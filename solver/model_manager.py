@@ -39,6 +39,20 @@ class ModelManager:
     on_progress: Callable[[float], None] | None = None
 
     @classmethod
+    def prepare_model(cls, model: Model, *, force: bool = False):
+        """Port the C# ``ModelManager.PrepareModel`` preprocessing stage.
+
+        The translated implementation currently covers the Quad/Restraint
+        computational topology used by the supplied masonry models.  It
+        creates interfaces, constitutive springs, global DOFs, and afference
+        mappings, then returns a :class:`PreparationReport`.
+        """
+        from histra.preprocessing.prepare_model import prepare_model
+
+        cls.clear_hysteretic_batch()
+        return prepare_model(model, force=force)
+
+    @classmethod
     def clear_hysteretic_batch(cls) -> None:
         """Detach any compiled spring runtime from its model objects."""
         runtime = cls._hysteretic_batch

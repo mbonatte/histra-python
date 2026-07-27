@@ -6,18 +6,29 @@ Run a model that has never been analyzed without relying on a C# SQLite
 `.Results` database:
 
 1. load the HRX;
-2. reset it to the virgin state;
-3. solve `Vert`;
-4. preserve the complete committed global and constitutive state in memory;
-5. initialize the chained Live Load analysis from that state;
-6. solve Live Load;
-7. export global node translations and total support reactions.
+2. automatically preprocess it when computational objects are absent;
+3. reset it to the virgin state;
+4. solve `Vert`;
+5. preserve the complete committed global and constitutive state in memory;
+6. initialize the chained Live Load analysis from that state;
+7. solve Live Load;
+8. export global node translations and total support reactions.
 
 The public launcher is:
 
 ```bash
 python run_vert_live.py model.HRX --output-dir python-results
 ```
+
+
+## Unlocked HRX preprocessing
+
+When the HRX has `IsLocked=false`, `GDL=0`, or lacks generated springs and
+interfaces, `solve_static_nonlinear` invokes the translated
+`ModelManager.PrepareModel` stage automatically. The validated path supports
+four-node masonry Quads, exact complete shared edges, and fixed line
+restraints. The generated model remains in memory and is passed directly from
+Vert to Live Load. See `PREPROCESSING.md`.
 
 ## In-memory chaining
 
@@ -59,7 +70,7 @@ For Live Load, the incremental vector excludes the inherited Vert reaction.
 A complete virgin-HRX run of the supplied `model-live/model.hrx` was executed
 without reading a `.Results` database:
 
-- elapsed time in the audit container: `267.465 s`;
+- optimized elapsed time in the audit container: approximately `13.10 s` with a warm JIT cache;
 - Vert: 5 committed steps, exact reference ordering;
 - Live Load: 87 committed steps, exact reference ordering;
 - attempted Live step 88 reached model-wide displacement `1.0000059183` and

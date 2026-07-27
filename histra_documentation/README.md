@@ -16,3 +16,5 @@ This directory describes the measured state of the uploaded Python/C# integratio
 - `TESTING_AND_VALIDATION.md` — test inventory and commands.
 - `REMAINING_LIMITATIONS.md` — current boundaries.
 - `REMEDIATION_PLAN.md` — evidence-driven next work.
+
+- `PREPROCESSING.md`: unlocked HRX computational-model generation and validation.

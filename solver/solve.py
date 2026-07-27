@@ -18,6 +18,7 @@ from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.solver.restart import restore_committed_analysis_state
 from histra.postprocessing import compute_total_reaction
+from histra.preprocessing import inspect_solver_readiness, require_solver_ready
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
@@ -31,6 +32,7 @@ def solve_static_nonlinear(
     results_path: str | Path | None = None,
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
+    auto_prepare: bool = True,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
 
@@ -49,6 +51,7 @@ def solve_static_nonlinear(
             on_progress=on_progress, results_path=results_path,
             initial_displacement=initial_displacement,
             restart_from_current_state=restart_from_current_state,
+            auto_prepare=auto_prepare,
         )
     finally:
         if gc_was_enabled:
@@ -65,10 +68,26 @@ def _solve_static_nonlinear_impl(
     results_path: str | Path | None = None,
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
+    auto_prepare: bool = True,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
+    readiness = inspect_solver_readiness(model)
+    if not readiness.is_ready and auto_prepare:
+        if on_log is not None:
+            on_log(
+                "Preparing unlocked HRX computational model in Python "
+                f"({readiness.quad_count} Quads)..."
+            )
+        prep = ModelManager.prepare_model(model)
+        if on_log is not None:
+            on_log(
+                "PrepareModel completed: "
+                f"GDL={prep.gdl}, interfaces={prep.interfaces}, "
+                f"springs={prep.quad_springs + prep.transverse_springs + prep.sliding_springs + prep.out_of_plane_springs}"
+            )
+    require_solver_ready(model)
     if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
         raise NotImplementedError(
             "P-Delta is implemented in the original C# code but the required "

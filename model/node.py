@@ -46,6 +46,8 @@ class NodeC:
 
     u: List[float] = field(default_factory=lambda: [0.0] * 6)
     p: List[float] = field(default_factory=lambda: [0.0] * 6)
+    aff: List[list] = field(default_factory=lambda: [[] for _ in range(6)])
+    is_independent: bool = True
 
     @classmethod
     def from_xml(cls, elem) -> NodeC:
@@ -55,14 +57,15 @@ class NodeC:
         nc.node_key = int(elem.get("NodeKey", "0"))
         nc.master_element_key = int(elem.get("MasterElementKey", "0"))
         nc.master_element_type = elem.get("MasterElementType", "")
+        nc.is_independent = elem.get("IsIndipendent", "true").lower() == "true"
 
         # SlaveElements
         se_group = elem.find("MasterElements")
         if se_group is not None:
             for se in se_group.findall("MasterElement"):
                 nc.slave_elements.append(SlaveElement(
-                    slave_key=int(se.get("SlaveKey", "0")),
-                    slave_type=se.get("SlaveType", ""),
+                    slave_key=int(se.get("Key", se.get("SlaveKey", "0"))),
+                    slave_type=se.get("Value", se.get("SlaveType", "")),
                 ))
 
         # U1..U6

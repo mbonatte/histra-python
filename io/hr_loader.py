@@ -44,6 +44,8 @@ _CONSUMED_TAGS = frozenset(
         "LoadFunctionItem",
         "Template",
         "Analysis",
+        "AdvancedOptionsDefault",
+        "AdvancedOptions",
     }
 )
 
@@ -67,6 +69,17 @@ def load_model(path: Union[str, Path]) -> Model:
             model.gdl = _safe_int(_attr(elem, "GDL", "gdl", default="0"))
             model.wizard_type = _attr(elem, "WizardType", default="")
             model.is_locked = _safe_bool(_attr(elem, "IsLocked", default="false"))
+            elem.clear()
+
+        elif tag in {"AdvancedOptionsDefault", "AdvancedOptions"}:
+            model.interface_nrow = _safe_int(
+                _attr(elem, "InterfaceNrow", default=str(model.interface_nrow)),
+                model.interface_nrow,
+            )
+            model.interface_imax = _safe_float(
+                _attr(elem, "InterfaceImax", default=str(model.interface_imax)),
+                model.interface_imax,
+            )
             elem.clear()
 
         elif tag == "Node":
@@ -272,6 +285,7 @@ def load_model(path: Union[str, Path]) -> Model:
                     fvk0_min=_safe_float(_attr(elem, "fvk0_min", default="0")),
                     fvk0_med=_safe_float(_attr(elem, "fvk0_med", default="0")),
                     fvk0_max=_safe_float(_attr(elem, "fvk0_max", default="0")),
+                    properties=dict(elem.attrib),
                 )
                 collections.materials[material.key] = material
             elem.clear()

@@ -3,6 +3,8 @@
 | Feature | Status | Evidence/constraint |
 |---|---|---|
 | HRX parsing for supplied models | Supported | Both benchmark models load |
+| Unlocked masonry HRX preprocessing | Supported for validated Quad/fixed-Restraint topology | Port of `ModelManager.PrepareModel`; creates DOFs, interfaces, springs, afference |
+| Partial/general polygon preprocessing | Unsupported | Exact full-edge contacts only; fails explicitly |
 | LoadControl | Supported for selected path | Vert executes five steps; parity after step 1 remains incomplete |
 | ArcLength, selected model points | Supported for Live Load reference | 87 committed C# steps within 1e-4 |
 | Chained Vert → Live Load restart | Supported | Complete state plus C# baseline-force behavior |

@@ -9,4 +9,6 @@
 7. Load families other than the validated self-weight and supplied Quad line-load path remain incomplete and must not silently become zero.
 8. Modal and dynamic analyses remain outside the validated solver path.
 9. Python reads C# results but does not yet write a complete C#-compatible `.Results` database.
-10. The long 87-step ArcLength benchmark is CPU intensive; the default suite keeps it opt-in while retaining a fast first-step regression.
+10. Raw-HRX preprocessing currently supports four-node masonry Quads, exact full-edge contacts, and fixed line restraints; partial polygon contacts, slave/partition models, and other computational element families remain unsupported.
+11. Generated computational data is currently held in memory and is not written back to an HRX file, so a new process repeats preprocessing for an unlocked model.
+12. The complete 87-step ArcLength benchmark remains opt-in even though the optimized standalone run is substantially faster, because it is still a long numerical acceptance test relative to the unit suite.

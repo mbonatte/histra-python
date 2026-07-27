@@ -24,6 +24,15 @@ explicit total/incremental reaction vectors. See `../STANDALONE_QUICKSTART.md`
 or `histra_documentation/STANDALONE_VERT_LIVE.md`.
 
 
+## Raw HRX preprocessing
+
+Unlocked masonry Quad/fixed-Restraint HRXs are now prepared automatically in
+Python. The translated `ModelManager.PrepareModel` stage creates global DOFs,
+Quad diagonal springs, Quad–Quad and Quad–Restraint interfaces, transverse and
+sliding springs, and afference matrices before the nonlinear analysis starts.
+See `../RAW_HRX_PREPROCESSING.md` and
+`histra_documentation/PREPROCESSING.md`.
+
 ## Performance
 
 Compatible transverse hysteretic springs are now evaluated in a compiled Numba

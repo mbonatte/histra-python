@@ -43,4 +43,6 @@ class Model:
     wizard_type: str = ""
     is_locked: bool = False
     source_path: Optional[str] = None
+    interface_nrow: int = 3
+    interface_imax: float = 40.0
     collections: Optional[Collections] = None

@@ -15,6 +15,25 @@ Coverage added for Live Load includes:
 - First Live Load C# step.
 - Optional complete 87-step ArcLength reference path.
 
+
+## Preprocessing validation
+
+Focused tests force-regenerate the locked C# benchmark from geometry and
+materials, then verify exact interface topology, exact global DOF ordering,
+exact afference row structure, close afference coefficients, and initial global
+stiffness. Additional tests cover idempotence and automatic preparation before
+a nonlinear solve.
+
+Run the measured preprocessing benchmark with:
+
+```bash
+python -m histra.tools.benchmark_preprocessing \
+  --reference histra/model-output/model.hrx \
+  --raw /path/to/unlocked/model.HRX \
+  --run-vert \
+  --output preprocessing_metrics.json
+```
+
 ## Commands
 
 From the directory containing `histra/`:

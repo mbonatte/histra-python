@@ -513,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
             combination=args.combination,
             echo_log=not args.quiet,
         )
-    except (ValueError, RuntimeError, NotImplementedError) as exc:
+    except (KeyError, ValueError, RuntimeError, NotImplementedError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 

@@ -22,6 +22,8 @@ class Quad:
     normal: List[Point] = field(default_factory=lambda: [Point(), Point(), Point(), Point()])
     g: Point = field(default_factory=Point)
     material_key: int = 0
+    spring: Spring | None = None
+
     @property
     def springs(self) -> List[Spring]:
         return [self.spring] if self.spring else []
