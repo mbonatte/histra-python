@@ -987,7 +987,11 @@ class SpringCoulomb03(Spring):
 
     def revert_to_last_commit(self) -> None:
         """C# RevertToLastCommit."""
-        self.fy[1] = -self.fy[0]
+        # C# restores the trial positive capacity from the committed negative
+        # capacity here (``Fy[0] = -Fy[1]``).  Reversing that assignment lets
+        # a rejected line-search trial leak its normal-force-updated ``Fy[0]``
+        # into the next trial.
+        self.fy[0] = -self.fy[1]
         self._trot_max = self.umax[0]
         self._trot_min = self.umax[1]
         self._trot_pu = self._crot_pu
@@ -1010,6 +1014,10 @@ class SpringCoulomb03(Spring):
         self._tplastic_compression_indicator = self._cplastic_compression_indicator
         self._t_phase_unload_t = self._c_phase_unload_t
         self._t_phase_unload_c = self._c_phase_unload_c
+
+    def revert_to_last_commit_stress_normal(self) -> None:
+        """C# ``revertToLastCommitStressNormal`` used by diagonal quads."""
+        self._cstress_normal = self._cstress_normal_prev
 
     def commit(self) -> None:
         """C# Commit."""

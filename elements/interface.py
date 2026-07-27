@@ -6,6 +6,7 @@ import numpy as np
 from histra.types.point import Point
 from histra.types.afference_entry import AfferenceEntry
 from histra.elements.interface_state import InterfaceState, _list2d
+from histra.types.phase_enum import PhaseEnum
 
 
 @dataclass
@@ -46,6 +47,48 @@ class Interface:
     vint3d: List[Point] = field(default_factory=lambda: [Point(), Point(), Point(), Point()])
     # Local 12-DOF resisting-force vector (port of ComputationalElement.F)
     f: List[float] = field(default_factory=lambda: [0.0] * 12)
+
+    def area(self) -> float:
+        """Return the C# ``Operations.Area(VInt2D)`` polygon area."""
+        pts = self.vint2d
+        if len(pts) < 3:
+            return 0.0
+        # XNA ``Vector2`` and ``Operations.Area`` accumulate in ``float``.
+        # Preserve those single-precision boundaries because normal-stress
+        # dependent friction is path-sensitive after the first elastic step.
+        twice = np.float32(0.0)
+        for index, point in enumerate(pts):
+            nxt = pts[(index + 1) % len(pts)]
+            cross = np.float32(
+                np.float32(point.x) * np.float32(nxt.y)
+                - np.float32(nxt.x) * np.float32(point.y)
+            )
+            twice = np.float32(twice + cross)
+        return float(abs(np.float32(twice * np.float32(0.5))))
+
+    def compute_dn(self, ls: Any = None, nr: bool = False) -> float:
+        """Port of C# ``Interface.ComputeDN``.
+
+        The nonlinear Newton path used by this benchmark passes ``NR=True``;
+        in that path the normal-force increment is the negative sum of the
+        transverse springs' incremental forces.
+        """
+        if nr:
+            return -sum(float(s.get_incr_force()) for s in self.trasv_1)
+        raise NotImplementedError(
+            "Interface.ComputeDN with NR=False requires the flexural "
+            "deformation path, which is not used by the selected benchmark."
+        )
+
+    def compute_area_corr(self) -> float:
+        """Port of the contact-area sum used by Coulomb sliding springs."""
+        excluded = {
+            PhaseEnum.Rupture,
+            PhaseEnum.RuptureComp,
+            PhaseEnum.RuptureTraz,
+            PhaseEnum.Plastic_t,
+        }
+        return sum(float(s.area) for s in self.trasv_1 if s.phase not in excluded)
 
     def interfaccia_vincolata_computed(self) -> bool:
         """Port of .NET InterfacciaVincolata(): True if either parent is a Restraint."""
@@ -323,34 +366,56 @@ class Interface:
     # ── ComputeKslidOutPlan ─────────────────────────────────────────────────
 
     def _compute_kslid_out_plan(self, alfa: float) -> None:
-        """Port of ComputeKslidOutPlan → RotationalSpring branch (default)."""
+        """Port the active C# ``TwoSprings`` out-of-plane branch.
+
+        ``ModelOperations.CheckTorsionalModel`` is hard-coded to
+        ``TypeModelTorsionEnum.TwoSprings`` in the supplied C# source.  The
+        previous Python translation incorrectly used the alternative
+        rotational-spring matrix, coupling otherwise unloaded out-of-plane
+        generalized DOFs into the in-plane gravity response.
+        """
         d2 = self.dim_aff[2] if len(self.dim_aff) > 2 else 4
         K = _list2d(d2, d2)
         if len(self.slid_out_plan) < 2:
             self.status.kslid_out_plan = K
             return
 
-        # ComputeKslidOutPlanRotationalSpring
-        k1 = self.slid_out_plan[0].get_k(alfa) / 4.0
-        L2 = self.length * self.length
-        k2 = self.slid_out_plan[1].get_k(alfa) / L2 if L2 > 1e-30 else 0.0
-
-        K[0][0] = k1 + k2
-        K[0][1] = k1 - k2
-        K[0][2] = -(k1 + k2)
-        K[0][3] = -(k1 - k2)
-        K[1][0] = k1 - k2
-        K[1][1] = k1 + k2
-        K[1][2] = -(k1 - k2)
-        K[1][3] = -(k1 + k2)
-        K[2][0] = -(k1 + k2)
-        K[2][1] = -(k1 - k2)
-        K[2][2] = k1 + k2
-        K[2][3] = k1 - k2
-        K[3][0] = -(k1 - k2)
-        K[3][1] = -(k1 + k2)
-        K[3][2] = k1 - k2
-        K[3][3] = k1 + k2
+        if d2 == 4:
+            di, dj = self.compute_dist_spring_for(self)
+            k1 = self.slid_out_plan[0].get_k(alfa)
+            k2 = self.slid_out_plan[1].get_k(alfa)
+            K[0][0] = k1 * dj * dj + k2 * di * di
+            K[0][1] = (k1 + k2) * di * dj
+            K[0][2] = -k1 * dj * dj - k2 * di * di
+            K[0][3] = -(k1 + k2) * di * dj
+            K[1][0] = K[0][1]
+            K[1][1] = k1 * di * di + k2 * dj * dj
+            K[1][2] = -(k1 + k2) * di * dj
+            K[1][3] = -k1 * di * di - k2 * dj * dj
+            K[2][0] = K[0][2]
+            K[2][1] = K[1][2]
+            K[2][2] = K[0][0]
+            K[2][3] = K[0][1]
+            K[3][0] = K[0][3]
+            K[3][1] = K[1][3]
+            K[3][2] = K[2][3]
+            K[3][3] = K[1][1]
+        elif d2 == 6 and len(self.slid_out_plan) >= 4:
+            values = [spring.get_k(alfa) for spring in self.slid_out_plan[:4]]
+            K[0][0] = values[0] / self.length
+            K[1][1] = values[1]
+            K[2][2] = values[2] / self.length
+            K[3][3] = values[3]
+            K[0][4] = K[4][0] = -values[0]
+            K[1][4] = K[4][1] = -values[1]
+            K[4][4] = values[0] + values[1]
+            K[2][5] = K[5][2] = -values[2]
+            K[3][5] = K[5][3] = -values[3]
+            K[5][5] = values[2] + values[3]
+        else:
+            raise NotImplementedError(
+                f"Unsupported Interface out-of-plane afference size {d2}"
+            )
 
         self.status.kslid_out_plan = K
 
@@ -415,6 +480,11 @@ class Interface:
                    - I.status.compute_du(I, x, i4))
         if I.slid:
             I.slid[0].u += du_slid
+            from histra.springs.coulomb03 import SpringCoulomb03
+            if isinstance(I.slid[0], SpringCoulomb03):
+                I.slid[0].dn = I.compute_dn(nr=True)
+                if I.slid[0].check_contact_area:
+                    I.slid[0].area_corrente = I.compute_area_corr()
             I.slid[0].set_trial_strain(I.slid[0].u)
 
         # ── 5. Update out-of-plane sliding springs ──────────────────────────
@@ -432,6 +502,15 @@ class Interface:
         if len(I.slid_out_plan) >= 2:
             I.slid_out_plan[0].u += du_op_a + (du_op_b - du_op_a) * di_sop
             I.slid_out_plan[1].u += du_op_a + (du_op_b - du_op_a) * dj_sop
+            from histra.springs.coulomb03 import SpringCoulomb03
+            if isinstance(I.slid_out_plan[0], SpringCoulomb03):
+                dn = 0.5 * I.compute_dn(nr=True)
+                I.slid_out_plan[0].dn = dn
+                I.slid_out_plan[1].dn = dn
+                if I.slid_out_plan[0].check_contact_area:
+                    area = 0.5 * I.compute_area_corr()
+                    I.slid_out_plan[0].area_corrente = area
+                    I.slid_out_plan[1].area_corrente = area
             I.slid_out_plan[0].set_trial_strain(I.slid_out_plan[0].u)
             I.slid_out_plan[1].set_trial_strain(I.slid_out_plan[1].u)
 

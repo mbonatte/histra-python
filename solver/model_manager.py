@@ -103,10 +103,12 @@ class ModelManager:
 
     @classmethod
     def update_domain(cls, model: Model, ls: LinearSystem, state: IntegratorState) -> None:
-        for quad in model.collections.quads.values():
-            quad.update_domain(ls.x, state)
+        # C# updates interfaces before quads.  Quad.ComputeDN depends on the
+        # transverse interface spring increments produced in this same trial.
         for intf in model.collections.interfaces.values():
             intf.update_domain(ls.x, state)
+        for quad in model.collections.quads.values():
+            quad.update_domain(ls, state, model.collections)
 
     @classmethod
     def compute_energy(cls, model: Model) -> tuple[float, float]:

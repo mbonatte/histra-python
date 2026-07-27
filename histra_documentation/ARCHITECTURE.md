@@ -1,48 +1,28 @@
 # Architecture
 
-## Purpose
+## Model and I/O
 
-HiStrA Python is a direct port of a subset of a C# structural-analysis application. The runtime parses HRX data, assembles sparse systems, updates macro-elements and path-dependent springs, and performs static nonlinear analysis.
+- `io/hr_loader.py` parses the HRX into typed model collections.
+- `io/results_reader.py` reads committed C# SQLite metadata, displacements, quads, interfaces, springs, and load multipliers.
+- `solver/restart.py` maps complete final SQLite state back into Python global, element, and spring state.
 
-## Layers
+## Elements and constitutive models
 
-```mermaid
-graph TD
-    CLI[histra.__main__] --> IO[histra.io]
-    IO --> MODEL[histra.model]
-    IO --> ELEMENTS[histra.elements]
-    ELEMENTS --> SPRINGS[histra.springs]
-    ELEMENTS --> TYPES[histra.types]
-    SOLVER[histra.solver] --> MODEL
-    SOLVER --> ELEMENTS
-    SOLVER --> TYPES
-    SOLVER --> SCIPY[NumPy/SciPy]
-    DB[SQLite .Results] --> IO
-```
+- `elements/quad.py` owns quad local displacement, stiffness, residual, normal stress, volume, self-weight, and `ComputeDN` behavior.
+- `elements/interface.py` owns flexural, in-plane sliding, and out-of-plane spring groups. It computes transverse normal-force increments before updating Coulomb springs.
+- `springs/hysteretic.py` implements transverse nonlinear response.
+- `springs/coulomb03.py` implements normal-force-dependent friction, history, tangent, phase, commit, and revert.
 
-## Main owners
+## Assembly and orchestration
 
-| State | Owner |
-|---|---|
-| Schema/geometry/connectivity | `Model` and `Collections` |
-| Global sparse matrix/residual/correction | `LinearSystem` |
-| Analysis callbacks and global displacement | `Program` |
-| Load factor, pseudo-time, step accumulation | Integrator |
-| Local displacement/forces | Quad/Interface state |
-| Trial and committed constitutive history | Spring instances |
-| Reference/external load vectors | Currently `ModelManager` class state |
+- `solver/assembler.py` assembles global stiffness, residual/load vectors, afference mappings, and the active C# `TwoSprings` torsional branch.
+- `solver/model_manager.py` controls element update order, residual assembly, energy, and load generation.
+- `solver/load_control.py` and `solver/arc_length.py` implement incremental integrators.
+- `solver/newton_raphson.py` and `solver/newton_line_search.py` implement equilibrium algorithms.
+- `solver/line_search.py` implements the translated line searches.
+- `solver/solve.py` orchestrates initialization, optional restart, step creation, iteration, ALS/ArcLength retry, commit, termination, and metrics.
+- `solver/state_snapshot.py` captures and restores complete reversible nonlinear state.
 
-## Critical lifecycle distinction
+## Benchmark boundary
 
-An HRX file can serialize the last solved state. A new virgin analysis must reset that state. A chained analysis must instead restore one specific prior committed state from the results database. These are different operations and must never be approximated by merely setting the global displacement vector to zero.
-
-## Current architectural constraints
-
-- `ModelManager` class attributes make analysis state process-global and non-thread-safe.
-- Element/spring state is mutable and has no general transaction/snapshot protocol.
-- The Python model covers only a subset of C# entity/load families.
-- Compatibility modules preserve historical imports but can obscure the canonical implementation location.
-
-## Recommended direction
-
-Introduce an `AnalysisContext` containing all global vectors and analysis state, plus typed snapshot/restore interfaces for elements and springs. Results-database restart should deserialize into the same context and committed-state protocol used by rollback.
+The selected benchmark exercises LoadControl, modified Newton stiffness, Regula-Falsi line search, Work convergence, self-weight, quads, interfaces, hysteretic springs, and Coulomb03 springs. It does not exercise P-Delta, ALS, or ArcLength.

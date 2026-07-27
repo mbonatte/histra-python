@@ -18,7 +18,7 @@ from histra.model.spring import (
 )
 
 
-MODEL_PATH = str(Path(__file__).resolve().parents[2] / "model-output" / "model.hrx")
+MODEL_PATH = str(Path(__file__).resolve().parents[1] / "model-output" / "model.hrx")
 
 
 def parse_spring_hysteretic_from_hrx() -> SpringHysteretic:

@@ -12,7 +12,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "model", nargs="?",
-        default=str(Path(__file__).resolve().parents[2] / "model-output" / "model.hrx"),
+        default=str(Path(__file__).resolve().parents[1] / "model-output" / "model.hrx"),
     )
     parser.add_argument("--analysis", type=int, default=1)
     args = parser.parse_args()

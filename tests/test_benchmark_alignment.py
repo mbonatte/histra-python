@@ -12,7 +12,7 @@ from histra.model.load import LoadFunction, LoadFunctionItem
 from histra.solver.assembler import extract_displacements
 from histra.solver.solve import solve_static_nonlinear
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-output" / "model.hrx"
 RESULTS = ROOT / "model-output" / "model.Results"
 
@@ -53,19 +53,33 @@ def test_first_nonlinear_step_matches_csharp_database():
     assert np.max(np.abs(python_u - csharp_u)) < 3e-7
 
 
-def test_chained_analysis_is_rejected_until_full_state_restore_exists():
+def test_chained_analysis_restores_complete_csharp_state():
+    from histra.solver.program import Program
+    from histra.solver.restart import restore_committed_analysis_state
+    from histra.types.linear_system import LinearSystem
+
     model = load_model(HRX)
-    analysis = model.collections.analyses[22]
-    with pytest.raises(NotImplementedError, match="restarts from analysis 1"):
-        solve_static_nonlinear(model, analysis)
+    p = Program(gdl=model.gdl)
+    p.u = np.zeros(model.gdl)
+    p.v = np.zeros(model.gdl)
+    ls = LinearSystem(model.gdl)
+    summary = restore_committed_analysis_state(
+        model, RESULTS, analysis_key=1, combination=1, u=p.u, v=p.v, ls=ls
+    )
+    assert summary.step == 5
+    assert summary.dof_count == 126
+    assert summary.quad_count == 18
+    assert summary.interface_count == 29
+    assert summary.spring_count == 2454
+    assert np.max(np.abs(p.u)) > 0.0
 
 
 def test_csharp_global_dynamic_vector_is_readable():
     from histra.io.results_reader import read_dynamic_vectors
 
-    u, v, step = read_dynamic_vectors(RESULTS, analysis_key=1, size=2142)
+    u, v, step = read_dynamic_vectors(RESULTS, analysis_key=1, size=126)
     assert step == 5
-    assert u.shape == (2142,)
-    assert v.shape == (2142,)
+    assert u.shape == (126,)
+    assert v.shape == (126,)
     assert np.all(np.isfinite(u))
     assert np.all(np.isfinite(v))

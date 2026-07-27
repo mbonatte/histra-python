@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 
 from histra.model.model import Model
+from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.solver.arc_length import ArcLength
 from histra.solver.incremental_integrator import StaticIntegrator
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
+from histra.solver.state_snapshot import SolverStateSnapshot
+from histra.solver.restart import restore_committed_analysis_state
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
@@ -21,6 +25,7 @@ def solve_static_nonlinear(
     *,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[float], None] | None = None,
+    results_path: str | Path | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute the translated static nonlinear solver.
 
@@ -52,13 +57,25 @@ def solve_static_nonlinear(
     if initial_analysis_key < 0:
         _set_initial_state(model, p.u, p.v, ls)
     else:
-        raise NotImplementedError(
-            "This analysis restarts from analysis "
-            f"{initial_analysis_key}, combination "
-            f"{getattr(analysis, 'initial_combination_analysis_key', 1)}. "
-            "Restoring the complete prior C# database state (global vectors, "
-            "element-local states, and all committed spring history variables) "
-            "is not yet implemented; starting from zero would be incorrect."
+        initial_combination = int(
+            getattr(analysis, "initial_combination_analysis_key", combination)
+        )
+        resolved_results = Path(results_path) if results_path is not None else (
+            find_results_path(model.source_path) if model.source_path else None
+        )
+        if resolved_results is None:
+            raise ResultsStateError(
+                "Chained analysis requires a C# .Results database. Pass results_path=... "
+                "or place a sibling .Results file next to the HRX model."
+            )
+        restart = restore_committed_analysis_state(
+            model, resolved_results, initial_analysis_key, initial_combination,
+            p.u, p.v, ls,
+        )
+        p.log(
+            f"Restored analysis {restart.analysis_key}, combination {restart.combination}, "
+            f"step {restart.step}: {restart.dof_count} DOFs, "
+            f"{restart.spring_count} complete spring states"
         )
 
     ModelManager._ptarget = np.zeros(n)
@@ -104,6 +121,9 @@ def solve_static_nonlinear(
 
     while continue_steps:
         step += 1
+        step_snapshot = SolverStateSnapshot.capture(
+            model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
+        )
         dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
         try:
             integrator.new_step(p, model, ls, analysis, combination, step, dof)
@@ -116,11 +136,11 @@ def solve_static_nonlinear(
 
         if result == -2 and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
             result = _als_loop(
-                p, ls, model, analysis, combination, step, alfa, integrator, algorithm
+                p, ls, model, analysis, combination, step, alfa, integrator, algorithm, step_snapshot
             )
         elif result == -2 and isinstance(integrator, ArcLength) and alfa != 0.0:
-            # Original C# retry: revert and switch ArcLength to initial stiffness.
-            integrator.revert_failed_step(model, ls)
+            # Retry from a complete pre-step state, not a partial global-vector rollback.
+            step_snapshot.restore()
             alfa = 0.0
             integrator.update_k(p, model, alfa)
             integrator.new_step(p, model, ls, analysis, combination, step, dof)
@@ -134,11 +154,7 @@ def solve_static_nonlinear(
             result = -4
 
         if result < 0:
-            if isinstance(integrator, LoadControl):
-                integrator.undo_current_load_increment(model)
-                integrator.revert_to_last_commit(model, ls)
-            elif isinstance(integrator, ArcLength):
-                integrator.revert_failed_step(model, ls)
+            step_snapshot.restore()
             p.current_load_factor = integrator.mult
             final_code = result
             step_data.append(
@@ -150,6 +166,9 @@ def solve_static_nonlinear(
                     "load_factor": integrator.mult,
                     "displacement": float(p.u[dof]) if 0 <= dof < n else 0.0,
                     "iterations": algorithm.the_test.current_iter,
+                    "convergence_error": float(algorithm.the_test.get_error()),
+                    "residual_norm": float(ls.get_b_norm()),
+                    "increment_norm": float(ls.get_x_norm()),
                 }
             )
             p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
@@ -172,6 +191,9 @@ def solve_static_nonlinear(
                 "load_factor": values[0],
                 "displacement": displacement,
                 "iterations": algorithm.the_test.current_iter,
+                "convergence_error": float(algorithm.the_test.get_error()),
+                "residual_norm": float(ls.get_b_norm()),
+                "increment_norm": float(ls.get_x_norm()),
                 "elastic_energy": energy_elastic,
                 "dissipated_energy": energy_dissipated,
             }
@@ -268,6 +290,7 @@ def _als_loop(
     alfa: float,
     integrator: StaticIntegrator,
     algorithm: EquiSolnAlgo,
+    step_snapshot: SolverStateSnapshot,
 ) -> int:
     """Automatic load-step reduction following the original C# sequence."""
     if not isinstance(integrator, LoadControl):
@@ -277,9 +300,9 @@ def _als_loop(
     factor = max(2, int(getattr(an, "load_factor_als", 2)))
     max_reductions = max(1, int(getattr(an, "max_number_als", 5)))
 
-    # Undo the complete failed increment before starting reduced substeps.
-    integrator.undo_current_load_increment(model)
-    integrator.revert_to_last_commit(model, ls)
+    # Start ALS from an exact pre-step snapshot.  This restores external loads,
+    # pseudo-time, all local element values, and every trial/committed spring field.
+    step_snapshot.restore()
 
     completed = 0.0
     sub_increment = original_increment / factor
@@ -294,6 +317,9 @@ def _als_loop(
             f"LoadIncrement={trial_increment:.6g}"
         )
 
+        substep_snapshot = SolverStateSnapshot.capture(
+            model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
+        )
         integrator.new_step_with_incr(
             p, model, ls, an, combination, step, trial_increment
         )
@@ -307,12 +333,11 @@ def _als_loop(
             completed += trial_increment
             continue
 
-        # Undo only the failed substep, returning to the last successful
-        # substep commit, then reduce the increment as in C#.
-        integrator.undo_current_load_increment(model)
-        integrator.revert_to_last_commit(model, ls)
+        # Restore the exact last-successful substep checkpoint.
+        substep_snapshot.restore()
         reduction += 1
         if reduction > max_reductions:
+            step_snapshot.restore()
             return -2
         sub_increment /= factor
 

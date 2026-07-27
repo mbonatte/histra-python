@@ -1,80 +1,19 @@
-# Benchmark results
+# Benchmark Results
 
-## Supplied artifacts
+## Final full run
 
-| Artifact | Use in validation |
-|---|---|
-| `model.hrx` | Input model and serialized application state |
-| `model.Results` | Authoritative C# SQLite results |
-| `results.json` | Historical parser/assembly snapshot; not an independent solver result |
+Completion code: 0. Runtime: 34.450 seconds. Committed steps: 1, 2, 3, 4, 5. All values finite.
 
-## Model inventory
+| Step | LF | Iter. | Work error | Residual norm | Increment norm | Relative U error | Max abs U error |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.2 | 3 | 8.474e-5 | 6.705e1 | 1.454e-4 | 1.311e-14 | 6.365e-17 |
+| 2 | 0.4 | 11 | 9.806e-5 | 1.380e2 | 2.130e-4 | 5.930e-2 | 7.257e-4 |
+| 3 | 0.6 | 16 | 9.901e-5 | 1.826e2 | 1.494e-3 | 1.799e-1 | 3.338e-3 |
+| 4 | 0.8 | 7 | 6.155e-5 | 2.643e2 | 4.238e-4 | 1.915e-1 | 4.313e-3 |
+| 5 | 1.0 | 38 | 8.777e-5 | 2.170e2 | 3.762e-5 | 1.153e-1 | 5.408e-3 |
 
-The current loader reports:
+All load-factor errors are within 1e-15. Step ordering is exact. Only step 1 satisfies the displacement criterion.
 
-| Item | Count/value |
-|---|---:|
-| Generalized DOFs | 2,142 |
-| Quads | 306 |
-| Interfaces | 555 |
-| Nodes | 388 |
-| NodeCs | 18 |
-| Restraints | 14 |
-| Initial-stiffness `K.nnz` | 42,252 |
+## Improvement over baseline
 
-The XML itself confirms 555 top-level keyed `Interface` entities.
-
-## C# database coverage
-
-The SQLite database contains, among other tables:
-
-- `QuadStates` for analysis 1, steps 0 through 5;
-- `InterfaceStates` for analysis 1, steps 0 through 5;
-- `QuadStates` and `InterfaceStates` for analysis 22, steps 0 through 61;
-- final `DynamicVectorsState` for analyses 1 and 22;
-- final spring-history records in `SpringStates`.
-
-## First-step comparison
-
-The automated benchmark constructs the same first load interval as C# analysis 1 and compares Python global displacement with displacement reconstructed from C# `QuadStates`, step 1.
-
-| Metric | Result |
-|---|---:|
-| Python exit code | 0 |
-| Python committed steps | 1 |
-| Python nonlinear iterations | 2 |
-| Load factor | 0.2 |
-| Python displacement-vector norm | `4.3901193906e-2` |
-| C# displacement-vector norm | `4.3901191095e-2` |
-| Relative vector difference | `2.2820198e-5` |
-| Maximum absolute DOF difference | `2.2123213e-7` |
-| Mean absolute DOF difference | `4.4611311e-9` |
-
-Test thresholds are intentionally slightly looser:
-
-```text
-relative error < 5e-5
-maximum absolute error < 3e-7
-```
-
-## Full-analysis result
-
-The complete C# analysis 1 has five committed load steps. The Python run currently:
-
-1. completes step 1;
-2. enters step 2;
-3. performs repeated nonlinear line-search trials;
-4. does not complete within the bounded audit run.
-
-A diagnostic run with deliberately small line-search/Newton limits terminates at step 2 with nonconvergence. This bounded run is diagnostic only and is not a replacement for the production settings.
-
-## Interpretation
-
-The first-step agreement validates an important but limited regime. It does **not** validate:
-
-- later yielding and friction/contact evolution;
-- `Quad.ComputeDN` normal-force coupling;
-- full `SpringCoulomb03` history correspondence;
-- automatic load stepping after nonlinear failure;
-- chained analysis 22 restart and ArcLength history;
-- final force, reaction, and energy agreement.
+The untouched solver stalled during step 2 after committing step 1 with relative error 2.214e-3. The corrected solver completes all steps, and step 1 is reduced to roundoff-level error. Normal-force coupling and the correct out-of-plane interface stiffness were necessary to move the divergence from the initial response and permit the full run.

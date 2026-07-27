@@ -1,67 +1,22 @@
-# Solver flow
+# Complete Solver Flow
 
-## Loading a model
+For the selected `Vert` analysis, Python now follows this sequence:
 
-`load_model()` streams the HRX and builds `Model.collections`. It also:
+1. Parse the HRX and select analysis key 1.
+2. For a virgin analysis, clear global vectors and all supported local trial/committed state while preserving model definitions.
+3. For a chained analysis, require a `.Results` database and restore the selected prerequisite's final complete state.
+4. Generate the supported load vector using the selected HRX load combination and database combination row.
+5. Assemble and factor the initial stiffness.
+6. Start a LoadControl increment and update the load multiplier/pseudo-time.
+7. Form the unbalance and solve the modified Newton increment.
+8. Snapshot all reversible state before trial updates.
+9. Update interfaces before quads, matching C# ordering.
+10. In each interface, update transverse springs, calculate normal-force increments, then update in-plane and out-of-plane Coulomb springs.
+11. In each quad, compute `dN`, current normal stress, volume, and update its Coulomb spring.
+12. Assemble the residual and evaluate the absolute Work convergence test.
+13. If needed, run Regula-Falsi trials with complete rollback on failed update or rejected outer iteration.
+14. On convergence, commit global, element, and spring state and record metrics.
+15. On failure, restore the complete pre-step state. ALS and ArcLength retries also start from complete snapshots.
+16. Stop at the load-function endpoint.
 
-- retains the absolute `Model.source_path`;
-- joins `LoadFunctionItem` records to `LoadFunction`;
-- parses `InitialAnalysisKey` and `InitialCombinationAnalysisKey`;
-- attaches the selected load function to each analysis.
-
-The HRX may contain saved solved state. Loading is not the same as initializing a new analysis.
-
-## Nonlinear initialization
-
-The C# flow chooses between virgin initialization and prior-analysis restoration.
-
-```mermaid
-flowchart TD
-    A[Select Analysis] --> B{InitialAnalysisKey < 0?}
-    B -- Yes --> C[Reset global vectors, element local state, springs]
-    B -- No --> D[Restore prior committed database state]
-    D --> E[Currently rejected in Python]
-    C --> F[Assemble reference load]
-    F --> G[Assemble initial/tangent stiffness]
-    G --> H[Start integrator]
-```
-
-Python implements the virgin branch for the supported quad/interface model. It rejects the restart branch until all history variables can be restored correctly.
-
-## LoadControl/Newton sequence
-
-1. Determine the next pseudo-time and load-multiplier increment.
-2. Add the external load increment.
-3. Form `R = F_external - F_internal` (plus supported additions).
-4. For Standard methods, rebuild tangent stiffness; Modified methods reuse initial stiffness.
-5. Solve for the global correction.
-6. Add the correction to global and element-local trial state.
-7. Update constitutive springs.
-8. Re-form residual.
-9. Optionally perform line-search trial corrections.
-10. Test force, displacement, or work convergence.
-11. Commit accepted element/spring state, or rollback on failure.
-
-## First-step C# alignment
-
-Virgin-state reset is essential. Without it, the first correction is added to the solved state stored in HRX. With the reset, the first analysis-1 step matches the C# database closely.
-
-## Remaining divergence point
-
-C# `Quad.UpdateDomain` computes normal-force change and initial normal stress before updating `SpringCoulomb03`. Python currently omits that computation. Later nonlinear steps therefore do not yet follow the same constitutive path.
-
-## ALS
-
-On a failed LoadControl step, the implementation:
-
-1. removes the failed full load increment;
-2. reverts to the last committed state;
-3. tries reduced subincrements;
-4. commits each successful substep;
-5. reverts a failed substep before reducing again.
-
-This follows the inspected C# sequence, but it still depends on correct element constitutive state.
-
-## ArcLength
-
-The C#-aligned ArcLength implementation uses residual and reference-load solutions, accumulated step displacement, a control/all-DOF constraint, and load-function direction. End-to-end validation is blocked because the supplied ArcLength analyses restart from earlier analyses whose complete database state is not yet restorable.
+A snapshot includes global displacements, velocity/step vectors, sparse linear-system vectors and matrices, external and P-Delta vectors, integrator fields, convergence-test state, line-search state, element local state, and all spring attributes. Restore also removes fields created only during a failed trial.

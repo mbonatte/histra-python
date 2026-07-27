@@ -208,29 +208,10 @@ def _compute_interface_kslid(intf: Interface, alfa: float = 0.0) -> List[List[fl
 
 
 def _compute_interface_kslid_op(intf: Interface, alfa: float = 0.0) -> List[List[float]]:
-    """4×4 out-of-plane stiffness (port of ComputeKslidOutPlanRotationalSpring)."""
-    k = [[0.0] * 4 for _ in range(4)]
-    if len(intf.slid_out_plan) >= 2:
-        k1 = intf.slid_out_plan[0].get_k(alfa) / 4.0
-        L2 = intf.length * intf.length
-        k2 = intf.slid_out_plan[1].get_k(alfa) / L2 if L2 > 1e-30 else 0.0
-        k[0][0] = k1 + k2
-        k[0][1] = k1 - k2
-        k[0][2] = -(k1 + k2)
-        k[0][3] = -(k1 - k2)
-        k[1][0] = k1 - k2
-        k[1][1] = k1 + k2
-        k[1][2] = -(k1 - k2)
-        k[1][3] = -(k1 + k2)
-        k[2][0] = -(k1 + k2)
-        k[2][1] = -(k1 - k2)
-        k[2][2] = k1 + k2
-        k[2][3] = k1 - k2
-        k[3][0] = -(k1 - k2)
-        k[3][1] = -(k1 + k2)
-        k[3][2] = k1 - k2
-        k[3][3] = k1 + k2
-    return k
+    """Out-of-plane stiffness using the C# model's active ``TwoSprings`` branch."""
+    d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else 4
+    intf._compute_kslid_out_plan(alfa)
+    return [row[:] for row in intf.status.kslid_out_plan[:d2]]
 
 
 # ── Assembly helpers ────────────────────────────────────────────────────────
@@ -420,11 +401,13 @@ def _get_comb_coeff_gravity(model: Model, analysis_key: int, combination: int) -
     """
     an = model.collections.analyses.get(analysis_key)
     if an is None:
-        return 0.0
+        raise KeyError(f"Analysis {analysis_key} is not present in the model")
 
     lc = model.collections.load_combinations.get(an.load_combination_key)
     if lc is None:
-        return 0.0
+        raise KeyError(
+            f"Load combination {an.load_combination_key} for analysis {analysis_key} is missing"
+        )
 
     # Find gravity load condition (Action == 1)
     gravity_lc = None
@@ -433,12 +416,18 @@ def _get_comb_coeff_gravity(model: Model, analysis_key: int, combination: int) -
             gravity_lc = cond
             break
     if gravity_lc is None:
-        return 0.0
+        raise NotImplementedError(
+            f"Analysis {analysis_key} has no gravity load condition (Action == 1); "
+            "non-gravity load generation is not implemented"
+        )
 
     # Look up the coefficient item for this condition at the given combination (row)
     item = lc.get_coefficient(combination, gravity_lc.id)
     if item is None:
-        return 0.0
+        raise KeyError(
+            f"Load combination {lc.key} has no row {combination} coefficient "
+            f"for gravity condition {gravity_lc.id}"
+        )
 
     # Resolve the coefficient value based on TypeData
     coeff = _resolve_coefficient(item, gravity_lc)
@@ -467,7 +456,9 @@ def _resolve_coefficient(item: "LoadCombinationItem", lc: "LoadCondition") -> fl
             f"Combination coefficient {td} requires Psi values from the C# "
             "LoadTemplateItem model, which is not present in this Python snapshot."
         )
-    return item.val
+    raise NotImplementedError(
+        f"Unsupported load-combination coefficient type: {td}"
+    )
 
 
 def generate_self_weight_loads(model: Model, analysis_key: int, combination: int = 1):
@@ -479,7 +470,7 @@ def generate_self_weight_loads(model: Model, analysis_key: int, combination: int
     """
     an = model.collections.analyses.get(analysis_key)
     if an is None:
-        return
+        raise KeyError(f"Analysis {analysis_key} is not present in the model")
 
     coeff = _get_comb_coeff_gravity(model, analysis_key, combination)
     if abs(coeff) < 1e-30:
@@ -572,10 +563,11 @@ def extract_displacements(
     if results_path is not None:
         from histra.io.results_reader import read_quad_states
         sql_u = read_quad_states(results_path, analysis_key, combination, step)
-        for quad_key, quad_u in sql_u.items():
+        for quad_key, quad_state in sql_u.items():
             if quad_key not in model.collections.quads:
                 continue
             quad = model.collections.quads[quad_key]
+            quad_u = quad_state.u if hasattr(quad_state, "u") else quad_state
             for i in range(7):
                 if i < len(quad.aff) and quad.aff[i]:
                     gdl = quad.aff[i][0].gdl - 1

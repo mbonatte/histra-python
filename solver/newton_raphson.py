@@ -6,6 +6,7 @@ from typing import Any
 from histra.model.model import Model
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
+from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
@@ -36,17 +37,22 @@ class NewtonRaphson(EquiSolnAlgo):
         previous_error = 1.0
 
         while result == -1:
+            iteration_snapshot = SolverStateSnapshot.capture(
+                model, p, ls, self.the_integrator, self.the_test, self.the_line_search
+            )
             if _is_standard_method(an) and alfa != 0.0:
                 self.the_integrator.update_k(p, model, alfa)
 
             try:
                 self.the_integrator.compute_increment(p, ls, model, an)
             except LinearSolveError as exc:
+                iteration_snapshot.restore()
                 p.log(f"Stiffness matrix is singular at step {step}: {exc}")
                 return -3
 
             update_code = self.the_integrator.update(model, p, an)
             if update_code < 0:
+                iteration_snapshot.restore()
                 return update_code
 
             self.the_integrator.form_unbalance(p, model, an)
@@ -57,6 +63,7 @@ class NewtonRaphson(EquiSolnAlgo):
                     f"Non-finite convergence error at step={step}, "
                     f"iteration={self.the_test.current_iter}"
                 )
+                iteration_snapshot.restore()
                 return -4
 
             # Keep progress informative without reproducing divide-by-zero
@@ -76,6 +83,7 @@ class NewtonRaphson(EquiSolnAlgo):
             previous_error = error
 
             if p.to_stop:
+                iteration_snapshot.restore()
                 return -4
 
         if result == -2:

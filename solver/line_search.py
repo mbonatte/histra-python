@@ -75,53 +75,67 @@ class LineSearch:
 
 
 class RegulaFalsiLineSearch(LineSearch):
-    """C# Regula Falsi algorithm with corrected bracket and sign handling."""
+    """Faithful port of the supplied C# Regula-Falsi line search.
+
+    The reference implementation evaluates trial ``s`` values with the
+    opposite sign from ``s0``/``s1``.  That is mathematically inconsistent,
+    but it materially changes the accepted nonlinear path in the supplied
+    benchmark.  Compatibility is therefore preserved here and documented as
+    an original C# defect rather than silently "corrected".
+    """
 
     def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
-        if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
+        ratio_initial = self._ratio(s1, s0)
+        if ratio_initial <= self.tolerance or s1 == s0:
             return self._finish(ls, dx0, 1.0)
 
-        eta_lo, s_lo = 0.0, s0
-        eta_hi, s_hi = 1.0, s1
-        eta_previous = 1.0
         eta = 1.0
-        baseline_ratio = self._ratio(s1, s0)
+        eta_hi, s_hi = 1.0, s1
+        eta_lo, s_lo = 0.0, s0
+        ratio = ratio_initial
+        eta_previous = 1.0
+        stopped = False
 
-        for _ in range(self.max_iter):
+        iterations = 0
+        while ratio > self.tolerance and iterations < self.max_iter and not stopped:
+            iterations += 1
             denominator = s_lo - s_hi
-            if abs(denominator) < 1e-30:
+            if denominator == 0.0:
                 break
             eta = eta_hi - s_hi * (eta_lo - eta_hi) / denominator
-            eta = float(np.clip(eta, self.min_eta, self.max_eta))
+            if eta > self.max_eta:
+                eta = self.max_eta
+            # Exact C# safeguard: once a trial is worse than the initial full
+            # step, evaluate eta=1 again rather than returning immediately.
+            if ratio > ratio_initial:
+                eta = 1.0
+            if eta < self.min_eta:
+                eta = self.min_eta
 
-            code, s_eta = self._trial(
-                model, p, ls, integrator, an, dx0, eta, eta_previous
-            )
+            ls.set_x_vector((eta - eta_previous) * dx0)
+            code = integrator.update(model, p, an)
             if code < 0:
                 return -1.0
-            ratio = self._ratio(s_eta, s0)
-            if ratio <= self.tolerance:
-                return self._finish(ls, dx0, eta)
+            integrator.form_unbalance(p, model, an)
 
-            # Keep the original safeguard, but compare against the initial full
-            # step rather than against the same expression.
-            if ratio > baseline_ratio and eta != 1.0:
-                code, s_eta = self._trial(
-                    model, p, ls, integrator, an, dx0, 1.0, eta
-                )
-                if code < 0:
-                    return -1.0
-                return self._finish(ls, dx0, 1.0)
+            # Deliberately preserve C# sign behavior: trial values use +dU.R
+            # while s0/s1 were formed as -dU.R.
+            s_eta = float(np.dot(dx0, ls.b))
+            ratio = self._ratio(s_eta, s0)
+            if eta_previous == eta:
+                stopped = True
+            eta_previous = eta
 
             if s_eta * s_hi < 0.0:
                 eta_lo, s_lo = eta, s_eta
-            elif s_eta == 0.0:
-                return self._finish(ls, dx0, eta)
+            elif s_eta * s_hi == 0.0:
+                stopped = True
             else:
                 eta_hi, s_hi = eta, s_eta
-            eta_previous = eta
+            if s_lo == s_hi:
+                stopped = True
 
-        return self._finish(ls, dx0, eta_previous)
+        return self._finish(ls, dx0, eta)
 
 
 class SecantLineSearch(LineSearch):

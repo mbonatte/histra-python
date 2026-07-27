@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from math import sqrt
+
+import numpy as np
 from typing import Dict, List, Tuple, Optional
 from histra.types.point import Point
 from histra.types.afference_entry import AfferenceEntry
@@ -44,107 +46,166 @@ class Quad:
     layer_key: int = 0
     master_element_key: int = 0
     master_element_type: str = ""
+    sigma_initial: float = 0.0
 
     def compute_static_load_internal(self, node_coords: List[Point], nodal_forces: List[Tuple[float, float, float]]) -> List[float]:
-        """2×2 Gauss integration of load distribution → P[0..6]."""
-        L0, L1, L3 = self.length[0], self.length[1], self.length[3]
-        Sin0, Sin1 = self.sin[0], self.sin[1]
-        Sin2, Sin3 = self.sin[2], self.sin[3]
-        Cos0, Cos1 = self.cos[0], self.cos[1]
-        Gx, Gy, Gz = self.g.x, self.g.y, self.g.z
-        e1x, e1y, e1z = self.reference_e1
-        e2x, e2y, e2z = self.reference_e2
+        """Port C# ``Quad.ComputeStaticLoadInternal`` for area loads.
 
-        # Transformation matrices for each node (3×7)
-        # Columns 0-2: identity (direct forces), 3-5: moment arms, 6: warping
-        T = []
-        for i in range(4):
-            n = node_coords[i]
-            dx, dy, dz = n.x - Gx, n.y - Gy, n.z - Gz
-            ti = [
-                [1.0, 0.0, 0.0, 0.0, dz, -dy, 0.0],
-                [0.0, 1.0, 0.0, -dz, 0.0, dx, 0.0],
-                [0.0, 0.0, 1.0, dy, -dx, 0.0, 0.0],
-            ]
-            T.append(ti)
+        The original implementation stores geometry, shape functions, force
+        interpolation and Jacobians in ``float``/XNA ``Vector3`` values, then
+        adds each Gauss-point contribution to a ``double[7]`` result.  Keeping
+        those single-precision operation boundaries is necessary for numerical
+        path compatibility with its work-based nonlinear convergence test.
+        """
+        f32 = np.float32
 
-        # Warping column (col 6) for nodes 2 and 3
-        if L0 != 0 and Sin2 != 0:
-            T[2][0][6] = -L3 * Sin3 / Sin2 * (Sin1 * e1x + Cos1 * e2x)
-            T[2][1][6] = -L3 * Sin3 / Sin2 * (Sin1 * e1y + Cos1 * e2y)
-            T[2][2][6] = -L3 * Sin3 / Sin2 * (Sin1 * e1z + Cos1 * e2z)
-            T[3][0][6] = -L3 * (Sin0 * e1x - Cos0 * e2x)
-            T[3][1][6] = -L3 * (Sin0 * e1y - Cos0 * e2y)
-            T[3][2][6] = -L3 * (Sin0 * e1z - Cos0 * e2z)
+        out = np.zeros(7, dtype=np.float64)
+        gp = f32(f32(np.sqrt(3.0)) / f32(3.0))
+        gauss = (gp, f32(-gp))
 
-        # Node local (u,v) coordinates
-        u_vals = [-L0 / 2, L0 / 2, L0 / 2 - L1 * Cos1, -L0 / 2 + L3 * Cos0]
-        v_vals = [0.0, 0.0, L1 * Sin1, L3 * Sin0]
+        g = np.asarray((self.g.x, self.g.y, self.g.z), dtype=np.float32)
+        e1 = np.asarray(self.reference_e1, dtype=np.float32)
+        e2 = np.asarray(self.reference_e2, dtype=np.float32)
+        transform = np.zeros((4, 3, 7), dtype=np.float32)
 
-        # Gauss points
-        gp = sqrt(3.0) / 3.0
-        gauss = [gp, -gp]
+        for i, node in enumerate(node_coords):
+            xyz = np.asarray((node.x, node.y, node.z), dtype=np.float32)
+            dx, dy, dz = xyz - g
+            transform[i, 0, 0] = f32(1.0)
+            transform[i, 1, 1] = f32(1.0)
+            transform[i, 2, 2] = f32(1.0)
+            transform[i, 0, 4] = dz
+            transform[i, 0, 5] = f32(-dy)
+            transform[i, 1, 3] = f32(-dz)
+            transform[i, 1, 5] = dx
+            transform[i, 2, 3] = dy
+            transform[i, 2, 4] = f32(-dx)
 
-        out = [0.0] * 7
+        # C# evaluates these expressions in double precision and explicitly
+        # converts the completed warping coefficient to Single.
+        for component in range(3):
+            transform[2, component, 6] = f32(
+                -self.length[3]
+                * self.sin[3]
+                / self.sin[2]
+                * (
+                    self.sin[1] * float(e1[component])
+                    + self.cos[1] * float(e2[component])
+                )
+            )
+            transform[3, component, 6] = f32(
+                -self.length[3]
+                * (
+                    self.sin[0] * float(e1[component])
+                    - self.cos[0] * float(e2[component])
+                )
+            )
 
-        for li in range(2):
-            xi = gauss[li]
-            for mi in range(2):
-                eta = gauss[mi]
+        length0 = f32(self.length[0])
+        length1 = f32(self.length[1])
+        length3 = f32(self.length[3])
+        cos0 = f32(self.cos[0])
+        cos1 = f32(self.cos[1])
+        sin0 = f32(self.sin[0])
+        sin1 = f32(self.sin[1])
+        local = np.zeros((4, 2), dtype=np.float32)
+        local[0] = (f32(f32(-length0) / f32(2.0)), f32(0.0))
+        local[1] = (f32(length0 / f32(2.0)), f32(0.0))
+        local[2] = (
+            f32(f32(length0 / f32(2.0)) - f32(length1 * cos1)),
+            f32(length1 * sin1),
+        )
+        local[3] = (
+            f32(f32(-length0) / f32(2.0) + f32(length3 * cos0)),
+            f32(length3 * sin0),
+        )
+        forces = np.asarray(nodal_forces, dtype=np.float32)
 
-                # Shape functions
-                N = [
-                    (1.0 - xi) * (1.0 - eta) / 4.0,
-                    (1.0 + xi) * (1.0 - eta) / 4.0,
-                    (1.0 + xi) * (1.0 + eta) / 4.0,
-                    (1.0 - xi) * (1.0 + eta) / 4.0,
-                ]
+        def sum4(values: List[np.float32]) -> np.float32:
+            # C#'s source expression is left associative and every operand is
+            # Single; spell that out rather than allowing a NumPy reduction.
+            return f32(f32(f32(values[0] + values[1]) + values[2]) + values[3])
 
-                # Shape function derivatives w.r.t. xi and eta
-                dN_dxi = [
-                    -(1.0 - eta) / 4.0,
-                    (1.0 - eta) / 4.0,
-                    (1.0 + eta) / 4.0,
-                    -(1.0 + eta) / 4.0,
-                ]
-                dN_deta = [
-                    -(1.0 - xi) / 4.0,
-                    -(1.0 + xi) / 4.0,
-                    (1.0 + xi) / 4.0,
-                    (1.0 - xi) / 4.0,
-                ]
+        one = f32(1.0)
+        four = f32(4.0)
+        for xi in gauss:
+            for eta in gauss:
+                shape = np.asarray(
+                    (
+                        f32(f32(one - xi) * f32(one - eta) / four),
+                        f32(f32(one + xi) * f32(one - eta) / four),
+                        f32(f32(one + xi) * f32(one + eta) / four),
+                        f32(f32(one - xi) * f32(one + eta) / four),
+                    ),
+                    dtype=np.float32,
+                )
+                dxi = np.asarray(
+                    (
+                        f32(-f32(one - eta) / four),
+                        f32(f32(one - eta) / four),
+                        f32(f32(one + eta) / four),
+                        f32(-f32(one + eta) / four),
+                    ),
+                    dtype=np.float32,
+                )
+                deta = np.asarray(
+                    (
+                        f32(-f32(one - xi) / four),
+                        f32(-f32(one + xi) / four),
+                        f32(f32(one + xi) / four),
+                        f32(f32(one - xi) / four),
+                    ),
+                    dtype=np.float32,
+                )
 
-                # Jacobian
-                J11 = sum(u_vals[i] * dN_dxi[i] for i in range(4))
-                J12 = sum(u_vals[i] * dN_deta[i] for i in range(4))
-                J21 = sum(v_vals[i] * dN_dxi[i] for i in range(4))
-                J22 = sum(v_vals[i] * dN_deta[i] for i in range(4))
-                detJ = J11 * J22 - J12 * J21
+                j11 = sum4([f32(local[i, 0] * dxi[i]) for i in range(4)])
+                j12 = sum4([f32(local[i, 0] * deta[i]) for i in range(4)])
+                j21 = sum4([f32(local[i, 1] * dxi[i]) for i in range(4)])
+                j22 = sum4([f32(local[i, 1] * deta[i]) for i in range(4)])
+                det_j = f32(f32(j11 * j22) - f32(j12 * j21))
 
-                # Interpolated force at Gauss point
-                fx = sum(N[i] * nodal_forces[i][0] for i in range(4))
-                fy = sum(N[i] * nodal_forces[i][1] for i in range(4))
-                fz = sum(N[i] * nodal_forces[i][2] for i in range(4))
+                force_gp = np.zeros(3, dtype=np.float32)
+                for component in range(3):
+                    force_gp[component] = sum4(
+                        [f32(shape[i] * forces[i, component]) for i in range(4)]
+                    )
 
-                # Interpolated transformation matrix
-                T_gp = [[0.0] * 7 for _ in range(3)]
-                for n in range(3):
-                    for c in range(7):
-                        T_gp[n][c] = sum(N[i] * T[i][n][c] for i in range(4))
+                transform_gp = np.zeros((3, 7), dtype=np.float32)
+                for row in range(3):
+                    for column in range(7):
+                        transform_gp[row, column] = sum4(
+                            [
+                                f32(transform[i, row, column] * shape[i])
+                                for i in range(4)
+                            ]
+                        )
 
-                # Accumulate: P += (Fx * T_row0 + Fy * T_row1 + Fz * T_row2) * detJ
-                for c in range(7):
-                    val = fx * T_gp[0][c] + fy * T_gp[1][c] + fz * T_gp[2][c]
-                    out[c] += val * detJ
+                for column in range(7):
+                    projection = f32(
+                        f32(
+                            f32(force_gp[0] * transform_gp[0, column])
+                            + f32(force_gp[1] * transform_gp[1, column])
+                        )
+                        + f32(force_gp[2] * transform_gp[2, column])
+                    )
+                    # The product is Single; assignment into double[] performs
+                    # the only widening conversion in this accumulation.
+                    out[column] += float(f32(projection * det_j))
 
-        return out
+        return out.tolist()
 
     def compute_self_weight_load(self, dir_x: float, dir_y: float, dir_z: float, w: float) -> List[Tuple[float, float, float]]:
-        """Compute nodal forces for self-weight: F[i] = thickness[i] * w * dir"""
-        return [
-            (self.thickness[i] * w * dir_x, self.thickness[i] * w * dir_y, self.thickness[i] * w * dir_z)
-            for i in range(4)
-        ]
+        """Port C# ``Thickness[i] * w * Vector3 dir`` in single precision."""
+        f32 = np.float32
+        direction = (f32(dir_x), f32(dir_y), f32(dir_z))
+        weight = f32(w)
+        forces: List[Tuple[float, float, float]] = []
+        for thickness in self.thickness:
+            scalar = f32(f32(thickness) * weight)
+            forces.append(
+                tuple(float(f32(scalar * component)) for component in direction)
+            )
+        return forces
 
     # ── Diagonal spring kinematic transformation ─────────────────────────────
 
@@ -567,7 +628,58 @@ class Quad:
             if 0 <= g < len(b):
                 b[g] -= f0 * a
 
-    def update_domain(self, x, state) -> None:
+    def compute_volume(self) -> float:
+        """Return the C# ``Quad.GetVolume`` value by 2x2 Gauss integration."""
+        l0, l1, l3 = self.length[0], self.length[1], self.length[3]
+        xcoord = [-l0 / 2.0, l0 / 2.0, l0 / 2.0 - l1 * self.cos[1], -l0 / 2.0 + l3 * self.cos[0]]
+        ycoord = [0.0, 0.0, l1 * self.sin[1], l3 * self.sin[0]]
+        gp = sqrt(3.0) / 3.0
+        volume = 0.0
+        for xi in (gp, -gp):
+            for eta in (gp, -gp):
+                n = [
+                    (1.0 - xi) * (1.0 - eta) / 4.0,
+                    (1.0 + xi) * (1.0 - eta) / 4.0,
+                    (1.0 + xi) * (1.0 + eta) / 4.0,
+                    (1.0 - xi) * (1.0 + eta) / 4.0,
+                ]
+                dxi = [-(1.0 - eta) / 4.0, (1.0 - eta) / 4.0, (1.0 + eta) / 4.0, -(1.0 + eta) / 4.0]
+                deta = [-(1.0 - xi) / 4.0, -(1.0 + xi) / 4.0, (1.0 + xi) / 4.0, (1.0 - xi) / 4.0]
+                j11 = sum(xcoord[i] * dxi[i] for i in range(4))
+                j12 = sum(xcoord[i] * deta[i] for i in range(4))
+                j21 = sum(ycoord[i] * dxi[i] for i in range(4))
+                j22 = sum(ycoord[i] * deta[i] for i in range(4))
+                thickness = sum(n[i] * self.thickness[i] for i in range(4))
+                volume += thickness * (j11 * j22 - j12 * j21)
+        return volume
+
+    def compute_dn(self, collections, ls=None, nr: bool = False) -> tuple[float, float]:
+        """Port of both C# ``Quad.ComputeDN`` outputs: ``(dN, sigma)``."""
+        normal_increment = [0.0] * 4
+        committed_stress = [0.0] * 4
+        for edge in range(4):
+            force = 0.0
+            area = 0.0
+            for interface_key in self.interface_keys[edge]:
+                intf = collections.interfaces.get(interface_key)
+                if intf is None:
+                    continue
+                area += intf.area()
+                belongs = (
+                    (intf.parent_type_element1 == "Quad" and intf.parent_element_key1 == self.key)
+                    or (intf.parent_type_element2 == "Quad" and intf.parent_element_key2 == self.key)
+                )
+                if not belongs:
+                    continue
+                normal_increment[edge] += intf.compute_dn(ls, nr=nr)
+                force += sum(float(s.get_force() - s.get_incr_force()) for s in intf.trasv_1)
+            if area > 0.0:
+                committed_stress[edge] = force / area
+        sigma = 0.5 * (committed_stress[0] + committed_stress[2]) + 0.5 * (committed_stress[1] + committed_stress[3])
+        dn = 0.5 * (normal_increment[0] + normal_increment[2]) + 0.5 * (normal_increment[1] + normal_increment[3])
+        return dn, sigma
+
+    def update_domain(self, ls_or_x, state, collections=None) -> None:
         """Port of ``Quad.UpdateDomain``.
 
         Calls ``set_trial_strain_takeda_diagonal_quad`` when the diagonal
@@ -576,6 +688,7 @@ class Quad:
         """
         if self.spring is None:
             return
+        x = ls_or_x.x if hasattr(ls_or_x, "x") else ls_or_x
         for i, aff_i in enumerate(self.aff[:7]):
             self.status.u[i] += sum(
                 x[entry.gdl - 1] * entry.alfa
@@ -584,11 +697,18 @@ class Quad:
             )
             from histra.springs.coulomb03 import SpringCoulomb03
         if isinstance(self.spring, SpringCoulomb03):
-            # dN = 0.0 until interface normal-force coupling is connected
-            dN = 0.0
+            if collections is None:
+                raise RuntimeError("Quad Coulomb update requires model collections for ComputeDN")
+            dN, sigma = self.compute_dn(collections, ls_or_x, nr=True)
+            if int(getattr(state, "step", 0)) == 1:
+                self.sigma_initial = sigma
             strain = self.d_alfa_2d_diag() * self.status.u[6]
             self.spring.set_trial_strain_takeda_diagonal_quad(
-                strain, dN, masonry=None, volume=0.0, sigma=0.0
+                strain,
+                dN,
+                masonry=collections.materials.get(self.material_key),
+                volume=self.compute_volume(),
+                sigma=self.sigma_initial,
             )
         else:
             self.spring.set_trial_strain(self.d_alfa_2d_diag() * self.status.u[6])
@@ -609,6 +729,8 @@ class Quad:
             )
         if self.spring is not None:
             self.spring.revert_to_last_commit()
+            if hasattr(self.spring, "revert_to_last_commit_stress_normal"):
+                self.spring.revert_to_last_commit_stress_normal()
 
     def max_u(self) -> float:
         """Port of ``Quad.MaxU``."""
