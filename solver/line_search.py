@@ -127,6 +127,33 @@ class RegulaFalsiLineSearch(LineSearch):
             # while s0/s1 were formed as -dU.R.
             s_eta = float(np.dot(dx0, ls.b))
             ratio = self._ratio(s_eta, s0)
+
+            # The supplied C# Regula-Falsi implementation stores ``s1`` as
+            # ``-dU·R`` but evaluates all trial values as ``+dU·R``.  When the
+            # first trial brackets the stored full-step endpoint solely
+            # because of that sign mismatch, every subsequent false-position
+            # iterate converges back to eta=1 and eventually stops only when
+            # floating-point equality is reached (typically ~50-60 expensive
+            # constitutive updates).  All supported springs recompute trial
+            # state from the last committed state and the current absolute
+            # strain, so returning to eta=1 in one update is state-equivalent
+            # to traversing the redundant sequence point by point.
+            if (
+                iterations == 1
+                and ratio > self.tolerance
+                and s0 * s1 > 0.0
+                and s_eta * s_hi < 0.0
+                and eta_hi == 1.0
+            ):
+                ls.set_x_vector((1.0 - eta) * dx0)
+                code = integrator.update(model, p, an)
+                if code < 0:
+                    return -1.0
+                integrator.form_unbalance(p, model, an)
+                eta = 1.0
+                stopped = True
+                break
+
             if eta_previous == eta:
                 stopped = True
             eta_previous = eta

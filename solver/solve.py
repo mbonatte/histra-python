@@ -17,6 +17,7 @@ from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.solver.restart import restore_committed_analysis_state
+from histra.postprocessing import compute_total_reaction
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
@@ -28,6 +29,8 @@ def solve_static_nonlinear(
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[float], None] | None = None,
     results_path: str | Path | None = None,
+    initial_displacement: np.ndarray | None = None,
+    restart_from_current_state: bool = False,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
 
@@ -44,6 +47,8 @@ def solve_static_nonlinear(
         return _solve_static_nonlinear_impl(
             model, analysis, combination, on_log=on_log,
             on_progress=on_progress, results_path=results_path,
+            initial_displacement=initial_displacement,
+            restart_from_current_state=restart_from_current_state,
         )
     finally:
         if gc_was_enabled:
@@ -58,6 +63,8 @@ def _solve_static_nonlinear_impl(
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[float], None] | None = None,
     results_path: str | Path | None = None,
+    initial_displacement: np.ndarray | None = None,
+    restart_from_current_state: bool = False,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     if model.collections is None:
@@ -82,7 +89,39 @@ def _solve_static_nonlinear_impl(
     initial_analysis_key = int(getattr(analysis, "initial_analysis_key", -100))
     initial_external_load = np.zeros(n)
     if initial_analysis_key < 0:
+        if restart_from_current_state or initial_displacement is not None:
+            raise ValueError(
+                "A virgin analysis cannot restart from an in-memory committed state."
+            )
         _set_initial_state(model, p.u, p.v, ls)
+    elif restart_from_current_state:
+        if initial_displacement is None:
+            raise ValueError(
+                "restart_from_current_state=True requires initial_displacement."
+            )
+        restored_u = np.asarray(initial_displacement, dtype=float)
+        if restored_u.shape != (n,):
+            raise ValueError(
+                f"Expected initial_displacement shape ({n},), got {restored_u.shape}."
+            )
+        if not np.all(np.isfinite(restored_u)):
+            raise ValueError("initial_displacement contains NaN or infinite values.")
+        p.u[:] = restored_u
+        p.v.fill(0.0)
+        ls.set_zero_displacement()
+        p.log(
+            f"Using in-memory committed state from analysis {initial_analysis_key}: "
+            f"{n} DOFs"
+        )
+        # The model's Quad/Interface/spring objects are already at the prior
+        # analysis' last committed state. Reproduce C# SetFextEqualToFint so
+        # the new analysis starts from exact equilibrium without a .Results DB.
+        ModelManager.get_resisting_force(model, ls)
+        initial_external_load = -ls.b.copy()
+        p.log(
+            "Restored chained baseline load from in-memory resisting forces: "
+            f"norm={np.linalg.norm(initial_external_load):.6g}"
+        )
     else:
         initial_combination = int(
             getattr(analysis, "initial_combination_analysis_key", combination)
@@ -196,6 +235,19 @@ def _solve_static_nonlinear_impl(
             result = -4
 
         if result < 0:
+            # Preserve the trial termination diagnostics before restoring the
+            # complete pre-step state. In particular, a -3 result represents
+            # the model-wide element displacement limit, which is not
+            # necessarily the graph/control DOF exported as ``displacement``.
+            failure_max_u = float(p.max_u)
+            failure_max_key = int(p.elem_max_u_key)
+            failure_max_type = str(p.elem_max_u_type)
+            failure_iterations = int(algorithm.the_test.current_iter)
+            failure_error = float(algorithm.the_test.get_error())
+            failure_residual = float(ls.get_b_norm())
+            failure_increment = float(ls.get_x_norm())
+            failure_load_factor = float(integrator.mult)
+            failure_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
             step_snapshot.restore()
             p.current_load_factor = integrator.mult
             final_code = result
@@ -205,12 +257,15 @@ def _solve_static_nonlinear_impl(
                     "status": "FAILED",
                     "exit_code": result,
                     "u": p.u.copy(),
-                    "load_factor": integrator.mult,
-                    "displacement": float(p.u[dof]) if 0 <= dof < n else 0.0,
-                    "iterations": algorithm.the_test.current_iter,
-                    "convergence_error": float(algorithm.the_test.get_error()),
-                    "residual_norm": float(ls.get_b_norm()),
-                    "increment_norm": float(ls.get_x_norm()),
+                    "load_factor": failure_load_factor,
+                    "displacement": failure_displacement,
+                    "iterations": failure_iterations,
+                    "convergence_error": failure_error,
+                    "residual_norm": failure_residual,
+                    "increment_norm": failure_increment,
+                    "max_element_displacement": failure_max_u,
+                    "max_element_key": failure_max_key,
+                    "max_element_type": failure_max_type,
                 }
             )
             p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
@@ -220,6 +275,8 @@ def _solve_static_nonlinear_impl(
         energy_elastic += de_el
         energy_dissipated += de_pl
         _commit_state(model, ls)
+
+        reaction = compute_total_reaction(model)
 
         p.current_load_factor = integrator.mult
         values = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
@@ -236,8 +293,17 @@ def _solve_static_nonlinear_impl(
                 "convergence_error": float(algorithm.the_test.get_error()),
                 "residual_norm": float(ls.get_b_norm()),
                 "increment_norm": float(ls.get_x_norm()),
+                "max_element_displacement": float(p.max_u),
+                "max_element_key": int(p.elem_max_u_key),
+                "max_element_type": str(p.elem_max_u_type),
                 "elastic_energy": energy_elastic,
                 "dissipated_energy": energy_dissipated,
+                "reaction_x": reaction.x,
+                "reaction_y": reaction.y,
+                "reaction_z": reaction.z,
+                "balancing_reaction_x": reaction.balancing_x,
+                "balancing_reaction_y": reaction.balancing_y,
+                "balancing_reaction_z": reaction.balancing_z,
             }
         )
         p.log(
