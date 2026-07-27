@@ -1,0 +1,71 @@
+"""Focused comparison against the supplied C# SQLite result database."""
+from __future__ import annotations
+
+import copy
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from histra.io.hr_loader import load_model
+from histra.model.load import LoadFunction, LoadFunctionItem
+from histra.solver.assembler import extract_displacements
+from histra.solver.solve import solve_static_nonlinear
+
+ROOT = Path(__file__).resolve().parents[2]
+HRX = ROOT / "model-output" / "model.hrx"
+RESULTS = ROOT / "model-output" / "model.Results"
+
+
+def _single_csharp_step_analysis(model):
+    analysis = copy.deepcopy(model.collections.analyses[1])
+    analysis.load_function_key = 999
+    analysis.load_function = LoadFunction(
+        key=999,
+        discr_val=0.2,
+        items=[
+            LoadFunctionItem(pseudo_time=0.0, multiplier=0.0),
+            LoadFunctionItem(pseudo_time=0.2, multiplier=0.2),
+        ],
+    )
+    model.collections.load_functions[999] = analysis.load_function
+    return analysis
+
+
+def test_first_nonlinear_step_matches_csharp_database():
+    model = load_model(HRX)
+    analysis = _single_csharp_step_analysis(model)
+    code, steps = solve_static_nonlinear(model, analysis)
+    assert code == 0
+    assert len(steps) == 1
+    assert steps[0]["status"] == "OK"
+
+    python_u = steps[0]["u"]
+    csharp_u = extract_displacements(
+        model,
+        results_path=str(RESULTS),
+        analysis_key=1,
+        combination=1,
+        step=1,
+    )
+    relative_error = np.linalg.norm(python_u - csharp_u) / np.linalg.norm(csharp_u)
+    assert relative_error < 5e-5
+    assert np.max(np.abs(python_u - csharp_u)) < 3e-7
+
+
+def test_chained_analysis_is_rejected_until_full_state_restore_exists():
+    model = load_model(HRX)
+    analysis = model.collections.analyses[22]
+    with pytest.raises(NotImplementedError, match="restarts from analysis 1"):
+        solve_static_nonlinear(model, analysis)
+
+
+def test_csharp_global_dynamic_vector_is_readable():
+    from histra.io.results_reader import read_dynamic_vectors
+
+    u, v, step = read_dynamic_vectors(RESULTS, analysis_key=1, size=2142)
+    assert step == 5
+    assert u.shape == (2142,)
+    assert v.shape == (2142,)
+    assert np.all(np.isfinite(u))
+    assert np.all(np.isfinite(v))

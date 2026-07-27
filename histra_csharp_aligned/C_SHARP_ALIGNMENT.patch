@@ -1,0 +1,4475 @@
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/io/hr_loader.py histra_csharp_aligned/histra/io/hr_loader.py
+--- histra_src/histra/io/hr_loader.py	2026-07-24 23:54:34.000000000 +0000
++++ histra_csharp_aligned/histra/io/hr_loader.py	2026-07-27 08:56:06.194038783 +0000
+@@ -1,214 +1,391 @@
+-"""HiStrA .hrx file loader — single-pass streaming XML parser."""
++"""HiStrA HRX loader.
++
++The C# model stores load-function definitions and their points as separate
++top-level entities.  This loader preserves that relationship and attaches
++``LoadFunctionItem`` objects after the streaming parse is complete.
++"""
+ 
+ from __future__ import annotations
++
+ import xml.etree.ElementTree as ET
+ from pathlib import Path
+ from typing import Union
+ 
+-from histra.model.model import Model, Collections
+-from histra.model.node import Node, NodeC
+-from histra.model.quad import Quad
+ from histra.model.interface import Interface
+-from histra.model.restraint import Restraint
+ from histra.model.load import (
+-    LoadCombination, LoadCombinationItem,
+-    LoadCondition, LoadFunction, Analysis,
++    Analysis,
++    LoadCombination,
++    LoadCombinationItem,
++    LoadCondition,
++    LoadFunction,
++    LoadFunctionItem,
+ )
+ from histra.model.masonry_material import MasonryMaterial
++from histra.model.model import Collections, Model
++from histra.model.node import Node, NodeC
++from histra.model.quad import Quad
++from histra.model.restraint import Restraint
++
+ 
+-# Tags we know how to process (top-level model entities).
+-_CONSUMED_TAGS = frozenset({
+-    "Node", "NodeC", "Quad", "Interface", "Restraint",
+-    "LoadCombination", "LoadCondition", "LoadFunction",
+-    "Template", "Analysis",
+-})
++_CONSUMED_TAGS = frozenset(
++    {
++        "Node",
++        "NodeC",
++        "Quad",
++        "Interface",
++        "Restraint",
++        "LoadCombination",
++        "LoadCondition",
++        "LoadFunction",
++        "LoadFunctionItem",
++        "Template",
++        "Analysis",
++    }
++)
+ 
+ 
+ def load_model(path: Union[str, Path]) -> Model:
+-    """Load a ``.hrx`` file and return a fully populated Model.
++    """Load a ``.hrx`` file into the translated Python model."""
+ 
+-    Single-pass streaming parser using iterparse.
+-    """
+-    path = str(path)
+     model = Model()
+     collections = Collections()
++    load_function_items: list[LoadFunctionItem] = []
+ 
+-    context = ET.iterparse(path, events=("end",))
++    context = ET.iterparse(str(path), events=("end",))
+ 
+     for _event, elem in context:
+         tag = elem.tag
+ 
+         if tag == "HiStrA":
+-            model.version = elem.get("version", "")
+-            model.gdl = _safe_int(elem.get("GDL", "0"))
+-            model.wizard_type = elem.get("WizardType", "")
+-            model.is_locked = elem.get("IsLocked", "false") == "true"
++            model.version = _attr(elem, "version", "Version", default="")
++            model.gdl = _safe_int(_attr(elem, "GDL", "gdl", default="0"))
++            model.wizard_type = _attr(elem, "WizardType", default="")
++            model.is_locked = _safe_bool(_attr(elem, "IsLocked", default="false"))
+             elem.clear()
+ 
+         elif tag == "Node":
+-            n = Node.from_xml(elem)
+-            collections.nodes[n.key] = n
++            node = Node.from_xml(elem)
++            collections.nodes[node.key] = node
+             elem.clear()
+ 
+         elif tag == "NodeC":
+-            nc = NodeC.from_xml(elem)
+-            collections.node_c[nc.key] = nc
++            node_c = NodeC.from_xml(elem)
++            collections.node_c[node_c.key] = node_c
+             elem.clear()
+ 
+         elif tag == "Quad":
+-            q = Quad.from_xml(elem)
+-            collections.quads[q.key] = q
++            quad = Quad.from_xml(elem)
++            collections.quads[quad.key] = quad
+             elem.clear()
+ 
+         elif tag == "Interface":
+-            # Top-level Interface elements have a "Key" attribute (entity).
+-            # Interface references inside a Quad's <Interfaces1..6> look like
+-            # <Interface Value="N" /> (no Key).  Skip those — they are
+-            # consumed by the parent Quad.from_xml path.
++            # Nested references inside a Quad have no Key and must stay attached
++            # until the parent Quad is parsed.
+             if elem.get("Key") is None:
+-                # Reference fragment (no Key).  It must remain attached to its
+-                # parent Quad until the Quad end event is parsed.
+                 continue
+-            else:
+-                intf = Interface.from_xml(elem)
+-                collections.interfaces[intf.key] = intf
++            interface = Interface.from_xml(elem)
++            collections.interfaces[interface.key] = interface
+             elem.clear()
+ 
+         elif tag == "Restraint":
+-            r = Restraint.from_xml(elem)
+-            collections.restraints[r.key] = r
++            restraint = Restraint.from_xml(elem)
++            collections.restraints[restraint.key] = restraint
+             elem.clear()
+ 
+         elif tag == "LoadCombination":
+-            lc = _parse_load_combination(elem)
+-            collections.load_combinations[lc.key] = lc
++            combination = _parse_load_combination(elem)
++            collections.load_combinations[combination.key] = combination
+             elem.clear()
+ 
+         elif tag == "LoadCondition":
+-            lc = LoadCondition(
+-                id=_safe_int(elem.get("Id", "0")),
+-                name=elem.get("Name", ""),
+-                description=elem.get("Description", ""),
+-                mass_in_dir_x=float(elem.get("MassInDirX", "1")),
+-                mass_in_dir_y=float(elem.get("MassInDirY", "1")),
+-                mass_in_dir_z=float(elem.get("MassInDirZ", "1")),
+-                is_main_load=elem.get("isMainLoad", "false") == "true",
+-                is_favourable=elem.get("isFavourable", "false") == "true",
+-                is_un_favourable=elem.get("isUnFavourable", "true") == "true",
+-                gamma_fav_str=float(elem.get("GammaFavSTR", "1")),
+-                gamma_unfav_str=float(elem.get("GammaUnfavSTR", "1")),
+-                gamma_fav_geo=float(elem.get("GammaFavGEO", "1")),
+-                gamma_unfav_geo=float(elem.get("GammaUnfavGEO", "1")),
+-                action=_safe_int(elem.get("Action", "0")),
++            condition = LoadCondition(
++                id=_safe_int(_attr(elem, "Id", "id", default="0")),
++                name=_attr(elem, "Name", "name", default=""),
++                description=_attr(elem, "Description", default=""),
++                mass_in_dir_x=_safe_float(
++                    _attr(elem, "MassInDirX", default="1"), 1.0
++                ),
++                mass_in_dir_y=_safe_float(
++                    _attr(elem, "MassInDirY", default="1"), 1.0
++                ),
++                mass_in_dir_z=_safe_float(
++                    _attr(elem, "MassInDirZ", default="1"), 1.0
++                ),
++                is_main_load=_safe_bool(
++                    _attr(elem, "isMainLoad", "IsMainLoad", default="false")
++                ),
++                is_favourable=_safe_bool(
++                    _attr(elem, "isFavourable", "IsFavourable", default="false")
++                ),
++                is_un_favourable=_safe_bool(
++                    _attr(
++                        elem,
++                        "isUnFavourable",
++                        "IsUnFavourable",
++                        default="true",
++                    )
++                ),
++                gamma_fav_str=_safe_float(
++                    _attr(elem, "GammaFavSTR", default="1"), 1.0
++                ),
++                gamma_unfav_str=_safe_float(
++                    _attr(elem, "GammaUnfavSTR", default="1"), 1.0
++                ),
++                gamma_fav_geo=_safe_float(
++                    _attr(elem, "GammaFavGEO", default="1"), 1.0
++                ),
++                gamma_unfav_geo=_safe_float(
++                    _attr(elem, "GammaUnfavGEO", default="1"), 1.0
++                ),
++                action=_safe_int(_attr(elem, "Action", default="0")),
+             )
+-            collections.load_conditions[lc.id] = lc
++            collections.load_conditions[condition.id] = condition
+             elem.clear()
+ 
+         elif tag == "LoadFunction":
+-            lf = LoadFunction(
+-                key=_safe_int(elem.get("Key", elem.get("key", "0"))),
+-                name=elem.get("Name", ""),
+-                type_discr=elem.get("typeDiscr", "false") == "true",
+-                discr_val=float(elem.get("DiscrVal", "0.1")),
++            function = LoadFunction(
++                key=_safe_int(_attr(elem, "Key", "key", default="0")),
++                name=_attr(elem, "Name", "name", default=""),
++                type_discr=_safe_bool(
++                    _attr(elem, "typeDiscr", "TypeDiscr", default="false")
++                ),
++                discr_val=_safe_float(
++                    _attr(elem, "DiscrVal", "discrVal", default="0.1"), 0.1
++                ),
++            )
++            collections.load_functions[function.key] = function
++            elem.clear()
++
++        elif tag == "LoadFunctionItem":
++            load_function_items.append(
++                LoadFunctionItem(
++                    key=_safe_int(_attr(elem, "Key", "key", default="0")),
++                    load_function_key=_safe_int(
++                        _attr(
++                            elem,
++                            "LoadFunctionKey",
++                            "loadFunctionKey",
++                            default="0",
++                        )
++                    ),
++                    pseudo_time=_safe_float(
++                        _attr(elem, "PseudoTime", "pseudoTime", default="0")
++                    ),
++                    multiplier=_safe_float(
++                        _attr(elem, "Multiplier", "multiplier", default="0")
++                    ),
++                )
+             )
+-            collections.load_functions[lf.key] = lf
+             elem.clear()
+ 
+         elif tag == "Template":
+-            purpose = elem.get("PurposeType", "")
+-            if purpose == "MasonryMaterial":
+-                mat = MasonryMaterial(
+-                    key=_safe_int(elem.get("Key", "0")),
+-                    name=elem.get("Name", ""),
+-                    w=float(elem.get("w", "0")),
+-                    E_min=float(elem.get("E_min", "0")),
+-                    E_med=float(elem.get("E_med", "0")),
+-                    E_max=float(elem.get("E_max", "0")),
+-                    G_min=float(elem.get("G_min", "0")),
+-                    G_med=float(elem.get("G_med", "0")),
+-                    G_max=float(elem.get("G_max", "0")),
+-                    fm_min=float(elem.get("fm_min", "0")),
+-                    fm_med=float(elem.get("fm_med", "0")),
+-                    fm_max=float(elem.get("fm_max", "0")),
+-                    fvk0_min=float(elem.get("fvk0_min", "0")),
+-                    fvk0_med=float(elem.get("fvk0_med", "0")),
+-                    fvk0_max=float(elem.get("fvk0_max", "0")),
++            if _attr(elem, "PurposeType", default="") == "MasonryMaterial":
++                material = MasonryMaterial(
++                    key=_safe_int(_attr(elem, "Key", default="0")),
++                    name=_attr(elem, "Name", default=""),
++                    w=_safe_float(_attr(elem, "w", default="0")),
++                    E_min=_safe_float(_attr(elem, "E_min", default="0")),
++                    E_med=_safe_float(_attr(elem, "E_med", default="0")),
++                    E_max=_safe_float(_attr(elem, "E_max", default="0")),
++                    G_min=_safe_float(_attr(elem, "G_min", default="0")),
++                    G_med=_safe_float(_attr(elem, "G_med", default="0")),
++                    G_max=_safe_float(_attr(elem, "G_max", default="0")),
++                    fm_min=_safe_float(_attr(elem, "fm_min", default="0")),
++                    fm_med=_safe_float(_attr(elem, "fm_med", default="0")),
++                    fm_max=_safe_float(_attr(elem, "fm_max", default="0")),
++                    fvk0_min=_safe_float(_attr(elem, "fvk0_min", default="0")),
++                    fvk0_med=_safe_float(_attr(elem, "fvk0_med", default="0")),
++                    fvk0_max=_safe_float(_attr(elem, "fvk0_max", default="0")),
+                 )
+-                collections.materials[mat.key] = mat
+-            # Clear regardless of purpose, to free memory
++                collections.materials[material.key] = material
+             elem.clear()
+ 
+         elif tag == "Analysis":
+-            an = Analysis(
+-                key=_safe_int(elem.get("Key", "0")),
+-                name=elem.get("Name", ""),
+-                analysis_type=_safe_int(elem.get("AnalysisType", "0")),
+-                load_combination_key=_safe_int(elem.get("LoadCombinationKey", "0")),
+-                load_function_key=_safe_int(elem.get("LoadFunctionKey", "0")),
+-                dir_x=float(elem.get("DirX", "0")),
+-                dir_y=float(elem.get("DirY", "0")),
+-                dir_z=float(elem.get("DirZ", "-1")),
+-                is_seismic=elem.get("IsSeismic", "false") == "true",
+-                mult=float(elem.get("Mult", "1")),
+-                integration_method=elem.get("IntegrationMethod", "LoadControl"),
+-                method=elem.get("Method", "StandardNewtonRaphson"),
+-                convergence_tolerance=float(elem.get("ConvergenceTolerance", "0.0001")),
+-                max_iterations=_safe_int(elem.get("MaxIterations", "1000")),
+-                max_u=float(elem.get("maxU", "100")),
+-                pdelta_effect=elem.get("PdeltaEffect", "None"),
+-                als=elem.get("ALS", "false") == "true",
+-                max_number_als=_safe_int(elem.get("MaxNumberALS", "10")),
+-                load_factor_als=_safe_int(elem.get("LoadFactorALS", "2")),
+-                master_point=_safe_int(elem.get("MasterPoint", "-10")),
++            analysis = Analysis(
++                key=_safe_int(_attr(elem, "Key", default="0")),
++                name=_attr(elem, "Name", default=""),
++                analysis_type=_safe_int(_attr(elem, "AnalysisType", default="0")),
++                load_combination_key=_safe_int(
++                    _attr(elem, "LoadCombinationKey", default="0")
++                ),
++                load_function_key=_safe_int(
++                    _attr(elem, "LoadFunctionKey", default="0")
++                ),
++                dir_x=_safe_float(_attr(elem, "DirX", default="0")),
++                dir_y=_safe_float(_attr(elem, "DirY", default="0")),
++                dir_z=_safe_float(_attr(elem, "DirZ", default="-1"), -1.0),
++                is_seismic=_safe_bool(
++                    _attr(elem, "IsSeismic", default="false")
++                ),
++                mult=_safe_float(_attr(elem, "Mult", default="1"), 1.0),
++                integration_method=_attr(
++                    elem, "IntegrationMethod", default="LoadControl"
++                ),
++                method=_attr(
++                    elem, "Method", default="StandardNewtonRaphson"
++                ),
++                adaptive_convergence_criteria=_attr(
++                    elem,
++                    "AdapticConvergenceCriteria",
++                    default="ForceMoment",
++                ),
++                convergence_tolerance=_safe_float(
++                    _attr(elem, "ConvergenceTolerance", default="0.0001"),
++                    1.0e-4,
++                ),
++                max_iterations=_safe_int(
++                    _attr(elem, "MaxIterations", default="1000"), 1000
++                ),
++                max_u=_safe_float(_attr(elem, "maxU", "MaxU", default="100"), 100.0),
++                pdelta_effect=_attr(elem, "PdeltaEffect", default="None"),
++                als=_safe_bool(_attr(elem, "ALS", default="false")),
++                max_number_als=_safe_int(
++                    _attr(elem, "MaxNumberALS", default="10"), 10
++                ),
++                load_factor_als=_safe_int(
++                    _attr(elem, "LoadFactorALS", default="2"), 2
++                ),
++                master_point=_safe_int(
++                    _attr(elem, "MasterPoint", default="-10"), -10
++                ),
++                target_displacement=_safe_float(
++                    _attr(elem, "TargetDisplacement", default="0")
++                ),
++                dr2=_safe_float(_attr(elem, "Dr2", "DR2", default="0.0001"), 1.0e-4),
++                arc_length_procedure=_attr(
++                    elem,
++                    "ArcLengthProcedure",
++                    default="OnlyControlPoint",
++                ),
++                update_dr2=_safe_bool(
++                    _attr(elem, "UpdateDr2", default="false")
++                ),
++                desired_iterations=_safe_int(
++                    _attr(elem, "DesiredIterations", default="5"), 5
++                ),
++                is_max_arc_length_ray=_safe_bool(
++                    _attr(elem, "IsMaxArcLengthRay", default="false")
++                ),
++                max_arc_length_ray=_safe_float(
++                    _attr(elem, "MaxArcLengthRay", default="1"), 1.0
++                ),
++                line_search_tolerance=_safe_float(
++                    _attr(elem, "LineSearchTolerance", default="0.8"), 0.8
++                ),
++                line_search_max_iterations=_safe_int(
++                    _attr(elem, "LineSearchMaxIterations", default="1000"),
++                    1000,
++                ),
++                line_search_max_eta=_safe_float(
++                    _attr(elem, "LineSearchMaxEta", default="10"), 10.0
++                ),
++                line_search_min_eta=_safe_float(
++                    _attr(elem, "LineSearchMinEta", default="0.1"), 0.1
++                ),
++                load_reduction_ratio_to_stop=_safe_bool(
++                    _attr(
++                        elem,
++                        "LoadReductionRatioToStop",
++                        default="false",
++                    )
++                ),
++                load_reduction_ratio_to_stop_value=_safe_float(
++                    _attr(
++                        elem,
++                        "LoadReductionRatioToStopValue",
++                        default="0.1",
++                    ),
++                    0.1,
++                ),
++                check_secant_stiffness=_safe_bool(
++                    _attr(elem, "CheckSecantStiffness", default="false")
++                ),
++                secant_stiffness_ratio=_safe_float(
++                    _attr(elem, "SecantStiffnessRatio", default="0")
++                ),
+             )
+-            collections.analyses[an.key] = an
++            collections.analyses[analysis.key] = analysis
+             elem.clear()
+ 
+-        # do NOT clear non-consumed elements (Spring, Alfa, Gdl, Item, etc.)
++    # Attach the separate C# LoadFunctionItem collection to each function.
++    for item in load_function_items:
++        function = collections.load_functions.get(item.load_function_key)
++        if function is not None:
++            function.items.append(item)
++    for function in collections.load_functions.values():
++        function.items.sort(key=lambda item: (item.pseudo_time, item.key))
++
++    for analysis in collections.analyses.values():
++        analysis.load_function = collections.load_functions.get(
++            analysis.load_function_key
++        )
+ 
+     model.collections = collections
+ 
+-    # If GDL is 0 (e.g. model was never solved), compute from max afference entry
++    # HRX files normally contain the active generalized-DOF count and saved
++    # afference matrices.  Recover the count only when the header is zero.
+     if model.gdl == 0:
+         max_gdl = 0
+-        for q in collections.quads.values():
+-            for aff_i in q.aff:
+-                for entry in aff_i:
+-                    if entry.gdl > max_gdl:
+-                        max_gdl = entry.gdl
+-        for intf in collections.interfaces.values():
+-            for aff_i in intf.aff[:]:
++        for element in (
++            list(collections.quads.values())
++            + list(collections.interfaces.values())
++        ):
++            for aff_i in element.aff:
+                 for entry in aff_i:
+-                    if entry.gdl > max_gdl:
+-                        max_gdl = entry.gdl
+-        if max_gdl > 0:
+-            model.gdl = max_gdl
++                    max_gdl = max(max_gdl, entry.gdl)
++        model.gdl = max_gdl
+ 
+     return model
+ 
+ 
+ def _parse_load_combination(elem: ET.Element) -> LoadCombination:
+-    lc = LoadCombination(
+-        key=_safe_int(elem.get("Key", "0")),
+-        name=elem.get("Name", ""),
+-        limit_state=elem.get("LimitState", ""),
++    combination = LoadCombination(
++        key=_safe_int(_attr(elem, "Key", default="0")),
++        name=_attr(elem, "Name", default=""),
++        limit_state=_attr(elem, "LimitState", default=""),
+     )
+     for child in elem.iterfind("Item"):
+-        item = LoadCombinationItem(
+-            column_key=_safe_int(child.get("ColumnKey", "0")),
+-            row_key=_safe_int(child.get("RowKey", "0")),
+-            name=child.get("Name", ""),
+-            type_data=child.get("TypeData", "Number"),
+-            secondary_type_data=child.get("SecondaryTypeData", "Number"),
+-            val=float(child.get("Val", "0")),
+-            combination=_safe_int(child.get("Combination", "0")),
++        combination.items.append(
++            LoadCombinationItem(
++                column_key=_safe_int(
++                    _attr(child, "ColumnKey", default="0")
++                ),
++                row_key=_safe_int(_attr(child, "RowKey", default="0")),
++                name=_attr(child, "Name", default=""),
++                type_data=_attr(child, "TypeData", default="Number"),
++                secondary_type_data=_attr(
++                    child, "SecondaryTypeData", default="Number"
++                ),
++                val=_safe_float(_attr(child, "Val", default="0")),
++                combination=_safe_int(
++                    _attr(child, "Combination", default="0")
++                ),
++            )
+         )
+-        lc.items.append(item)
+-    return lc
++    return combination
++
++
++def _attr(elem: ET.Element, *names: str, default: str = "") -> str:
++    for name in names:
++        value = elem.get(name)
++        if value is not None:
++            return value
++    return default
++
++
++def _safe_bool(value: str) -> bool:
++    return str(value).strip().lower() in {"1", "true", "yes"}
++
++
++def _safe_float(value: str, default: float = 0.0) -> float:
++    try:
++        return float(value)
++    except (TypeError, ValueError):
++        return default
+ 
+ 
+ def _safe_int(value: str, default: int = 0) -> int:
+     try:
+         return int(value)
+-    except (ValueError, TypeError):
++    except (TypeError, ValueError):
+         return default
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/model/__init__.py histra_csharp_aligned/histra/model/__init__.py
+--- histra_src/histra/model/__init__.py	2026-07-23 23:18:26.000000000 +0000
++++ histra_csharp_aligned/histra/model/__init__.py	2026-07-27 08:55:22.894039070 +0000
+@@ -4,6 +4,29 @@
+ from .quad import Quad, QuadState
+ from .interface import Interface, InterfaceState
+ from .restraint import Restraint
+-from .spring import Spring, SpringCoulomb03, SpringElastic, SpringCoulomb, SpringMultiLinear, spring_from_xml
+-from .load import LoadCombination
++from .spring import (
++    Spring,
++    SpringCoulomb03,
++    SpringElastic,
++    SpringCoulomb,
++    SpringMultiLinear,
++    spring_from_xml,
++)
++from .load import (
++    Analysis,
++    LoadCombination,
++    LoadCombinationItem,
++    LoadCondition,
++    LoadFunction,
++    LoadFunctionItem,
++)
+ from .model import Model, Collections
++
++__all__ = [
++    "Point", "AfferenceEntry", "Node", "NodeC", "SlaveElement",
++    "Quad", "QuadState", "Interface", "InterfaceState", "Restraint",
++    "Spring", "SpringCoulomb03", "SpringElastic", "SpringCoulomb",
++    "SpringMultiLinear", "spring_from_xml", "Analysis", "LoadCombination",
++    "LoadCombinationItem", "LoadCondition", "LoadFunction", "LoadFunctionItem",
++    "Model", "Collections",
++]
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/model/load.py histra_csharp_aligned/histra/model/load.py
+--- histra_src/histra/model/load.py	2026-07-24 20:05:15.000000000 +0000
++++ histra_csharp_aligned/histra/model/load.py	2026-07-27 08:43:22.950043848 +0000
+@@ -1,18 +1,15 @@
+-"""Load combination dataclasses matching .hrx schema."""
++"""Load and analysis dataclasses matching the HiStrA HRX schema."""
+ 
+ from __future__ import annotations
+-from dataclasses import dataclass, field
+-from typing import Dict, List
+-
+ 
+-# ---------------------------------------------------------------------------
+-# LoadCombinationItem
+-# ---------------------------------------------------------------------------
++from dataclasses import dataclass, field
++from typing import List
+ 
+ 
+ @dataclass
+ class LoadCombinationItem:
+     """One coefficient entry in a load combination."""
++
+     column_key: int = 0
+     row_key: int = 0
+     name: str = ""
+@@ -22,34 +19,28 @@
+     combination: int = 0
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# LoadCombination
+-# ---------------------------------------------------------------------------
+-
+-
+ @dataclass
+ class LoadCombination:
+-    """A load combination: coefficient table for load conditions."""
++    """A load combination coefficient table."""
++
+     key: int = 0
+     name: str = ""
+     limit_state: str = ""
+     items: List[LoadCombinationItem] = field(default_factory=list)
+ 
+-    def get_coefficient(self, row_key: int, col_key: int) -> LoadCombinationItem | None:
++    def get_coefficient(
++        self, row_key: int, col_key: int
++    ) -> LoadCombinationItem | None:
+         for item in self.items:
+             if item.row_key == row_key and item.column_key == col_key:
+                 return item
+         return None
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# LoadCondition
+-# ---------------------------------------------------------------------------
+-
+-
+ @dataclass
+ class LoadCondition:
+-    """A load condition type (gravity, variable, etc.)."""
++    """A load condition type (gravity, variable action, and so on)."""
++
+     id: int = 0
+     name: str = ""
+     description: str = ""
+@@ -69,28 +60,35 @@
+         return self.action == 1
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# LoadFunction
+-# ---------------------------------------------------------------------------
++@dataclass(frozen=True)
++class LoadFunctionItem:
++    """One point of the pseudo-time/load-multiplier function."""
++
++    key: int = 0
++    load_function_key: int = 0
++    pseudo_time: float = 0.0
++    multiplier: float = 0.0
+ 
+ 
+ @dataclass
+ class LoadFunction:
+-    """A function (typically linear) for load application."""
++    """Load application function.
++
++    C# stores ``LoadFunction`` and ``LoadFunctionItem`` as separate collections.
++    The loader attaches matching items here and orders them by pseudo-time.
++    """
++
+     key: int = 0
+     name: str = ""
+     type_discr: bool = False
+     discr_val: float = 0.1
+-
+-
+-# ---------------------------------------------------------------------------
+-# Analysis
+-# ---------------------------------------------------------------------------
++    items: List[LoadFunctionItem] = field(default_factory=list)
+ 
+ 
+ @dataclass
+ class Analysis:
+-    """An analysis definition."""
++    """Static-analysis definition used by the translated solver."""
++
+     key: int = 0
+     name: str = ""
+     analysis_type: int = 0
+@@ -101,13 +99,37 @@
+     dir_z: float = -1.0
+     is_seismic: bool = False
+     mult: float = 1.0
++
+     integration_method: str = "LoadControl"
+     method: str = "StandardNewtonRaphson"
++    adaptive_convergence_criteria: str = "ForceMoment"
+     convergence_tolerance: float = 1e-4
+     max_iterations: int = 1000
+     max_u: float = 100.0
++
+     pdelta_effect: str = "None"
+     als: bool = False
+     max_number_als: int = 10
+     load_factor_als: int = 2
++
+     master_point: int = -10
++    target_displacement: float = 0.0
++    dr2: float = 1.0e-4
++    arc_length_procedure: str = "OnlyControlPoint"
++    update_dr2: bool = False
++    desired_iterations: int = 5
++    is_max_arc_length_ray: bool = False
++    max_arc_length_ray: float = 1.0
++
++    line_search_tolerance: float = 0.8
++    line_search_max_iterations: int = 1000
++    line_search_max_eta: float = 10.0
++    line_search_min_eta: float = 0.1
++
++    load_reduction_ratio_to_stop: bool = False
++    load_reduction_ratio_to_stop_value: float = 0.1
++    check_secant_stiffness: bool = False
++    secant_stiffness_ratio: float = 0.0
++
++    # Populated by ``load_model`` after all top-level entities are parsed.
++    load_function: LoadFunction | None = field(default=None, repr=False)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/__init__.py histra_csharp_aligned/histra/solver/__init__.py
+--- histra_src/histra/solver/__init__.py	2026-07-25 14:11:46.000000000 +0000
++++ histra_csharp_aligned/histra/solver/__init__.py	2026-07-27 08:55:22.890039070 +0000
+@@ -4,7 +4,13 @@
+ from histra.solver.solution_algorithm import SolutionAlgorithm, EquiSolnAlgo
+ from histra.solver.newton_raphson import NewtonRaphson
+ from histra.solver.newton_line_search import NewtonLineSearch
+-from histra.solver.line_search import LineSearch, RegulaFalsiLineSearch
++from histra.solver.line_search import (
++    LineSearch,
++    RegulaFalsiLineSearch,
++    SecantLineSearch,
++    BisectionLineSearch,
++    InitialInterpolatedLineSearch,
++)
+ from histra.solver.model_manager import ModelManager
+ from histra.types.convergence_test import ConvergenceTest
+ from histra.solver.program import Program
+@@ -23,6 +29,9 @@
+     "NewtonLineSearch",
+     "LineSearch",
+     "RegulaFalsiLineSearch",
++    "SecantLineSearch",
++    "BisectionLineSearch",
++    "InitialInterpolatedLineSearch",
+     "ModelManager",
+     "Program",
+     "solve_static_nonlinear",
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/arc_length.py histra_csharp_aligned/histra/solver/arc_length.py
+--- histra_src/histra/solver/arc_length.py	2026-07-26 18:11:28.000000000 +0000
++++ histra_csharp_aligned/histra/solver/arc_length.py	2026-07-27 08:54:11.602039543 +0000
+@@ -1,48 +1,124 @@
+ from __future__ import annotations
+ 
+-import logging
+-import math
+-from typing import Any, Optional, Set
++from typing import Any
+ 
+ import numpy as np
+-from scipy.sparse.linalg import spsolve
+ 
+-from histra.solver.model_manager import ModelManager
+-from histra.solver.program import Program
+ from histra.model.model import Model
+-from histra.types.linear_system import LinearSystem
+ from histra.solver.incremental_integrator import StaticIntegrator
+-from .assembler import assemble_global_k, get_restrained_dofs
+-
+-logger = logging.getLogger(__name__)
++from histra.solver.model_manager import ModelManager
++from histra.solver.program import Program
++from histra.types.linear_system import LinearSolveError, LinearSystem
+ 
+ 
+ class ArcLength(StaticIntegrator):
+-    """
+-    Spherical arc-length integrator (Crisfield 1981).
++    """Arc-length integrator ported from the original C# implementation.
+ 
+-    Constraint:  Du^2 + _*(dlambda*||P||)^2 = Ds^2
+-    psi = 1.0  spherical,  psi = 0.0  cylindrical
+-    """
++    The algorithm separates the residual displacement ``delta_u_bar`` from the
++    reference-load displacement ``delta_u_hat`` and enforces the quadratic
++    constraint over either a control DOF or all active generalized DOFs.
++
++    Two apparent C# defects are intentionally corrected:
+ 
+-    PSI: float = 0.0  # cylindrical (0.0); spherical would be 1.0
++    * the adaptive radius is not reset to ``Analysis.Dr2`` at every step;
++    * ``MaxArcLengthRay`` is compared with the radius, not radius-squared.
++    """
+ 
+-    def __init__(self):
++    def __init__(self) -> None:
+         super().__init__()
+-        self._t: float = 0.0
+-        self._last_pseudo_time: float = 0.0
++        self._target_displacement = 0.0
++        self._target_displacement_base = 0.0
++        self._arc_length2 = 0.0
++        self._alpha2 = 0.0
++        self._delta_u_hat: np.ndarray | None = None
++        self._delta_u_bar: np.ndarray | None = None
++        self._delta_u: np.ndarray | None = None
++        self._delta_u_step: np.ndarray | None = None
++        self._phat: np.ndarray | None = None
++        self._phat_ref: np.ndarray | None = None
++        self._delta_lambda_step = 0.0
++        self._current_lambda = 0.0
++        self._adapt_exponent = 0.5
++        self._dofs: np.ndarray | None = None
+         self._lf_items: list[tuple[float, float]] = []
+-        self._arc_length_radius: float = 0.0
+-        self._lambda: float = 0.0              # current load factor
+-        self._delta_lambda: float = 0.0        # dlambda for the current iteration
+-        self._duP: np.ndarray | None = None     # K__*P  (reference displacement)
+-        self._duP_norm2: float = 0.0            # ||duP||^2
+-        self._du_accum: np.ndarray | None = None  # Du accumulated this step
+-        self._cached_fixed: Set[int] | None = None  # fixed DOFs (detected once)
+-        self._K_stamp: int = 0                  # counter to detect K changes
+-        self._dbg_iter: int = 0                 # debug iteration counter
++        self._current_lf_item = 1
++        self._initialized = False
++        self._step_snapshot: dict[str, Any] | None = None
++
++    def _load_items(self, an: Any) -> list[tuple[float, float]]:
++        items = list(getattr(getattr(an, "load_function", None), "items", []) or [])
++        values = sorted(
++            [(float(item.pseudo_time), float(item.multiplier)) for item in items],
++            key=lambda item: item[0],
++        )
++        return values if len(values) >= 2 else [(0.0, 0.0), (1.0, 1.0)]
++
++    def _segment_sign(self) -> float:
++        previous = self._lf_items[self._current_lf_item - 1][1]
++        current = self._lf_items[self._current_lf_item][1]
++        sign = float(np.sign(current - previous))
++        return sign if sign != 0.0 else 1.0
+ 
+-    # __ new_step ____________________________________________________________
++    def _select_dofs(self, p: Program, an: Any, fallback_dof: int | None = None) -> np.ndarray:
++        n = p.ls.n
++        procedure = str(getattr(an, "arc_length_procedure", "OnlyControlPoint")).lower()
++        if "only" not in procedure and "control" not in procedure:
++            return np.arange(n, dtype=int)
++
++        master = int(getattr(an, "master_point", -10))
++        candidate = fallback_dof if master == -10 else master
++        if candidate is not None and 0 <= int(candidate) < n:
++            return np.array([int(candidate)], dtype=int)
++
++        # C# auto-selection maximizes deltaUhat[i] * phat[i].
++        if self._delta_u_hat is not None and self._phat is not None and n:
++            products = self._delta_u_hat * self._phat
++            return np.array([int(np.argmax(products))], dtype=int)
++        return np.array([0], dtype=int) if n else np.zeros(0, dtype=int)
++
++    def _selected(self, vector: np.ndarray) -> np.ndarray:
++        if self._dofs is None or len(self._dofs) == 0:
++            return vector
++        return vector[self._dofs]
++
++    def _refresh_segment_load(self) -> None:
++        if self._phat_ref is None:
++            return
++        self._phat = self._segment_sign() * self._phat_ref
++        ModelManager._ptarget = self._phat.copy()
++        multiplier = self._lf_items[self._current_lf_item][1]
++        self._target_displacement = self._target_displacement_base * multiplier
++
++    def domain_changed(self, p: Program, model: Model, size: int) -> None:
++        del model
++        an = self.state.analysis
++        if not self._initialized:
++            self._lf_items = self._load_items(an)
++            self._current_lf_item = min(1, len(self._lf_items) - 1)
++            self._target_displacement_base = float(getattr(an, "target_displacement", 0.0))
++            self._arc_length2 = abs(float(getattr(an, "dr2", 1e-4)))
++            self._alpha2 = 0.0
++            self._phat_ref = np.asarray(ModelManager._ptarget, dtype=float).copy()
++            self._initialized = True
++
++        self._delta_u_hat = np.zeros(size)
++        self._delta_u_bar = np.zeros(size)
++        self._delta_u = np.zeros(size)
++        self._delta_u_step = np.zeros(size)
++        self._current_lambda = 0.0
++        self._delta_lambda_step = 0.0
++        self._refresh_segment_load()
++        self._dofs = None
++
++        # Determine a stable automatic control DOF when no explicit point is
++        # supplied.  A valid initial stiffness has already been assembled.
++        if int(getattr(an, "master_point", -10)) == -10 and size:
++            try:
++                p.ls.solve(rhs=self._phat)
++                self._delta_u_hat[:] = p.ls.x
++                self._dofs = self._select_dofs(p, an)
++            except LinearSolveError:
++                self._dofs = np.array([0], dtype=int)
+ 
+     def new_step(
+         self,
+@@ -54,296 +130,142 @@
+         step: int,
+         dof: int,
+     ) -> None:
+-        """Start a new arc-length step — applies the predictor load increment."""
+         self.step = step
+         self.iteration = 0
+-        self._du_accum = np.zeros(ls.n)
+-        self._dbg_iter = 0
+-        self._first_iteration = True
+-        self._duP = None
+-
+-        # Compute duP = K⁻¹·P (reference displacement)
+-        fixed_dofs = get_restrained_dofs(model, K=ls.k)
+-        P = ModelManager._ptarget.copy()
+-        n = ls.n
+-        if fixed_dofs:
+-            for dof in fixed_dofs:
+-                if dof < n:
+-                    P[dof] = 0.0
+-            free = sorted(set(range(n)) - fixed_dofs)
+-            K_red = ls.k[np.ix_(free, free)]
+-            P_red = P[free]
+-            duP = np.zeros(n)
+-            try:
+-                duP_red = spsolve(K_red, P_red)
+-            except Exception:
+-                duP = np.zeros(n)
+-            else:
+-                for i, dof in enumerate(free):
+-                    duP[dof] = duP_red[i]
+-        else:
+-            try:
+-                duP = spsolve(ls.k, P)
+-            except Exception:
+-                duP = np.zeros(n)
+-        self._duP_norm2 = np.dot(duP, duP)
+-
+-        # Compute initial dlambda from arc-length radius
+-        if self._arc_length_radius == 0.0:
+-            discr = getattr(getattr(an, "load_function", None), "discr_val", 0.1)
+-            delta_l0 = min(discr, 0.02)
+-            P_norm2 = np.dot(ModelManager._ptarget, ModelManager._ptarget)
+-            self._arc_length_radius = abs(delta_l0) * np.sqrt(
+-                self._duP_norm2 + self.PSI * P_norm2
+-            )
+-
+-        a = self._duP_norm2 + self.PSI * np.dot(ModelManager._ptarget, ModelManager._ptarget)
+-        if a < 1e-30:
+-            delta_l_predictor = self._arc_length_radius
+-        else:
+-            delta_l_predictor = self._arc_length_radius / np.sqrt(a)
+-
+-        self._delta_lambda = delta_l_predictor
+-        du_predictor = delta_l_predictor * duP
+-        self._duP = duP
+-
+-        # Apply predictor: advance lambda and update elements
+-        self._lambda += delta_l_predictor
+-        self._du_accum += du_predictor
+-        ls.x = du_predictor
++        self._step_snapshot = {
++            "u": None if self.u is None else self.u.copy(),
++            "fext": None if ModelManager._fext is None else ModelManager._fext.copy(),
++            "mult": self.mult,
++            "lambda": self._current_lambda,
++            "delta_lambda_step": self._delta_lambda_step,
++            "delta_u_step": None if self._delta_u_step is None else self._delta_u_step.copy(),
++        }
++
++        if self.update_ptarget(p, model, an, combination, self.iteration):
++            self._phat_ref = np.asarray(ModelManager._ptarget, dtype=float).copy()
++            self._refresh_segment_load()
++        if self._phat is None:
++            raise RuntimeError("ArcLength reference load is not initialized")
++
++        ls.solve(rhs=self._phat)
++        self._delta_u_hat = ls.x.copy()
++        self._dofs = self._select_dofs(p, an, fallback_dof=dof)
++        selected_hat = self._selected(self._delta_u_hat)
++        denominator = float(np.dot(selected_hat, selected_hat) + self._alpha2)
++        if denominator <= 1e-30:
++            raise LinearSolveError("ArcLength has a zero reference-load displacement")
++
++        # OnlyControlPoint in C# scales Dr2 by the selected DOF count.
++        radius2 = self._arc_length2
++        if "only" in str(getattr(an, "arc_length_procedure", "")).lower():
++            radius2 *= max(1, len(self._dofs))
++
++        delta_lambda = float(np.sqrt(radius2 / denominator))
++        if bool(getattr(an, "is_max_arc_length_ray", False)):
++            max_radius = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
++            if max_radius > 0.0 and np.sqrt(radius2) > max_radius:
++                radius2 = max_radius * max_radius
++                self._arc_length2 = radius2
++                delta_lambda = float(np.sqrt(radius2 / denominator))
++
++        selected_load = self._selected(self._phat)
++        if delta_lambda * float(np.dot(selected_hat, selected_load)) < 0.0:
++            delta_lambda *= -1.0
++
++        self._delta_lambda_step = delta_lambda
++        self._current_lambda += delta_lambda
++        self._delta_u = delta_lambda * self._delta_u_hat
++        self._delta_u_step[:] = self._delta_u
++        ls.set_x_vector(self._delta_u)
+         if self.u is not None:
+-            self.u += du_predictor
++            self.u += self._delta_u
++        self.apply_load_domain(model, delta_lambda)
+         ModelManager.update_domain(model, ls, self.state)
+ 
++        display_radius = np.sqrt(radius2 / max(1, len(self._dofs)))
+         p.log(
+-            f"Step {step}: ArcLength, "
+-            f"lambda={self._lambda:.6f}, "
+-            f"Ds={self._arc_length_radius:.6e}, "
+-            f"predictor dl={delta_l_predictor:.6f}"
+-        )
+-        p.progress(
+-            min(1.0, self._t / self._last_pseudo_time)
+-            if self._last_pseudo_time > 0
+-            else 0.0
++            f"Step {step} solving: dr={display_radius:.6g}, "
++            f"dLambda={delta_lambda:.6g}"
+         )
+ 
+-    # __ form_unbalance (override) ___________________________________________
+-
+-    def form_unbalance(self, p: Program, model: Model, an: Any) -> None:
+-        """
+-        Compute residual R = lambda*P_ref _ F_int.
+-
+-        P_ref is the reference load vector stored in ModelManager._ptarget.
+-        """
+-        # Internal forces (scattered as -F_int into ls.b)
+-        ModelManager.get_resisting_force(model, p.ls)
+-        # Add lambda*P_ref
+-        P = ModelManager._ptarget
+-        n = p.ls.n
+-        for i in range(n):
+-            fext_i = self._lambda * P[i] if i < len(P) else 0.0
+-            p.ls.sumb(i, fext_i)
+-
+-    # __ compute_increment __________________________________________________
++    def update(self, model: Model, p: Program, an: Any) -> int:
++        self.iteration += 1
++        ls = p.ls
++        self._delta_u_bar = ls.x.copy()
++        if self._phat is None or self._delta_u_step is None:
++            self.errors.append("ArcLength is not initialized")
++            return -10
++
++        try:
++            ls.solve(rhs=self._phat)
++        except LinearSolveError as exc:
++            self.errors.append(f"ArcLength reference-load solve failed: {exc}")
++            return -10
++        self._delta_u_hat = ls.x.copy()
++
++        hat = self._selected(self._delta_u_hat)
++        bar = self._selected(self._delta_u_bar)
++        step = self._selected(self._delta_u_step)
++
++        a = self._alpha2 + float(np.dot(hat, hat))
++        b = 2.0 * (
++            self._alpha2 * self._delta_lambda_step
++            + float(np.dot(hat, bar))
++            + float(np.dot(step, hat))
++        )
++        c = 2.0 * float(np.dot(step, bar)) + float(np.dot(bar, bar))
+ 
+-    def compute_increment(
+-        self,
+-        p: Program,
+-        ls: LinearSystem,
+-        model: Model,
+-        an: Any,
+-        fixed_dofs: Set[int] | None = None,
+-    ) -> np.ndarray:
+-        """
+-        Compute search direction Du = du* + dlambda*duP using the arc-length
+-        constraint.
+-
+-        Parameters
+-        ----------
+-        fixed_dofs : set of int or None
+-            DOFs that are fixed (zero boundary condition).  If None they are
+-            detected from the model restraints (once, then cached).
+-
+-        Returns Du (also stored in ls.x).
+-        """
+-        n = ls.n
+-
+-        # __ 1. Identify fixed DOFs __________________________________________
+-        if fixed_dofs is None:
+-            if self._cached_fixed is None:
+-                probe_k = assemble_global_k(model, 0.0)
+-                self._cached_fixed = get_restrained_dofs(model, K=probe_k)
+-            fixed_dofs = self._cached_fixed
+-
+-        def _zero_fixed(b: np.ndarray) -> None:
+-            if fixed_dofs:
+-                for dof in fixed_dofs:
+-                    if dof < len(b):
+-                        b[dof] = 0.0
+-
+-        # __ 2. Solve K*duP = P (recomputed each iteration from current K) ____
+-
+-        P = ModelManager._ptarget.copy()
+-        _zero_fixed(P)
+-        duP = np.zeros(n)
+-        if fixed_dofs:
+-            free = sorted(set(range(n)) - fixed_dofs)
+-            K_red = ls.k[np.ix_(free, free)]
+-            P_red = P[free]
+-            try:
+-                duP_red = spsolve(K_red, P_red)
+-            except Exception as exc:
+-                p.log(f"ArcLength: failed to solve K*duP=P _ {exc}")
+-                ls.x = np.zeros(n)
+-                return ls.x
+-            for i, dof in enumerate(free):
+-                duP[dof] = duP_red[i]
+-        else:
+-            try:
+-                duP = spsolve(ls.k, P)
+-            except Exception as exc:
+-                p.log(f"ArcLength: failed to solve K*duP=P _ {exc}")
+-                ls.x = np.zeros(n)
+-                return ls.x
+-        duP_norm2 = np.dot(duP, duP)
+-        if duP_norm2 < 1e-30:
+-            p.log("ArcLength: ||duP|| ~ 0, cannot determine arc-length step")
+-            ls.x = np.zeros(n)
+-            return ls.x
+-
+-        # Cache duP for update() (which projects du onto duP for lambda increment)
+-        self._duP = duP
+-        self._duP_norm2 = duP_norm2
+-
+-        # On the first call, set Ds from the predictor.
+-        # Use a SMALL initial lambda increment to avoid yield shock.
+-        if self._arc_length_radius == 0.0:
+-            discr = getattr(
+-                getattr(an, "load_function", None), "discr_val", 0.1
+-            )
+-            delta_l0 = min(discr, 0.02)  # start small to stay elastic
+-            P_norm2 = np.dot(ModelManager._ptarget, ModelManager._ptarget)
+-            self._arc_length_radius = abs(delta_l0) * np.sqrt(
+-                duP_norm2 + self.PSI * P_norm2
+-            )
+-
+-        # __ 3. Solve K*du* = ls.b  (residual part) _________________________
+-
+-        R = ls.b.copy()
+-        _zero_fixed(R)
+-
+-        if fixed_dofs:
+-            free = sorted(set(range(n)) - fixed_dofs)
+-            K_red = ls.k[np.ix_(free, free)]
+-            R_red = R[free]
+-            try:
+-                du_star_red = spsolve(K_red, R_red)
+-            except Exception as exc:
+-                p.log(f"ArcLength: failed to solve K*du*=R _ {exc}")
+-                ls.x = np.zeros(n)
+-                return ls.x
+-            du_star = np.zeros(n)
+-            for i, dof in enumerate(free):
+-                du_star[dof] = du_star_red[i]
+-        else:
+-            try:
+-                du_star = spsolve(ls.k, R)
+-            except Exception as exc:
+-                p.log(f"ArcLength: failed to solve K*du*=R _ {exc}")
+-                ls.x = np.zeros(n)
+-                return ls.x
+-
+-        # __ 4. Find dlambda from the spherical arc-length constraint ____________
+-        # Du^2 + _*(lambda*P)^2 = Ds^2   (Crisfield 1981)
+-
+-        # Du_{k-1} + du*
+-        a_vec = self._du_accum + du_star
+-
+-        # lambda_{k-1} = cumulative lambda for this step (before this iteration)
+-        P_norm2 = np.dot(ModelManager._ptarget, ModelManager._ptarget)
+-        PSI = self.PSI
+-
+-        a = self._duP_norm2 + PSI * P_norm2
+-        b = 2.0 * np.dot(a_vec, self._duP) + 2.0 * PSI * self._lambda * P_norm2 if PSI > 0 else 2.0 * np.dot(a_vec, self._duP)
+-        c = np.dot(a_vec, a_vec) + PSI * self._lambda**2 * P_norm2 - self._arc_length_radius**2
+-
+-        disc = b * b - 4.0 * a * c
+-
+-        if disc < 0:
+-            p.log(
+-                f"ArcLength: negative discriminant ({disc:.4e}), "
+-                f"using dlambda = discr_val fallback"
+-            )
+-            disc = 0.0
+-
+-        sqrt_disc = np.sqrt(max(disc, 0.0))
+-        if a < 1e-30:
+-            p.log("ArcLength: a ~ 0, single-root case")
+-            delta_lambda = -c / max(b, 1e-30)
++        if abs(a) < 1e-30:
++            if abs(b) < 1e-30:
++                self.errors.append("ArcLength constraint has zero reference load and denominator")
++                return -10
++            delta_lambda = -c / b
+         else:
+-            dlambda1 = (-b + sqrt_disc) / (2.0 * a)
+-            dlambda2 = (-b - sqrt_disc) / (2.0 * a)
+-
+-            # Crisfield 1981 root selection: pick the root where the
+-            # new increment vector stays close to the accumulated one.
+-            #   Du_new = a_vec + dlambda * duP
+-            # Criterion: maximise (a_vec + dlambda*duP) · a_vec
+-            # which equals ||a_vec||^2 + dlambda * (duP·a_vec)
+-            # For first iteration, ensure dlambda is positive (loading direction)
+-            if self._first_iteration or np.linalg.norm(self._du_accum) < 1e-30:
+-                delta_lambda = dlambda1 if dlambda1 >= dlambda2 else dlambda2
+-                # Ensure positive loading direction for first step
+-                P_norm = np.linalg.norm(ModelManager._ptarget)
+-                if P_norm > 0 and self._lambda <= 0.0:
+-                    delta_lambda = max(dlambda1, dlambda2)
+-                self._first_iteration = False
++            discriminant = b * b - 4.0 * a * c
++            if discriminant < 0.0:
++                # Same fallback as C#, with denominator checking and a coherent
++                # direction choice.
++                numerator = float(np.dot(step, bar))
++                denominator = float(np.dot(step, hat)) + self._alpha2 * self._delta_lambda_step
++                if abs(denominator) < 1e-30:
++                    self.errors.append("ArcLength linearized constraint denominator is zero")
++                    return -10
++                delta_lambda = -numerator / denominator
++                if self._phat is not None:
++                    if delta_lambda * float(np.dot(hat, self._selected(self._phat))) < 0.0:
++                        delta_lambda *= -1.0
+             else:
+-                # Standard Crisfield: cos(du1, a_vec) vs cos(du2, a_vec)
+-                dotP = np.dot(self._duP, a_vec)
+-                cos1 = np.dot(a_vec, a_vec) + dlambda1 * dotP
+-                cos2 = np.dot(a_vec, a_vec) + dlambda2 * dotP
+-                delta_lambda = dlambda1 if cos1 >= cos2 else dlambda2
+-
+-        self._delta_lambda = delta_lambda
+-
+-        # __ 5. Total displacement increment ________________________________
+-        du = du_star + delta_lambda * self._duP
+-
+-        # Debug logging (first few iterations)
+-        it = self._dbg_iter
+-        self._dbg_iter += 1
+-        if it < 30:
+-            du_norm = np.linalg.norm(du)
+-            r_norm = np.linalg.norm(ls.b) if ls.b is not None else 0.0
+-            p.log(
+-                f"  AL[{it}]: dl={delta_lambda:.6f}, |duP|={np.sqrt(self._duP_norm2):.6e}, "
+-                f"|du|={du_norm:.6e}, l={self._lambda:.4f}, |R|={r_norm:.4e}, "
+-                f"a={a:.4e}, b={b:.4e}, c={c:.4e}, disc={disc:.4e}"
+-            )
+-
+-        ls.x = du
+-        return du
+-
+-    # __ update _____________________________________________________________
+-
+-    def update(self, model: Model, p: Program, an: Any) -> int:
+-        """
+-        Update element state from ls.x, accumulate u, and advance lambda.
+-
+-        lambda is incremented by the delta_lambda solved from the arc-length
+-        constraint (Crisfield 1981) — NOT from a projection of du onto duP.
+-        """
+-        self.iteration += 1
+-        ModelManager.update_domain(model, p.ls, self.state)
+-        if self.u is not None and p.ls is not None:
+-            du = p.ls.x
+-            self.u += du
+-            if self._du_accum is not None:
+-                self._du_accum += du
+-            self._lambda += self._delta_lambda
++                root = float(np.sqrt(discriminant))
++                dl1 = (-b + root) / (2.0 * a)
++                dl2 = (-b - root) / (2.0 * a)
++                directional = float(np.dot(hat, step))
++                criterion1 = float(np.dot(step, step) + np.dot(bar, step) + dl1 * directional)
++                delta_lambda = dl1 if criterion1 > 0.0 else dl2
++
++        self._delta_u = self._delta_u_bar + delta_lambda * self._delta_u_hat
++        self._delta_u_step += self._delta_u
++        self._delta_lambda_step += delta_lambda
++        self._current_lambda += delta_lambda
++        ls.set_x_vector(self._delta_u)
++        if self.u is not None:
++            self.u += self._delta_u
++        ModelManager.update_domain(model, ls, self.state)
++        self.apply_load_domain(model, delta_lambda)
+         return 0
+ 
+-    # __ commit _____________________________________________________________
++    def revert_failed_step(self, model: Model, ls: LinearSystem) -> None:
++        if self._step_snapshot is None:
++            self.revert_to_last_commit(model, ls)
++            return
++        snapshot = self._step_snapshot
++        if snapshot["fext"] is not None and ModelManager._fext is not None:
++            ModelManager._fext[:] = snapshot["fext"]
++        self.mult = snapshot["mult"]
++        self._current_lambda = snapshot["lambda"]
++        self._delta_lambda_step = snapshot["delta_lambda_step"]
++        if snapshot["delta_u_step"] is not None and self._delta_u_step is not None:
++            self._delta_u_step[:] = snapshot["delta_u_step"]
++        self.revert_to_last_commit(model, ls)
+ 
+     def commit(
+         self,
+@@ -353,24 +275,34 @@
+         dof_max: int,
+         has_domain_changed: list[bool],
+     ) -> bool:
+-        """
+-        Finalise the step _ advance pseudo-time and check termination.
+-
+-        Returns True when the full load has been applied.
+-        """
++        del model, dof_max
+         if self.u_committed is not None and self.u is not None:
+             self.u_committed[:] = self.u
+-        # Sync mult with lambda for consistency
+-        self.mult = self._lambda
+-        dt, _ = self._get_increment()
+-        self._t += dt
+-        # Stop when lambda _ 1 (full design load reached)
+-        return self._lambda >= 1.0 or self._t >= self._last_pseudo_time
++
++        previous_multiplier = self._lf_items[self._current_lf_item - 1][1]
++        target_multiplier = self._lf_items[self._current_lf_item][1]
++        increasing = target_multiplier - previous_multiplier > 0.0
++        reached = disp >= self._target_displacement if increasing else disp <= self._target_displacement
++
++        if reached and self._current_lf_item < len(self._lf_items) - 1:
++            self._current_lf_item += 1
++            has_domain_changed[0] = True
++            reached = False
++
++        if bool(getattr(an, "update_dr2", False)):
++            desired = max(1.0, float(getattr(an, "desired_iterations", 5)))
++            actual = max(1.0, float(self.iteration))
++            self._arc_length2 *= (desired / actual) ** self._adapt_exponent
++
++        if bool(getattr(an, "is_max_arc_length_ray", False)):
++            max_radius = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
++            if max_radius > 0.0:
++                self._arc_length2 = min(self._arc_length2, max_radius * max_radius)
++        return reached
+ 
+     def get_time(self) -> float:
+-        return self._t
++        return float(self.step)
+ 
+ 
+ class ArcLengthLinear(ArcLength):
+-    """Linear arc-length stub."""
+-    pass
++    """Linear arc-length variant using the same corrected constraint machinery."""
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/assembler.py histra_csharp_aligned/histra/solver/assembler.py
+--- histra_src/histra/solver/assembler.py	2026-07-25 11:45:57.000000000 +0000
++++ histra_csharp_aligned/histra/solver/assembler.py	2026-07-27 08:58:50.902037690 +0000
+@@ -458,20 +458,15 @@
+         return lc.gamma_fav_geo
+     if td == "GammaUnfavGEO":
+         return lc.gamma_unfav_geo
+-    if td == "Psi0":
+-        return 0.0  # simplified
+-    if td == "Psi1":
+-        return 0.0
+-    if td == "Psi2":
+-        return 0.0
+-    if td == "GammaFavSTR_Psi0":
+-        return lc.gamma_fav_str * 0.0
+-    if td == "GammaUnfavSTR_Psi0":
+-        return lc.gamma_unfav_str * 0.0
+-    if td == "GammaFavGEO_Psi0":
+-        return lc.gamma_fav_geo * 0.0
+-    if td == "GammaUnfavGEO_Psi0":
+-        return lc.gamma_unfav_geo * 0.0
++    if td in {
++        "Psi0", "Psi1", "Psi2",
++        "GammaFavSTR_Psi0", "GammaUnfavSTR_Psi0",
++        "GammaFavGEO_Psi0", "GammaUnfavGEO_Psi0",
++    }:
++        raise NotImplementedError(
++            f"Combination coefficient {td} requires Psi values from the C# "
++            "LoadTemplateItem model, which is not present in this Python snapshot."
++        )
+     return item.val
+ 
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/incremental_integrator.py histra_csharp_aligned/histra/solver/incremental_integrator.py
+--- histra_src/histra/solver/incremental_integrator.py	2026-07-25 13:39:50.000000000 +0000
++++ histra_csharp_aligned/histra/solver/incremental_integrator.py	2026-07-27 08:48:42.390041728 +0000
+@@ -1,203 +1,68 @@
+ from __future__ import annotations
+-from typing import Any, Set
++
++from abc import ABC, abstractmethod
++from typing import Any
++
+ import numpy as np
+-from scipy.sparse.linalg import spsolve
++
++from histra.solver.model_manager import ModelManager, pdelta_enabled
+ from histra.types.integrator_state import IntegratorState
+ from histra.types.linear_system import LinearSystem
+-from histra.solver.model_manager import ModelManager
+-from histra.solver.assembler import assemble_global_k, get_restrained_dofs
+ 
+ 
+-class IncrementalIntegrator:
+-    """
+-    Port of SolverRuntime.Integrator.IncrementalIntegrator.
++class IncrementalIntegrator(ABC):
++    """Base state and operations shared by static integrators.
+ 
+-    Base class carrying state, displacement vectors, and virtual methods
+-    that specialised integrators override.
++    This follows the original C# separation between the total displacement
++    ``U``, the last committed displacement ``U_commited`` and the current
++    linear-system increment ``LS.X``.
+     """
+ 
+-    def __init__(self):
++    def __init__(self) -> None:
+         self.state = IntegratorState()
+-        self.u: np.ndarray | None = None            # total displacement
+-        self.v: np.ndarray | None = None            # velocity (dynamic)
+-        self.u_committed: np.ndarray | None = None   # last committed displ
++        self.u: np.ndarray | None = None
++        self.v: np.ndarray | None = None
++        self.u_committed: np.ndarray | None = None
+         self.errors: list[str] = []
+ 
+-    # -- property shortcuts into state ---------------------------------------
+-
+     @property
+     def step(self) -> int:
+         return self.state.step
+ 
+     @step.setter
+-    def step(self, val: int) -> None:
+-        self.state.step = val
++    def step(self, value: int) -> None:
++        self.state.step = int(value)
+ 
+     @property
+     def iteration(self) -> int:
+-        return self.state.iteration
++        return getattr(self.state, "iteration", 0)
+ 
+     @iteration.setter
+-    def iteration(self, val: int) -> None:
+-        self.state.iteration = val
++    def iteration(self, value: int) -> None:
++        self.state.iteration = int(value)
+ 
+     @property
+     def incr_mult(self) -> float:
+-        return self.state.incr_mult
++        return getattr(self.state, "incr_mult", 0.0)
+ 
+     @incr_mult.setter
+-    def incr_mult(self, val: float) -> None:
+-        self.state.incr_mult = val
++    def incr_mult(self, value: float) -> None:
++        self.state.incr_mult = float(value)
+ 
+     @property
+     def mult(self) -> float:
+-        return self.state.mult
++        return getattr(self.state, "mult", 0.0)
+ 
+     @mult.setter
+-    def mult(self, val: float) -> None:
+-        self.state.mult = val
+-
+-    # -- virtual methods -----------------------------------------------------
+-
+-    def update(self, model: Any, p: Any, an: Any) -> int:
+-        """Port of Update _ update element state, accumulate u += Du."""
+-        return 0
++    def mult(self, value: float) -> None:
++        self.state.mult = float(value)
+ 
+     def form_unbalance(self, p: Any, model: Any, an: Any) -> None:
+-        """Port of formUnbalance virtual _ delegates to ModelManager."""
+         ModelManager.form_unbalance(model, p.ls, an)
+ 
+-    def update_k(
+-        self, p: Any, model: Any, alfa: float, compute_c: bool = False
+-    ) -> None:
+-        """Port of UpdateK virtual _ assemble tangent stiffness."""
+-        ModelManager.compute_ktang(model, p.ls, alfa)
+-
+-    def new_step(
+-        self,
+-        p: Any,
+-        model: Any,
+-        ls: LinearSystem,
+-        an: Any,
+-        combination: int,
+-        step: int,
+-        dof: int,
+-    ) -> None:
+-        """Port of NewStep _ start a new load step."""
+-        pass
+-
+-    def commit(
+-        self,
+-        model: Any,
+-        an: Any,
+-        disp: float,
+-        dof_max: int,
+-        has_domain_changed: list[bool],
+-    ) -> bool:
+-        """
+-        Port of Commit _ finalise the step.
+-
+-        Returns True when the analysis should stop (all steps done).
+-        """
+-        return False
+-
+-    def domain_changed(self, p: Any, model: Any, size: int) -> None:
+-        """Port of domainChanged _ called when the domain topology changes."""
+-        pass
+-
+-    def revert_to_last_commit(self, model: Any, ls: LinearSystem) -> None:
+-        """Port of revertToLastCommit _ undo to last committed state."""
+-        if self.u_committed is None or self.u is None:
+-            return
+-        dx = self.u_committed - self.u
+-        self.u[:] = self.u_committed
+-        ls.set_x(dx)
+-        for quad in model.collections.quads.values():
+-            quad.revert_to_last_commit(ls)
+-        for intf in model.collections.interfaces.values():
+-            intf.revert_to_last_commit(ls)
+-
+-    def get_time(self) -> float:
+-        return 0.0
+-
+-    # -- initialisation ------------------------------------------------------
+-
+-    def _get_initial_time_and_force(self, an: Any) -> None:
+-        """Read the load function definition (port of GetInitialTimeAndForce)."""
+-        lf_items = []
+-        if hasattr(an, "load_function") and an.load_function is not None:
+-            lf = an.load_function
+-            items = getattr(lf, "items", [])
+-            lf_items = [(it.pseudo_time, it.multiplier) for it in items]
+-        if not lf_items:
+-            lf_items = [(0.0, 0.0), (1.0, 1.0)]
+-        self._lf_items = lf_items
+-        self._t = min(pt for pt, _ in lf_items)
+-        self._last_pseudo_time = max(pt for pt, _ in lf_items)
+-        self.mult = lf_items[0][1]
+-
+-    def domain_changed(self, p: Any, model: Any, size: int) -> None:
+-        """Port of domainChanged _ init load function on first call."""
+-        if not self._lf_items:
+-            an = getattr(self.state, "analysis", None)
+-            if an is not None:
+-                self._get_initial_time_and_force(an)
+-
+-    # -- increment calculation -----------------------------------------------
+-
+-    def _get_increment(self) -> tuple[float, float]:
+-        """
+-        Port of GetIncrement.
+-
+-        Returns (dt, df) _ the next pseudo-time increment and multiplier
+-        increment based on the load function discretisation.
+-        """
+-        if not self._lf_items:
+-            return 1.0, 1.0
+-
+-        lf = getattr(getattr(self.state, "analysis", None), "load_function", None)
+-        discr_val = float(getattr(lf, "discr_val", 0.1))
+-
+-        last_pt, last_mult = self._lf_items[-1]
+-
+-        # At the last point?
+-        if abs(last_pt - self._t) < 1e-12:
+-            dt = last_pt - self._t
+-            an = getattr(self.state, "analysis", None)
+-            analysis_mult = getattr(an, "mult", 1.0)
+-            df = last_mult * analysis_mult - self.mult
+-            return dt, df
+-
+-        # Find preceding and following load function points
+-        prev_pt, prev_mult = self._lf_items[0]
+-        next_pt, next_mult = self._lf_items[-1]
+-        for pt, mult in self._lf_items:
+-            if pt - 1e-12 <= self._t:
+-                prev_pt, prev_mult = pt, mult
+-            if pt > self._t:
+-                next_pt, next_mult = pt, mult
+-                break
+-
+-        range_pt = next_pt - prev_pt
+-        range_mult = next_mult - prev_mult
+-
+-        if abs(range_pt) < 1e-30 and abs(range_mult) < 1e-30:
+-            return discr_val, discr_val
+-
+-        # Number of sub-steps
+-        type_discr = getattr(lf, "type_discr", False) if lf else False
+-
+-        if not type_discr:
+-            n_steps = max(1, int(np.ceil(range_pt / discr_val)))
+-        else:
+-            n_steps = max(1, int(np.ceil(range_mult / discr_val)))
+-
+-        analysis_mult = getattr(
+-            getattr(self.state, "analysis", None), "mult", 1.0
+-        )
+-        df = range_mult / n_steps * analysis_mult
+-        dt = range_pt / n_steps
+-        return dt, df
++    def update_k(self, p: Any, model: Any, alfa: float, compute_c: bool = False) -> int:
++        del compute_c
++        return ModelManager.compute_ktang(model, p.ls, alfa)
+ 
+     def compute_increment(
+         self,
+@@ -205,19 +70,13 @@
+         ls: LinearSystem,
+         model: Any,
+         an: Any,
+-        fixed_dofs: Set[int] | None = None,
++        fixed_dofs: set[int] | None = None,
+     ) -> np.ndarray:
+-        """
+-        Compute the search direction Du for the current iteration.
+-
+-        Default (LoadControl behaviour): solve K*Du = ls.b (unbalance).
+-        Returns the displacement increment (also stored in ls.x).
+-        """
++        """Solve the active generalized-DOF system, as the C# solver does."""
++        del p, model, an, fixed_dofs
+         ls.solve()
+         return ls.x
+ 
+-    # -- Ptarget update ------------------------------------------------------
+-
+     def update_ptarget(
+         self,
+         p: Any,
+@@ -225,32 +84,44 @@
+         an: Any,
+         combination: int,
+         iteration: int,
+-    ) -> None:
+-        """Port of UpdatePtarget _ reassemble loads if P-D or frames present."""
+-        pdelta = getattr(an, "pdelta_effect", 0)
+-        if pdelta in (1, 2):  # EachStep or EachIteration
+-            need_update = (pdelta == 2) or (iteration == 0)
+-            if need_update:
+-                ModelManager.assemble_load(model, p.ls, an.key, combination)
+-
++    ) -> bool:
++        """Refresh load vectors when supported by this translation.
+ 
+-class StaticIntegrator(IncrementalIntegrator):
+-    """
+-    Port of SolverRuntime.Integrator.StaticIntegrator.
++        The C# application recomputes frame, pushover and P-Delta loads here.
++        Those subsystems are not present in this Python snapshot.  Enabled
++        P-Delta is rejected by the public solver instead of being silently
++        approximated.
++        """
++        del iteration
++        if pdelta_enabled(getattr(an, "pdelta_effect", None)):
++            raise NotImplementedError(
++                "P-Delta load generation is implemented in the original C# "
++                "solver but is not available in this Python translation."
++            )
++        # Reassemble only when a valid analysis key is available.  This also
++        # mirrors the C# nonlinear-load refresh for supported self-weight loads.
++        if getattr(an, "key", None) is not None:
++            ModelManager.assemble_load(model, p.ls, an.key, combination)
++            return True
++        return False
+ 
+-    Adds ApplyLoadDomain (scales Ptarget _ Fext) and the factory method.
+-    """
++    def revert_to_last_commit(self, model: Any, ls: LinearSystem) -> None:
++        """Undo trial displacements and restore committed element states."""
++        if self.u_committed is None or self.u is None:
++            return
++        correction = self.u_committed - self.u
++        self.u[:] = self.u_committed
++        ls.set_x_vector(correction)
++        for collection_name in ("quads", "interfaces"):
++            collection = getattr(model.collections, collection_name, {})
++            for element in collection.values():
++                element.revert_to_last_commit(ls)
+ 
+-    def apply_load_domain(self, model: Any, incr_mult: float) -> None:
+-        """Port of ApplyLoadDomain: Fext += IncrMult * Ptarget."""
+-        self.incr_mult = incr_mult
+-        self.mult += incr_mult
+-        fext = ModelManager._fext
+-        ptarget = ModelManager._ptarget
+-        if fext is not None and ptarget is not None:
+-            n = min(len(fext), len(ptarget))
+-            fext[:n] += ptarget[:n] * incr_mult
++    @abstractmethod
++    def update(self, model: Any, p: Any, an: Any) -> int:
++        raise NotImplementedError
+ 
++    @abstractmethod
+     def new_step(
+         self,
+         p: Any,
+@@ -261,12 +132,9 @@
+         step: int,
+         dof: int,
+     ) -> None:
+-        """Default new step _ apply load increment."""
+-        self.step = step
+-        self.iteration = 0
+-        self.update_ptarget(p, model, an, combination, self.iteration)
+-        self.apply_load_domain(model, self.incr_mult)
++        raise NotImplementedError
+ 
++    @abstractmethod
+     def commit(
+         self,
+         model: Any,
+@@ -275,18 +143,42 @@
+         dof_max: int,
+         has_domain_changed: list[bool],
+     ) -> bool:
+-        """Default commit _ stop after one step."""
+-        return True
++        raise NotImplementedError
++
++    def domain_changed(self, p: Any, model: Any, size: int) -> None:
++        del p, model, size
++
++    def get_time(self) -> float:
++        return 0.0
++
++
++class StaticIntegrator(IncrementalIntegrator):
++    """Static-integrator base with load-domain accumulation and factory."""
++
++    def apply_load_domain(self, model: Any, incr_mult: float) -> None:
++        del model
++        self.incr_mult = incr_mult
++        self.mult += incr_mult
++        if ModelManager._fext is None or ModelManager._ptarget is None:
++            return
++        n = min(len(ModelManager._fext), len(ModelManager._ptarget))
++        ModelManager._fext[:n] += ModelManager._ptarget[:n] * incr_mult
+ 
+     @staticmethod
+-    def new_static_integrator(an: Any, combination: int) -> StaticIntegrator:
+-        """Factory _ port of NewStaticIntegrator."""
+-        method = getattr(an, "integration_method", "LoadControl")
++    def new_static_integrator(an: Any, combination: int) -> "StaticIntegrator":
++        method = str(getattr(an, "integration_method", "LoadControl"))
+         if method == "ArcLength":
+             from histra.solver.arc_length import ArcLength
+-            return ArcLength()
+-        if method == "ArcLengthLinear":
++
++            integrator: StaticIntegrator = ArcLength()
++        elif method == "ArcLengthLinear":
+             from histra.solver.arc_length import ArcLengthLinear
+-            return ArcLengthLinear()
+-        from histra.solver.load_control import LoadControl
+-        return LoadControl()
++
++            integrator = ArcLengthLinear()
++        else:
++            from histra.solver.load_control import LoadControl
++
++            integrator = LoadControl()
++        integrator.state.analysis = an
++        integrator.state.combination = combination
++        return integrator
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/line_search.py histra_csharp_aligned/histra/solver/line_search.py
+--- histra_src/histra/solver/line_search.py	2026-07-25 13:38:59.000000000 +0000
++++ histra_csharp_aligned/histra/solver/line_search.py	2026-07-27 08:49:56.046041239 +0000
+@@ -1,21 +1,24 @@
+ from __future__ import annotations
++
+ from typing import Any
++
+ import numpy as np
+ 
+ 
+ class LineSearch:
+-    """Port of C# LineSearch base class."""
++    """Base/no-op line search matching the C# solver interface."""
+ 
+-    def __init__(self):
+-        self.tolerance: float = 0.8
+-        self.max_iter: int = 100
+-        self.min_eta: float = 0.1
+-        self.max_eta: float = 10.0
+-        self.print_flag: int = 1
++    def __init__(self) -> None:
++        self.tolerance = 0.8
++        self.max_iter = 100
++        self.min_eta = 0.1
++        self.max_eta = 10.0
++        self.print_flag = 1
++        self._direction: np.ndarray | None = None
+ 
+     def new_step(self, p: Any, ls: Any) -> None:
+-        """Port of newStep _ save initial dx for the search direction."""
+-        pass
++        del p
++        self._direction = ls.x.copy()
+ 
+     def search(
+         self,
+@@ -28,117 +31,215 @@
+         s0: float,
+         s1: float,
+     ) -> float:
+-        """
+-        Port of search _ find optimal step scaling eta.
+-
+-        Parameters
+-        ----------
+-        dx0 : np.ndarray _ Newton search direction (full step).
+-        s0 : float = -(dx0 * R0)  _ dot product with initial residual.
+-        s1 : float = -(dx0 * R1)  _ dot product with residual after full step.
+-
+-        Returns
+-        -------
+-        eta : float _ step scaling factor (0.1 _ 10).
+-        """
++        del model, p, integrator, an, s0, s1
++        ls.set_x_vector(dx0)
+         return 1.0
+ 
+-
+-class RegulaFalsiLineSearch(LineSearch):
+-    """Port of C# RegulaFalsiLineSearch."""
+-
+-    def __init__(self):
+-        super().__init__()
+-        self._dU: np.ndarray | None = None
+-
+-    def new_step(self, p: Any, ls: Any) -> None:
+-        self._dU = ls.x.copy() if ls.x is not None else np.zeros(ls.n)
+-
+-    def search(
++    def _trial(
+         self,
+         model: Any,
+         p: Any,
+         ls: Any,
+         integrator: Any,
+         an: Any,
+-        dx0: np.ndarray,
+-        s0: float,
+-        s1: float,
+-    ) -> float:
+-        if s0 == 0.0:
+-            return 1.0
++        direction: np.ndarray,
++        eta: float,
++        eta_previous: float,
++    ) -> tuple[int, float]:
++        """Move from the current trial point to ``eta`` and evaluate ``s``.
++
++        The full Newton step has already been applied by ``NewtonLineSearch``,
++        so the first correction is ``(eta - 1) * direction``.  Trial points are
++        reached incrementally, exactly as in the C# algorithm.
++        """
++        ls.set_x_vector((eta - eta_previous) * direction)
++        code = integrator.update(model, p, an)
++        if code < 0:
++            return code, float("nan")
++        integrator.form_unbalance(p, model, an)
++        # Fix an original C# inconsistency: s0/s1 use -dU·R, whereas trial
++        # values used +dU·R.  A single sign convention is required for valid
++        # secant/bracketing logic.
++        return 0, -float(np.dot(direction, ls.b))
++
++    @staticmethod
++    def _ratio(s: float, s0: float) -> float:
++        return abs(s / s0) if abs(s0) > 1e-30 else 0.0
++
++    def _finish(self, ls: Any, direction: np.ndarray, eta: float) -> float:
++        # Elements and total displacement are already at eta from incremental
++        # trial corrections.  Set LS.x to the *total* scaled Newton increment
++        # for displacement/work convergence tests, without updating again.
++        ls.set_x_vector(eta * direction)
++        return float(eta)
+ 
+-        ratio = abs(s1 / s0)
+-        if ratio <= self.tolerance:
+-            return 1.0
+-
+-        if s1 == s0:
+-            return 1.0
+-
+-        eta_old = 1.0
+-        eta_a = 1.0       # x_a (left bound)
+-        s_a = s1           # f(x_a)
+-        eta_b = 1.0        # x_b (right bound)
+-        s_b = s1           # f(x_b)
+-        s_prev = s0        # f(x_{k-1})
+-        eta_prev = 0.0     # x_{k-1}
+-
+-        dU = dx0.copy()
+-        iteration = 0
+-
+-        while iteration < self.max_iter:
+-            iteration += 1
+-
+-            # Regula falsi: eta = eta_b - s_b * (eta_a - eta_b) / (s_a - s_b)
+-            denom = s_a - s_b
+-            if abs(denom) < 1e-30:
+-                break
+-            eta = eta_b - s_b * (eta_a - eta_b) / denom
+-            eta = max(self.min_eta, min(self.max_eta, eta))
+ 
+-            if ratio > abs(s1 / s0):
+-                eta = 1.0
++class RegulaFalsiLineSearch(LineSearch):
++    """C# Regula Falsi algorithm with corrected bracket and sign handling."""
++
++    def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
++        if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
++            return self._finish(ls, dx0, 1.0)
++
++        eta_lo, s_lo = 0.0, s0
++        eta_hi, s_hi = 1.0, s1
++        eta_previous = 1.0
++        eta = 1.0
++        baseline_ratio = self._ratio(s1, s0)
++
++        for _ in range(self.max_iter):
++            denominator = s_lo - s_hi
++            if abs(denominator) < 1e-30:
++                break
++            eta = eta_hi - s_hi * (eta_lo - eta_hi) / denominator
++            eta = float(np.clip(eta, self.min_eta, self.max_eta))
+ 
+-            # Correction: (eta - eta_prev) * dU
+-            dcorr = (eta - eta_prev) * dU
+-            ls.x = dcorr
+-            code = integrator.update(model, p, an)
++            code, s_eta = self._trial(
++                model, p, ls, integrator, an, dx0, eta, eta_previous
++            )
+             if code < 0:
+                 return -1.0
+-            integrator.form_unbalance(p, model, an)
+-            resid_j = ls.b.copy()
+-            s_j = -np.dot(dU, resid_j)
++            ratio = self._ratio(s_eta, s0)
++            if ratio <= self.tolerance:
++                return self._finish(ls, dx0, eta)
++
++            # Keep the original safeguard, but compare against the initial full
++            # step rather than against the same expression.
++            if ratio > baseline_ratio and eta != 1.0:
++                code, s_eta = self._trial(
++                    model, p, ls, integrator, an, dx0, 1.0, eta
++                )
++                if code < 0:
++                    return -1.0
++                return self._finish(ls, dx0, 1.0)
++
++            if s_eta * s_hi < 0.0:
++                eta_lo, s_lo = eta, s_eta
++            elif s_eta == 0.0:
++                return self._finish(ls, dx0, eta)
++            else:
++                eta_hi, s_hi = eta, s_eta
++            eta_previous = eta
+ 
+-            new_ratio = abs(s_j / s0) if s0 != 0.0 else 0.0
++        return self._finish(ls, dx0, eta_previous)
+ 
+-            if new_ratio <= self.tolerance:
+-                eta_prev = eta
+-                break
+ 
+-            if eta_prev == eta:
+-                break
++class SecantLineSearch(LineSearch):
++    """C# secant line search with consistent residual signs."""
++
++    def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
++        if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
++            return self._finish(ls, dx0, 1.0)
++
++        eta_prev2, s_prev2 = 0.0, s0
++        eta_prev, s_prev = 1.0, s1
++        baseline_ratio = self._ratio(s1, s0)
+ 
+-            if s_j * s_b < 0.0:
+-                eta_a = eta
+-                s_a = s_j
+-            elif s_j * s_b == 0.0:
++        for _ in range(self.max_iter):
++            denominator = s_prev2 - s_prev
++            if abs(denominator) < 1e-30:
++                break
++            eta = eta_prev - s_prev * (eta_prev2 - eta_prev) / denominator
++            eta = float(np.clip(eta, self.min_eta, self.max_eta))
++            code, s_eta = self._trial(
++                model, p, ls, integrator, an, dx0, eta, eta_prev
++            )
++            if code < 0:
++                return -1.0
++            ratio = self._ratio(s_eta, s0)
++            if ratio <= self.tolerance:
++                return self._finish(ls, dx0, eta)
++            if ratio > baseline_ratio and eta != 1.0:
++                code, _ = self._trial(model, p, ls, integrator, an, dx0, 1.0, eta)
++                if code < 0:
++                    return -1.0
++                return self._finish(ls, dx0, 1.0)
++            eta_prev2, s_prev2 = eta_prev, s_prev
++            eta_prev, s_prev = eta, s_eta
++
++        return self._finish(ls, dx0, eta_prev)
++
++
++class BisectionLineSearch(LineSearch):
++    """Bracket-and-bisect search based on the original C# implementation."""
++
++    def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
++        if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
++            return self._finish(ls, dx0, 1.0)
++
++        eta_lo, s_lo = 0.0, s0
++        eta_hi, s_hi = 1.0, s1
++        eta_previous = 1.0
++
++        # Expand the upper point until a sign change is found.
++        attempts = 0
++        while s_lo * s_hi > 0.0 and eta_hi < self.max_eta and attempts < self.max_iter:
++            attempts += 1
++            eta_new = min(self.max_eta, 2.0 * eta_hi)
++            code, s_new = self._trial(
++                model, p, ls, integrator, an, dx0, eta_new, eta_previous
++            )
++            if code < 0:
++                return -1.0
++            eta_previous = eta_new
++            eta_hi, s_hi = eta_new, s_new
++            if self._ratio(s_hi, s0) <= self.tolerance:
++                return self._finish(ls, dx0, eta_hi)
++
++        if s_lo * s_hi > 0.0:
++            # No bracket: restore the already accepted full Newton point.
++            if eta_previous != 1.0:
++                code, _ = self._trial(
++                    model, p, ls, integrator, an, dx0, 1.0, eta_previous
++                )
++                if code < 0:
++                    return -1.0
++            return self._finish(ls, dx0, 1.0)
++
++        eta = eta_previous
++        for _ in range(max(0, self.max_iter - attempts)):
++            eta = 0.5 * (eta_lo + eta_hi)
++            code, s_eta = self._trial(
++                model, p, ls, integrator, an, dx0, eta, eta_previous
++            )
++            if code < 0:
++                return -1.0
++            eta_previous = eta
++            if self._ratio(s_eta, s0) <= self.tolerance or s_eta == 0.0:
+                 break
++            if s_eta * s_hi < 0.0:
++                eta_lo, s_lo = eta, s_eta
+             else:
+-                eta_b = eta
+-                s_b = s_j
++                eta_hi, s_hi = eta, s_eta
+ 
+-            if s_a == s_b:
+-                break
++        return self._finish(ls, dx0, eta)
+ 
+-            s_prev = s_j
+-            eta_prev = eta
+ 
+-        # Apply final correction
+-        dcorr = (eta_prev - 0.0) * dU if eta_prev == 1.0 else (eta_prev - eta_prev) * dU
+-        # Actually, apply delta = (eta - 0) * dU = eta * dU
+-        ls.x = eta_prev * dU
+-        code = integrator.update(model, p, an)
+-        if code < 0:
+-            return -1.0
++class InitialInterpolatedLineSearch(LineSearch):
++    """Initial-interpolation search, ported as a real override.
++
++    The original C# class declares ``new virtual`` instead of ``override``;
++    through a base ``LineSearch`` reference that likely dispatches to the no-op
++    base method.  The Python version implements the intended algorithm.
++    """
+ 
+-        return eta_prev
++    def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
++        if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
++            return self._finish(ls, dx0, 1.0)
++
++        eta_previous = 1.0
++        eta = float(np.clip(s0 / (s0 - s1), self.min_eta, self.max_eta))
++        for _ in range(self.max_iter):
++            code, s_eta = self._trial(
++                model, p, ls, integrator, an, dx0, eta, eta_previous
++            )
++            if code < 0:
++                return -1.0
++            if self._ratio(s_eta, s0) <= self.tolerance:
++                break
++            denominator = s0 - s_eta
++            if abs(denominator) < 1e-30:
++                break
++            eta_previous = eta
++            eta = float(np.clip(eta * s0 / denominator, self.min_eta, self.max_eta))
++        return self._finish(ls, dx0, eta)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/load_control.py histra_csharp_aligned/histra/solver/load_control.py
+--- histra_src/histra/solver/load_control.py	2026-07-25 13:38:03.000000000 +0000
++++ histra_csharp_aligned/histra/solver/load_control.py	2026-07-27 08:48:42.398041728 +0000
+@@ -1,117 +1,83 @@
+ from __future__ import annotations
+ 
+-import logging
+-from typing import Any, Optional
++from typing import Any
+ 
+ import numpy as np
+-from scipy.sparse.linalg import spsolve
+ 
++from histra.model.model import Model
++from histra.solver.incremental_integrator import StaticIntegrator
+ from histra.solver.model_manager import ModelManager
+ from histra.solver.program import Program
+-from histra.model.model import Model
+ from histra.types.linear_system import LinearSystem
+-from histra.solver.incremental_integrator import StaticIntegrator
+-
+-logger = logging.getLogger(__name__)
+ 
+ 
+ class LoadControl(StaticIntegrator):
+-    """
+-    Port of SolverRuntime.Integrator.LoadControl.
+-
+-    Load-controlled integrator: each step increments the load multiplier by
+-    an amount read from a LoadFunction (pseudo-time vs. multiplier table).
+-    """
++    """Load-controlled nonlinear integrator aligned with C# ``LoadControl``."""
+ 
+-    def __init__(self):
++    def __init__(self) -> None:
+         super().__init__()
+-        self._t: float = 0.0
+-        self._last_pseudo_time: float = 0.0
+-        self._lf_items: list[tuple[float, float]] = []  # [(pseudoTime, mult), ...]
+-
+-    # -- initialisation ------------------------------------------------------
++        self._t = 0.0
++        self._last_pseudo_time = 0.0
++        self._lf_items: list[tuple[float, float]] = []
++        self._step_dt = 0.0
+ 
+     def _get_initial_time_and_force(self, an: Any) -> None:
+-        """Read the load function definition (port of GetInitialTimeAndForce)."""
+-        lf_items = []
+-        if hasattr(an, "load_function") and an.load_function is not None:
+-            lf = an.load_function
+-            items = getattr(lf, "items", [])
+-            lf_items = [(it.pseudo_time, it.multiplier) for it in items]
+-        if not lf_items:
+-            lf_items = [(0.0, 0.0), (1.0, 1.0)]
+-        self._lf_items = lf_items
+-        self._t = min(pt for pt, _ in lf_items)
+-        self._last_pseudo_time = max(pt for pt, _ in lf_items)
+-        self.mult = lf_items[0][1]
+-
+-    # -- domain changed ------------------------------------------------------
++        items = list(getattr(getattr(an, "load_function", None), "items", []) or [])
++        self._lf_items = sorted(
++            [(float(it.pseudo_time), float(it.multiplier)) for it in items],
++            key=lambda item: item[0],
++        )
++        if not self._lf_items:
++            self._lf_items = [(0.0, 0.0), (1.0, 1.0)]
++        self._t = self._lf_items[0][0]
++        self._last_pseudo_time = self._lf_items[-1][0]
++        self.mult = self._lf_items[0][1]
+ 
+     def domain_changed(self, p: Program, model: Model, size: int) -> None:
+-        """Port of domainChanged _ init load function on first call."""
++        del p, model, size
+         if not self._lf_items:
+-            an = getattr(self.state, "analysis", None)
+-            if an is not None:
+-                self._get_initial_time_and_force(an)
++            self._get_initial_time_and_force(self.state.analysis)
+ 
+-    # -- increment calculation -----------------------------------------------
++    def _segment(self) -> tuple[tuple[float, float], tuple[float, float]]:
++        if len(self._lf_items) == 1:
++            return self._lf_items[0], self._lf_items[0]
++        previous = self._lf_items[0]
++        for following in self._lf_items[1:]:
++            if self._t < following[0] - 1e-12:
++                return previous, following
++            previous = following
++        return self._lf_items[-2], self._lf_items[-1]
+ 
+     def _get_increment(self) -> tuple[float, float]:
+-        """
+-        Port of GetIncrement.
+-
+-        Returns (dt, df) _ the next pseudo-time increment and multiplier
+-        increment based on the load function discretisation.
+-        """
+         if not self._lf_items:
+-            return 1.0, 1.0
++            self._get_initial_time_and_force(self.state.analysis)
+ 
+-        lf = getattr(getattr(self.state, "analysis", None), "load_function", None)
+-        discr_val = float(getattr(lf, "discr_val", 0.1))
+-
+-        last_pt, last_mult = self._lf_items[-1]
+-
+-        # At the last point?
+-        if abs(last_pt - self._t) < 1e-12:
+-            dt = last_pt - self._t
+-            an = getattr(self.state, "analysis", None)
+-            analysis_mult = getattr(an, "mult", 1.0)
+-            df = last_mult * analysis_mult - self.mult
+-            return dt, df
+-
+-        # Find preceding and following load function points
+-        prev_pt, prev_mult = self._lf_items[0]
+-        next_pt, next_mult = self._lf_items[-1]
+-        for pt, mult in self._lf_items:
+-            if pt - 1e-12 <= self._t:
+-                prev_pt, prev_mult = pt, mult
+-            if pt > self._t:
+-                next_pt, next_mult = pt, mult
+-                break
+-
+-        range_pt = next_pt - prev_pt
+-        range_mult = next_mult - prev_mult
+-
+-        if abs(range_pt) < 1e-30 and abs(range_mult) < 1e-30:
+-            return discr_val, discr_val
+-
+-        # Number of sub-steps
+-        type_discr = getattr(lf, "type_discr", False) if lf else False
+-
+-        if not type_discr:
+-            n_steps = max(1, int(np.ceil(range_pt / discr_val)))
+-        else:
+-            n_steps = max(1, int(np.ceil(range_mult / discr_val)))
+-
+-        analysis_mult = getattr(
+-            getattr(self.state, "analysis", None), "mult", 1.0
+-        )
+-        df = range_mult / n_steps * analysis_mult
+-        dt = range_pt / n_steps
++        last_time, last_multiplier = self._lf_items[-1]
++        analysis_multiplier = float(getattr(self.state.analysis, "mult", 1.0))
++        if self._t >= last_time - 1e-12:
++            return 0.0, last_multiplier * analysis_multiplier - self.mult
++
++        (t0, f0), (t1, f1) = self._segment()
++        dt_range = t1 - t0
++        df_range = f1 - f0
++        lf = getattr(self.state.analysis, "load_function", None)
++        discretization = abs(float(getattr(lf, "discr_val", 0.1)))
++        if discretization < 1e-15:
++            raise ValueError("Load-function discretization must be positive")
++
++        force_based = bool(getattr(lf, "type_discr", False))
++        span = abs(df_range) if force_based else abs(dt_range)
++        n_steps = max(1, int(np.ceil(span / discretization)))
++
++        dt = dt_range / n_steps
++        df = df_range / n_steps * analysis_multiplier
++        # Do not step beyond the segment endpoint because floating point and
++        # a non-divisible discretization can leave a shorter final interval.
++        dt = min(dt, t1 - self._t) if dt >= 0 else max(dt, t1 - self._t)
++        if abs(dt_range) > 1e-30:
++            df = df_range * (dt / dt_range) * analysis_multiplier
+         return dt, df
+ 
+-    # -- new step ------------------------------------------------------------
+-
+     def new_step(
+         self,
+         p: Program,
+@@ -122,23 +88,15 @@
+         step: int,
+         dof: int,
+     ) -> None:
+-        """Port of the 6-arg NewStep."""
++        del ls, dof
+         self.step = step
+         self.iteration = 0
+-        # Reset step displacement vector
+-        if self.u is not None:
+-            self.u.fill(0.0)
+-        dt, df = self._get_increment()
+-        self.incr_mult = df
++        self._step_dt, self.incr_mult = self._get_increment()
+         p.log(
+             f"Step {step} solving: Mult={self.mult + self.incr_mult:.6f}, "
+-            f"IncrMult: {self.incr_mult:.6f}"
+-        )
+-        p.progress(
+-            min(1.0, self._t / self._last_pseudo_time)
+-            if self._last_pseudo_time > 0
+-            else 0.0
++            f"IncrMult={self.incr_mult:.6f}"
+         )
++        p.progress(min(1.0, self._t / self._last_pseudo_time) if self._last_pseudo_time else 0.0)
+         self.update_ptarget(p, model, an, combination, self.iteration)
+         self.apply_load_domain(model, self.incr_mult)
+ 
+@@ -152,34 +110,30 @@
+         step: int,
+         incr_mult: float,
+     ) -> None:
+-        """Port of the 7-arg NewStep (used by ALS)."""
++        del ls
+         self.step = step
+         self.iteration = 0
+-        self.incr_mult = incr_mult
++        self.incr_mult = float(incr_mult)
+         p.log(
+-            f"Step: {step}, Mult: {self.mult + self.incr_mult:.6f}, "
+-            f"IncrMult: {self.incr_mult:.6f}"
+-        )
+-        p.progress(
+-            min(1.0, self._t / self._last_pseudo_time)
+-            if self._last_pseudo_time > 0
+-            else 0.0
++            f"Step {step}, Mult={self.mult + self.incr_mult:.6f}, "
++            f"IncrMult={self.incr_mult:.6f}"
+         )
+         self.update_ptarget(p, model, an, combination, self.iteration)
+         self.apply_load_domain(model, self.incr_mult)
+ 
+-    # -- update --------------------------------------------------------------
++    def undo_current_load_increment(self, model: Model) -> None:
++        """Undo the external-load part of a failed step before rollback/ALS."""
++        self.apply_load_domain(model, -self.incr_mult)
++        self.incr_mult = 0.0
+ 
+     def update(self, model: Model, p: Program, an: Any) -> int:
+-        """Port of LoadControl.Update _ increment iteration, update domain, accumulate u."""
++        del an
+         self.iteration += 1
+         ModelManager.update_domain(model, p.ls, self.state)
+-        if self.u is not None and p.ls is not None:
++        if self.u is not None:
+             self.u += p.ls.x
+         return 0
+ 
+-    # -- commit --------------------------------------------------------------
+-
+     def commit(
+         self,
+         model: Model,
+@@ -188,12 +142,11 @@
+         dof_max: int,
+         has_domain_changed: list[bool],
+     ) -> bool:
+-        """Port of LoadControl.Commit.  Returns True when all load steps done."""
++        del model, an, disp, dof_max, has_domain_changed
+         if self.u_committed is not None and self.u is not None:
+             self.u_committed[:] = self.u
+-        dt, _ = self._get_increment()
+-        self._t += dt
+-        return self._t >= self._last_pseudo_time  # True _ stop
++        self._t += self._step_dt
++        return self._t >= self._last_pseudo_time - 1e-12
+ 
+     def get_time(self) -> float:
+         return self._t
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/model_manager.py histra_csharp_aligned/histra/solver/model_manager.py
+--- histra_src/histra/solver/model_manager.py	2026-07-25 14:13:51.000000000 +0000
++++ histra_csharp_aligned/histra/solver/model_manager.py	2026-07-27 08:47:28.202042220 +0000
+@@ -1,131 +1,94 @@
+ from __future__ import annotations
+ 
+-import logging
+-from typing import Any, Callable, Optional
++from typing import Any, Callable
+ 
+ import numpy as np
+ 
+ from histra.model.model import Model
+-from histra.types.linear_system import LinearSystem
+-from histra.solver.assembler import assemble_global_k, assemble_load_vector, get_restrained_dofs
++from histra.solver.assembler import assemble_global_k, assemble_load_vector
++from histra.solver.program import Program
+ from histra.types.integrator_state import IntegratorState
++from histra.types.linear_system import LinearSystem
++
++
++def pdelta_enabled(value: Any) -> bool:
++    """Normalize the C# enum/string representation of P-Delta settings."""
++    if value is None:
++        return False
++    if isinstance(value, bool):
++        return value
++    if isinstance(value, (int, float)):
++        return int(value) != 0
++    text = str(value).strip().lower()
++    return text not in {"", "0", "none", "no", "false", "disabled"}
+ 
+ 
+ class ModelManager:
+-    """
+-    Port of SolverRuntime.ModelManager (static methods).
++    """Global assembly/state operations aligned with the C# ``ModelManager``."""
+ 
+-    Low-level operations: assemble K, assemble reference load, form unbalance,
+-    update element domain, compute energy.
+-    """
+-
+-    # Module-level vectors (mirroring .NET static fields)
+-    _ptarget: np.ndarray | None = None    # reference load pattern
+-    _fext: np.ndarray | None = None       # accumulated external load
+-    _pq: np.ndarray | None = None         # P-D load vector
+-    _pq_prev: np.ndarray | None = None    # previous P-D load
+-    _u_total: np.ndarray | None = None    # total displacement (for internal force)
++    _ptarget: np.ndarray | None = None
++    _fext: np.ndarray | None = None
++    _pq: np.ndarray | None = None
++    _pq_prev: np.ndarray | None = None
++    _u_total: np.ndarray | None = None
+ 
+-    # Callbacks
+     on_log: Callable[[str], None] | None = None
+     on_progress: Callable[[float], None] | None = None
+ 
+-    # __ assemble K _________________________________________________________
+-
+     @classmethod
+-    def assemble_k(cls, model: Model, ls: LinearSystem, set_zero: bool = True) -> None:
+-        """
+-        Port of AssembleK.
++    def assemble_k(
++        cls,
++        model: Model,
++        ls: LinearSystem,
++        alfa: float = 1.0,
++        *,
++        set_zero: bool = True,
++    ) -> None:
++        """Assemble the element stiffness selected by ``alfa``.
+ 
+-        Builds K from element contributions and stores it on *ls*.
+-        Note: always uses initial stiffness (alfa=0) for assembly to keep K
+-        non-singular when springs yield (k_tang ~ 0). This is effectively
+-        Modified Newton-Raphson, which is more robust for DMEM models.
++        The C# code first calls each element's ``ComputeK(alfa)`` and then
++        scatters those current coefficients.  The earlier Python port always
++        reassembled with ``alfa=0``, silently turning Standard Newton into
++        Modified Newton.
+         """
+         if set_zero:
+             ls.set_zero()
+-        ls.k = assemble_global_k(model, alfa=0.0)
+-
+-    # __ assemble reference load ____________________________________________
++        ls.k = assemble_global_k(model, alfa=alfa).tocsc()
+ 
+     @classmethod
+     def assemble_load(
+-        cls, model: Model, ls: LinearSystem, analysis_key: int | None = None,
++        cls,
++        model: Model,
++        ls: LinearSystem,
++        analysis_key: int | None = None,
+         combination: int = 1,
+     ) -> None:
+-        """
+-        Port of AssembleLoad.
+-
+-        Assembles the reference load vector *Ptarget* from element loads.
+-        The vector is **not** yet scaled by the load factor.
+-        """
+         cls._ptarget = assemble_load_vector(model, analysis_key, combination)
+         ls.set_zero_load()
+ 
+-    # __ assemble tangent stiffness _________________________________________
+-
+     @classmethod
+     def compute_ktang(cls, model: Model, ls: LinearSystem, alfa: float) -> int:
+-        """
+-        Port of AssembleKtang.
+-
+-        1. Compute element tangent stiffnesses (scale with *alfa*).
+-        2. Assemble into K.
+-        3. Numeric factorisation.
+-        Returns 0 on success, !=0 if singular.
+-        """
+         cls.compute_k(model, alfa)
+-        cls.assemble_k(model, ls, set_zero=True)
+-        return 0  # solve happens later in the iteration loop after BC enforcement
++        cls.assemble_k(model, ls, alfa=alfa, set_zero=True)
++        return 0
+ 
+     @classmethod
+     def compute_k(cls, model: Model, alfa: float = 1.0) -> None:
+-        """Port of ComputeK _ calls each element's ComputeK(alfa)."""
+         for quad in model.collections.quads.values():
+             quad.compute_k(alfa)
+         for intf in model.collections.interfaces.values():
+             intf.compute_k(alfa)
+ 
+-    # __ form unbalance (residual) __________________________________________
+-
+     @classmethod
+-    def form_unbalance(
+-        cls,
+-        model: Model,
+-        ls: LinearSystem,
+-        an: Any,
+-    ) -> None:
+-        """
+-        Port of formUnbalance.
+-
+-        Computes:
+-            b = F_int  (via GetResistingForce)
+-        then
+-            b += F_ext + P_q   (external + P-D)
+-        """
++    def form_unbalance(cls, model: Model, ls: LinearSystem, an: Any) -> None:
+         cls.get_resisting_force(model, ls)
+         fext = cls._fext if cls._fext is not None else np.zeros(ls.n)
+         pq = cls._pq if cls._pq is not None else np.zeros(ls.n)
+-
+-        pdelta = getattr(an, "pdelta_effect", 0)
+-        if pdelta != 0:
+-            for i in range(ls.n):
+-                ls.sumb(i, fext[i] + pq[i])
+-        else:
+-            for i in range(ls.n):
+-                ls.sumb(i, fext[i])
++        residual_external = fext + pq if pdelta_enabled(getattr(an, "pdelta_effect", None)) else fext
++        ls.b[: min(ls.n, len(residual_external))] += residual_external[:ls.n]
+ 
+     @classmethod
+     def get_resisting_force(cls, model: Model, ls: LinearSystem) -> None:
+-        """
+-        Port of GetResistingForce.
+-
+-        Zeros LS.b, then each element scatters its internal force into b.
+-
+-        Element force vectors are assembled directly.  A tangent matrix cannot
+-        be used here: at convergence it is not the secant relationship between
+-        total displacement and internal force.
+-        """
+         ls.set_zero_load()
+         for quad in model.collections.quads.values():
+             if quad.spring is None or len(quad.aff) <= 6:
+@@ -138,62 +101,53 @@
+         for intf in model.collections.interfaces.values():
+             intf.get_resisting_force(ls)
+ 
+-    # __ update domain ______________________________________________________
+-
+     @classmethod
+-    def update_domain(
+-        cls,
+-        model: Model,
+-        ls: LinearSystem,
+-        state: IntegratorState,
+-    ) -> None:
+-        """
+-        Port of updateDomain.
+-
+-        Updates each element's internal state from the current displacement
+-        increment (ls.x) via the afference.
+-        """
++    def update_domain(cls, model: Model, ls: LinearSystem, state: IntegratorState) -> None:
+         for quad in model.collections.quads.values():
+             quad.update_domain(ls.x, state)
+         for intf in model.collections.interfaces.values():
+             intf.update_domain(ls.x, state)
+ 
+-    # __ energy _____________________________________________________________
+-
+     @classmethod
+-    def compute_energy(cls, model: Model, eel: float, ed: float) -> None:
+-        """Port of ComputeEnergy _ sums elastic and dissipated energy."""
+-        for quad in model.collections.quads.values():
+-            de_el, de_pl, _ = quad.compute_energy()
+-            eel += de_el
+-            ed += de_pl
+-        for intf in model.collections.interfaces.values():
+-            de_el, de_pl, _ = intf.compute_energy()
+-            eel += de_el
+-            ed += de_pl
+-
+-    # __ max displacement ___________________________________________________
++    def compute_energy(cls, model: Model) -> tuple[float, float]:
++        eel = 0.0
++        ed = 0.0
++        for element in (
++            list(model.collections.quads.values())
++            + list(model.collections.interfaces.values())
++        ):
++            de_el, de_pl, _ = element.compute_energy()
++            eel += float(de_el)
++            ed += float(de_pl)
++        return eel, ed
+ 
+     @classmethod
+     def find_max_u(cls, model: Model, p: Program) -> None:
+-        """Port of FindMaxU."""
+         max_u = 0.0
+-        for quad in model.collections.quads.values():
+-            u_local = quad.max_u()
+-            if u_local > max_u:
+-                max_u = u_local
++        max_key = 0
++        max_type = ""
++        for kind, collection in (
++            ("Quad", model.collections.quads),
++            ("Interface", model.collections.interfaces),
++        ):
++            for key, element in collection.items():
++                value = abs(float(element.max_u()))
++                if value > max_u:
++                    max_u = value
++                    max_key = int(key)
++                    max_type = kind
+         p.max_u = max_u
+-
+-    # __ dof for max displacement __________________________________________
++        p.elem_max_u_key = max_key
++        p.elem_max_u_type = max_type
+ 
+     @classmethod
+-    def get_dof_for_max_displacement(
+-        cls, p: Program, model: Model, an: Any
+-    ) -> int:
+-        """Port of GetDofForMaxDisplacement."""
+-        master = getattr(an, "master_point", -10)
++    def get_dof_for_max_displacement(cls, p: Program, model: Model, an: Any) -> int:
++        del model
++        master = int(getattr(an, "master_point", -10))
++        # HRX/C# external DOF identifiers are commonly one-based; accept a
++        # valid zero-based value too and clamp only at the usage site.
+         if master != -10:
+             return master
+-        if p.u is not None and len(p.u) > 0:
++        if p.u is not None and len(p.u):
+             return int(np.argmax(np.abs(p.u)))
+         return 0
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/newton_line_search.py histra_csharp_aligned/histra/solver/newton_line_search.py
+--- histra_src/histra/solver/newton_line_search.py	2026-07-25 13:38:03.000000000 +0000
++++ histra_csharp_aligned/histra/solver/newton_line_search.py	2026-07-27 08:50:34.634040983 +0000
+@@ -1,36 +1,19 @@
+-"""
+-Newton-Raphson with line search _ port of HiStrA's NewtonLineSearch.
+-"""
+-
+ from __future__ import annotations
+ 
+-import logging
+-from typing import Any, Optional
++import math
++from typing import Any
+ 
+ import numpy as np
+-from scipy.sparse.linalg import spsolve
+ 
+ from histra.model.model import Model
+-from histra.solver.arc_length import ArcLength
+-from histra.solver.assembler import assemble_global_k, get_restrained_dofs
+-from histra.solver.line_search import LineSearch, RegulaFalsiLineSearch
+-from histra.solver.model_manager import ModelManager
++from histra.solver.newton_raphson import _is_standard_method
+ from histra.solver.program import Program
+-from histra.solver.solution_algorithm import EquiSolnAlgo
+-from histra.types.linear_system import LinearSystem
+-
+-logger = logging.getLogger(__name__)
++from histra.solver.solution_algorithm import EquiSolnAlgo, _new_line_search
++from histra.types.linear_system import LinearSolveError, LinearSystem
+ 
+ 
+ class NewtonLineSearch(EquiSolnAlgo):
+-    """
+-    Port of NewtonLineSearch (C# SolverRuntime.NumericalProcedure.NewtonLineSearch).
+-
+-    Newton-Raphson with line search.  For Modified* methods (alfa=0.0) K is
+-    assembled once; for Standard* methods K is reassembled every iteration.
+-    The line search (e.g. RegulaFalsi) finds the optimal step scaling ``eta``
+-    that minimises the residual along the search direction.
+-    """
++    """Newton-Raphson with the C# line-search call sequence."""
+ 
+     def solve_current_step(
+         self,
+@@ -42,165 +25,73 @@
+         step: int,
+         alfa: float,
+     ) -> int:
+-        # Helper: zero residual at fixed DOFs
+-        def _zero_fixed(b: np.ndarray) -> None:
+-            if fixed_dofs:
+-                for dof in fixed_dofs:
+-                    if dof < len(b):
+-                        b[dof] = 0.0
+-
+-        probe_k = assemble_global_k(model, 0.0)
+-        fixed_dofs = get_restrained_dofs(model, K=probe_k)
+-
++        del combination
++        assert self.the_integrator is not None
++        assert self.the_test is not None
+         if self.the_line_search is None:
+             self.the_line_search = _new_line_search(an)
+-        self.the_line_search.new_step(p, ls)
+ 
+-        self.the_integrator.form_unbalance(p, model, an)
+-        _zero_fixed(ls.b)
+         self.the_test.start()
++        self.the_integrator.form_unbalance(p, model, an)
++        result = -1
++        previous_error = 1.0
+ 
+-        prev_error = 1.0
+-        result_code = -1
+-        n = ls.n
+-
+-        while result_code == -1:
+-            # Update K for Standard* methods
+-            if alfa != 0.0:
++        while result == -1:
++            residual0 = ls.b.copy()
++            if _is_standard_method(an) and alfa != 0.0:
+                 self.the_integrator.update_k(p, model, alfa)
+ 
+-            # Compute search direction via the integrator
+-            # (LoadControl:  K*Du = ls.b;  ArcLength: Du = du* + dlambda*duP)
+-            self.the_integrator.compute_increment(
+-                p, ls, model, an, fixed_dofs=fixed_dofs,
+-            )
+-
+-            # After compute_increment, ls.x holds the search direction.
+-            # For ArcLength the fixed-DOF handling is done internally by
+-            # compute_increment; for LoadControl the old inline-solve code
+-            # already handled it.  We keep the existing solve path for
+-            # backward compatibility via compute_increment.
+-
+-            # Save ArcLength lambda before the full-step update
+-            al_before = None
+-            if isinstance(self.the_integrator, ArcLength):
+-                al = self.the_integrator
+-                al_before = al._lambda
+-
+-            dx0 = ls.x.copy()          # Newton step
+-            resid0 = ls.b.copy()       # residual before update
+-
+-            # s0 = -(dx0 * R0)
+-            s0 = -np.dot(dx0, resid0)
++            try:
++                self.the_integrator.compute_increment(p, ls, model, an)
++            except LinearSolveError as exc:
++                p.log(f"Stiffness matrix is singular at step {step}: {exc}")
++                return -3
++
++            dx0 = ls.x.copy()
++            self.the_line_search.new_step(p, ls)
++            s0 = -float(np.dot(dx0, residual0))
+ 
+-            # Apply full Newton step
+             update_code = self.the_integrator.update(model, p, an)
+             if update_code < 0:
+                 return update_code
+ 
+-            # New residual after full step
+             self.the_integrator.form_unbalance(p, model, an)
+-            _zero_fixed(ls.b)
+-            resid1 = ls.b.copy()
+-            s1 = -np.dot(dx0, resid1)
+-
+-            # Line search _ adjust eta such that R(eta*dx0) _ dx0
++            s1 = -float(np.dot(dx0, ls.b))
+             eta = self.the_line_search.search(
+-                model, p, ls, self.the_integrator, an, dx0, s0, s1,
++                model, p, ls, self.the_integrator, an, dx0, s0, s1
+             )
+             if eta < 0.0:
+                 return -10
+ 
+-            # For ArcLength, correct lambda after the line search.
+-            # The line search may have called update() multiple times with
+-            # trial _ values, each one incrementing lambda by the projection of
+-            # the trial du onto duP.  Overwrite with the analytically correct
+-            # value: lambda = lambda_before + _*dlambda.
+-            if al_before is not None:
+-                self.the_integrator._lambda = (
+-                    al_before + eta * self.the_integrator._delta_lambda
+-                )
+-
+-            # After line search: formUnbalance again (line search may have
+-            # altered element state) or the line search itself did it.
+-            self.the_integrator.form_unbalance(p, model, an)
+-            _zero_fixed(ls.b)
+-
+-            # Convergence test
+-            result_code = self.the_test.test(p, model, ls)
++            # Search evaluates the residual at its final trial point and stores
++            # eta*dx0 in LS.x for displacement/work convergence tests.
++            result = self.the_test.test(p, model, ls)
+             error = self.the_test.get_error()
+-
+-            if np.isnan(error):
+-                p.log("NaN values in residual force vector!")
+-                p.log(f"At step={step}, Iteration={self.the_test.current_iter}")
++            if not math.isfinite(error):
++                p.log(
++                    f"Non-finite convergence error at step={step}, "
++                    f"iteration={self.the_test.current_iter}"
++                )
+                 return -4
+ 
+-            it = self.the_test.current_iter
+-            if it <= 10:
+-                b_norm = np.linalg.norm(ls.b)
+-                x_norm = np.linalg.norm(ls.x) if ls.x is not None else -1
+-                p.log(f"  LS[{it}]: |b|={b_norm:.4e}, |x|={x_norm:.4e}, err={error:.4e}")
+-
+-            est_iters = (
+-                self.the_test.current_iter
+-                + max((error - prev_error) / max(error - prev_error, 1e-30), -10)
+-            )
+-            est_iters = max(est_iters, self.the_test.current_iter + 1e-6)
+-            frac = min(90.0, self.the_test.current_iter / est_iters * 100.0)
+-            p.progress(frac)
+-            prev_error = error
++            iteration = max(1, self.the_test.current_iter)
++            estimate = max(iteration + 1.0, float(self.the_test.max_iter))
++            if error < previous_error:
++                estimate = max(iteration + 1.0, iteration / max(1e-6, 1.0 - error / max(previous_error, 1e-30)))
++            p.progress(min(90.0, iteration / estimate * 100.0))
++            previous_error = error
+ 
+             if p.to_stop:
+                 return -4
+ 
+-        if result_code == -2:
+-            p.log("")
+-            p.log("################ CONVERGENCE FAILED ################")
+-            p.log("Convergence failed, max iterations reached!")
++        if result == -2:
+             p.log(
+-                f"Step={step}, Iterations={self.the_test.current_iter}, "
+-                f"Error={self.the_test.get_error():.6e}, "
+-                f"Tol={self.the_test.get_tol():.6e}"
++                f"Line-search convergence failed at step={step}: "
++                f"error={self.the_test.get_error():.6e}"
+             )
+-            p.log("################ CONVERGENCE FAILED ################")
+-            p.log("")
+-        elif result_code == -3:
+-            p.log("")
+-            p.log("############# Max displacement reached #################")
++        elif result == -3:
+             p.log(
+-                f"Step={step}, Iterations={self.the_test.current_iter}, "
+-                f"Error={self.the_test.get_error():.6e}, "
+-                f"Tol={self.the_test.get_tol():.6e}"
++                f"Maximum displacement reached at step={step}: "
++                f"max_u={p.max_u:.6e}"
+             )
+-            p.log("############# Max displacement reached #################")
+-            p.log("")
+-
+-        return result_code
+-
+-
+-# _____________________________________________________________________________
+-# Line Search factory
+-# _____________________________________________________________________________
+-
+-
+-def _new_line_search(an: Any) -> LineSearch:
+-    """Port of LineSearch.NewLineSearch factory."""
+-    method = str(getattr(an, "method", ""))
+-    if "RegulaFalsi" in method:
+-        ls = RegulaFalsiLineSearch()
+-    elif "Bisection" in method:
+-        from bisect import bisect  # placeholder
+-        ls = RegulaFalsiLineSearch()  # fallback
+-    elif "Secant" in method:
+-        ls = RegulaFalsiLineSearch()  # fallback
+-    elif "InitialInterpolated" in method:
+-        ls = RegulaFalsiLineSearch()  # fallback
+-    else:
+-        ls = LineSearch()  # no-op
+-
+-    ls.tolerance = float(getattr(an, "line_search_tolerance", 0.8))
+-    ls.max_eta = float(getattr(an, "line_search_max_eta", 10.0))
+-    ls.min_eta = float(getattr(an, "line_search_min_eta", 0.1))
+-    ls.max_iter = int(getattr(an, "line_search_max_iterations", 100))
+-    ls.print_flag = 0
+-    return ls
++        return result
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/newton_raphson.py histra_csharp_aligned/histra/solver/newton_raphson.py
+--- histra_src/histra/solver/newton_raphson.py	2026-07-26 18:13:06.000000000 +0000
++++ histra_csharp_aligned/histra/solver/newton_raphson.py	2026-07-27 08:54:29.246039426 +0000
+@@ -1,37 +1,20 @@
+-"""
+-Newton-Raphson iteration loop _ port of HiStrA's NewmarkNewtonRaphson.
+-"""
+-
+ from __future__ import annotations
+ 
+-import logging
+-from typing import Any, Optional
+-
+-import numpy as np
+-from scipy.sparse.linalg import spsolve
++import math
++from typing import Any
+ 
+ from histra.model.model import Model
+-from histra.solver.assembler import assemble_global_k, get_restrained_dofs
+-from histra.solver.model_manager import ModelManager
+ from histra.solver.program import Program
+ from histra.solver.solution_algorithm import EquiSolnAlgo
+-from histra.types.linear_system import LinearSystem
++from histra.types.linear_system import LinearSolveError, LinearSystem
+ 
+-logger = logging.getLogger(__name__)
+ 
++def _is_standard_method(an: Any) -> bool:
++    return str(getattr(an, "method", "")).startswith("Standard")
+ 
+-class NewtonRaphson(EquiSolnAlgo):
+-    """
+-    Port of NewtonRaphson (SolverRuntime.NumericalProcedure.NewtonRaphson).
+ 
+-    Standard (full) Newton-Raphson iteration loop:
+-      1. formUnbalance
+-      2. Solve K*Du = -R
+-      3. Update element state
+-      4. formUnbalance (new residual)
+-      5. Test convergence
+-      6. Repeat from 2 if not converged
+-    """
++class NewtonRaphson(EquiSolnAlgo):
++    """C#-aligned Newton-Raphson iteration loop."""
+ 
+     def solve_current_step(
+         self,
+@@ -43,142 +26,66 @@
+         step: int,
+         alfa: float,
+     ) -> int:
+-        # Helper: zero residual at fixed DOFs (reactions are irrelevant)
+-        def _zero_fixed(b: np.ndarray) -> None:
+-            if fixed_dofs:
+-                for dof in fixed_dofs:
+-                    if dof < len(b):
+-                        b[dof] = 0.0
+-
+-        # Probe-assemble K once to identify zero-diagonal passive DOFs
+-        probe_k = assemble_global_k(model, 0.0)
+-        fixed_dofs = get_restrained_dofs(model, K=probe_k)
++        del combination
++        assert self.the_integrator is not None
++        assert self.the_test is not None
+ 
+-        # Initial unbalance (at predictor level for ArcLength)
+         self.the_integrator.form_unbalance(p, model, an)
+-        _zero_fixed(ls.b)
++        self.the_test.start()
++        result = -1
++        previous_error = 1.0
+ 
+-        # Use the applied external load magnitude as reference norm for
+-        # relative convergence. This avoids numerical noise causing the
+-        # convergence test to chase an impossible target.
+-        from histra.solver.model_manager import ModelManager
+-        if ModelManager._ptarget is not None:
+-            ref_vec = ModelManager._ptarget.copy()
+-            if fixed_dofs:
+-                for d in fixed_dofs:
+-                    if d < len(ref_vec):
+-                        ref_vec[d] = 0.0
+-            ref_norm = float(np.linalg.norm(ref_vec))
+-        else:
+-            ref_norm = 0.0
+-
+-        self.the_test.start(ls, reference_norm=ref_norm)
+-
+-        prev_error = 1.0
+-        result_code = self.the_test.test(p, model, ls)
+-
+-        while result_code == -1:
+-            # Full Newton: reassemble K each iteration
+-            if alfa != 0.0:
++        while result == -1:
++            if _is_standard_method(an) and alfa != 0.0:
+                 self.the_integrator.update_k(p, model, alfa)
+ 
+-            # Compute search direction via the integrator.
+-            # Default (LoadControl):  solves K*Du = ls.b.
+-            # ArcLength:              Du = du* + dlambda*duP.
+-            self.the_integrator.compute_increment(
+-                p, ls, model, an, fixed_dofs=fixed_dofs,
+-            )
++            try:
++                self.the_integrator.compute_increment(p, ls, model, an)
++            except LinearSolveError as exc:
++                p.log(f"Stiffness matrix is singular at step {step}: {exc}")
++                return -3
+ 
+-            # Update element state, accumulate Du _ u
+             update_code = self.the_integrator.update(model, p, an)
+             if update_code < 0:
+                 return update_code
+ 
+-            # Form new unbalance
+             self.the_integrator.form_unbalance(p, model, an)
+-            _zero_fixed(ls.b)
+-
+-            # Convergence test
+-            result_code = self.the_test.test(p, model, ls)
++            result = self.the_test.test(p, model, ls)
+             error = self.the_test.get_error()
+-
+-            if np.isnan(error):
+-                p.log("NaN values in residual force vector!")
+-                p.log(f"At step={step}, Iteration={self.the_test.current_iter}")
++            if not math.isfinite(error):
++                p.log(
++                    f"Non-finite convergence error at step={step}, "
++                    f"iteration={self.the_test.current_iter}"
++                )
+                 return -4
+ 
+-            # Debug: track all iterations
+-            it = self.the_test.current_iter
+-            if it <= 5:
+-                b_norm = np.linalg.norm(ls.b)
+-                x_norm = np.linalg.norm(ls.x) if ls.x is not None else -1
+-                q0 = list(model.collections.quads.values())[0]
+-                s = q0.spring
+-                q0.set_resisting_force()
+-                f_int_0 = q0.status.f
+-                free = sorted(set(range(ls.n)) - fixed_dofs) if fixed_dofs else list(range(ls.n))
+-                p.log(f"  DBG[{it}]: |b|={b_norm:.4e}, |x|={x_norm:.4e}, err={error:.4e}, nfxd={len(fixed_dofs)}, nfree={len(free)}")
+-                p.log(f"    q0: u[6]={q0.status.u[6]:.6e}, spring._tstrain={s._tstrain:.6e}, "
+-                      f"_tstress={s._tstress:.6e}, get_force={s.get_force():.6e}, "
+-                      f"k_tang={s.k_tang:.4e}, phase={s.phase}")
+-                p.log(f"    q0.status.f={f_int_0:.6e}, d_alfa={q0.d_alfa_2d_diag():.4f}")
+-                # Check a few more quads
+-                for idx in [1, 10, 100]:
+-                    if idx < len(model.collections.quads):
+-                        qi = list(model.collections.quads.values())[idx]
+-                        si = qi.spring
+-                        p.log(f"    q{idx}: u[6]={qi.status.u[6]:.6e}, _tstrain={si._tstrain:.6e}, "
+-                              f"_tstress={si._tstress:.6e}, phase={si.phase}")
+-
+-            # Progress
+-            denom = max(
+-                prev_error,
+-                max(error - prev_error, 1e-30),
+-            )
+-            est_iters = (
+-                self.the_test.current_iter
+-                + (an.convergence_tolerance - error) / denom
+-            )
+-            frac = min(90.0, self.the_test.current_iter / est_iters * 100.0)
+-            p.progress(frac)
+-            prev_error = error
++            # Keep progress informative without reproducing divide-by-zero
++            # behavior in the original estimate formula.
++            iteration = max(1, self.the_test.current_iter)
++            if error < previous_error and previous_error > 0.0:
++                reduction = max(error / previous_error, 1e-12)
++                if reduction < 1.0 and error > 0.0:
++                    target_ratio = max(self.the_test.tolerance / error, 1e-300)
++                    remaining = max(1.0, abs(math.log(target_ratio) / math.log(reduction)))
++                else:
++                    remaining = 1.0
++                estimate = iteration + remaining
++            else:
++                estimate = max(iteration + 1.0, float(self.the_test.max_iter))
++            p.progress(min(90.0, iteration / estimate * 100.0))
++            previous_error = error
+ 
+             if p.to_stop:
+                 return -4
+ 
+-        # Log convergence / failure messages
+-        if result_code == -2:
+-            p.log("")
+-            p.log("################ CONVERGENCE FAILED ################")
+-            p.log("Convergence failed, max iterations reached!")
++        if result == -2:
+             p.log(
+-                f"Step={step}, Iterations={self.the_test.current_iter}, "
+-                f"Error={self.the_test.get_error():.6e}, "
+-                f"Tol={self.the_test.get_tol():.6e}"
++                f"Convergence failed at step={step}: max iterations "
++                f"({self.the_test.max_iter}), error={self.the_test.get_error():.6e}"
+             )
+-            p.log("################ CONVERGENCE FAILED ################")
+-            p.log("")
+-        elif result_code == -3:
+-            p.log("")
+-            p.log("############# Max displacement reached #################")
++        elif result == -3:
+             p.log(
+-                f"Step={step}, Iterations={self.the_test.current_iter}, "
+-                f"Error={self.the_test.get_error():.6e}, "
+-                f"Tol={self.the_test.get_tol():.6e}"
++                f"Maximum displacement reached at step={step}: "
++                f"max_u={p.max_u:.6e}, limit={self.the_test.max_u:.6e}"
+             )
+-            p.log("############# Max displacement reached #################")
+-            p.log("")
+-        elif result_code <= -10:
+-            p.log("")
+-            p.log("############# CONVERGENCE FAILED #############")
+-            for err in self.the_integrator.errors:
+-                p.log(err)
+-            p.log(
+-                f"Step={step}, Iterations={self.the_test.current_iter}, "
+-                f"Error={self.the_test.get_error():.6e}, "
+-                f"Tol={self.the_test.get_tol():.6e}"
+-            )
+-            p.log("############# CONVERGENCE FAILED #############")
+-            p.log("")
+-
+-        return result_code
++        return result
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/program.py histra_csharp_aligned/histra/solver/program.py
+--- histra_src/histra/solver/program.py	2026-07-25 13:38:03.000000000 +0000
++++ histra_csharp_aligned/histra/solver/program.py	2026-07-27 08:52:14.458040321 +0000
+@@ -1,28 +1,24 @@
+ from __future__ import annotations
+-from dataclasses import dataclass, field
++
++from dataclasses import dataclass
+ from typing import Any
+ 
+ 
+ @dataclass
+ class Program:
+-    """
+-    Port of SolverRuntime.Program.
+-
+-    Carries the linear system, displacement / velocity vectors, status flags,
+-    and event callbacks.
+-    """
++    """Runtime vectors, status and callbacks used by the solver."""
+ 
+     gdl: int = 0
+     ls: Any | None = None
+-    u: Any | None = None   # total displacement
+-    v: Any | None = None   # velocity (for restart / dynamic)
++    u: Any | None = None
++    v: Any | None = None
+     max_u: float = 0.0
+     elem_max_u_key: int = 0
+     elem_max_u_type: str = ""
+     to_stop: bool = False
+     index_fact_k: int = 0
++    current_load_factor: float = 0.0
+ 
+-    # -- callbacks -----------------------------------------------------------
+     on_log: Any | None = None
+     on_progress: Any | None = None
+ 
+@@ -31,14 +27,12 @@
+             self.on_log(msg)
+         else:
+             import logging
+-            logger = logging.getLogger(__name__)
+-            logger.info(msg)
++
++            logging.getLogger(__name__).info(msg)
+ 
+     def progress(self, val: float) -> None:
+         if self.on_progress:
+-            self.on_progress(val)
+-
+-    # -- graph helpers (stubs that external code can override) ---------------
++            self.on_progress(float(val))
+ 
+     def get_value_graph_analysis(
+         self,
+@@ -47,13 +41,19 @@
+         dof: int,
+         reaction_sum: Any,
+         out_displ: list,
+-    ) -> list:
+-        """Port of GetValueGraphAnalysis _ [load_factor, displacement, ...]."""
+-        load_factor = 1.0
+-        displ = 0.0
+-        if dof >= 0 and self.u is not None and dof < len(self.u):
+-            displ = float(self.u[dof])
+-        return [load_factor, displ]
++    ) -> list[float]:
++        """Return the core force/displacement pair used by solver monitoring.
++
++        Full C# graph extraction can sum reactions and query model points.  This
++        snapshot lacks those subsystems, so it returns the actual integrator
++        load factor and a real generalized displacement instead of the former
++        hard-coded load factor ``1.0``.
++        """
++        del collections, an, reaction_sum, out_displ
++        displacement = 0.0
++        if self.u is not None and 0 <= int(dof) < len(self.u):
++            displacement = float(self.u[int(dof)])
++        return [float(self.current_load_factor), displacement]
+ 
+     def add_value_graph_static_analysis(
+         self,
+@@ -65,4 +65,4 @@
+         step: int,
+         time: float,
+     ) -> None:
+-        pass
++        del collections, an, values, ref_values, dof, step, time
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/solution_algorithm.py histra_csharp_aligned/histra/solver/solution_algorithm.py
+--- histra_src/histra/solver/solution_algorithm.py	2026-07-25 13:50:14.000000000 +0000
++++ histra_csharp_aligned/histra/solver/solution_algorithm.py	2026-07-27 08:49:56.050041239 +0000
+@@ -1,53 +1,49 @@
+ from __future__ import annotations
++
+ from typing import Any
+-import numpy as np
+-from histra.types.linear_system import LinearSystem
+-from histra.types.convergence_test import ConvergenceTest
+-from histra.solver.incremental_integrator import IncrementalIntegrator, StaticIntegrator
+ 
++from histra.solver.incremental_integrator import IncrementalIntegrator, StaticIntegrator
++from histra.solver.line_search import (
++    BisectionLineSearch,
++    InitialInterpolatedLineSearch,
++    LineSearch,
++    RegulaFalsiLineSearch,
++    SecantLineSearch,
++)
++from histra.types.convergence_test import ConvergenceTest
++from histra.types.linear_system import LinearSystem
+ 
+-def _new_line_search(an: Any) -> Any:
+-    """Port of LineSearch.NewLineSearch factory."""
+-    from histra.solver.line_search import LineSearch, RegulaFalsiLineSearch
+ 
++def _new_line_search(an: Any) -> LineSearch:
+     method = str(getattr(an, "method", ""))
+     if "RegulaFalsi" in method:
+-        ls = RegulaFalsiLineSearch()
++        search: LineSearch = RegulaFalsiLineSearch()
+     elif "Bisection" in method:
+-        from bisect import bisect  # placeholder
+-        ls = RegulaFalsiLineSearch()  # fallback
++        search = BisectionLineSearch()
+     elif "Secant" in method:
+-        ls = RegulaFalsiLineSearch()  # fallback
++        search = SecantLineSearch()
+     elif "InitialInterpolated" in method:
+-        ls = RegulaFalsiLineSearch()  # fallback
++        search = InitialInterpolatedLineSearch()
+     else:
+-        ls = LineSearch()  # no-op
++        search = LineSearch()
+ 
+-    ls.tolerance = float(getattr(an, "line_search_tolerance", 0.8))
+-    ls.max_eta = float(getattr(an, "line_search_max_eta", 10.0))
+-    ls.min_eta = float(getattr(an, "line_search_min_eta", 0.1))
+-    ls.max_iter = int(getattr(an, "line_search_max_iterations", 100))
+-    ls.print_flag = 0
+-    return ls
++    search.tolerance = float(getattr(an, "line_search_tolerance", 0.8))
++    search.max_eta = float(getattr(an, "line_search_max_eta", 10.0))
++    search.min_eta = float(getattr(an, "line_search_min_eta", 0.1))
++    search.max_iter = int(getattr(an, "line_search_max_iterations", 100))
++    search.print_flag = 0
++    return search
+ 
+ 
+ class SolutionAlgorithm:
+-    """Port of SolutionAlgorithm base (empty)."""
+     pass
+ 
+ 
+ class EquiSolnAlgo(SolutionAlgorithm):
+-    """
+-    Port of EquiSolnAlgo.
+-
+-    Factory for building solution algorithms, and base class providing
+-    solveCurrentStep.
+-    """
+-
+-    def __init__(self):
++    def __init__(self) -> None:
+         self.the_integrator: IncrementalIntegrator | None = None
+         self.the_test: ConvergenceTest | None = None
+-        self.the_line_search: Any = None
++        self.the_line_search: LineSearch | None = None
+ 
+     def solve_current_step(
+         self,
+@@ -59,40 +55,31 @@
+         step: int,
+         alfa: float,
+     ) -> int:
+-        """Virtual _ subclasses override."""
+-        return 0
++        raise NotImplementedError
+ 
+     @staticmethod
+-    def new_equi_soln_algo(an: Any, combination: int) -> EquiSolnAlgo:
+-        """
+-        Factory _ port of NewEquiSolnAlgo.
+-
+-        Creates the appropriate solution algorithm based on *an.method*.
+-        """
+-        from histra.solver.newton_raphson import NewtonRaphson
++    def new_equi_soln_algo(an: Any, combination: int) -> "EquiSolnAlgo":
+         from histra.solver.newton_line_search import NewtonLineSearch
++        from histra.solver.newton_raphson import NewtonRaphson
+ 
+         method = str(getattr(an, "method", "StandardNewtonRaphson"))
+-
+-        # Select algorithm class
+-        if method in (
+-            "StandardNewtonRaphson",
+-            "ModifiedNewtonRaphson",
+-        ):
++        if method in {"StandardNewtonRaphson", "ModifiedNewtonRaphson"}:
+             algo: EquiSolnAlgo = NewtonRaphson()
+-        else:
++        elif any(
++            name in method
++            for name in ("Bisection", "RegulaFalsi", "Secant", "InitialInterpolated")
++        ):
+             algo = NewtonLineSearch()
++        else:
++            raise ValueError(f"Unsupported nonlinear solution method: {method}")
+ 
+-        # Create integrator
+         algo.the_integrator = StaticIntegrator.new_static_integrator(an, combination)
+-
+-        # Create line search (only used by NewtonLineSearch)
+         algo.the_line_search = _new_line_search(an)
+-
+-        # Create convergence test
+-        tol = float(getattr(an, "convergence_tolerance", 1e-6))
+-        max_iter = int(getattr(an, "max_iterations", 20))
+-        max_u = float(getattr(an, "max_u", 1e30))
+-        algo.the_test = ConvergenceTest(tolerance=tol, max_iter=max_iter)
+-
++        algo.the_test = ConvergenceTest(
++            tolerance=float(getattr(an, "convergence_tolerance", 1e-6)),
++            max_iter=int(getattr(an, "max_iterations", 20)),
++            max_u=float(getattr(an, "max_u", 1e30)),
++            criterion=str(getattr(an, "adaptive_convergence_criteria", "ForceMoment")),
++            absolute=True,
++        )
+         return algo
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/solve.py histra_csharp_aligned/histra/solver/solve.py
+--- histra_src/histra/solver/solve.py	2026-07-25 13:41:45.000000000 +0000
++++ histra_csharp_aligned/histra/solver/solve.py	2026-07-27 08:55:22.754039071 +0000
+@@ -1,28 +1,17 @@
+ from __future__ import annotations
+ 
+-import logging
+-from typing import Any, Callable, Optional
++from typing import Any, Callable
+ 
+ import numpy as np
+-from scipy.sparse.linalg import spsolve
+ 
+ from histra.model.model import Model
+-from histra.types.linear_system import LinearSystem
+-from histra.solver.model_manager import ModelManager
+-from histra.solver.incremental_integrator import StaticIntegrator, IncrementalIntegrator
+-from histra.solver.load_control import LoadControl
+ from histra.solver.arc_length import ArcLength
+-from histra.solver.newton_raphson import NewtonRaphson
+-from histra.solver.newton_line_search import NewtonLineSearch
++from histra.solver.incremental_integrator import StaticIntegrator
++from histra.solver.load_control import LoadControl
++from histra.solver.model_manager import ModelManager, pdelta_enabled
+ from histra.solver.program import Program
+ from histra.solver.solution_algorithm import EquiSolnAlgo
+-from histra.solver.line_search import LineSearch, RegulaFalsiLineSearch
+-from histra.solver.assembler import assemble_load_vector
+-
+-
+-# _____________________________________________________________________________
+-# StaticNonLinearAnalysis _ the main solver entry-point
+-# _____________________________________________________________________________
++from histra.types.linear_system import LinearSolveError, LinearSystem
+ 
+ 
+ def solve_static_nonlinear(
+@@ -33,269 +22,180 @@
+     on_log: Callable[[str], None] | None = None,
+     on_progress: Callable[[float], None] | None = None,
+ ) -> tuple[int, list[dict[str, Any]]]:
+-    """
+-    Port of StaticNonLinearAnalysis.Execute.
++    """Execute the translated static nonlinear solver.
+ 
+-    Parameters
+-    ----------
+-    model : Model
+-        The structural model (with .collections, .gdl, etc.).
+-    analysis : Analysis
+-        Analysis definition (method, integration_method, tolerances, etc.).
+-    combination : int
+-        Load combination index (default 1).
+-    on_log : callable, optional
+-        Callback for log messages.
+-    on_progress : callable, optional
+-        Callback for progress (0..100).
+-
+-    Returns
+-    -------
+-    exit_code : int
+-        0 = completed, <0 = failure.
+-    step_data : list[dict]
+-        Per-step results (status, exit_code, load_factor, displacement, etc.).
++    The execution order follows the original C# ``StaticNonLinearAnalysis``:
++    prepare load and initial stiffness, initialize the integrator, apply a load
++    step, solve iterations, optionally retry with ALS/initial stiffness, commit,
++    and return the true final status.
+     """
+-    # __ 1. Initialise Program & LinearSystem _______________________________
+-    n = model.gdl
++    if model.collections is None:
++        raise ValueError("Model.collections is not initialized")
++    if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
++        raise NotImplementedError(
++            "P-Delta is implemented in the original C# code but the required "
++            "frame/load-generation subsystem is absent from this Python port."
++        )
++
++    n = int(model.gdl)
+     p = Program(gdl=n, on_log=on_log, on_progress=on_progress)
+     ls = LinearSystem(n)
++    p.ls = ls
++    p.u = np.zeros(n)
++    p.v = np.zeros(n)
+ 
+     ModelManager._ptarget = np.zeros(n)
+     ModelManager._fext = np.zeros(n)
+     ModelManager._pq = np.zeros(n)
+     ModelManager._pq_prev = np.zeros(n)
+-    ModelManager._u_total = np.zeros(n)
+-
+-    p.ls = ls
+-    p.u = np.zeros(n)
+-    p.v = np.zeros(n)
+-
+-    # __ 2. Build solution algorithm and integrator _________________________
+-    equi_soln_algo = EquiSolnAlgo.new_equi_soln_algo(analysis, combination)
+-    the_integrator = equi_soln_algo.the_integrator
+-
+-    the_integrator.u = p.u
+-    the_integrator.v = p.v
+-    the_integrator.u_committed = p.u.copy()
+-    the_integrator.state.analysis = analysis
+-    the_integrator.state.combination = combination
+-
+-    # Zero element states _ the XML may have been saved from a previous
+-    # converged analysis and contains non-zero status.u values that would
+-    # cause immediate yielding (committed state starts at 0 everywhere).
+-    for quad in model.collections.quads.values():
+-        for i in range(len(getattr(quad.status, 'u', []))):
+-            quad.status.u[i] = 0.0
+-        if quad.spring is not None:
+-            quad.spring.revert_to_last_commit()
+-    for intf in model.collections.interfaces.values():
+-        for i in range(len(getattr(intf.status, 'u', []))):
+-            intf.status.u[i] = 0.0
++    ModelManager._u_total = p.u
+ 
+-    # PrepareModelForAnalysis generates the reference force pattern before the
+-    # first load increment.  The runtime only reassembles it later when needed.
+     if getattr(analysis, "load_function_key", 0) in model.collections.load_functions:
+         analysis.load_function = model.collections.load_functions[analysis.load_function_key]
+ 
+-    # For ArcLength analysis use the same reference load as the primary
+-    # LoadControl analysis (key 1) since the ArcLength load combination
+-    # may not contain gravity loads.
+-    load_key = analysis.key
+-    if "ArcLength" in str(getattr(analysis, "integration_method", "")):
+-        load_key = 1
+-    ModelManager.assemble_load(model, ls, load_key, combination)
+-
+-    # __ 3. Assemble initial tangent stiffness ______________________________
+-    alfa = 1.0
+-    if "Modified" in str(getattr(analysis, "method", "")):
+-        alfa = 0.0
+-
+-    has_domain_changed = True
+-    step_flag = True  # when False _ stop
+-    step_number = 0
+-    max_abs_displ = 0.0
+-    max_over_fo = 1.0
+-    fo_ratio = 1.0
++    ModelManager.assemble_load(model, ls, getattr(analysis, "key", None), combination)
+ 
+-    Eel = 0.0
+-    Ed = 0.0
++    algorithm = EquiSolnAlgo.new_equi_soln_algo(analysis, combination)
++    integrator = algorithm.the_integrator
++    assert integrator is not None
++    integrator.u = p.u
++    integrator.v = p.v
++    integrator.u_committed = p.u.copy()
++
++    alfa = 0.0 if "Modified" in str(getattr(analysis, "method", "")) else 1.0
++    # C# PrepareModelForAnalysis leaves a factorable stiffness ready before the
++    # first NewStep.  This is essential for the ArcLength predictor.
++    integrator.update_k(p, model, alfa)
++    integrator.domain_changed(p, model, n)
++
++    p.current_load_factor = integrator.mult
++    dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
++    reference = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
++
++    step_data: list[dict[str, Any]] = []
++    final_code = 0
++    step = 0
++    continue_steps = True
++    max_force_change = 0.0
++    energy_elastic = 0.0
++    energy_dissipated = 0.0
+ 
+     p.log(
+         f"Analysis method: {getattr(analysis, 'integration_method', 'LoadControl')} "
+         f"with {getattr(analysis, 'method', 'StandardNewtonRaphson')}"
+     )
+ 
+-    # Reference values for graph
+-    dof_for_max = ModelManager.get_dof_for_max_displacement(p, model, analysis)
+-    ref_values = p.get_value_graph_analysis(
+-        model.collections, analysis, dof_for_max, None, []
+-    )
+-    ref_displ = ref_values[1] if len(ref_values) > 1 else 0.0
+-
+-    step_data: list[dict[str, Any]] = []
+-
+-    # __ 4. Main step loop __________________________________________________
+-    try:
+-        while step_flag:
+-            step_number += 1
+-
+-            # Debug: check spring state before each step
+-            if step_number <= 2:
+-                q0 = list(model.collections.quads.values())[0]
+-                s0 = q0.spring
+-                p.log(f"  >>> Step {step_number} start: "
+-                      f"u={s0.u:.6e}, f={s0.f:.6e}, "
+-                      f"k_tang={s0.k_tang:.6f}, phase={s0.phase}")
+-                if s0.u != 0.0:
+-                    # Check a second quad too
+-                    q1 = list(model.collections.quads.values())[10]
+-                    s1 = q1.spring
+-                    p.log(f"  >>> Quad 11: u={s1.u:.6e}, f={s1.f:.6e}")
+-
+-            # Update DOF for max displacement
+-            dof_for_max = ModelManager.get_dof_for_max_displacement(
+-                p, model, analysis
++    while continue_steps:
++        step += 1
++        dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
++        try:
++            integrator.new_step(p, model, ls, analysis, combination, step, dof)
++            result = algorithm.solve_current_step(
++                p, ls, model, analysis, combination, step, alfa
+             )
+-
+-            if has_domain_changed:
+-                has_domain_changed = False
+-                # Initialise frame parameters (port of FrameOperations.InitFrameParameters)
+-                if hasattr(model.collections, "frames"):
+-                    for frame in model.collections.frames.values():
+-                        frame.init_parameters()
+-
+-                if "Modified" in str(getattr(analysis, "method", "")):
+-                    the_integrator.update_k(p, model, alfa)
+-                the_integrator.domain_changed(p, model, ls.n)
+-
+-            # Start a new step
+-            the_integrator.new_step(
+-                p, model, ls, analysis, combination, step_number, dof_for_max
++        except LinearSolveError as exc:
++            p.log(f"Linear solve failed at step {step}: {exc}")
++            result = -3
++
++        if result == -2 and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
++            result = _als_loop(
++                p, ls, model, analysis, combination, step, alfa, integrator, algorithm
+             )
+-
+-            # Solve current step (Newton-Raphson iterations)
+-            result = equi_soln_algo.solve_current_step(
+-                p, ls, model, analysis, combination, step_number, alfa
++        elif result == -2 and isinstance(integrator, ArcLength) and alfa != 0.0:
++            # Original C# retry: revert and switch ArcLength to initial stiffness.
++            integrator.revert_failed_step(model, ls)
++            alfa = 0.0
++            integrator.update_k(p, model, alfa)
++            integrator.new_step(p, model, ls, analysis, combination, step, dof)
++            result = algorithm.solve_current_step(
++                p, ls, model, analysis, combination, step, alfa
+             )
+ 
+-            # __ Automatic Load Stepping (ALS) _______________________________
+-            if result == -2 and _is_load_control(analysis) and getattr(analysis, "als", False):
+-                result = _als_loop(
+-                    p, ls, model, analysis, combination,
+-                    step_number, alfa, the_integrator, equi_soln_algo,
+-                )
+-
+-            # Sync global vectors
+-            if the_integrator.u is not None:
+-                p.u[:] = the_integrator.u
+-            if the_integrator.v is not None:
+-                p.v[:] = the_integrator.v
+-
+-            ModelManager._u_total = p.u
+-
+-            if p.to_stop:
+-                result = -4
+-
+-            if result < 0:
+-                p.log("")
+-                p.log("################# WARNING! ################")
+-                p.log(f"Convergence failed at step {step_number}")
+-                p.log("################# WARNING! ################")
+-                step_data.append(
+-                    {
+-                        "step": step_number,
+-                        "status": "FAILED",
+-                        "exit_code": result,
+-                        "u": p.u.copy(),
+-                        "load_factor": 0.0,
+-                        "displacement": 0.0,
+-                        "iterations": equi_soln_algo.the_test.current_iter,
+-                    }
+-                )
+-                break
+-
+-            # __ Commit step ________________________________________________
+-            # Energy
+-            ModelManager.compute_energy(model, Eel, Ed)
+-
+-            # Commit element state
+-            _commit_state(model, ls)
+-
+-            # Graph values
+-            cur_values = p.get_value_graph_analysis(
+-                model.collections, analysis, dof_for_max, None, []
+-            )
+-            displ = cur_values[1] if len(cur_values) > 1 else 0.0
+-
++        p.current_load_factor = integrator.mult
++        ModelManager._u_total = p.u
++        if p.to_stop:
++            result = -4
++
++        if result < 0:
++            if isinstance(integrator, LoadControl):
++                integrator.undo_current_load_increment(model)
++                integrator.revert_to_last_commit(model, ls)
++            elif isinstance(integrator, ArcLength):
++                integrator.revert_failed_step(model, ls)
++            p.current_load_factor = integrator.mult
++            final_code = result
+             step_data.append(
+                 {
+-                    "step": step_number,
+-                    "status": "OK",
++                    "step": step,
++                    "status": "FAILED",
+                     "exit_code": result,
+                     "u": p.u.copy(),
+-                    "load_factor": cur_values[0],
+-                    "displacement": displ,
+-                    "iterations": equi_soln_algo.the_test.current_iter,
++                    "load_factor": integrator.mult,
++                    "displacement": float(p.u[dof]) if 0 <= dof < n else 0.0,
++                    "iterations": algorithm.the_test.current_iter,
+                 }
+             )
++            p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
++            break
+ 
+-            p.log(
+-                f"Step {step_number}: committed, "
+-                f"load_factor={cur_values[0]:.6f}, displ={displ:.6e}, "
+-                f"iterations={equi_soln_algo.the_test.current_iter}"
+-            )
++        de_el, de_pl = ModelManager.compute_energy(model)
++        energy_elastic += de_el
++        energy_dissipated += de_pl
++        _commit_state(model, ls)
++
++        p.current_load_factor = integrator.mult
++        values = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
++        displacement = values[1]
++        step_data.append(
++            {
++                "step": step,
++                "status": "OK",
++                "exit_code": result,
++                "u": p.u.copy(),
++                "load_factor": values[0],
++                "displacement": displacement,
++                "iterations": algorithm.the_test.current_iter,
++                "elastic_energy": energy_elastic,
++                "dissipated_energy": energy_dissipated,
++            }
++        )
++        p.log(
++            f"Step {step}: committed, load_factor={values[0]:.6f}, "
++            f"displacement={displacement:.6e}, "
++            f"iterations={algorithm.the_test.current_iter}"
++        )
+ 
+-            # Monitoring values (for exit criteria)
+-            abs_displ = (
+-                abs(cur_values[0] - ref_values[0]) if len(ref_values) > 0 else 0.0
+-            )
+-            max_abs_displ = max(max_abs_displ, abs_displ)
+-            fo = float(getattr(analysis, "states", getattr(analysis, "fo", 1.0)))
+-            max_over_fo = abs_displ / max(fo, 1e-30)
+-            fo_ratio = abs_displ / max(fo, 1e-30)
+-
+-            # Check if integrator says we are done
+-            step_flag = not the_integrator.commit(
+-                model, analysis, displ, dof_for_max, [has_domain_changed]
+-            )
++        force_change = abs(values[0] - reference[0])
++        max_force_change = max(max_force_change, force_change)
++        load_reduction_ratio = force_change / max(max_force_change, 1e-30)
++
++        changed = [False]
++        stop = integrator.commit(model, analysis, displacement, dof, changed)
++        if changed[0]:
++            integrator.update_k(p, model, alfa)
++            integrator.domain_changed(p, model, n)
++        continue_steps = not stop
++
++        if bool(getattr(analysis, "load_reduction_ratio_to_stop", False)):
++            threshold = float(getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1))
++            if load_reduction_ratio < threshold:
++                continue_steps = False
+ 
+-            # Load-reduction ratio stop criterion
+-            stop_ratio = getattr(analysis, "load_reduction_ratio_to_stop", False)
+-            stop_val = getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1)
+-            if stop_ratio and max_over_fo < stop_val:
+-                step_flag = False
+-
+-    except Exception as exc:
+-        p.log(f"Exception in solver loop: {exc}")
+-        raise
+-
+-    # __ 5. Finalise ________________________________________________________
+-    if step_number > 0:
+-        p.log("Analysis executed and completed")
++    if final_code == 0:
++        p.log("Analysis executed and completed" if step else "Analysis not executed")
+     else:
+-        p.log("Analysis not executed")
+-
+-    return 0, step_data
+-
+-
+-# _____________________________________________________________________________
+-# Internal helpers
+-# _____________________________________________________________________________
++        p.log("Analysis executed but not completed")
++    return final_code, step_data
+ 
+ 
+ def _is_load_control(an: Any) -> bool:
+-    """Return True if the integrator is LoadControl (not ArcLength)."""
+-    method = str(getattr(an, "integration_method", "LoadControl"))
+-    return "ArcLength" not in method
++    return "ArcLength" not in str(getattr(an, "integration_method", "LoadControl"))
+ 
+ 
+ def _commit_state(model: Model, ls: LinearSystem) -> None:
+-    """Port of CommonOperations.Commit _ commit each element's state."""
+-    for quad in model.collections.quads.values():
+-        quad.commit(ls)
+-    for intf in model.collections.interfaces.values():
+-        intf.commit(ls)
++    for collection_name in ("quads", "interfaces"):
++        for element in getattr(model.collections, collection_name).values():
++            element.commit(ls)
+ 
+ 
+ def _als_loop(
+@@ -306,78 +206,55 @@
+     combination: int,
+     step: int,
+     alfa: float,
+-    the_integrator: StaticIntegrator,
+-    equi_soln_algo: EquiSolnAlgo,
++    integrator: StaticIntegrator,
++    algorithm: EquiSolnAlgo,
+ ) -> int:
+-    """
+-    Automatic Load Stepping (ALS) _ port of the ALS block in
+-    StaticNonLinearAnalysis.Execute.
+-
+-    When LoadControl fails to converge, this subdivides the failed increment
+-    into smaller sub-steps.
+-    """
+-    if not isinstance(the_integrator, LoadControl):
+-        return -2  # ALS only implemented for LoadControl
+-
+-    lc = the_integrator
+-    incr_mult = lc.incr_mult
+-    als_factor = int(getattr(an, "load_factor_als", 2))
+-    sub_incr = incr_mult / als_factor
+-    cum_incr = 0.0
+-    max_als = int(getattr(an, "max_number_als", 5))
+-    als_attempt = 0
+-
+-    accumulated = 0.0
+-    succeeded = False
+-
+-    while not succeeded and als_attempt < max_als:
++    """Automatic load-step reduction following the original C# sequence."""
++    if not isinstance(integrator, LoadControl):
++        return -2
++
++    original_increment = integrator.incr_mult
++    factor = max(2, int(getattr(an, "load_factor_als", 2)))
++    max_reductions = max(1, int(getattr(an, "max_number_als", 5)))
++
++    # Undo the complete failed increment before starting reduced substeps.
++    integrator.undo_current_load_increment(model)
++    integrator.revert_to_last_commit(model, ls)
++
++    completed = 0.0
++    sub_increment = original_increment / factor
++    reduction = 0
++
++    while abs(original_increment - completed) > 1e-12 and reduction <= max_reductions:
++        remaining = original_increment - completed
++        direction = 1.0 if remaining >= 0.0 else -1.0
++        trial_increment = direction * min(abs(sub_increment), abs(remaining))
+         p.log(
+-            f">>> ALS attempt ({als_attempt + 1}): "
+-            f"LoadIncrement = {sub_incr:.6f}"
++            f">>> Automatic step reduction ({reduction + 1}): "
++            f"LoadIncrement={trial_increment:.6g}"
+         )
+-        n_sub = int(np.ceil((incr_mult - accumulated) / sub_incr))
+-        success_count = 0
+-
+-        # Temporarily store the state before the sub-steps
+-        u_before = lc.u.copy()
+-
+-        for i_sub in range(n_sub):
+-            # Determine step value (may be smaller for the last sub-step)
+-            step_val = min(sub_incr, incr_mult - accumulated - sub_incr * success_count)
+-            if abs(step_val) < 1e-30:
+-                break
+-
+-            p.log(f"  SubStep {i_sub + 1}/{n_sub}, incr={step_val:.6f}")
+-
+-            lc.new_step_with_incr(p, model, ls, an, combination, step, step_val)
+-            sub_result = equi_soln_algo.solve_current_step(
+-                p, ls, model, an, combination, step, alfa
+-            )
+-
+-            if sub_result < 0:
+-                p.log("  Unable to find convergent sub-step")
+-                # Revert
+-                lc.u[:] = u_before
+-                lc.new_step_with_incr(
+-                    p, model, ls, an, combination, step, -step_val
+-                )
+-                lc.revert_to_last_commit(model, ls)
+-                # Reduce sub-step size
+-                sub_incr /= als_factor
+-                als_attempt += 1
+-                break
+-            else:
+-                _commit_state(model, ls)
+-                lc.u_committed[:] = lc.u
+-                accumulated += step_val
+-                success_count += 1
+-        else:
+-            # All sub-steps succeeded
+-            succeeded = True
+-
+-    if succeeded:
+-        return 0  # success
+-    return -2  # ALS failed
+-
+ 
++        integrator.new_step_with_incr(
++            p, model, ls, an, combination, step, trial_increment
++        )
++        result = algorithm.solve_current_step(
++            p, ls, model, an, combination, step, alfa
++        )
++        if result >= 0:
++            _commit_state(model, ls)
++            if integrator.u_committed is not None and integrator.u is not None:
++                integrator.u_committed[:] = integrator.u
++            completed += trial_increment
++            continue
++
++        # Undo only the failed substep, returning to the last successful
++        # substep commit, then reduce the increment as in C#.
++        integrator.undo_current_load_increment(model)
++        integrator.revert_to_last_commit(model, ls)
++        reduction += 1
++        if reduction > max_reductions:
++            return -2
++        sub_increment /= factor
+ 
++    integrator.incr_mult = original_increment
++    return 0
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/solver/solver.py histra_csharp_aligned/histra/solver/solver.py
+--- histra_src/histra/solver/solver.py	2026-07-23 23:18:59.000000000 +0000
++++ histra_csharp_aligned/histra/solver/solver.py	2026-07-27 08:52:14.462040321 +0000
+@@ -1,73 +1,50 @@
+-"""
+-Linear system solver — wraps scipy.sparse.linalg.spsolve.
+-"""
++"""Linear static solver and verification helpers."""
+ from __future__ import annotations
+ 
+ import numpy as np
+ import scipy.sparse as sp
+-from scipy.sparse.linalg import spsolve
+ 
+ from histra.model.model import Model
+-from .assembler import (
+-    assemble_global_k,
+-    assemble_load_vector,
+-    apply_boundary_conditions,
+-    get_restrained_dofs,
+-    extract_displacements,
+-)
++from histra.types.linear_system import LinearSystem
++from .assembler import assemble_global_k, assemble_load_vector, extract_displacements
+ 
+ 
+-def solve_linear(model: Model, alfa: float = 0.0) -> np.ndarray:
++def solve_linear(
++    model: Model,
++    *,
++    stiffness_alfa: float = 0.0,
++    analysis_key: int | None = None,
++    combination: int = 1,
++) -> np.ndarray:
++    """Solve the active HRX generalized-DOF system ``K u = b``.
++
++    Fixed physical DOFs are removed when the original C# model builds the
++    afference/global-DOF map; they must not be inferred again from zero matrix
++    diagonals.  The earlier Python signature also accidentally passed
++    ``alfa`` as an analysis key when assembling loads.
+     """
+-    Solve the linear static system K·u = b.
+-
+-    Assembles K and b from the parsed model, applies boundary conditions,
+-    solves with spsolve, and returns the full displacement vector u.
+-    """
+-    n = model.gdl
+-    K = assemble_global_k(model, alfa)
+-    b = assemble_load_vector(model, alfa)
+-    fixed = get_restrained_dofs(model)
+-
+-    K_red, b_red = apply_boundary_conditions(K, b, fixed)
+-    u_red = spsolve(K_red, b_red)
+-
+-    # Expand back to full DOF space
+-    u = np.zeros(n)
+-    free = sorted(set(range(n)) - fixed)
+-    for i, dof in enumerate(free):
+-        u[dof] = u_red[i]
+-
+-    return u
++    n = int(model.gdl)
++    ls = LinearSystem(n)
++    ls.k = assemble_global_k(model, stiffness_alfa).tocsc()
++    ls.b[:] = assemble_load_vector(model, analysis_key, combination)
++    ls.solve()
++    return ls.x.copy()
+ 
+ 
+ def verify_solution(model: Model, alfa: float = 0.0) -> dict:
+-    """
+-    Verification: assemble K, extract reference u, compute f = K·u.
+-
+-    Returns a dict with residual and relative error metrics.
+-    """
+-    K = assemble_global_k(model, alfa)
++    k = assemble_global_k(model, alfa)
+     u_ref = extract_displacements(model)
+-    f_computed = K @ u_ref
+-
+-    K_diag = K.diagonal()
+-    max_diag = np.max(np.abs(K_diag))
+-
+-    result = {
+-        "K": K,
++    f_computed = k @ u_ref
++    return {
++        "K": k,
+         "u_ref": u_ref,
+         "f_computed": f_computed,
+-        "K_nnz": K.nnz,
+-        "K_norm": sp.linalg.norm(K),
++        "K_nnz": k.nnz,
++        "K_norm": sp.linalg.norm(k),
+     }
+-    return result
+ 
+ 
+ def compute_residual(K: sp.csc_matrix, u: np.ndarray, b: np.ndarray) -> float:
+-    """Compute ||K·u - b|| / ||b||."""
+-    r = K @ u - b
+-    bn = np.linalg.norm(b)
+-    if bn < 1e-30:
+-        return np.linalg.norm(r)
+-    return np.linalg.norm(r) / bn
++    residual = K @ u - b
++    norm_b = np.linalg.norm(b)
++    return float(np.linalg.norm(residual) if norm_b < 1e-30 else np.linalg.norm(residual) / norm_b)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/types/__init__.py histra_csharp_aligned/histra/types/__init__.py
+--- histra_src/histra/types/__init__.py	2026-07-25 13:27:21.000000000 +0000
++++ histra_csharp_aligned/histra/types/__init__.py	2026-07-27 08:58:51.978037683 +0000
+@@ -6,7 +6,7 @@
+     HystereticCompressiveCurveTypeEnum,
+ )
+ from histra.types.convergence_test import ConvergenceTest
+-from histra.types.linear_system import LinearSystem
++from histra.types.linear_system import LinearSystem, LinearSolveError
+ from histra.types.integrator_state import IntegratorState
+ 
+ __all__ = [
+@@ -17,5 +17,6 @@
+     "HystereticCompressiveCurveTypeEnum",
+     "ConvergenceTest",
+     "LinearSystem",
++    "LinearSolveError",
+     "IntegratorState",
+ ]
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/types/convergence_test.py histra_csharp_aligned/histra/types/convergence_test.py
+--- histra_src/histra/types/convergence_test.py	2026-07-26 18:07:04.000000000 +0000
++++ histra_csharp_aligned/histra/types/convergence_test.py	2026-07-27 08:47:28.194042220 +0000
+@@ -1,18 +1,22 @@
+ from __future__ import annotations
+-import logging
+-from typing import TYPE_CHECKING, Any, List
+ 
+-if TYPE_CHECKING:
+-    from histra.solver.program import Program
+-    from histra.types.linear_system import LinearSystem
++from typing import Any
++
++from histra.types.linear_system import LinearSystem
+ 
+ 
+ class ConvergenceTest:
+-    """Port of SolverRuntime.ConvergenceTest.ConvergenceTest.
++    """C#-aligned nonlinear convergence test.
++
++    The original solver selects one of three absolute criteria:
+ 
+-    Checks convergence of the residual norm.
+-    Supports both the low-level ``test(b, n, tol, error)`` and
+-    the high-level ``test(p, model, ls)`` interface used by the solver loop.
++    * ``ForceMoment``: norm of the residual vector ``b``;
++    * ``DispRotation``: norm of the last displacement increment ``x``;
++    * ``Work``: ``0.5 * abs(x dot b)``.
++
++    The Python translation previously used a relative residual by default and
++    failed to initialize its reference norm in the line-search path.  That was
++    not how the C# implementation behaves.
+     """
+ 
+     def __init__(
+@@ -22,91 +26,102 @@
+         max_u: float = 1e30,
+         print_level: int = 0,
+         norm_type: int = 2,
+-        absolute: bool = False,
+-    ):
+-        self.tolerance = tolerance
+-        self.max_iter = max_iter
+-        self.max_u = max_u
+-        self.print_level = print_level
+-        self.norm_type = norm_type
+-        self.absolute = absolute
+-        self.current_iter: int = 0
++        criterion: str = "ForceMoment",
++        absolute: bool = True,
++    ) -> None:
++        self.tolerance = float(tolerance)
++        self.max_iter = int(max_iter)
++        self.max_u = float(max_u)
++        self.print_level = int(print_level)
++        self.norm_type = int(norm_type)
++        self.criterion = self._normalize_criterion(criterion)
++        self.absolute = bool(absolute)
++        self.current_iter = 0
+         self.flag = 0
+-        self._norm: float = 0.0
+-        self._prev_norm: float = 1.0
++        self._error = 0.0
++        self._previous_raw_norm = 1.0
+ 
+-    # -- low-level API (used by unit tests) -----------------------------------
++    @staticmethod
++    def _normalize_criterion(value: Any) -> str:
++        text = str(value or "ForceMoment").replace("_", "").replace(" ", "").lower()
++        if text in {"disprotation", "displacement", "displacementincrement", "normdispincr"}:
++            return "DispRotation"
++        if text in {"work", "energy", "energyincrement"}:
++            return "Work"
++        return "ForceMoment"
+ 
+     def set_tolerance(self, tol: float) -> None:
+-        self.tolerance = tol
++        self.tolerance = float(tol)
+ 
+     def set_max_num_iter(self, n: int) -> None:
+-        self.max_iter = n
++        self.max_iter = int(n)
+ 
+     def set_print_level(self, n: int) -> None:
+-        self.print_level = n
+-
+-    def test(self, *args, **kwargs):
+-        raise NotImplementedError("Call start() + test(p, model, ls) instead")
+-
+-    # -- high-level API (used by NewtonRaphson) -------------------------------
++        self.print_level = int(n)
+ 
+     def start(self, ls: LinearSystem | None = None, reference_norm: float = 0.0) -> int:
++        del ls, reference_norm
+         self.current_iter = 1
+-        if reference_norm > 0.0:
+-            self._initial_norm = reference_norm
+-        elif ls is not None:
+-            self._initial_norm = ls.get_b_norm(self.norm_type)
+-        else:
+-            self._initial_norm = 0.0
+-        self._prev_norm = 1.0
++        self._error = 0.0
++        self._previous_raw_norm = 1.0
+         return 0
+ 
+-    def get_error(self) -> float:
+-        return abs(self._norm)
++    def _raw_error(self, ls: LinearSystem) -> float:
++        if self.criterion == "DispRotation":
++            return ls.get_x_norm(self.norm_type)
++        if self.criterion == "Work":
++            return 0.5 * abs(ls.get_x_per_b())
++        return ls.get_b_norm(self.norm_type)
+ 
+-    def get_tol(self) -> float:
+-        return self.tolerance
+-
+-    def test(
+-        self,
+-        p: Program,
+-        model: Any,
+-        ls: LinearSystem,
+-    ) -> int:
+-        """
+-        Check convergence (high-level API used by NewtonRaphson).
++    def test(self, p: Any, model: Any, ls: LinearSystem) -> int:
++        """Return C#-compatible result codes.
+ 
+-        Returns:
+-          >=0  — converged (iteration count)
+-          -1   — continue iterating
+-          -2   — max iterations exceeded
+-          -3   — max displacement exceeded
++        ``>=0`` converged, ``-1`` continue, ``-2`` iteration limit and ``-3``
++        maximum displacement reached.
+         """
+         from histra.solver.model_manager import ModelManager
+-        ModelManager.find_max_u(model, p)
+-        raw_norm = ls.get_b_norm(self.norm_type)
+ 
+-        # Absolute floor: the residual is numerically zero
+-        if raw_norm < 1e-10:
+-            self._norm = 0.0
+-            return self.current_iter
++        ModelManager.find_max_u(model, p)
++        raw = self._raw_error(ls)
+ 
+         if self.absolute:
+-            self._norm = raw_norm
++            self._error = raw
+         else:
+-            initial = max(abs(self._initial_norm), 1e-30)
+-            self._norm = raw_norm / initial
+-
+-        if self._norm <= self.tolerance:
+-            return self.current_iter  # converged
++            # Retained as an opt-in compatibility mode.  The original force
++            # test compares the current norm with the first measured norm.
++            if self.current_iter == 1:
++                self._previous_raw_norm = max(abs(raw), 1e-30)
++            self._error = raw / self._previous_raw_norm
+ 
++        if self._error <= self.tolerance:
++            return self.current_iter
+         if self.current_iter >= self.max_iter:
+             self.current_iter += 1
+-            return -2  # max iterations
+-
++            return -2
+         if p.max_u >= self.max_u:
+-            return -3  # max displacement
++            return -3
+ 
+         self.current_iter += 1
+-        return -1  # continue
++        return -1
++
++    def get_error(self) -> float:
++        return abs(float(self._error))
++
++    def get_tol(self) -> float:
++        return self.tolerance
++
++    def get_copy(self, iterations: int) -> "ConvergenceTest":
++        """Return a same-type test with a different iteration cap.
++
++        This intentionally fixes a bug in the original C# implementation where
++        ``CTestNormUnbalance.getCopy`` returned a displacement-increment test.
++        """
++        return ConvergenceTest(
++            tolerance=self.tolerance,
++            max_iter=iterations,
++            max_u=self.max_u,
++            print_level=self.print_level,
++            norm_type=self.norm_type,
++            criterion=self.criterion,
++            absolute=self.absolute,
++        )
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' histra_src/histra/types/linear_system.py histra_csharp_aligned/histra/types/linear_system.py
+--- histra_src/histra/types/linear_system.py	2026-07-25 14:27:03.000000000 +0000
++++ histra_csharp_aligned/histra/types/linear_system.py	2026-07-27 08:42:58.954044007 +0000
+@@ -1,58 +1,91 @@
+ from __future__ import annotations
++
++import warnings
++
+ import numpy as np
+ import scipy.sparse as sp
+-from typing import List
++from scipy.sparse.linalg import MatrixRankWarning, spsolve
++
++
++class LinearSolveError(RuntimeError):
++    """Raised when the sparse stiffness solve is singular or non-finite."""
+ 
+ 
+ class LinearSystem:
+-    """Port of C# ``LinearSystem`` — holds K, M, C, b, x.
++    """Sparse global system used by the translated static solver.
+ 
+-    Manages the sparse global stiffness matrix and right-hand-side vector
+-    for a static analysis step.
++    The original C# ``LinearSystem.SetZero`` clears only the matrix values.
++    Load and displacement vectors are cleared by separate methods.  Preserving
++    that distinction is important because a standard Newton iteration rebuilds
++    ``K`` *after* the residual has already been assembled in ``b``.
+     """
+ 
+     def __init__(self, n: int):
+-        self.n = n
+-        self.k = sp.csc_matrix((n, n), dtype=np.float64)
+-        self.m = sp.csc_matrix((n, n), dtype=np.float64)
+-        self.c = sp.csc_matrix((n, n), dtype=np.float64)
+-        self.x = np.zeros(n, dtype=np.float64)
+-        self.b = np.zeros(n, dtype=np.float64)
+-        self.b0 = np.zeros(n, dtype=np.float64)
++        self.n = int(n)
++        self.k = sp.csc_matrix((self.n, self.n), dtype=np.float64)
++        self.m = sp.csc_matrix((self.n, self.n), dtype=np.float64)
++        self.c = sp.csc_matrix((self.n, self.n), dtype=np.float64)
++        self.x = np.zeros(self.n, dtype=np.float64)
++        self.b = np.zeros(self.n, dtype=np.float64)
++        self.b0 = np.zeros(self.n, dtype=np.float64)
+ 
+     def sumb(self, i: int, v: float) -> None:
+-        """Add *v* to ``b[i]`` (port of ``A.sumb(i, v)`` in C#)."""
+         self.b[i] += v
+ 
+     def get_b_norm(self, norm_type: int = 2) -> float:
++        if self.b.size == 0:
++            return 0.0
+         if norm_type == 2:
+-            return float(np.sqrt(np.dot(self.b, self.b)))
++            return float(np.linalg.norm(self.b))
+         return float(np.max(np.abs(self.b)))
+ 
++    def get_x_norm(self, norm_type: int = 2) -> float:
++        if self.x.size == 0:
++            return 0.0
++        if norm_type == 2:
++            return float(np.linalg.norm(self.x))
++        return float(np.max(np.abs(self.x)))
++
++    def get_x_per_b(self) -> float:
++        return float(np.dot(self.x, self.b))
++
+     def set_x(self, i: int, v: float) -> None:
+-        """Set ``x[i] = v``."""
+         self.x[i] = v
+ 
++    def set_x_vector(self, values: np.ndarray) -> None:
++        values = np.asarray(values, dtype=np.float64)
++        if values.shape != (self.n,):
++            raise ValueError(
++                f"Expected displacement vector of shape {(self.n,)}, "
++                f"received {values.shape}"
++            )
++        self.x[:] = values
++
+     def get_x(self, i: int) -> float:
+-        """Return ``x[i]``."""
+-        return self.x[i]
++        return float(self.x[i])
+ 
+     def set_b(self, i: int, v: float) -> None:
+-        """Set ``b[i] = v``."""
+         self.b[i] = v
+ 
++    def set_b_vector(self, values: np.ndarray) -> None:
++        values = np.asarray(values, dtype=np.float64)
++        if values.shape != (self.n,):
++            raise ValueError(
++                f"Expected load vector of shape {(self.n,)}, "
++                f"received {values.shape}"
++            )
++        self.b[:] = values
++
+     def get_b(self, i: int) -> float:
+-        """Return ``b[i]``."""
+-        return self.b[i]
++        return float(self.b[i])
+ 
+     def set_k(self, i: int, j: int, v: float) -> None:
+-        """Set entry K[i,j] = v (only if K is in LIL format)."""
+-        if hasattr(self.k, '__setitem__'):
+-            self.k[i, j] = v
++        if not sp.isspmatrix_lil(self.k):
++            self.k = self.k.tolil()
++        self.k[i, j] = v
+ 
+     def get_k(self, i: int, j: int) -> float:
+-        """Return K[i, j]."""
+-        return self.k[i, j]
++        return float(self.k[i, j])
+ 
+     def zero_b(self) -> None:
+         self.b[:] = 0.0
+@@ -61,19 +94,59 @@
+         self.x[:] = 0.0
+ 
+     def copy_b_to_b0(self) -> None:
+-        self.b0[:] = self.b[:]
++        self.b0[:] = self.b
+ 
+     def set_zero_load(self) -> None:
+-        """Zero the load vector b (port of A.setZeroLoad)."""
+         self.b[:] = 0.0
+ 
++    def set_zero_displacement(self) -> None:
++        self.x[:] = 0.0
++
+     def set_zero(self) -> None:
+-        """Zero the entire system (port of K.SetZero)."""
++        """Clear only stiffness coefficients, matching C# ``K.SetZero()``."""
+         self.k = sp.csc_matrix((self.n, self.n), dtype=np.float64)
+-        self.b[:] = 0.0
+-        self.x[:] = 0.0
+ 
+-    def solve(self) -> None:
+-        """Solve K*x = b (in-place, stores result in x)."""
+-        from scipy.sparse.linalg import spsolve
+-        self.x = spsolve(self.k, self.b)
++    def solve(self, rhs: np.ndarray | None = None) -> int:
++        """Solve ``K x = rhs`` and store the result in ``x``.
++
++        HiStrA's saved afference matrices are expressed in active generalized
++        DOFs: fixed DOFs are omitted while the C# model is prepared.  Therefore
++        this method solves the assembled active system directly rather than
++        trying to infer and eliminate restraints a second time.
++
++        Returns ``0`` on success and raises :class:`LinearSolveError` on a
++        singular or non-finite result.
++        """
++        if self.n == 0:
++            self.x = np.zeros(0, dtype=np.float64)
++            return 0
++
++        vector = self.b if rhs is None else np.asarray(rhs, dtype=np.float64)
++        if vector.shape != (self.n,):
++            raise ValueError(
++                f"Expected right-hand side of shape {(self.n,)}, "
++                f"received {vector.shape}"
++            )
++
++        matrix = self.k.tocsc()
++        if matrix.shape != (self.n, self.n):
++            raise LinearSolveError(
++                f"Stiffness matrix has shape {matrix.shape}; "
++                f"expected {(self.n, self.n)}"
++            )
++
++        with warnings.catch_warnings():
++            warnings.simplefilter("error", MatrixRankWarning)
++            try:
++                solution = spsolve(matrix, vector)
++            except (MatrixRankWarning, RuntimeError, ValueError) as exc:
++                raise LinearSolveError(f"Unable to solve stiffness system: {exc}") from exc
++
++        solution = np.asarray(solution, dtype=np.float64).reshape(-1)
++        if solution.shape != (self.n,) or not np.all(np.isfinite(solution)):
++            raise LinearSolveError(
++                "Sparse solve returned a singular or non-finite displacement vector"
++            )
++
++        self.x[:] = solution
++        return 0

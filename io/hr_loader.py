@@ -1,0 +1,398 @@
+"""HiStrA HRX loader.
+
+The C# model stores load-function definitions and their points as separate
+top-level entities.  This loader preserves that relationship and attaches
+``LoadFunctionItem`` objects after the streaming parse is complete.
+"""
+
+from __future__ import annotations
+
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Union
+
+from histra.model.interface import Interface
+from histra.model.load import (
+    Analysis,
+    LoadCombination,
+    LoadCombinationItem,
+    LoadCondition,
+    LoadFunction,
+    LoadFunctionItem,
+)
+from histra.model.masonry_material import MasonryMaterial
+from histra.model.model import Collections, Model
+from histra.model.node import Node, NodeC
+from histra.model.quad import Quad
+from histra.model.restraint import Restraint
+
+
+_CONSUMED_TAGS = frozenset(
+    {
+        "Node",
+        "NodeC",
+        "Quad",
+        "Interface",
+        "Restraint",
+        "LoadCombination",
+        "LoadCondition",
+        "LoadFunction",
+        "LoadFunctionItem",
+        "Template",
+        "Analysis",
+    }
+)
+
+
+def load_model(path: Union[str, Path]) -> Model:
+    """Load a ``.hrx`` file into the translated Python model."""
+
+    source_path = Path(path).resolve()
+    model = Model(source_path=str(source_path))
+    collections = Collections()
+    load_function_items: list[LoadFunctionItem] = []
+
+    context = ET.iterparse(str(source_path), events=("end",))
+
+    for _event, elem in context:
+        tag = elem.tag
+
+        if tag == "HiStrA":
+            model.version = _attr(elem, "version", "Version", default="")
+            model.gdl = _safe_int(_attr(elem, "GDL", "gdl", default="0"))
+            model.wizard_type = _attr(elem, "WizardType", default="")
+            model.is_locked = _safe_bool(_attr(elem, "IsLocked", default="false"))
+            elem.clear()
+
+        elif tag == "Node":
+            node = Node.from_xml(elem)
+            collections.nodes[node.key] = node
+            elem.clear()
+
+        elif tag == "NodeC":
+            node_c = NodeC.from_xml(elem)
+            collections.node_c[node_c.key] = node_c
+            elem.clear()
+
+        elif tag == "Quad":
+            quad = Quad.from_xml(elem)
+            collections.quads[quad.key] = quad
+            elem.clear()
+
+        elif tag == "Interface":
+            # Nested references inside a Quad have no Key and must stay attached
+            # until the parent Quad is parsed.
+            if elem.get("Key") is None:
+                continue
+            interface = Interface.from_xml(elem)
+            collections.interfaces[interface.key] = interface
+            elem.clear()
+
+        elif tag == "Restraint":
+            restraint = Restraint.from_xml(elem)
+            collections.restraints[restraint.key] = restraint
+            elem.clear()
+
+        elif tag == "LoadCombination":
+            combination = _parse_load_combination(elem)
+            collections.load_combinations[combination.key] = combination
+            elem.clear()
+
+        elif tag == "LoadCondition":
+            condition = LoadCondition(
+                id=_safe_int(_attr(elem, "Id", "id", default="0")),
+                name=_attr(elem, "Name", "name", default=""),
+                description=_attr(elem, "Description", default=""),
+                mass_in_dir_x=_safe_float(
+                    _attr(elem, "MassInDirX", default="1"), 1.0
+                ),
+                mass_in_dir_y=_safe_float(
+                    _attr(elem, "MassInDirY", default="1"), 1.0
+                ),
+                mass_in_dir_z=_safe_float(
+                    _attr(elem, "MassInDirZ", default="1"), 1.0
+                ),
+                is_main_load=_safe_bool(
+                    _attr(elem, "isMainLoad", "IsMainLoad", default="false")
+                ),
+                is_favourable=_safe_bool(
+                    _attr(elem, "isFavourable", "IsFavourable", default="false")
+                ),
+                is_un_favourable=_safe_bool(
+                    _attr(
+                        elem,
+                        "isUnFavourable",
+                        "IsUnFavourable",
+                        default="true",
+                    )
+                ),
+                gamma_fav_str=_safe_float(
+                    _attr(elem, "GammaFavSTR", default="1"), 1.0
+                ),
+                gamma_unfav_str=_safe_float(
+                    _attr(elem, "GammaUnfavSTR", default="1"), 1.0
+                ),
+                gamma_fav_geo=_safe_float(
+                    _attr(elem, "GammaFavGEO", default="1"), 1.0
+                ),
+                gamma_unfav_geo=_safe_float(
+                    _attr(elem, "GammaUnfavGEO", default="1"), 1.0
+                ),
+                action=_safe_int(_attr(elem, "Action", default="0")),
+            )
+            collections.load_conditions[condition.id] = condition
+            elem.clear()
+
+        elif tag == "LoadFunction":
+            function = LoadFunction(
+                key=_safe_int(_attr(elem, "Key", "key", default="0")),
+                name=_attr(elem, "Name", "name", default=""),
+                type_discr=_safe_bool(
+                    _attr(elem, "typeDiscr", "TypeDiscr", default="false")
+                ),
+                discr_val=_safe_float(
+                    _attr(elem, "DiscrVal", "discrVal", default="0.1"), 0.1
+                ),
+            )
+            collections.load_functions[function.key] = function
+            elem.clear()
+
+        elif tag == "LoadFunctionItem":
+            load_function_items.append(
+                LoadFunctionItem(
+                    key=_safe_int(_attr(elem, "Key", "key", default="0")),
+                    load_function_key=_safe_int(
+                        _attr(
+                            elem,
+                            "LoadFunctionKey",
+                            "loadFunctionKey",
+                            default="0",
+                        )
+                    ),
+                    pseudo_time=_safe_float(
+                        _attr(elem, "PseudoTime", "pseudoTime", default="0")
+                    ),
+                    multiplier=_safe_float(
+                        _attr(elem, "Multiplier", "multiplier", default="0")
+                    ),
+                )
+            )
+            elem.clear()
+
+        elif tag == "Template":
+            if _attr(elem, "PurposeType", default="") == "MasonryMaterial":
+                material = MasonryMaterial(
+                    key=_safe_int(_attr(elem, "Key", default="0")),
+                    name=_attr(elem, "Name", default=""),
+                    w=_safe_float(_attr(elem, "w", default="0")),
+                    E_min=_safe_float(_attr(elem, "E_min", default="0")),
+                    E_med=_safe_float(_attr(elem, "E_med", default="0")),
+                    E_max=_safe_float(_attr(elem, "E_max", default="0")),
+                    G_min=_safe_float(_attr(elem, "G_min", default="0")),
+                    G_med=_safe_float(_attr(elem, "G_med", default="0")),
+                    G_max=_safe_float(_attr(elem, "G_max", default="0")),
+                    fm_min=_safe_float(_attr(elem, "fm_min", default="0")),
+                    fm_med=_safe_float(_attr(elem, "fm_med", default="0")),
+                    fm_max=_safe_float(_attr(elem, "fm_max", default="0")),
+                    fvk0_min=_safe_float(_attr(elem, "fvk0_min", default="0")),
+                    fvk0_med=_safe_float(_attr(elem, "fvk0_med", default="0")),
+                    fvk0_max=_safe_float(_attr(elem, "fvk0_max", default="0")),
+                )
+                collections.materials[material.key] = material
+            elem.clear()
+
+        elif tag == "Analysis":
+            analysis = Analysis(
+                key=_safe_int(_attr(elem, "Key", default="0")),
+                name=_attr(elem, "Name", default=""),
+                analysis_type=_safe_int(_attr(elem, "AnalysisType", default="0")),
+                load_combination_key=_safe_int(
+                    _attr(elem, "LoadCombinationKey", default="0")
+                ),
+                load_function_key=_safe_int(
+                    _attr(elem, "LoadFunctionKey", default="0")
+                ),
+                initial_analysis_key=_safe_int(
+                    _attr(elem, "InitialAnalysisKey", default="-100"), -100
+                ),
+                initial_combination_analysis_key=_safe_int(
+                    _attr(elem, "InitialCombinationAnalysisKey", default="1"), 1
+                ),
+                dir_x=_safe_float(_attr(elem, "DirX", default="0")),
+                dir_y=_safe_float(_attr(elem, "DirY", default="0")),
+                dir_z=_safe_float(_attr(elem, "DirZ", default="-1"), -1.0),
+                is_seismic=_safe_bool(
+                    _attr(elem, "IsSeismic", default="false")
+                ),
+                mult=_safe_float(_attr(elem, "Mult", default="1"), 1.0),
+                integration_method=_attr(
+                    elem, "IntegrationMethod", default="LoadControl"
+                ),
+                method=_attr(
+                    elem, "Method", default="StandardNewtonRaphson"
+                ),
+                adaptive_convergence_criteria=_attr(
+                    elem,
+                    "AdapticConvergenceCriteria",
+                    default="ForceMoment",
+                ),
+                convergence_tolerance=_safe_float(
+                    _attr(elem, "ConvergenceTolerance", default="0.0001"),
+                    1.0e-4,
+                ),
+                max_iterations=_safe_int(
+                    _attr(elem, "MaxIterations", default="1000"), 1000
+                ),
+                max_u=_safe_float(_attr(elem, "maxU", "MaxU", default="100"), 100.0),
+                pdelta_effect=_attr(elem, "PdeltaEffect", default="None"),
+                als=_safe_bool(_attr(elem, "ALS", default="false")),
+                max_number_als=_safe_int(
+                    _attr(elem, "MaxNumberALS", default="10"), 10
+                ),
+                load_factor_als=_safe_int(
+                    _attr(elem, "LoadFactorALS", default="2"), 2
+                ),
+                master_point=_safe_int(
+                    _attr(elem, "MasterPoint", default="-10"), -10
+                ),
+                target_displacement=_safe_float(
+                    _attr(elem, "TargetDisplacement", default="0")
+                ),
+                dr2=_safe_float(_attr(elem, "Dr2", "DR2", default="0.0001"), 1.0e-4),
+                arc_length_procedure=_attr(
+                    elem,
+                    "ArcLengthProcedure",
+                    default="OnlyControlPoint",
+                ),
+                update_dr2=_safe_bool(
+                    _attr(elem, "UpdateDr2", default="false")
+                ),
+                desired_iterations=_safe_int(
+                    _attr(elem, "DesiredIterations", default="5"), 5
+                ),
+                is_max_arc_length_ray=_safe_bool(
+                    _attr(elem, "IsMaxArcLengthRay", default="false")
+                ),
+                max_arc_length_ray=_safe_float(
+                    _attr(elem, "MaxArcLengthRay", default="1"), 1.0
+                ),
+                line_search_tolerance=_safe_float(
+                    _attr(elem, "LineSearchTolerance", default="0.8"), 0.8
+                ),
+                line_search_max_iterations=_safe_int(
+                    _attr(elem, "LineSearchMaxIterations", default="1000"),
+                    1000,
+                ),
+                line_search_max_eta=_safe_float(
+                    _attr(elem, "LineSearchMaxEta", default="10"), 10.0
+                ),
+                line_search_min_eta=_safe_float(
+                    _attr(elem, "LineSearchMinEta", default="0.1"), 0.1
+                ),
+                load_reduction_ratio_to_stop=_safe_bool(
+                    _attr(
+                        elem,
+                        "LoadReductionRatioToStop",
+                        default="false",
+                    )
+                ),
+                load_reduction_ratio_to_stop_value=_safe_float(
+                    _attr(
+                        elem,
+                        "LoadReductionRatioToStopValue",
+                        default="0.1",
+                    ),
+                    0.1,
+                ),
+                check_secant_stiffness=_safe_bool(
+                    _attr(elem, "CheckSecantStiffness", default="false")
+                ),
+                secant_stiffness_ratio=_safe_float(
+                    _attr(elem, "SecantStiffnessRatio", default="0")
+                ),
+            )
+            collections.analyses[analysis.key] = analysis
+            elem.clear()
+
+    # Attach the separate C# LoadFunctionItem collection to each function.
+    for item in load_function_items:
+        function = collections.load_functions.get(item.load_function_key)
+        if function is not None:
+            function.items.append(item)
+    for function in collections.load_functions.values():
+        function.items.sort(key=lambda item: (item.pseudo_time, item.key))
+
+    for analysis in collections.analyses.values():
+        analysis.load_function = collections.load_functions.get(
+            analysis.load_function_key
+        )
+
+    model.collections = collections
+
+    # HRX files normally contain the active generalized-DOF count and saved
+    # afference matrices.  Recover the count only when the header is zero.
+    if model.gdl == 0:
+        max_gdl = 0
+        for element in (
+            list(collections.quads.values())
+            + list(collections.interfaces.values())
+        ):
+            for aff_i in element.aff:
+                for entry in aff_i:
+                    max_gdl = max(max_gdl, entry.gdl)
+        model.gdl = max_gdl
+
+    return model
+
+
+def _parse_load_combination(elem: ET.Element) -> LoadCombination:
+    combination = LoadCombination(
+        key=_safe_int(_attr(elem, "Key", default="0")),
+        name=_attr(elem, "Name", default=""),
+        limit_state=_attr(elem, "LimitState", default=""),
+    )
+    for child in elem.iterfind("Item"):
+        combination.items.append(
+            LoadCombinationItem(
+                column_key=_safe_int(
+                    _attr(child, "ColumnKey", default="0")
+                ),
+                row_key=_safe_int(_attr(child, "RowKey", default="0")),
+                name=_attr(child, "Name", default=""),
+                type_data=_attr(child, "TypeData", default="Number"),
+                secondary_type_data=_attr(
+                    child, "SecondaryTypeData", default="Number"
+                ),
+                val=_safe_float(_attr(child, "Val", default="0")),
+                combination=_safe_int(
+                    _attr(child, "Combination", default="0")
+                ),
+            )
+        )
+    return combination
+
+
+def _attr(elem: ET.Element, *names: str, default: str = "") -> str:
+    for name in names:
+        value = elem.get(name)
+        if value is not None:
+            return value
+    return default
+
+
+def _safe_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes"}
+
+
+def _safe_float(value: str, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(value: str, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
