@@ -44,3 +44,10 @@ maps, cached Quad/interface topology, and compact snapshot state reduce the
 same run to 13.10 seconds warm and 15.83 seconds with an empty JIT cache. The
 full opt-in suite passes with 132 tests, and final displacement/reaction outputs
 remain equal to the previous solver to roundoff. See `../PERFORMANCE_PROFILE.md`.
+
+## Exact raw-model preprocessing alignment
+
+The 560-DOF benchmark exposed several path-sensitive C# preprocessing rules.
+The current release ports them and restores the same 38-step Live Load trajectory
+as the software-generated model. See `../PREPROCESSING_EXACTNESS_REPORT.md` and
+`../PREPROCESSING_EXACTNESS_METRICS.json`.

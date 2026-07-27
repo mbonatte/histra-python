@@ -74,6 +74,7 @@ class _HystereticLaw:
     G_c: float
     eps_u_t: float
     eps_u_c: float
+    law_type: str
 
 
 @dataclass(frozen=True)
@@ -136,7 +137,14 @@ def _bool(material: MasonryMaterial, name: str, default: bool = False) -> bool:
 
 
 def _float(material: MasonryMaterial, name: str, default: float = 0.0) -> float:
-    return float(material.value(name, default))
+    """Read a C# ``MasonryMaterial`` numeric property as ``System.Single``.
+
+    The desktop material class stores these values in ``float`` fields.  The
+    rounded value is then promoted to ``double`` by constitutive constructors.
+    Keeping the XML decimal as a Python double changes near-zero Coulomb
+    capacities enough to select a different phase.
+    """
+    return float(np.float32(float(material.value(name, default))))
 
 
 def _flex_law(material: MasonryMaterial, *, vertical: bool = False) -> _HystereticLaw:
@@ -169,6 +177,38 @@ def _flex_law(material: MasonryMaterial, *, vertical: bool = False) -> _Hysteret
         G_c=_float(material, "GcVer" if vertical else "Gc"),
         eps_u_t=eps_t,
         eps_u_c=eps_c,
+        law_type=str(material.value("ConstitutiveLawFlex", "Hysteretic")),
+    )
+
+
+def _diagonal_flex_law(material: MasonryMaterial) -> _HystereticLaw:
+    """Apply C# ``PropOrthotropyParameter(sqrt(2)/2, sqrt(2)/2)``."""
+    vertical = _flex_law(material, vertical=True)
+    horizontal = _flex_law(material, vertical=False)
+    c = math.sqrt(2.0) / 2.0
+    w = c * c
+    elasto_plastic = vertical.law_type.startswith("ElastoPlastic")
+    return _HystereticLaw(
+        E=vertical.E * w + horizontal.E * w,
+        fy_t=vertical.fy_t * w + horizontal.fy_t * w,
+        fy_c=vertical.fy_c * w + horizontal.fy_c * w,
+        tensile_curve=horizontal.tensile_curve,
+        compressive_curve=horizontal.compressive_curve,
+        ratio_et_t=vertical.ratio_et_t * w + horizontal.ratio_et_t * w,
+        ratio_et_c=vertical.ratio_et_c * w + horizontal.ratio_et_c * w,
+        alfa_r_t=vertical.alfa_r_t,
+        alfa_r_c=vertical.alfa_r_c,
+        alfa_u_t=vertical.alfa_u_t,
+        alfa_u_c=vertical.alfa_u_c,
+        G_t=vertical.G_t * w + horizontal.G_t * w,
+        G_c=vertical.G_c * w + horizontal.G_c * w,
+        # C# ConstitutiveLawElastoPlastic contains a source-level asymmetry:
+        # tensile ultimate strain uses c rather than c².
+        eps_u_t=(vertical.eps_u_t * c + horizontal.eps_u_t * c)
+        if elasto_plastic
+        else (vertical.eps_u_t * w + horizontal.eps_u_t * w),
+        eps_u_c=vertical.eps_u_c * w + horizontal.eps_u_c * w,
+        law_type=vertical.law_type,
     )
 
 
@@ -457,8 +497,16 @@ def _combine_coulomb(sp1: SpringCoulomb03, sp2: SpringCoulomb03, restrained: boo
     area = sp1.area if sp1.cohesion <= sp2.cohesion else sp2.area
     mu = min(sp1.mu, sp2.mu)
     ur = min(sp1.ur[0], sp2.ur[0])
-    h1 = sp1.k * sp1.plastic_stiffness_ratio
-    h2 = sp2.k * sp2.plastic_stiffness_ratio
+    # C# CombinationSpring(SpringCoulomb03, ...) uses each temporary
+    # spring's *actual* hardening modulus H, not the serialized class
+    # property PlasticStiffnessRatio.  SetQuadSlidSpring intentionally leaves
+    # that property at its SpringCoulomb03 default (1e-4), while the envelope
+    # tangent E2p is built from the material ratio.  Using the property here
+    # introduced an artificial softening branch for the common material value
+    # SlidingPlasticStiffnessRatio=0 and changed the committed Vert phase of
+    # near-zero-capacity in-plane sliders.
+    h1 = sp1.h
+    h2 = sp2.h
     h = min(h1, h2)
     ktan = -k * h / (k - h) if k != h else 0.0
     ratio = ktan / k if k else 0.0
@@ -922,13 +970,20 @@ def _distance_to_interface_plane(quad: Quad, intf: Interface) -> float:
 
 def _quad_spring(model: Model, quad: Quad) -> SpringCoulomb03 | SpringHysteretic | SpringElastic:
     material = _material(model, quad.material_key)
-    flex = _flex_law(material, vertical=True)
+    flex = _diagonal_flex_law(material)
     shear = _shear_law(material)
     length = quad.d_alfa_2d_diag()
     k = quad.get_diagonal_stiffness(flex.E, shear.E)
     if shear.sub_law in {"Coulomb", "Cacovic"}:
-        fy = quad.set_non_linear_properties(k, flex.E, shear.E, shear.cohesion, 10.0 * shear.cohesion)
-        cos_alpha = quad.diago[1] and quad.length[0] / quad.diago[1] or 1.0
+        fy_compression = (
+            flex.fy_c
+            if flex.law_type.startswith("ElastoPlastic")
+            else 10.0 * shear.cohesion
+        )
+        fy = quad.set_non_linear_properties(
+            k, flex.E, shear.E, shear.cohesion, fy_compression
+        )
+        cos_alpha = quad.cos_alfa
         if shear.fracture_energy:
             strength = min(abs(fy[0]), abs(fy[1]))
             yield_u = strength/k if k else 0.0

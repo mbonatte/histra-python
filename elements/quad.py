@@ -420,6 +420,23 @@ class Quad:
         v = self.d_alfa_2d_diag()
         return 1.0 / v if v != 0.0 else 0.0
 
+    @property
+    def cos_alfa(self) -> float:
+        """Literal port of C# ``Quad.cosAlfa``.
+
+        The property is a law-of-cosines quantity based on ``Diago[0]`` and
+        can legitimately be negative for distorted quadrilaterals.  Its sign
+        is part of the diagonal Coulomb friction law.
+        """
+        denominator = 2.0 * self.length[0] * self.diago[0]
+        if denominator == 0.0:
+            return 0.0
+        return (
+            self.length[0] ** 2
+            + self.diago[0] ** 2
+            - self.length[1] ** 2
+        ) / denominator
+
     # ── ComputeK ─────────────────────────────────────────────────────────────
 
     def compute_k(self, alfa: float = 0.0) -> float:
@@ -657,135 +674,113 @@ class Quad:
 
     def set_non_linear_properties(self, k: float, E: float, G: float,
                                    Fyt: float, Fyc: float) -> Tuple[float, float]:
-        """Compute nonlinear yield forces in tension and compression.
+        """Literal port of C# ``Quad.SetNonLinearProperties``.
 
-        C# ``SetNonLinearProperties(k, E, G, Fyt, Fyc)``.
-
-        Searches over a 100×100 grid in the parametric domain for the
-        minimum principal stress (compression) and maximum principal stress
-        (tension), then returns the yield forces scaled by ``d_alfa_2d_diag()``.
-
-        Returns
-        -------
-        (fy_tension, fy_compression)  — the forces at which the diagonal
-        spring yields in tension and compression respectively.
+        The C# routine evaluates both principal stresses for each of two
+        opposite unit diagonal deformations.  Its extrema are intentionally
+        cumulative across the two passes; the first and second returned yield
+        forces can therefore have different magnitudes.  A previous Python
+        simplification used one symmetric extrema pair and overestimated the
+        Quad cohesion by up to two orders of magnitude.
         """
         nu = E / (2.0 * G) - 1.0
         lam = E * nu / (2.0 * (1.0 + 2.0 * nu))
 
         L0, L1, L3 = self.length[0], self.length[1], self.length[3]
-        Cos0, Cos1 = self.cos[0], self.cos[1]
-        Sin0, Sin1 = self.sin[0], self.sin[1]
-        Sin2, Sin3 = self.sin[2], self.sin[3]
-        Cos2, Cos0 = self.cos[2], self.cos[0]
+        cos0, cos1 = self.cos[0], self.cos[1]
+        sin0, sin1, sin2, sin3 = self.sin[0], self.sin[1], self.sin[2], self.sin[3]
+        x = [-L0 / 2.0, L0 / 2.0, L0 / 2.0 - L1 * cos1, -L0 / 2.0 + L3 * cos0]
+        y = [0.0, 0.0, L1 * sin1, L3 * sin0]
 
-        X = [-L0 / 2.0, L0 / 2.0,
-             L0 / 2.0 - L1 * Cos1, -L0 / 2.0 + L3 * Cos0]
-        Y = [0.0, 0.0, L1 * Sin1, L3 * Sin0]
+        # These are C# num4 (largest principal stress) and num5 (smallest).
+        # They are deliberately not reset between the two deformation signs.
+        max_principal = 0.0
+        min_principal = 0.0
+        result = [0.0, 0.0]
+        n = 100
 
-        n = 100  # grid size (C#: num3 = 100)
-        s_min = 0.0  # most compressive (most negative)
-        s_max = 0.0  # most tensile (most positive)
-        # Location of principal stresses
-        xi_comp = yi_comp = 0.0
-        xi_tens = yi_tens = 0.0
+        if abs(sin2) <= 1.0e-30:
+            return 0.0, 0.0
+        w0 = -L3 * sin3 * sin1 / sin2
+        w1 = -L3 * sin3 * cos1 / sin2
+        w2 = -L3 * sin0
+        # C# SetNonLinearProperties uses a negative fourth warping term
+        # here (unlike GetDiagonalStiffness, whose projection vector stores
+        # the positive value). Preserve that source-level sign asymmetry.
+        w3 = -L3 * cos0
 
-        for sign in (1, -1):  # sign = +1 for tension, -1 for compression
-            s_best = -1e100 if sign > 0 else 1e100
-            for j in range(n):
-                for i_idx in range(n):
-                    eta = -1.0 + 2.0 / n * i_idx + 1.0 / n
-                    xi = -1.0 + 2.0 / n * j + 1.0 / n
+        for pass_index in range(2):
+            direction = (-1.0) ** pass_index
+            pass_min = 0.0
+            pass_max = 0.0
+            for flat_index in range(n * n):
+                row = flat_index // n + 1
+                col = flat_index + 1 - (row - 1) * n
+                xi = -1.0 + 2.0 / n * (col - 1.0) + 1.0 / n
+                eta = -1.0 + 2.0 / n * (row - 1.0) + 1.0 / n
 
-                    # Shape function derivatives at (xi, eta)
-                    dN_dxi  = [-(1.0 - eta) / 4.0,  (1.0 - eta) / 4.0,
-                                (1.0 + eta) / 4.0, -(1.0 + eta) / 4.0]
-                    dN_deta = [-(1.0 - xi) / 4.0, -(1.0 + xi) / 4.0,
-                                (1.0 + xi) / 4.0,  (1.0 - xi) / 4.0]
+                dxi = [
+                    -(1.0 - eta) / 4.0,
+                    (1.0 - eta) / 4.0,
+                    (1.0 + eta) / 4.0,
+                    -(1.0 + eta) / 4.0,
+                ]
+                deta = [
+                    -(1.0 - xi) / 4.0,
+                    -(1.0 + xi) / 4.0,
+                    (1.0 + xi) / 4.0,
+                    (1.0 - xi) / 4.0,
+                ]
+                j11 = sum(x[i] * dxi[i] for i in range(4))
+                j12 = sum(x[i] * deta[i] for i in range(4))
+                j21 = sum(y[i] * dxi[i] for i in range(4))
+                j22 = sum(y[i] * deta[i] for i in range(4))
+                det = j11 * j22 - j12 * j21
+                if abs(det) <= 1.0e-30:
+                    continue
 
-                    J11 = sum(X[i] * dN_dxi[i] for i in range(4))
-                    J12 = sum(X[i] * dN_deta[i] for i in range(4))
-                    J21 = sum(Y[i] * dN_dxi[i] for i in range(4))
-                    J22 = sum(Y[i] * dN_deta[i] for i in range(4))
-                    detJ = J11 * J22 - J12 * J21
-                    if abs(detJ) < 1e-30:
-                        continue
+                inv11 = j22 / det
+                inv12 = -j21 / det
+                inv21 = -j12 / det
+                inv22 = j11 / det
 
-                    inv11 =  J22 / detJ
-                    inv12 = -J12 / detJ
-                    inv21 = -J21 / detJ
-                    inv22 =  J11 / detJ
+                b1x = inv11 * (1.0 + eta) / 4.0 + inv12 * (1.0 + xi) / 4.0
+                b2x = -inv11 * (1.0 + eta) / 4.0 + inv12 * (1.0 - xi) / 4.0
+                b1y = inv21 * (1.0 + eta) / 4.0 + inv22 * (1.0 + xi) / 4.0
+                b2y = -inv21 * (1.0 + eta) / 4.0 + inv22 * (1.0 - xi) / 4.0
 
-                    # B-matrix columns (C# lines: num28..num31)
-                    a1 = inv11 * (1.0 + eta) / 4.0 + inv12 * (1.0 + xi) / 4.0
-                    a2 = -inv11 * (1.0 + eta) / 4.0 + inv12 * (1.0 - xi) / 4.0
-                    b1 = inv21 * (1.0 + eta) / 4.0 + inv22 * (1.0 + xi) / 4.0
-                    b2 = -inv21 * (1.0 + eta) / 4.0 + inv22 * (1.0 - xi) / 4.0
+                eps_x = direction * (w0 * b1x + w2 * b2x)
+                eps_y = direction * (w1 * b1y + w3 * b2y)
+                gamma_xy = direction * (
+                    w0 * b1y + w1 * b1x + w2 * b2y + w3 * b2x
+                )
+                sigma_x = lam * (eps_x + eps_y) + 2.0 * G * eps_x
+                sigma_y = lam * (eps_x + eps_y) + 2.0 * G * eps_y
+                tau = G * gamma_xy
+                average = (sigma_x + sigma_y) / 2.0
+                radius = sqrt(((sigma_x - sigma_y) / 2.0) ** 2 + tau ** 2)
+                principal_max = average + radius
+                principal_min = average - radius
+                if principal_min < pass_min:
+                    pass_min = principal_min
+                if principal_max > pass_max:
+                    pass_max = principal_max
 
-                    # Warping function coefficients at this point
-                    # C#: w1 = array2[0]*N1 + array2[2]*N4? Actually no:
-                    # num32 = sign * (a[0]*a1 + a[2]*a2)  (eps_x)
-                    # num33 = sign * (a[1]*b1 + a[3]*b2)  (eps_y)
-                    # num34 = sign * (a[0]*b1 + a[1]*a1 + a[2]*b2 + a[3]*a2) (gamma_xy)
-                    if abs(Sin2) > 1e-30:
-                        w0 = -L3 * Sin3 * Sin1 / Sin2
-                        w1 = -L3 * Sin3 * Cos1 / Sin2
-                    else:
-                        w0 = w1 = 0.0
-                    w2 = -L3 * Sin0
-                    w3 =  L3 * Cos0
+            if pass_min < min_principal:
+                min_principal = pass_min
+            if pass_max > max_principal:
+                max_principal = pass_max
 
-                    eps_x = w0 * a1 + w2 * a2
-                    eps_y = w1 * b1 + w3 * b2
-                    gam_xy = w0 * b1 + w1 * a1 + w2 * b2 + w3 * a2
-
-                    eps_x *= sign
-                    eps_y *= sign
-                    gam_xy *= sign
-
-                    # Stress from constitutive law (plane stress)
-                    sig_x = (lam + 2.0 * G) * eps_x + lam * eps_y
-                    sig_y = lam * eps_x + (lam + 2.0 * G) * eps_y
-                    tau_xy = G * gam_xy
-
-                    # Principal stresses
-                    sig_avg = (sig_x + sig_y) / 2.0
-                    sig_diff = sqrt(((sig_x - sig_y) / 2.0)**2 + tau_xy**2)
-                    sig_1 = sig_avg + sig_diff  # max principal
-                    sig_3 = sig_avg - sig_diff  # min principal
-
-                    if sign > 0 and sig_1 > s_best:
-                        s_best = sig_1
-                        xi_tens, yi_tens = xi, eta
-                    elif sign < 0 and sig_3 < s_best:
-                        s_best = sig_3
-                        xi_comp, yi_comp = xi, eta
-
-            if sign > 0:
-                s_max = s_best
+            if max_principal == 0.0 or min_principal == 0.0:
+                result[pass_index] = 0.0
             else:
-                s_min = s_best
+                scale = direction * min(
+                    abs(Fyt / max_principal),
+                    abs(Fyc / min_principal),
+                )
+                result[pass_index] = k * self.d_alfa_2d_diag() * scale
 
-        # Scale yield stresses by interpolation at the critical points
-        def interp_coords(xi, eta):
-            """Bilinear interpolation of local (X,Y) at (xi, eta)."""
-            N = [(1.0 - xi) * (1.0 - eta) / 4.0,
-                 (1.0 + xi) * (1.0 - eta) / 4.0,
-                 (1.0 + xi) * (1.0 + eta) / 4.0,
-                 (1.0 - xi) * (1.0 + eta) / 4.0]
-            x = sum(X[i] * N[i] for i in range(4))
-            y = sum(Y[i] * N[i] for i in range(4))
-            return x, y
-
-        # For tension direction
-        f_max = min(abs(Fyt / s_max) if abs(s_max) > 1e-30 else 0.0,
-                    abs(Fyc / s_min) if abs(s_min) > 1e-30 else 0.0)
-        f_min = -f_max
-
-        dalfa = self.d_alfa_2d_diag()
-        fy_t = k * dalfa * f_max
-        fy_c = k * dalfa * f_min
-        return fy_t, fy_c
+        return result[0], result[1]
 
     # ── SetResistingForce / GetResistingForce ────────────────────────────────
 

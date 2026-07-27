@@ -154,3 +154,85 @@ def test_solver_auto_prepares_unlocked_geometry_model(monkeypatch):
     assert inspect_solver_readiness(model).is_ready
     assert any("PrepareModel completed" in message for message in messages)
     ModelManager.clear_hysteretic_batch()
+
+
+def test_regenerated_quad_diagonal_envelopes_match_csharp_locked_model():
+    """Catches the C# cosAlfa and SetNonLinearProperties sign conventions."""
+    reference = load_model(LOCKED_HRX)
+    generated = load_model(LOCKED_HRX)
+    prepare_model(generated, force=True)
+
+    np.testing.assert_allclose(
+        [quad.spring.cohesion for quad in generated.collections.quads.values()],
+        [quad.spring.cohesion for quad in reference.collections.quads.values()],
+        rtol=5.0e-7,
+        atol=1.0e-5,
+    )
+    np.testing.assert_allclose(
+        [quad.spring.mu for quad in generated.collections.quads.values()],
+        [quad.spring.mu for quad in reference.collections.quads.values()],
+        rtol=5.0e-7,
+        atol=5.0e-7,
+    )
+
+
+def test_distorted_quad_uses_csharp_diagonal_signs_and_yield_search():
+    """Representative C# values from Quad key 21 in the 560-DOF benchmark."""
+    from histra.elements.quad import Quad
+
+    quad = Quad(
+        length=[21.4999847412109, 87.0741653442383, 21.5000019073486, 76.2800369262695],
+        sin=[0.951635564897295, 0.953827636154029, 0.979428628995489, 0.980859329226481],
+        cos=[-0.307229151648418, 0.300354524701755, 0.201790883599871, -0.194717683504551],
+        diago=[83.1839904785156, 85.3733978271484],
+        thickness=[288.0, 288.0, 288.0, 288.0],
+    )
+
+    assert quad.cos_alfa == pytest.approx(-0.05593786469959976, abs=1.0e-14)
+    fy_t, fy_c = quad.set_non_linear_properties(
+        1024446.6401416943,
+        1620.0,
+        782.2222222222222,
+        0.029,
+        2.68,
+    )
+    assert fy_t == pytest.approx(212.998674604, rel=1.0e-7)
+    assert fy_c == pytest.approx(-197.709832167, rel=1.0e-7)
+
+
+def test_coulomb_combination_uses_actual_hardening_modulus_not_serialized_default():
+    """C# CombinationSpring(SpringCoulomb03) combines ``sp.H`` values.
+
+    ``SetQuadSlidSpring`` does not copy the material's plastic-stiffness ratio
+    into the spring's serialized ``PlasticStiffnessRatio`` property, so that
+    property remains at its class default 1e-4.  For a material ratio of zero,
+    using the property invents a softening branch and changes the committed
+    in-plane sliding phase under gravity.
+    """
+    from histra.preprocessing.prepare_model import (
+        _CoulombLaw,
+        _combine_coulomb,
+        _configure_coulomb,
+    )
+
+    law = _CoulombLaw(
+        E=1000.0,
+        cohesion=0.1,
+        mu=1.2,
+        plastic_stiffness_ratio=0.0,
+        max_tensile_ratio=0.8,
+    )
+    side1 = _configure_coulomb(k=9000.0, area=10.0, length=1.0, law=law)
+    side2 = _configure_coulomb(k=12000.0, area=10.0, length=1.0, law=law)
+
+    # This is the observable C# quirk: the property remains at its default,
+    # while the actual envelope hardening modulus is zero.
+    assert side1.plastic_stiffness_ratio == pytest.approx(1.0e-4)
+    assert side1.h == pytest.approx(0.0)
+    assert side2.h == pytest.approx(0.0)
+
+    combined = _combine_coulomb(side1, side2, restrained=False)
+
+    assert combined.h == pytest.approx(0.0)
+    assert combined.e2p == pytest.approx(0.0)
+    assert combined.mom2p == pytest.approx(combined.mom1p)

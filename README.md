@@ -41,3 +41,10 @@ The supplied standalone benchmark completes in 13.10 seconds with a warm JIT
 cache and 15.83 seconds with an empty cache on the audit environment, versus
 267.46 seconds before this optimization. Numerical outputs and iteration counts
 remain unchanged. See `../PERFORMANCE_PROFILE.md`.
+
+## Exact raw-model preprocessing alignment
+
+The 560-DOF benchmark exposed several path-sensitive C# preprocessing rules.
+The current release ports them and restores the same 38-step Live Load trajectory
+as the software-generated model. See `../PREPROCESSING_EXACTNESS_REPORT.md` and
+`../PREPROCESSING_EXACTNESS_METRICS.json`.
