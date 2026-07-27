@@ -33,3 +33,14 @@ Full equivalence is claimed only for the Live Load committed-step acceptance def
 - Added focused and optional full Live Load regression tests.
 
 See `histra_documentation/LIVE_LOAD_INTEGRATION.md` and the machine-readable benchmark metrics for step-by-step evidence.
+
+## Performance optimization
+
+The complete virgin `Vert -> LiveLoad_1` workflow was function-profiled. The
+previous 267.46-second runtime was dominated by 21.6 million scalar hysteretic
+spring calls and repeated immutable geometry/topology work; sparse solves were
+not the bottleneck. A compiled dense hysteretic runtime, compiled local/global
+maps, cached Quad/interface topology, and compact snapshot state reduce the
+same run to 13.10 seconds warm and 15.83 seconds with an empty JIT cache. The
+full opt-in suite passes with 132 tests, and final displacement/reaction outputs
+remain equal to the previous solver to roundoff. See `../PERFORMANCE_PROFILE.md`.

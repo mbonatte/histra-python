@@ -23,3 +23,12 @@ without a `.Results` database. It exports global node `ux`, `uy`, `uz` and
 explicit total/incremental reaction vectors. See `../STANDALONE_QUICKSTART.md`
 or `histra_documentation/STANDALONE_VERT_LIVE.md`.
 
+
+## Performance
+
+Compatible transverse hysteretic springs are now evaluated in a compiled Numba
+batch, with compiled kinematic and residual-force maps and dense rollback state.
+The supplied standalone benchmark completes in 13.10 seconds with a warm JIT
+cache and 15.83 seconds with an empty cache on the audit environment, versus
+267.46 seconds before this optimization. Numerical outputs and iteration counts
+remain unchanged. See `../PERFORMANCE_PROFILE.md`.

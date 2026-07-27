@@ -58,13 +58,21 @@ def _iter_springs(model: Any) -> Iterable[Any]:
     seen: set[int] = set()
     for quad in model.collections.quads.values():
         spring = getattr(quad, "spring", None)
-        if spring is not None and id(spring) not in seen:
+        if (
+            spring is not None
+            and not getattr(spring, "_histra_batch_managed", False)
+            and id(spring) not in seen
+        ):
             seen.add(id(spring))
             yield spring
     for intf in model.collections.interfaces.values():
         for name in ("trasv_1", "trasv_2", "slid", "slid_out_plan"):
             for spring in getattr(intf, name, ()):
-                if spring is not None and id(spring) not in seen:
+                if (
+                    spring is not None
+                    and not getattr(spring, "_histra_batch_managed", False)
+                    and id(spring) not in seen
+                ):
                     seen.add(id(spring))
                     yield spring
 
@@ -88,6 +96,7 @@ class SolverStateSnapshot:
     quad_state: list[tuple[Any, dict[str, Any]]]
     interface_state: list[tuple[Any, dict[str, Any]]]
     spring_state: list[tuple[Any, dict[str, Any]]]
+    batch_state: tuple[np.ndarray, np.ndarray, np.ndarray] | None
 
     @classmethod
     def capture(
@@ -141,6 +150,8 @@ class SolverStateSnapshot:
                 "f": _copy_array(intf.f),
             }))
         springs = [(spring, _copy_state_dict(spring.__dict__)) for spring in _iter_springs(model)]
+        runtime = ModelManager.hysteretic_batch_for(model)
+        batch_state = runtime.snapshot() if runtime is not None else None
         return cls(
             p=p,
             ls=ls,
@@ -157,6 +168,7 @@ class SolverStateSnapshot:
             quad_state=quads,
             interface_state=interfaces,
             spring_state=springs,
+            batch_state=batch_state,
         )
 
     def restore(self) -> None:
@@ -225,6 +237,13 @@ class SolverStateSnapshot:
         for spring, saved in self.spring_state:
             spring.__dict__.clear()
             spring.__dict__.update(_copy_state_dict(saved))
+        if self.batch_state is not None:
+            runtime = ModelManager.hysteretic_batch_for(self.integrator.state.model) if hasattr(self.integrator.state, "model") else None
+            if runtime is None:
+                runtime = ModelManager._hysteretic_batch
+            if runtime is None:
+                raise RuntimeError("Cannot restore compiled hysteretic snapshot: runtime is absent")
+            runtime.restore(self.batch_state)
 
     def fingerprint(self) -> str:
         """Stable value fingerprint used by rollback regression tests."""
@@ -239,5 +258,6 @@ class SolverStateSnapshot:
             [saved for _obj, saved in self.quad_state],
             [saved for _obj, saved in self.interface_state],
             [saved for _obj, saved in self.spring_state],
+            self.batch_state,
         )
         return hashlib.sha256(pickle.dumps(payload, protocol=5)).hexdigest()

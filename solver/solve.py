@@ -93,7 +93,9 @@ def _solve_static_nonlinear_impl(
             raise ValueError(
                 "A virgin analysis cannot restart from an in-memory committed state."
             )
+        ModelManager.clear_hysteretic_batch()
         _set_initial_state(model, p.u, p.v, ls)
+        ModelManager.prepare_hysteretic_batch(model, rebuild=True)
     elif restart_from_current_state:
         if initial_displacement is None:
             raise ValueError(
@@ -114,8 +116,11 @@ def _solve_static_nonlinear_impl(
             f"{n} DOFs"
         )
         # The model's Quad/Interface/spring objects are already at the prior
-        # analysis' last committed state. Reproduce C# SetFextEqualToFint so
-        # the new analysis starts from exact equilibrium without a .Results DB.
+        # analysis' last committed state. Reuse (or build) the dense hysteretic
+        # runtime from those committed objects before evaluating equilibrium.
+        ModelManager.prepare_hysteretic_batch(model, rebuild=False)
+        # Reproduce C# SetFextEqualToFint so the new analysis starts from exact
+        # equilibrium without a .Results DB.
         ModelManager.get_resisting_force(model, ls)
         initial_external_load = -ls.b.copy()
         p.log(
@@ -134,10 +139,12 @@ def _solve_static_nonlinear_impl(
                 "Chained analysis requires a C# .Results database. Pass results_path=... "
                 "or place a sibling .Results file next to the HRX model."
             )
+        ModelManager.clear_hysteretic_batch()
         restart = restore_committed_analysis_state(
             model, resolved_results, initial_analysis_key, initial_combination,
             p.u, p.v, ls,
         )
+        ModelManager.prepare_hysteretic_batch(model, rebuild=True)
         p.log(
             f"Restored analysis {restart.analysis_key}, combination {restart.combination}, "
             f"step {restart.step}: {restart.dof_count} DOFs, "
@@ -365,6 +372,9 @@ def _set_initial_state(
         state.fd[:] = [0.0] * len(state.fd)
         state.forces = (0.0, 0.0, 0.0)
         state.bending_moments = (0.0, 0.0, 0.0)
+        state.normal_increment = 0.0
+        state.committed_normal_force = 0.0
+        state.max_spring_displacement = 0.0
         intf.f[:] = [0.0] * len(intf.f)
 
         for spring_group in (
@@ -383,6 +393,9 @@ def _is_load_control(an: Any) -> bool:
 
 
 def _commit_state(model: Model, ls: LinearSystem) -> None:
+    runtime = ModelManager.hysteretic_batch_for(model)
+    if runtime is not None:
+        runtime.commit()
     for collection_name in ("quads", "interfaces"):
         for element in getattr(model.collections, collection_name).values():
             element.commit(ls)

@@ -27,6 +27,7 @@ import numpy as np
 from histra.io.hr_loader import load_model
 from histra.postprocessing import compute_node_displacements
 from histra.solver.solve import solve_static_nonlinear
+from histra.solver.model_manager import ModelManager
 
 
 def _resolve_analysis(model, selector: str | None, kind: str):
@@ -286,6 +287,13 @@ STEPS
   limit only when the failed trial's max_element_displacement reaches analysis.maxU.
 - Failed/uncommitted attempts appear in *_steps.csv, but never in node displacement CSVs. Their reaction cells are blank because no trial reaction is committed.
 
+PERFORMANCE
+- run_summary.json records the active backend and the number of batched springs.
+- numba_compiled_batch is the accelerated path installed by requirements.txt.
+- The first process may spend a few seconds compiling kernels; later processes
+  load them from Numba's cache.
+- Set HISTRA_DISABLE_COMPILED_SPRINGS=1 only for scalar-path diagnostics.
+
 The command does not read a .Results database. Vert and Live Load are solved
 sequentially in one Python process, with the full committed constitutive state
 passed in memory.
@@ -329,6 +337,19 @@ def run_vert_live(
         model, vert, combination, on_log=lambda message: log(f"[Vert] {message}")
     )
     vert_committed = [row for row in vert_rows if row["status"] == "OK"]
+    runtime = ModelManager.hysteretic_batch_for(model)
+    if runtime is not None:
+        log(
+            f"Performance backend: Numba compiled hysteretic batch "
+            f"({len(runtime.springs)} springs)"
+        )
+    elif ModelManager._hysteretic_batch_error:
+        log(
+            "Performance backend: scalar Python fallback; compiled backend failed: "
+            f"{ModelManager._hysteretic_batch_error}"
+        )
+    else:
+        log("Performance backend: scalar Python fallback")
     if vert_code != 0 or not vert_committed:
         raise RuntimeError(
             f"Vert did not complete (code {vert_code}, committed steps "
@@ -406,6 +427,12 @@ def run_vert_live(
             "incremental_support_reaction_x_y_z": (
                 "total support reaction minus the current analysis step-0 support reaction"
             ),
+        },
+        "performance": {
+            "backend": "numba_compiled_batch" if runtime is not None else "scalar_python",
+            "batched_hysteretic_springs": len(runtime.springs) if runtime is not None else 0,
+            "fallback_error": ModelManager._hysteretic_batch_error,
+            "disable_environment_variable": "HISTRA_DISABLE_COMPILED_SPRINGS=1",
         },
         "analyses": {
             "vert": {

@@ -48,8 +48,20 @@ class Interface:
     # Local 12-DOF resisting-force vector (port of ComputationalElement.F)
     f: List[float] = field(default_factory=lambda: [0.0] * 12)
 
+    # Immutable geometry/afference caches. These are built lazily after XML
+    # loading and deliberately excluded from serialized/rollback state.
+    _perf_di: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_dj: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_ecc: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_aff_pairs: tuple[tuple[tuple[int, float], ...], ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_area: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_dist: tuple[float, float] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_dist_for: tuple[float, float] | None = field(default=None, init=False, repr=False, compare=False)
+
     def area(self) -> float:
-        """Return the C# ``Operations.Area(VInt2D)`` polygon area."""
+        """Return the cached C# ``Operations.Area(VInt2D)`` polygon area."""
+        if self._perf_area is not None:
+            return self._perf_area
         pts = self.vint2d
         if len(pts) < 3:
             return 0.0
@@ -64,7 +76,8 @@ class Interface:
                 - np.float32(nxt.x) * np.float32(point.y)
             )
             twice = np.float32(twice + cross)
-        return float(abs(np.float32(twice * np.float32(0.5))))
+        self._perf_area = float(abs(np.float32(twice * np.float32(0.5))))
+        return self._perf_area
 
     def compute_dn(self, ls: Any = None, nr: bool = False) -> float:
         """Port of C# ``Interface.ComputeDN``.
@@ -150,6 +163,43 @@ class Interface:
             + v[2].y * (1.0 + xi) * (1.0 + eta) / 4.0
             + v[3].y * (1.0 - xi) * (1.0 + eta) / 4.0
         )
+
+    def _ensure_performance_cache(self) -> None:
+        """Build immutable geometry and afference tuples once per interface."""
+        if self._perf_di is not None:
+            return
+
+        count = min(max(0, self.nrow * self.ncol), len(self.trasv_1))
+        di_values: list[float] = []
+        ecc_values: list[float] = []
+        for idx in range(count):
+            row, col = divmod(idx, max(self.ncol, 1))
+            di_values.append(self.get_di(row, col))
+            ecc_values.append(self.ecc_spring(row, col))
+        self._perf_di = tuple(di_values)
+        self._perf_dj = tuple(self.length - value for value in di_values)
+        self._perf_ecc = tuple(ecc_values)
+        self._perf_aff_pairs = tuple(
+            tuple((entry.gdl - 1, float(entry.alfa)) for entry in (
+                self.aff[local_dof] if local_dof < len(self.aff) else ()
+            ))
+            for local_dof in range(self.dim_aff_tot)
+        )
+        self._perf_dist = self.compute_dist_spring()
+        self._perf_dist_for = self.compute_dist_spring_for(self)
+
+    def _local_increment(self, x: np.ndarray) -> list[float]:
+        self._ensure_performance_cache()
+        assert self._perf_aff_pairs is not None
+        size = len(x)
+        out = [0.0] * self.dim_aff_tot
+        for i, pairs in enumerate(self._perf_aff_pairs):
+            total = 0.0
+            for gdl, coefficient in pairs:
+                if 0 <= gdl < size:
+                    total += x[gdl] * coefficient
+            out[i] = total
+        return out
 
     # ── ComputeDistSpring (two overloads) ───────────────────────────────────
 
@@ -424,220 +474,167 @@ class Interface:
     # ═════════════════════════════════════════════════════════════════════════
 
     def update_domain(self, x: np.ndarray, state: Any) -> None:
-        """Port of Interface.UpdateDomain(LinearSystem LS, IntegratorState state).
+        """Update local/interface spring trial state using cached geometry."""
+        del state
+        self._ensure_performance_cache()
+        assert self._perf_di is not None
+        assert self._perf_dj is not None
+        assert self._perf_ecc is not None
 
-        Updates element-local displacements *U* from the global displacement
-        increment *x* (Δu), then computes spring deformations and pushes
-        trial strains.
-        """
-        I = self
+        local_du = self._local_increment(x)
+        status_u = self.status.u
+        for i, value in enumerate(local_du):
+            status_u[i] += float(value)
 
-        # ── 1. Accumulate U from afference ──────────────────────────────────
-        for i in range(I.dim_aff_tot):
-            total = 0.0
-            if i < len(I.aff):
-                for entry in I.aff[i]:
-                    g = entry.gdl - 1
-                    if 0 <= g < len(x):
-                        total += x[g] * entry.alfa
-            I.status.u[i] += total
-
-        # ── 2. Compute flexural deformation modes ───────────────────────────
-        if not I.interfaccia_vincolata_computed():
-            num = (I.status.compute_du(I, x, 3)
-                   - I.status.compute_du(I, x, 0))
-            num2 = (I.status.compute_du(I, x, 2)
-                    - I.status.compute_du(I, x, 1))
+        if not self.interfaccia_vincolata_computed():
+            num = local_du[3] - local_du[0]
+            num2 = local_du[2] - local_du[1]
         else:
-            num = (I.status.compute_du(I, x, 3)
-                   - (I.status.compute_du(I, x, 0)
-                      - I.status.compute_du(I, x, 1) * (I.length / 2.0)))
-            num2 = (I.status.compute_du(I, x, 2)
-                    - (I.status.compute_du(I, x, 0)
-                       + I.status.compute_du(I, x, 1) * (I.length / 2.0)))
+            half_length = self.length / 2.0
+            num = local_du[3] - (local_du[0] - local_du[1] * half_length)
+            num2 = local_du[2] - (local_du[0] + local_du[1] * half_length)
+        num3 = local_du[4]
+        num4 = local_du[5]
 
-        num3 = I.status.compute_du(I, x, 4)
-        num4 = I.status.compute_du(I, x, 5)
+        normal_increment = 0.0
+        committed_normal_force = 0.0
+        max_displacement = 0.0
+        delta_flex = num4 - num3
+        inv_length = 1.0 / self.length
+        for spring, di, dj, ecc in zip(
+            self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
+        ):
+            increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
+            new_u = spring.u + increment
+            spring.u = new_u
+            spring.set_trial_strain(new_u)
+            if "get_incr_force" in spring.__dict__ or "get_force" in spring.__dict__:
+                trial = float(spring.get_force())
+                committed = trial - float(spring.get_incr_force())
+            else:
+                trial = float(spring._tstress)
+                committed = float(spring._cstress)
+            normal_increment -= trial - committed
+            committed_normal_force += committed
+            abs_u = abs(new_u)
+            if abs_u > max_displacement:
+                max_displacement = abs_u
 
-        # ── 3. Update transversal springs ───────────────────────────────────
-        for i_ in range(I.nrow):
-            for j_ in range(I.ncol):
-                idx_ = I.idx(i_, j_)
-                if idx_ >= len(I.trasv_1):
-                    continue
-                di = I.get_di(i_, j_)
-                dj = I.get_dj(i_, j_)
-                ecc = I.ecc_spring(i_, j_)
-                du_spring = (num * dj + num2 * di) / I.length - (num4 - num3) * ecc
-                I.trasv_1[idx_].u += du_spring
-                I.trasv_1[idx_].set_trial_strain(I.trasv_1[idx_].u)
+        self.status.normal_increment = normal_increment
+        self.status.committed_normal_force = committed_normal_force
 
-        # ── 4. Update in-plane sliding spring ───────────────────────────────
-        d0 = I.dim_aff[0] if len(I.dim_aff) > 0 else 6
-        i3 = d0
-        i4 = d0 + 1
-        du_slid = (I.status.compute_du(I, x, i3)
-                   - I.status.compute_du(I, x, i4))
-        if I.slid:
-            I.slid[0].u += du_slid
+        d0 = self.dim_aff[0] if self.dim_aff else 6
+        du_slid = local_du[d0] - local_du[d0 + 1]
+        if self.slid:
+            spring = self.slid[0]
+            spring.u += float(du_slid)
             from histra.springs.coulomb03 import SpringCoulomb03
-            if isinstance(I.slid[0], SpringCoulomb03):
-                I.slid[0].dn = I.compute_dn(nr=True)
-                if I.slid[0].check_contact_area:
-                    I.slid[0].area_corrente = I.compute_area_corr()
-            I.slid[0].set_trial_strain(I.slid[0].u)
+            if isinstance(spring, SpringCoulomb03):
+                spring.dn = normal_increment
+                if spring.check_contact_area:
+                    spring.area_corrente = self.compute_area_corr()
+            spring.set_trial_strain(spring.u)
+            max_displacement = max(max_displacement, abs(float(spring.u)))
 
-        # ── 5. Update out-of-plane sliding springs ──────────────────────────
-        d1 = I.dim_aff[1] if len(I.dim_aff) > 1 else 2
-        i3 = d0 + d1
-        i4 = d0 + d1 + 2
-        du_op_a = (I.status.compute_du(I, x, i3)
-                   - I.status.compute_du(I, x, i4))
-        i3 = d0 + d1 + 1
-        i4 = d0 + d1 + 3
-        du_op_b = (I.status.compute_du(I, x, i3)
-                   - I.status.compute_du(I, x, i4))
-
-        di_sop, dj_sop = I.compute_dist_spring_for(I)
-        if len(I.slid_out_plan) >= 2:
-            I.slid_out_plan[0].u += du_op_a + (du_op_b - du_op_a) * di_sop
-            I.slid_out_plan[1].u += du_op_a + (du_op_b - du_op_a) * dj_sop
+        d1 = self.dim_aff[1] if len(self.dim_aff) > 1 else 2
+        du_op_a = local_du[d0 + d1] - local_du[d0 + d1 + 2]
+        du_op_b = local_du[d0 + d1 + 1] - local_du[d0 + d1 + 3]
+        assert self._perf_dist_for is not None
+        di_sop, dj_sop = self._perf_dist_for
+        if len(self.slid_out_plan) >= 2:
+            spring0, spring1 = self.slid_out_plan[0], self.slid_out_plan[1]
+            spring0.u += float(du_op_a + (du_op_b - du_op_a) * di_sop)
+            spring1.u += float(du_op_a + (du_op_b - du_op_a) * dj_sop)
             from histra.springs.coulomb03 import SpringCoulomb03
-            if isinstance(I.slid_out_plan[0], SpringCoulomb03):
-                dn = 0.5 * I.compute_dn(nr=True)
-                I.slid_out_plan[0].dn = dn
-                I.slid_out_plan[1].dn = dn
-                if I.slid_out_plan[0].check_contact_area:
-                    area = 0.5 * I.compute_area_corr()
-                    I.slid_out_plan[0].area_corrente = area
-                    I.slid_out_plan[1].area_corrente = area
-            I.slid_out_plan[0].set_trial_strain(I.slid_out_plan[0].u)
-            I.slid_out_plan[1].set_trial_strain(I.slid_out_plan[1].u)
+            if isinstance(spring0, SpringCoulomb03):
+                dn = 0.5 * normal_increment
+                spring0.dn = dn
+                spring1.dn = dn
+                if spring0.check_contact_area:
+                    area = 0.5 * self.compute_area_corr()
+                    spring0.area_corrente = area
+                    spring1.area_corrente = area
+            spring0.set_trial_strain(spring0.u)
+            spring1.set_trial_strain(spring1.u)
+            max_displacement = max(
+                max_displacement, abs(float(spring0.u)), abs(float(spring1.u))
+            )
+
+        self.status.max_spring_displacement = max_displacement
 
     # ═════════════════════════════════════════════════════════════════════════
     # SetResistingForce  (port of Interface.SetResistingForce)
     # ═════════════════════════════════════════════════════════════════════════
 
     def set_resisting_force(self) -> None:
-        """Port of Interface.SetResistingForce().
+        """Compute the local 12-DOF force vector using cached geometry."""
+        self._ensure_performance_cache()
+        assert self._perf_di is not None
+        assert self._perf_dj is not None
+        assert self._perf_ecc is not None
 
-        Computes the local 12-DOF resisting force vector *F* from spring
-        forces and stores it in ``self.f``.
-        """
-        # Zero the local force vector
+        arr = self.f
         for i in range(12):
-            self.f[i] = 0.0
+            arr[i] = 0.0
 
-        constrained = self.interfaccia_vincolata_computed()
-
-        # ── Transversal springs (Trasv_1) → DOFs 0..5 ───────────────────────
-        for i in range(self.nrow):
-            for j in range(self.ncol):
-                idx_ = self.idx(i, j)
-                if idx_ >= len(self.trasv_1):
-                    continue
-                spring_force = self.trasv_1[idx_].get_force()
-                dj = self.get_dj(i, j)
-                di = self.get_di(i, j)
-                L = self.length
-
+        batch = getattr(self, "_perf_hysteretic_batch", None)
+        if batch is not None and batch.manages(self):
+            local_force = batch.local_force_for(self)
+            for i in range(12):
+                arr[i] = float(local_force[i])
+            return
+        else:
+            constrained = self.interfaccia_vincolata_computed()
+            inv_length = 1.0 / self.length
+            for spring, di, dj, ecc in zip(
+                self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
+            ):
+                force = float(spring._tstress) if hasattr(spring, "_tstress") else float(spring.get_force())
+                force_di = force * di * inv_length
+                force_dj = force * dj * inv_length
                 if not constrained:
-                    self.f[3] += spring_force * dj / L
-                    self.f[2] += spring_force * di / L
-                    self.f[0] += -spring_force * dj / L
-                    self.f[1] += -spring_force * di / L
+                    arr[3] += force_dj
+                    arr[2] += force_di
+                    arr[0] -= force_dj
+                    arr[1] -= force_di
                 else:
-                    self.f[3] += spring_force * dj / L
-                    self.f[2] += spring_force * di / L
-                    self.f[0] += -spring_force * di / L - spring_force * dj / L
-                    self.f[1] += 0.5 * L * (spring_force * dj / L - spring_force * di / L)
+                    arr[3] += force_dj
+                    arr[2] += force_di
+                    arr[0] -= force_di + force_dj
+                    arr[1] += 0.5 * self.length * (force_dj - force_di)
+                force_ecc = force * ecc
+                arr[4] += force_ecc
+                arr[5] -= force_ecc
 
-                ecc = self.ecc_spring(i, j)
-                self.f[4] += spring_force * ecc
-                self.f[5] += -spring_force * ecc
-
-        # ── In-plane sliding → DOFs 6,7 ─────────────────────────────────────
         if self.slid:
-            slid_force = self.slid[0].get_force()
-            self.f[6] += slid_force
-            self.f[7] += -slid_force
+            spring = self.slid[0]
+            force = float(spring._tstress) if hasattr(spring, "_tstress") else float(spring.get_force())
+            arr[6] += force
+            arr[7] -= force
 
-        # ── Out-of-plane sliding → DOFs 8..11 ───────────────────────────────
         if len(self.slid_out_plan) >= 2:
-            di, dj = self.compute_dist_spring()
-            sop0_force = self.slid_out_plan[0].get_force()
-            sop1_force = self.slid_out_plan[1].get_force()
-            self.f[8] += dj * sop0_force + di * sop1_force
-            self.f[9] += di * sop0_force + dj * sop1_force
-            self.f[10] -= dj * sop0_force + di * sop1_force
-            self.f[11] -= di * sop0_force + dj * sop1_force
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # GetResistingForce global scatter  (port of Interface.GetResistingForce)
-    # ═════════════════════════════════════════════════════════════════════════
+            assert self._perf_dist is not None
+            di, dj = self._perf_dist
+            spring0, spring1 = self.slid_out_plan[0], self.slid_out_plan[1]
+            force0 = float(spring0._tstress) if hasattr(spring0, "_tstress") else float(spring0.get_force())
+            force1 = float(spring1._tstress) if hasattr(spring1, "_tstress") else float(spring1.get_force())
+            first = dj * force0 + di * force1
+            second = di * force0 + dj * force1
+            arr[8] += first
+            arr[9] += second
+            arr[10] -= first
+            arr[11] -= second
 
     def get_resisting_force(self, ls: Any) -> None:
-        """Port of Interface.GetResistingForce(LinearSystem A).
-
-        Computes the local resisting force array then scatters it into the
-        global residual vector ``ls.b`` (with negative sign, as in the C#
-        port).
-        """
-        # Local force array of size DimAffTot
-        arr = [0.0] * self.dim_aff_tot
-
-        constrained = self.interfaccia_vincolata_computed()
-
-        # ── Transversal springs ─────────────────────────────────────────────
-        for i in range(self.nrow):
-            for j in range(self.ncol):
-                idx_ = self.idx(i, j)
-                if idx_ >= len(self.trasv_1):
-                    continue
-                spring_force = self.trasv_1[idx_].get_force()
-                dj = self.get_dj(i, j)
-                di = self.get_di(i, j)
-                L = self.length
-
-                if not constrained:
-                    arr[3] += spring_force * dj / L
-                    arr[2] += spring_force * di / L
-                    arr[0] += -spring_force * dj / L
-                    arr[1] += -spring_force * di / L
-                else:
-                    arr[3] += spring_force * dj / L
-                    arr[2] += spring_force * di / L
-                    arr[0] += -spring_force * di / L - spring_force * dj / L
-                    arr[1] += 0.5 * L * (spring_force * dj / L - spring_force * di / L)
-
-                ecc = self.ecc_spring(i, j)
-                arr[4] += spring_force * ecc
-                arr[5] += -spring_force * ecc
-
-        # ── In-plane sliding ────────────────────────────────────────────────
-        if self.slid:
-            slid_force = self.slid[0].get_force()
-            arr[6] += slid_force
-            arr[7] += -slid_force
-
-        # ── Out-of-plane sliding ────────────────────────────────────────────
-        if len(self.slid_out_plan) >= 2:
-            di, dj = self.compute_dist_spring()
-            sop0_force = self.slid_out_plan[0].get_force()
-            sop1_force = self.slid_out_plan[1].get_force()
-            arr[8] += dj * sop0_force + di * sop1_force
-            arr[9] += di * sop0_force + dj * sop1_force
-            arr[10] -= dj * sop0_force + di * sop1_force
-            arr[11] -= di * sop0_force + dj * sop1_force
-
-        # ── Scatter to global via afference (with negative sign) ────────────
-        for i in range(self.dim_aff_tot):
-            if i >= len(self.aff):
+        """Compute and scatter the cached local resisting-force projection."""
+        self.set_resisting_force()
+        for i, local_force in enumerate(self.f[: self.dim_aff_tot]):
+            if local_force == 0.0 or i >= len(self.aff):
                 continue
             for entry in self.aff[i]:
                 g = entry.gdl - 1
                 if 0 <= g < ls.n:
-                    ls.b[g] += (-arr[i]) * entry.alfa
+                    ls.b[g] -= local_force * entry.alfa
 
     # ═════════════════════════════════════════════════════════════════════════
     # Commit  (port of Interface.Commit)
@@ -650,9 +647,11 @@ class Interface:
         The *ls* argument is accepted for interface compatibility with the
         solver but is not used (C# Commit has no LS parameter).
         """
-        for s in self.trasv_1:
-            if hasattr(s, 'commit'):
-                s.commit()
+        batch = getattr(self, "_perf_hysteretic_batch", None)
+        if batch is None or not batch.manages(self):
+            for s in self.trasv_1:
+                if hasattr(s, 'commit'):
+                    s.commit()
         for s in self.slid:
             if hasattr(s, 'commit'):
                 s.commit()
@@ -686,10 +685,15 @@ class Interface:
                     total += x[g] * entry.alfa
             I.status.u[i] += total
 
-        # Revert springs
-        for s in I.trasv_1:
-            if hasattr(s, 'revert_to_last_commit'):
-                s.revert_to_last_commit()
+        # Revert springs. Batched transverse histories are restored in dense
+        # arrays and synchronized to their compatibility objects once per interface.
+        batch = getattr(I, "_perf_hysteretic_batch", None)
+        if batch is not None and batch.manages(I):
+            batch.revert_interface(I)
+        else:
+            for s in I.trasv_1:
+                if hasattr(s, 'revert_to_last_commit'):
+                    s.revert_to_last_commit()
         for s in I.slid:
             if hasattr(s, 'revert_to_last_commit'):
                 s.revert_to_last_commit()
@@ -702,15 +706,8 @@ class Interface:
     # ═════════════════════════════════════════════════════════════════════════
 
     def max_u(self) -> float:
-        """Maximum absolute spring displacement (port of a common pattern)."""
-        mx = 0.0
-        for s in self.trasv_1:
-            mx = max(mx, abs(getattr(s, 'u', 0.0)))
-        for s in self.slid:
-            mx = max(mx, abs(getattr(s, 'u', 0.0)))
-        for s in self.slid_out_plan:
-            mx = max(mx, abs(getattr(s, 'u', 0.0)))
-        return mx
+        """Maximum trial spring displacement cached during ``update_domain``."""
+        return float(self.status.max_spring_displacement)
 
     def compute_energy(self) -> Tuple[float, float, float]:
         """Port of Interface.ComputeEnergy.

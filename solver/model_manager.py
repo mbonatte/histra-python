@@ -31,9 +31,57 @@ class ModelManager:
     _pq: np.ndarray | None = None
     _pq_prev: np.ndarray | None = None
     _u_total: np.ndarray | None = None
+    _hysteretic_batch: Any | None = None
+    _hysteretic_batch_model_id: int | None = None
+    _hysteretic_batch_error: str | None = None
 
     on_log: Callable[[str], None] | None = None
     on_progress: Callable[[float], None] | None = None
+
+    @classmethod
+    def clear_hysteretic_batch(cls) -> None:
+        """Detach any compiled spring runtime from its model objects."""
+        runtime = cls._hysteretic_batch
+        if runtime is not None:
+            for record in runtime.records:
+                interface = record.interface
+                for name in ("_perf_hysteretic_batch", "_perf_hysteretic_slice"):
+                    if hasattr(interface, name):
+                        delattr(interface, name)
+            for spring in runtime.springs:
+                if hasattr(spring, "_histra_batch_managed"):
+                    delattr(spring, "_histra_batch_managed")
+        cls._hysteretic_batch = None
+        cls._hysteretic_batch_model_id = None
+        cls._hysteretic_batch_error = None
+
+    @classmethod
+    def prepare_hysteretic_batch(cls, model: Model, *, rebuild: bool = False) -> Any | None:
+        """Build or reuse the optional compiled transverse-spring runtime."""
+        if (
+            not rebuild
+            and cls._hysteretic_batch is not None
+            and cls._hysteretic_batch_model_id == id(model)
+        ):
+            return cls._hysteretic_batch
+        cls.clear_hysteretic_batch()
+        try:
+            from histra.solver.hysteretic_batch import build_hysteretic_batch
+            runtime = build_hysteretic_batch(model)
+        except Exception as exc:
+            # Acceleration is optional. The tested scalar implementation remains
+            # the authoritative fallback on platforms without a working Numba.
+            runtime = None
+            cls._hysteretic_batch_error = f"{type(exc).__name__}: {exc}"
+        cls._hysteretic_batch = runtime
+        cls._hysteretic_batch_model_id = id(model) if runtime is not None else None
+        return runtime
+
+    @classmethod
+    def hysteretic_batch_for(cls, model: Model) -> Any | None:
+        if cls._hysteretic_batch_model_id == id(model):
+            return cls._hysteretic_batch
+        return None
 
     @classmethod
     def assemble_k(
@@ -98,20 +146,39 @@ class ModelManager:
                 gdl = entry.gdl - 1
                 if 0 <= gdl < ls.n:
                     ls.sumb(gdl, -quad.status.f * entry.alfa)
-        for intf in model.collections.interfaces.values():
-            intf.get_resisting_force(ls)
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            runtime.scatter_resisting_force(ls.b)
+            for intf in model.collections.interfaces.values():
+                if not runtime.manages(intf):
+                    intf.get_resisting_force(ls)
+        else:
+            for intf in model.collections.interfaces.values():
+                intf.get_resisting_force(ls)
 
     @classmethod
     def update_domain(cls, model: Model, ls: LinearSystem, state: IntegratorState) -> None:
-        # C# updates interfaces before quads.  Quad.ComputeDN depends on the
+        # C# updates interfaces before quads. Quad.ComputeDN depends on the
         # transverse interface spring increments produced in this same trial.
-        for intf in model.collections.interfaces.values():
-            intf.update_domain(ls.x, state)
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            runtime.prepare(ls.x)
+            runtime.evaluate()
+            runtime.finish()
+            for intf in model.collections.interfaces.values():
+                if not runtime.manages(intf):
+                    intf.update_domain(ls.x, state)
+        else:
+            for intf in model.collections.interfaces.values():
+                intf.update_domain(ls.x, state)
         for quad in model.collections.quads.values():
             quad.update_domain(ls, state, model.collections)
 
     @classmethod
     def compute_energy(cls, model: Model) -> tuple[float, float]:
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            runtime.sync_trial_to_objects()
         eel = 0.0
         ed = 0.0
         for element in (

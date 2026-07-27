@@ -47,6 +47,10 @@ class Quad:
     master_element_key: int = 0
     master_element_type: str = ""
     sigma_initial: float = 0.0
+    _perf_volume: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_aff_pairs: tuple[tuple[tuple[int, float], ...], ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_dn_edges: tuple[tuple[tuple[object, bool], ...], ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_dn_areas: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
 
     def compute_static_load_internal(self, node_coords: List[Point], nodal_forces: List[Tuple[float, float, float]]) -> List[float]:
         """Port C# ``Quad.ComputeStaticLoadInternal`` for area loads.
@@ -818,7 +822,9 @@ class Quad:
                 b[g] -= f0 * a
 
     def compute_volume(self) -> float:
-        """Return the C# ``Quad.GetVolume`` value by 2x2 Gauss integration."""
+        """Return the cached C# ``Quad.GetVolume`` value."""
+        if self._perf_volume is not None:
+            return self._perf_volume
         l0, l1, l3 = self.length[0], self.length[1], self.length[3]
         xcoord = [-l0 / 2.0, l0 / 2.0, l0 / 2.0 - l1 * self.cos[1], -l0 / 2.0 + l3 * self.cos[0]]
         ycoord = [0.0, 0.0, l1 * self.sin[1], l3 * self.sin[0]]
@@ -840,14 +846,16 @@ class Quad:
                 j22 = sum(ycoord[i] * deta[i] for i in range(4))
                 thickness = sum(n[i] * self.thickness[i] for i in range(4))
                 volume += thickness * (j11 * j22 - j12 * j21)
+        self._perf_volume = volume
         return volume
 
-    def compute_dn(self, collections, ls=None, nr: bool = False) -> tuple[float, float]:
-        """Port of both C# ``Quad.ComputeDN`` outputs: ``(dN, sigma)``."""
-        normal_increment = [0.0] * 4
-        committed_stress = [0.0] * 4
+    def _ensure_dn_cache(self, collections) -> None:
+        if self._perf_dn_edges is not None:
+            return
+        edges: list[tuple[tuple[object, bool], ...]] = []
+        areas: list[float] = []
         for edge in range(4):
-            force = 0.0
+            refs: list[tuple[object, bool]] = []
             area = 0.0
             for interface_key in self.interface_keys[edge]:
                 intf = collections.interfaces.get(interface_key)
@@ -860,13 +868,61 @@ class Quad:
                 )
                 if not belongs:
                     continue
-                normal_increment[edge] += intf.compute_dn(ls, nr=nr)
-                force += sum(float(s.get_force() - s.get_incr_force()) for s in intf.trasv_1)
+                custom_springs = any(
+                    "get_force" in spring.__dict__ or "get_incr_force" in spring.__dict__
+                    for spring in intf.trasv_1
+                )
+                refs.append((intf, custom_springs))
+            edges.append(tuple(refs))
+            areas.append(area)
+        self._perf_dn_edges = tuple(edges)
+        self._perf_dn_areas = tuple(areas)
+
+    def compute_dn(self, collections, ls=None, nr: bool = False) -> tuple[float, float]:
+        """Port of C# ``Quad.ComputeDN`` using cached interface relationships."""
+        del ls
+        if not nr:
+            raise NotImplementedError("Quad.ComputeDN with NR=False is not implemented")
+        self._ensure_dn_cache(collections)
+        assert self._perf_dn_edges is not None
+        assert self._perf_dn_areas is not None
+        normal_increment = [0.0] * 4
+        committed_stress = [0.0] * 4
+        for edge, refs in enumerate(self._perf_dn_edges):
+            force = 0.0
+            for intf, custom_springs in refs:
+                custom_interface = "compute_dn" in intf.__dict__
+                if custom_interface or custom_springs:
+                    normal_increment[edge] += intf.compute_dn(nr=True)
+                    force += sum(
+                        float(spring.get_force() - spring.get_incr_force())
+                        for spring in intf.trasv_1
+                    )
+                else:
+                    normal_increment[edge] += float(intf.status.normal_increment)
+                    force += float(intf.status.committed_normal_force)
+            area = self._perf_dn_areas[edge]
             if area > 0.0:
                 committed_stress[edge] = force / area
         sigma = 0.5 * (committed_stress[0] + committed_stress[2]) + 0.5 * (committed_stress[1] + committed_stress[3])
         dn = 0.5 * (normal_increment[0] + normal_increment[2]) + 0.5 * (normal_increment[1] + normal_increment[3])
         return dn, sigma
+
+    def _local_increment(self, x: np.ndarray) -> list[float]:
+        if self._perf_aff_pairs is None:
+            self._perf_aff_pairs = tuple(
+                tuple((entry.gdl - 1, float(entry.alfa)) for entry in entries)
+                for entries in self.aff[:7]
+            )
+        size = len(x)
+        out = [0.0] * 7
+        for i, pairs in enumerate(self._perf_aff_pairs):
+            total = 0.0
+            for gdl, coefficient in pairs:
+                if 0 <= gdl < size:
+                    total += x[gdl] * coefficient
+            out[i] = total
+        return out
 
     def update_domain(self, ls_or_x, state, collections=None) -> None:
         """Port of ``Quad.UpdateDomain``.
@@ -878,13 +934,10 @@ class Quad:
         if self.spring is None:
             return
         x = ls_or_x.x if hasattr(ls_or_x, "x") else ls_or_x
-        for i, aff_i in enumerate(self.aff[:7]):
-            self.status.u[i] += sum(
-                x[entry.gdl - 1] * entry.alfa
-                for entry in aff_i
-                if 0 <= entry.gdl - 1 < len(x)
-            )
-            from histra.springs.coulomb03 import SpringCoulomb03
+        local_du = self._local_increment(x)
+        for i, value in enumerate(local_du):
+            self.status.u[i] += float(value)
+        from histra.springs.coulomb03 import SpringCoulomb03
         if isinstance(self.spring, SpringCoulomb03):
             if collections is None:
                 raise RuntimeError("Quad Coulomb update requires model collections for ComputeDN")
@@ -910,12 +963,8 @@ class Quad:
     def revert_to_last_commit(self, ls) -> None:
         """Port of ``Quad.revertToLastCommit``."""
         x = ls.x if hasattr(ls, "x") else ls
-        for i, aff_i in enumerate(self.aff[:7]):
-            self.status.u[i] += sum(
-                x[entry.gdl - 1] * entry.alfa
-                for entry in aff_i
-                if 0 <= entry.gdl - 1 < len(x)
-            )
+        for i, value in enumerate(self._local_increment(x)):
+            self.status.u[i] += float(value)
         if self.spring is not None:
             self.spring.revert_to_last_commit()
             if hasattr(self.spring, "revert_to_last_commit_stress_normal"):

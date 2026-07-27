@@ -30,6 +30,12 @@ class InterfaceState:
     kslid: List[List[float]] = field(default_factory=lambda: _list2d(2, 2))
     kslid_out_plan: List[List[float]] = field(default_factory=lambda: _list2d(4, 4))
 
+    # Cached trial values used by the nonlinear solver. They are part of the
+    # reversible element state and are therefore captured by SolverStateSnapshot.
+    normal_increment: float = 0.0
+    committed_normal_force: float = 0.0
+    max_spring_displacement: float = 0.0
+
     # ── port of InterfaceState.Init(I) ──────────────────────────────────────
     def init_from_interface(self, intf: Interface) -> None:
         """Create/reshape the stiffness matrices to match *intf.dim_aff*.
