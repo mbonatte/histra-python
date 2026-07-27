@@ -6,11 +6,27 @@ from typing import Any
 import numpy as np
 
 from histra.model.model import Model
-from histra.solver.newton_raphson import _is_standard_method
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo, _new_line_search
+from histra.solver.line_search import LineSearch
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.types.linear_system import LinearSolveError, LinearSystem
+
+
+def _updates_tangent_each_iteration(an: Any) -> bool:
+    """Match the exact C# NewtonLineSearch dispatch condition.
+
+    The original condition accidentally omits StandardInitialInterpolatedLineSearch
+    (and repeats StandardBisectionLineSearch), so that nominally standard method
+    keeps the initial stiffness throughout the step.  Existing C# result databases
+    therefore depend on this compatibility behavior.
+    """
+    return str(getattr(an, "method", "")) in {
+        "StandardNewtonRaphson",
+        "StandardBisectionLineSearch",
+        "StandardRegulaFalsiLineSearch",
+        "StandardSecantLineSearch",
+    }
 
 
 class NewtonLineSearch(EquiSolnAlgo):
@@ -38,17 +54,29 @@ class NewtonLineSearch(EquiSolnAlgo):
         previous_error = 1.0
 
         while result == -1:
-            iteration_snapshot = SolverStateSnapshot.capture(
-                model, p, ls, self.the_integrator, self.the_test, self.the_line_search
+            # The C# InitialInterpolated class hides rather than overrides the
+            # base methods, so this benchmark dispatches through the exact
+            # no-op LineSearch type.  No rejected trial point exists in that
+            # path: a failure terminates the step and the complete pre-step
+            # snapshot in solve.py restores it.  Avoid copying 2,454 spring
+            # histories on every accepted Newton correction.  Real line-search
+            # implementations retain a full per-iteration rollback snapshot.
+            needs_iteration_snapshot = type(self.the_line_search) is not LineSearch
+            iteration_snapshot = (
+                SolverStateSnapshot.capture(
+                    model, p, ls, self.the_integrator, self.the_test, self.the_line_search
+                )
+                if needs_iteration_snapshot else None
             )
             residual0 = ls.b.copy()
-            if _is_standard_method(an) and alfa != 0.0:
+            if _updates_tangent_each_iteration(an) and alfa != 0.0:
                 self.the_integrator.update_k(p, model, alfa)
 
             try:
                 self.the_integrator.compute_increment(p, ls, model, an)
             except LinearSolveError as exc:
-                iteration_snapshot.restore()
+                if iteration_snapshot is not None:
+                    iteration_snapshot.restore()
                 p.log(f"Stiffness matrix is singular at step {step}: {exc}")
                 return -3
 
@@ -58,7 +86,8 @@ class NewtonLineSearch(EquiSolnAlgo):
 
             update_code = self.the_integrator.update(model, p, an)
             if update_code < 0:
-                iteration_snapshot.restore()
+                if iteration_snapshot is not None:
+                    iteration_snapshot.restore()
                 return update_code
 
             self.the_integrator.form_unbalance(p, model, an)
@@ -67,7 +96,8 @@ class NewtonLineSearch(EquiSolnAlgo):
                 model, p, ls, self.the_integrator, an, dx0, s0, s1
             )
             if eta < 0.0:
-                iteration_snapshot.restore()
+                if iteration_snapshot is not None:
+                    iteration_snapshot.restore()
                 return -10
 
             # Search evaluates the residual at its final trial point and stores
@@ -79,7 +109,8 @@ class NewtonLineSearch(EquiSolnAlgo):
                     f"Non-finite convergence error at step={step}, "
                     f"iteration={self.the_test.current_iter}"
                 )
-                iteration_snapshot.restore()
+                if iteration_snapshot is not None:
+                    iteration_snapshot.restore()
                 return -4
 
             iteration = max(1, self.the_test.current_iter)
@@ -90,7 +121,8 @@ class NewtonLineSearch(EquiSolnAlgo):
             previous_error = error
 
             if p.to_stop:
-                iteration_snapshot.restore()
+                if iteration_snapshot is not None:
+                    iteration_snapshot.restore()
                 return -4
 
         if result == -2:

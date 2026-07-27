@@ -23,7 +23,13 @@ def _new_line_search(an: Any) -> LineSearch:
     elif "Secant" in method:
         search = SecantLineSearch()
     elif "InitialInterpolated" in method:
-        search = InitialInterpolatedLineSearch()
+        # C# ``InitialInterpolatedSearch`` hides ``search``/``newStep`` with
+        # ``new virtual`` instead of overriding the base methods.  The solver
+        # stores it through a ``LineSearch`` reference, so runtime dispatch is
+        # the base no-op implementation.  Preserve that behavior for numerical
+        # compatibility with committed C# ArcLength results.  The intended
+        # algorithm remains available by constructing InitialInterpolatedLineSearch directly.
+        search = LineSearch()
     else:
         search = LineSearch()
 

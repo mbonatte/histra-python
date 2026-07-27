@@ -31,8 +31,13 @@ class LineSearch:
         s0: float,
         s1: float,
     ) -> float:
-        del model, p, integrator, an, s0, s1
-        ls.set_x_vector(dx0)
+        # The C# base LineSearch.search() is a true no-op.  In the hidden
+        # InitialInterpolated benchmark path, ArcLength.Update has already
+        # replaced LS.X with the combined constrained correction
+        # (delta_u_bar + delta_lambda * delta_u_hat).  The Work convergence
+        # test must see that vector; restoring the raw Newton direction dx0
+        # changes the commit iteration and nonlinear path.
+        del model, p, ls, integrator, an, dx0, s0, s1
         return 1.0
 
     def _trial(

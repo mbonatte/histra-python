@@ -4,7 +4,7 @@ import warnings
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.sparse.linalg import MatrixRankWarning, spsolve
+from scipy.sparse.linalg import MatrixRankWarning, splu
 
 
 class LinearSolveError(RuntimeError):
@@ -28,6 +28,11 @@ class LinearSystem:
         self.x = np.zeros(self.n, dtype=np.float64)
         self.b = np.zeros(self.n, dtype=np.float64)
         self.b0 = np.zeros(self.n, dtype=np.float64)
+        self._factorization = None
+        self._factor_matrix_id: int | None = None
+        self._factor_data: np.ndarray | None = None
+        self._factor_indices: np.ndarray | None = None
+        self._factor_indptr: np.ndarray | None = None
 
     def sumb(self, i: int, v: float) -> None:
         self.b[i] += v
@@ -79,10 +84,18 @@ class LinearSystem:
     def get_b(self, i: int) -> float:
         return float(self.b[i])
 
+    def _invalidate_factorization(self) -> None:
+        self._factorization = None
+        self._factor_matrix_id = None
+        self._factor_data = None
+        self._factor_indices = None
+        self._factor_indptr = None
+
     def set_k(self, i: int, j: int, v: float) -> None:
         if not sp.isspmatrix_lil(self.k):
             self.k = self.k.tolil()
         self.k[i, j] = v
+        self._invalidate_factorization()
 
     def get_k(self, i: int, j: int) -> float:
         return float(self.k[i, j])
@@ -105,6 +118,7 @@ class LinearSystem:
     def set_zero(self) -> None:
         """Clear only stiffness coefficients, matching C# ``K.SetZero()``."""
         self.k = sp.csc_matrix((self.n, self.n), dtype=np.float64)
+        self._invalidate_factorization()
 
     def solve(self, rhs: np.ndarray | None = None) -> int:
         """Solve ``K x = rhs`` and store the result in ``x``.
@@ -135,11 +149,26 @@ class LinearSystem:
                 f"expected {(self.n, self.n)}"
             )
 
+        same_matrix = (
+            self._factorization is not None
+            and self._factor_matrix_id == id(self.k)
+            and self._factor_data is not None
+            and np.array_equal(matrix.data, self._factor_data)
+            and np.array_equal(matrix.indices, self._factor_indices)
+            and np.array_equal(matrix.indptr, self._factor_indptr)
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("error", MatrixRankWarning)
             try:
-                solution = spsolve(matrix, vector)
+                if not same_matrix:
+                    self._factorization = splu(matrix)
+                    self._factor_matrix_id = id(self.k)
+                    self._factor_data = matrix.data.copy()
+                    self._factor_indices = matrix.indices.copy()
+                    self._factor_indptr = matrix.indptr.copy()
+                solution = self._factorization.solve(vector)
             except (MatrixRankWarning, RuntimeError, ValueError) as exc:
+                self._invalidate_factorization()
                 raise LinearSolveError(f"Unable to solve stiffness system: {exc}") from exc
 
         solution = np.asarray(solution, dtype=np.float64).reshape(-1)

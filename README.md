@@ -1,8 +1,12 @@
-# Supplied model and result files
+# HiStrA Python solver integration package
 
-- `model.hrx`: model definition plus serialized application/element state.
-- `model.Results`: SQLite database containing C# result states. This is the authoritative numerical reference used by the audit.
-- `results.json`: historical parser/assembly snapshot. It is **not** an independent nonlinear-solver result and contains stale metadata (`n_interfaces` and `K_nnz`).
+This package contains the translated Python solver, the original C# source, tests, documentation, and two numerical benchmark datasets.
 
-The Python test `histra/tests/test_benchmark_alignment.py` compares the first analysis-1 load step with `QuadStates` in `model.Results`.
-- `audit_metrics.json`: machine-readable inventory, test count, C# database row counts, and measured first-step comparison from the final audit.
+## Benchmarks
+
+- `model-output/model.hrx` / `model.Results`: analysis 1, `Vert`, five-step LoadControl reference.
+- `model-live/model.hrx` / `model.Results`: analysis 22, `LiveLoad_1`, ArcLength analysis chained from the completed `Vert` state.
+
+The Live Load benchmark now reproduces all 87 committed C# steps within `1e-4` relative global-displacement error and reaches the same maximum-displacement terminal event at attempted step 88.
+
+See `histra_documentation/LIVE_LOAD_INTEGRATION.md` for commands, measured errors, compatibility behavior, and limitations.

@@ -85,6 +85,69 @@ class LoadFunction:
     items: List[LoadFunctionItem] = field(default_factory=list)
 
 
+
+
+@dataclass
+class LoadTemplateItem:
+    """One load-template value (force direction, magnitude and condition)."""
+
+    key: int = 0
+    id: int = 0
+    load_template_key: int = 0
+    load_condition_id: int = 0
+    load_value: float = 0.0
+    dir_x: float = 0.0
+    dir_y: float = 0.0
+    dir_z: float = 0.0
+    psi0: float = 0.0
+    psi1: float = 0.0
+    psi2: float = 0.0
+    is_projected: bool = False
+    load_type: str = "Force"
+
+    @property
+    def direction(self) -> tuple[float, float, float]:
+        return (self.dir_x, self.dir_y, self.dir_z)
+
+
+@dataclass
+class LoadTemplate:
+    """C# ``LoadTemplate`` subset required by static element loads."""
+
+    key: int = 0
+    name: str = ""
+    purpose_type: str = ""
+    dynamic_coefficient: float = 1.0
+    items: List[LoadTemplateItem] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class LineLoadElement:
+    """A line load assigned directly to one computational element."""
+
+    key: int = 0
+    parent_key: int = 0
+    element_key: int = 0
+    element_type: str = ""
+    load_template_key: int = 0
+    point1: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    point2: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+    @property
+    def points(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        return (self.point1, self.point2)
+
+
+@dataclass(frozen=True)
+class ModelPoint:
+    """Model point used to select ArcLength constraint DOFs."""
+
+    key: int = 0
+    element_key: int = 0
+    element_type: str = ""
+    id_vertex: int = 0
+
+
 @dataclass
 class Analysis:
     """Static-analysis definition used by the translated solver."""
@@ -132,6 +195,7 @@ class Analysis:
     load_reduction_ratio_to_stop_value: float = 0.1
     check_secant_stiffness: bool = False
     secant_stiffness_ratio: float = 0.0
+    active_model_points: dict[int, bool] = field(default_factory=dict)
 
     # Populated by ``load_model`` after all top-level entities are parsed.
     load_function: LoadFunction | None = field(default=None, repr=False)

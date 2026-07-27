@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import hashlib
 import pickle
 from typing import Any, Iterable
+from enum import Enum
 
 import numpy as np
 
@@ -19,7 +20,31 @@ from histra.solver.model_manager import ModelManager
 
 
 def _copy_array(value: Any) -> Any:
-    return value.copy() if isinstance(value, np.ndarray) else deepcopy(value)
+    """Fast value copy for solver state.
+
+    Nonlinear snapshots contain thousands of spring dictionaries made almost
+    entirely of scalars and short numeric containers.  ``deepcopy`` on each
+    complete dictionary creates large memo/GC workloads and can cause very
+    long pauses in multi-step ArcLength runs.  Copy the supported state shapes
+    directly and retain ``deepcopy`` only as an explicit fallback.
+    """
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    if value is None or isinstance(value, (bool, int, float, complex, str, bytes, Enum)):
+        return value
+    if isinstance(value, list):
+        return [_copy_array(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_copy_array(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _copy_array(item) for key, item in value.items()}
+    if isinstance(value, set):
+        return {_copy_array(item) for item in value}
+    return deepcopy(value)
+
+
+def _copy_state_dict(values: dict[str, Any]) -> dict[str, Any]:
+    return {key: _copy_array(value) for key, value in values.items()}
 
 
 def _restore_array(target: Any, saved: Any) -> Any:
@@ -106,16 +131,16 @@ class SolverStateSnapshot:
         quads = []
         for quad in model.collections.quads.values():
             quads.append((quad, {
-                "status": deepcopy(quad.status.__dict__),
+                "status": _copy_state_dict(quad.status.__dict__),
                 "sigma_initial": float(getattr(quad, "sigma_initial", 0.0)),
             }))
         interfaces = []
         for intf in model.collections.interfaces.values():
             interfaces.append((intf, {
-                "status": deepcopy(intf.status.__dict__),
-                "f": deepcopy(intf.f),
+                "status": _copy_state_dict(intf.status.__dict__),
+                "f": _copy_array(intf.f),
             }))
-        springs = [(spring, deepcopy(spring.__dict__)) for spring in _iter_springs(model)]
+        springs = [(spring, _copy_state_dict(spring.__dict__)) for spring in _iter_springs(model)]
         return cls(
             p=p,
             ls=ls,
@@ -127,8 +152,8 @@ class SolverStateSnapshot:
             manager_state=manager_state,
             integrator_state=state_data,
             integrator_member_state=member_state,
-            convergence_state=deepcopy(convergence_test.__dict__) if convergence_test else None,
-            line_search_state=deepcopy(line_search.__dict__) if line_search else None,
+            convergence_state=_copy_state_dict(convergence_test.__dict__) if convergence_test else None,
+            line_search_state=_copy_state_dict(line_search.__dict__) if line_search else None,
             quad_state=quads,
             interface_state=interfaces,
             spring_state=springs,
@@ -184,22 +209,22 @@ class SolverStateSnapshot:
 
         if self.convergence_test is not None and self.convergence_state is not None:
             self.convergence_test.__dict__.clear()
-            self.convergence_test.__dict__.update(deepcopy(self.convergence_state))
+            self.convergence_test.__dict__.update(_copy_state_dict(self.convergence_state))
         if self.line_search is not None and self.line_search_state is not None:
             self.line_search.__dict__.clear()
-            self.line_search.__dict__.update(deepcopy(self.line_search_state))
+            self.line_search.__dict__.update(_copy_state_dict(self.line_search_state))
 
         for quad, saved in self.quad_state:
             quad.status.__dict__.clear()
-            quad.status.__dict__.update(deepcopy(saved["status"]))
+            quad.status.__dict__.update(_copy_state_dict(saved["status"]))
             quad.sigma_initial = saved["sigma_initial"]
         for intf, saved in self.interface_state:
             intf.status.__dict__.clear()
-            intf.status.__dict__.update(deepcopy(saved["status"]))
-            intf.f[:] = deepcopy(saved["f"])
+            intf.status.__dict__.update(_copy_state_dict(saved["status"]))
+            intf.f[:] = _copy_array(saved["f"])
         for spring, saved in self.spring_state:
             spring.__dict__.clear()
-            spring.__dict__.update(deepcopy(saved))
+            spring.__dict__.update(_copy_state_dict(saved))
 
     def fingerprint(self) -> str:
         """Stable value fingerprint used by rollback regression tests."""

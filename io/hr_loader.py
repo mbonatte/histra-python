@@ -19,6 +19,10 @@ from histra.model.load import (
     LoadCondition,
     LoadFunction,
     LoadFunctionItem,
+    LoadTemplate,
+    LoadTemplateItem,
+    LineLoadElement,
+    ModelPoint,
 )
 from histra.model.masonry_material import MasonryMaterial
 from histra.model.model import Collections, Model
@@ -51,6 +55,7 @@ def load_model(path: Union[str, Path]) -> Model:
     model = Model(source_path=str(source_path))
     collections = Collections()
     load_function_items: list[LoadFunctionItem] = []
+    load_template_items: list[LoadTemplateItem] = []
 
     context = ET.iterparse(str(source_path), events=("end",))
 
@@ -179,8 +184,78 @@ def load_model(path: Union[str, Path]) -> Model:
             )
             elem.clear()
 
+        elif tag == "LoadTemplateItem":
+            load_template_items.append(
+                LoadTemplateItem(
+                    key=_safe_int(_attr(elem, "Key", default="0")),
+                    id=_safe_int(_attr(elem, "Id", default="0")),
+                    load_template_key=_safe_int(
+                        _attr(elem, "IdLoadTemplate", default="0")
+                    ),
+                    load_condition_id=_safe_int(
+                        _attr(elem, "IdLoadCondition", default="0")
+                    ),
+                    load_value=_safe_float(_attr(elem, "LoadValue", default="0")),
+                    dir_x=_safe_float(_attr(elem, "DirX", default="0")),
+                    dir_y=_safe_float(_attr(elem, "DirY", default="0")),
+                    dir_z=_safe_float(_attr(elem, "DirZ", default="0")),
+                    psi0=_safe_float(_attr(elem, "Psi0", default="0")),
+                    psi1=_safe_float(_attr(elem, "Psi1", default="0")),
+                    psi2=_safe_float(_attr(elem, "Psi2", default="0")),
+                    is_projected=_safe_bool(
+                        _attr(elem, "IsProjected", default="false")
+                    ),
+                    load_type=_attr(elem, "IdTypeLoad", default="Force"),
+                )
+            )
+            elem.clear()
+
+        elif tag == "LoadElement":
+            type_of = _attr(elem, "TypeOf", default="")
+            if type_of.endswith("LineLoadElement"):
+                line_load = LineLoadElement(
+                    key=_safe_int(_attr(elem, "Key", default="0")),
+                    parent_key=_safe_int(_attr(elem, "ParentKey", default="0")),
+                    element_key=_safe_int(_attr(elem, "ElementKey", default="0")),
+                    element_type=_attr(elem, "ElementType", default=""),
+                    load_template_key=_safe_int(
+                        _attr(elem, "IdLoadTemplate", default="0")
+                    ),
+                    point1=_parse_xyz(_attr(elem, "Point1", default="0;0;0")),
+                    point2=_parse_xyz(_attr(elem, "Point2", default="0;0;0")),
+                )
+                collections.line_loads[line_load.key] = line_load
+            else:
+                raise NotImplementedError(
+                    f"Unsupported HRX load element type: {type_of or '<missing>'}"
+                )
+            elem.clear()
+
+        elif tag == "ModelPoint":
+            model_point = ModelPoint(
+                key=_safe_int(_attr(elem, "Key", default="0")),
+                element_key=_safe_int(
+                    _attr(elem, "ElementKey", "IdElement", default="0")
+                ),
+                element_type=_attr(elem, "ElementType", default=""),
+                id_vertex=_safe_int(_attr(elem, "IdVertex", default="0")),
+            )
+            collections.model_points[model_point.key] = model_point
+            elem.clear()
+
         elif tag == "Template":
-            if _attr(elem, "PurposeType", default="") == "MasonryMaterial":
+            purpose_type = _attr(elem, "PurposeType", default="")
+            if purpose_type in {"AreaLoad", "LineLoad", "PointLoad"}:
+                template = LoadTemplate(
+                    key=_safe_int(_attr(elem, "Key", default="0")),
+                    name=_attr(elem, "Name", default=""),
+                    purpose_type=purpose_type,
+                    dynamic_coefficient=_safe_float(
+                        _attr(elem, "DynamicCoefficient", default="1"), 1.0
+                    ),
+                )
+                collections.load_templates[template.key] = template
+            elif purpose_type == "MasonryMaterial":
                 material = MasonryMaterial(
                     key=_safe_int(_attr(elem, "Key", default="0")),
                     name=_attr(elem, "Name", default=""),
@@ -310,6 +385,12 @@ def load_model(path: Union[str, Path]) -> Model:
                 secant_stiffness_ratio=_safe_float(
                     _attr(elem, "SecantStiffnessRatio", default="0")
                 ),
+                active_model_points={
+                    _safe_int(_attr(child, "Key", default="0")): _safe_bool(
+                        _attr(child, "Value", default="false")
+                    )
+                    for child in elem.findall("./ActiveModelPoints/ActiveModelPoint")
+                },
             )
             collections.analyses[analysis.key] = analysis
             elem.clear()
@@ -321,6 +402,13 @@ def load_model(path: Union[str, Path]) -> Model:
             function.items.append(item)
     for function in collections.load_functions.values():
         function.items.sort(key=lambda item: (item.pseudo_time, item.key))
+
+    for item in load_template_items:
+        template = collections.load_templates.get(item.load_template_key)
+        if template is not None:
+            template.items.append(item)
+    for template in collections.load_templates.values():
+        template.items.sort(key=lambda item: (item.id, item.key))
 
     for analysis in collections.analyses.values():
         analysis.load_function = collections.load_functions.get(
@@ -378,6 +466,13 @@ def _attr(elem: ET.Element, *names: str, default: str = "") -> str:
         if value is not None:
             return value
     return default
+
+
+def _parse_xyz(value: str) -> tuple[float, float, float]:
+    parts = str(value).replace(",", ".").split(";")
+    if len(parts) != 3:
+        raise ValueError(f"Expected X;Y;Z coordinates, got {value!r}")
+    return tuple(float(part) for part in parts)  # type: ignore[return-value]
 
 
 def _safe_bool(value: str) -> bool:

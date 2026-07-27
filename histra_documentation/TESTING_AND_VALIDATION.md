@@ -1,29 +1,19 @@
 # Testing and Validation
 
-## Final status
+## Final default suite
 
-- Compile: passed.
-- Import: passed.
-- Test suite: 113 passed, 1 skipped.
-- Full benchmark: completed independently, five steps, 34.45 seconds.
+The final command output is included as a deliverable. The default suite contains focused tests for both benchmarks and skips two opt-in long acceptance runs.
 
-The skipped test is the long full-analysis acceptance assertion, enabled only with `HISTRA_RUN_FULL_BENCHMARK=1`. It remains skipped by default because steps 2–5 are known not to meet parity and because it is much slower than the focused suite.
+Coverage added for Live Load includes:
 
-## Focused coverage added
-
-- Quad `ComputeDN`, current stress, and volume.
-- Interface normal increment into all Coulomb groups.
-- Coulomb03 trial/commit/revert.
-- Complete solver snapshot roundtrip.
-- Failed Newton iteration rollback.
-- Failed ALS substep rollback.
-- Signed unloading discretization.
-- Typed C# SQLite global/quad/interface/spring readers.
-- Every stored C# step and load factor.
-- Virgin initialization.
-- Complete chained/final restart.
-- First C# reference step.
-- Optional full-analysis result comparison.
+- HRX model-point/load-template/line-load parsing.
+- Exact generalized line-load vector.
+- C# Coulomb03 negative-envelope slope selection.
+- Hidden InitialInterpolated base dispatch and combined Work vector.
+- Sparse factorization reuse/invalidation.
+- Solver-scoped cyclic-GC restoration.
+- First Live Load C# step.
+- Optional complete 87-step ArcLength reference path.
 
 ## Commands
 
@@ -32,10 +22,23 @@ From the directory containing `histra/`:
 ```bash
 python -m compileall -q histra
 python -c "import histra; print('import ok')"
-python -m pytest -q
+python -m pytest -q histra/tests
+```
+
+Run the long Live Load acceptance test:
+
+```bash
+HISTRA_RUN_LIVE_BENCHMARK=1 \
+python -m pytest -q histra/tests/test_live_load_arc_length.py \
+  -k complete_live_load_reference_path
+```
+
+Run the benchmark metrics tool:
+
+```bash
 python -m histra.tools.benchmark_csharp_sqlite \
-  --hrx histra/model-output/model.hrx \
-  --results histra/model-output/model.Results \
-  --analysis 1 --combination 1 \
-  --output histra_benchmark_metrics.json
+  --hrx histra/model-live/model.hrx \
+  --results histra/model-live/model.Results \
+  --analysis 22 --combination 1 --selected-dofs 58 \
+  --output live_load_benchmark_metrics.json
 ```

@@ -59,22 +59,76 @@ class ArcLength(StaticIntegrator):
         sign = float(np.sign(current - previous))
         return sign if sign != 0.0 else 1.0
 
-    def _select_dofs(self, p: Program, an: Any, fallback_dof: int | None = None) -> np.ndarray:
+    def _model_point_dofs(self, model: Model, an: Any, point_key: int) -> list[int]:
+        point = getattr(model.collections, "model_points", {}).get(int(point_key))
+        if point is None:
+            return []
+        components = [
+            float(getattr(an, "dir_x", 0.0)),
+            float(getattr(an, "dir_y", 0.0)),
+            float(getattr(an, "dir_z", 0.0)),
+        ]
+        elements = []
+        if point.element_type == "Quad":
+            quad = model.collections.quads.get(point.element_key)
+            if quad is not None:
+                elements.append(quad)
+        elif point.element_type == "Node":
+            for quad in model.collections.quads.values():
+                if point.element_key in quad.node_keys:
+                    elements.append(quad)
+        else:
+            raise NotImplementedError(
+                f"ArcLength ModelPoint {point.key} targets unsupported type "
+                f"{point.element_type!r}"
+            )
+
+        result: list[int] = []
+        for element in elements:
+            for component, direction in enumerate(components):
+                if direction == 0.0 or component >= len(element.aff) or not element.aff[component]:
+                    continue
+                dof = int(element.aff[component][0].gdl) - 1
+                if dof not in result:
+                    result.append(dof)
+        return result
+
+    def _select_dofs(
+        self,
+        p: Program,
+        model: Model,
+        an: Any,
+        fallback_dof: int | None = None,
+    ) -> np.ndarray:
         n = p.ls.n
         procedure = str(getattr(an, "arc_length_procedure", "OnlyControlPoint")).lower()
-        if "only" not in procedure and "control" not in procedure:
-            return np.arange(n, dtype=int)
-
         master = int(getattr(an, "master_point", -10))
-        candidate = fallback_dof if master == -10 else master
-        if candidate is not None and 0 <= int(candidate) < n:
-            return np.array([int(candidate)], dtype=int)
 
-        # C# auto-selection maximizes deltaUhat[i] * phat[i].
-        if self._delta_u_hat is not None and self._phat is not None and n:
-            products = self._delta_u_hat * self._phat
-            return np.array([int(np.argmax(products))], dtype=int)
-        return np.array([0], dtype=int) if n else np.zeros(0, dtype=int)
+        if "modelpointsselected" in procedure:
+            selected: list[int] = []
+            for point_key, active in getattr(an, "active_model_points", {}).items():
+                if active:
+                    selected.extend(self._model_point_dofs(model, an, int(point_key)))
+            unique = list(dict.fromkeys(selected))
+            return np.asarray(unique if unique else list(range(n)), dtype=int)
+
+        if "controlpoint" in procedure:
+            if master != -10:
+                selected = self._model_point_dofs(model, an, master)
+                if selected:
+                    return np.asarray(selected, dtype=int)
+            if fallback_dof is not None and 0 <= int(fallback_dof) < n:
+                return np.array([int(fallback_dof)], dtype=int)
+
+            # C# auto-selection maximizes deltaUhat[i] * phat[i].
+            if self._delta_u_hat is not None and self._phat is not None and n:
+                products = self._delta_u_hat * self._phat
+                positive = np.maximum(products, 0.0)
+                candidate = int(np.argmax(positive))
+                return np.array([candidate], dtype=int)
+
+        # C# GetVect uses the full vector when ModelPointOperations returns -1.
+        return np.arange(n, dtype=int)
 
     def _selected(self, vector: np.ndarray) -> np.ndarray:
         if self._dofs is None or len(self._dofs) == 0:
@@ -116,7 +170,7 @@ class ArcLength(StaticIntegrator):
             try:
                 p.ls.solve(rhs=self._phat)
                 self._delta_u_hat[:] = p.ls.x
-                self._dofs = self._select_dofs(p, an)
+                self._dofs = self._select_dofs(p, model, an)
             except LinearSolveError:
                 self._dofs = np.array([0], dtype=int)
 
@@ -149,22 +203,34 @@ class ArcLength(StaticIntegrator):
 
         ls.solve(rhs=self._phat)
         self._delta_u_hat = ls.x.copy()
-        self._dofs = self._select_dofs(p, an, fallback_dof=dof)
+        self._dofs = self._select_dofs(p, model, an, fallback_dof=dof)
         selected_hat = self._selected(self._delta_u_hat)
         denominator = float(np.dot(selected_hat, selected_hat) + self._alpha2)
         if denominator <= 1e-30:
             raise LinearSolveError("ArcLength has a zero reference-load displacement")
 
-        # OnlyControlPoint in C# scales Dr2 by the selected DOF count.
+        # C# resets Dr2 at each NewStep.  For OnlyControlPoint it scales by
+        # the number of selected DOFs; OnlyModelPointsSelected does not.
+        self._arc_length2 = abs(float(getattr(an, "dr2", self._arc_length2)))
         radius2 = self._arc_length2
-        if "only" in str(getattr(an, "arc_length_procedure", "")).lower():
+        procedure = str(getattr(an, "arc_length_procedure", "")).lower()
+        if "controlpoint" in procedure:
             radius2 *= max(1, len(self._dofs))
 
         delta_lambda = float(np.sqrt(radius2 / denominator))
         if bool(getattr(an, "is_max_arc_length_ray", False)):
-            max_radius = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
-            if max_radius > 0.0 and np.sqrt(radius2) > max_radius:
-                radius2 = max_radius * max_radius
+            # Despite the property name, C# caps the predictor load increment,
+            # not the geometric radius.  Preserve that behavior for reference
+            # compatibility with ArcLength analyses already stored in SQLite.
+            max_delta_lambda = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
+            if max_delta_lambda > 0.0 and delta_lambda > max_delta_lambda:
+                if "controlpoint" in procedure:
+                    radius2 = abs(
+                        max_delta_lambda**2
+                        * (float(np.dot(selected_hat, selected_hat)) / max(1, len(self._dofs)) + self._alpha2)
+                    ) * max(1, len(self._dofs))
+                else:
+                    radius2 = abs(max_delta_lambda**2 * denominator)
                 self._arc_length2 = radius2
                 delta_lambda = float(np.sqrt(radius2 / denominator))
 
@@ -182,7 +248,7 @@ class ArcLength(StaticIntegrator):
         self.apply_load_domain(model, delta_lambda)
         ModelManager.update_domain(model, ls, self.state)
 
-        display_radius = np.sqrt(radius2 / max(1, len(self._dofs)))
+        display_radius = np.sqrt(radius2 / max(1, len(self._dofs))) if "controlpoint" in procedure else np.sqrt(radius2)
         p.log(
             f"Step {step} solving: dr={display_radius:.6g}, "
             f"dLambda={delta_lambda:.6g}"

@@ -461,6 +461,114 @@ def _resolve_coefficient(item: "LoadCombinationItem", lc: "LoadCondition") -> fl
     )
 
 
+def _get_load_template_coefficient(
+    model: Model,
+    analysis_key: int,
+    combination: int,
+    load_condition_id: int,
+    template_item=None,
+) -> float:
+    an = model.collections.analyses.get(analysis_key)
+    if an is None:
+        raise KeyError(f"Analysis {analysis_key} is not present in the model")
+    combination_table = model.collections.load_combinations.get(an.load_combination_key)
+    if combination_table is None:
+        raise KeyError(
+            f"Load combination {an.load_combination_key} for analysis {analysis_key} is missing"
+        )
+    condition = model.collections.load_conditions.get(load_condition_id)
+    if condition is None:
+        raise KeyError(f"Load condition {load_condition_id} is missing")
+    coefficient = combination_table.get_coefficient(combination, load_condition_id)
+    if coefficient is None:
+        raise KeyError(
+            f"Load combination {combination_table.key} has no row {combination} "
+            f"coefficient for condition {load_condition_id}"
+        )
+    if coefficient.type_data == "Psi0":
+        if template_item is None:
+            raise ValueError("Psi0 coefficient requires a load-template item")
+        return float(template_item.psi0)
+    if coefficient.type_data == "Psi1":
+        if template_item is None:
+            raise ValueError("Psi1 coefficient requires a load-template item")
+        return float(template_item.psi1)
+    if coefficient.type_data == "Psi2":
+        if template_item is None:
+            raise ValueError("Psi2 coefficient requires a load-template item")
+        return float(template_item.psi2)
+    return float(_resolve_coefficient(coefficient, condition))
+
+
+def generate_line_loads(model: Model, analysis_key: int, combination: int = 1) -> None:
+    """Generate direct Quad line loads along the active C# call chain."""
+    an = model.collections.analyses.get(analysis_key)
+    if an is None:
+        raise KeyError(f"Analysis {analysis_key} is not present in the model")
+
+    for load in model.collections.line_loads.values():
+        if load.element_type != "Quad":
+            raise NotImplementedError(
+                f"LineLoadElement {load.key} targets unsupported element type "
+                f"{load.element_type!r}"
+            )
+        quad = model.collections.quads.get(load.element_key)
+        if quad is None:
+            raise KeyError(
+                f"LineLoadElement {load.key} references missing Quad {load.element_key}"
+            )
+        template = model.collections.load_templates.get(load.load_template_key)
+        if template is None:
+            raise KeyError(
+                f"LineLoadElement {load.key} references missing template "
+                f"{load.load_template_key}"
+            )
+        if template.purpose_type != "LineLoad":
+            raise ValueError(
+                f"Load template {template.key} has purpose {template.purpose_type!r}, "
+                "expected 'LineLoad'"
+            )
+
+        endpoint = np.zeros(3, dtype=np.float32)
+        for item in template.items:
+            if item.load_type != "Force":
+                raise NotImplementedError(
+                    f"Line-load template item {item.key} has unsupported type {item.load_type!r}"
+                )
+            coeff = np.float32(
+                _get_load_template_coefficient(
+                    model, analysis_key, combination, item.load_condition_id, item
+                )
+            )
+            if bool(an.is_seismic):
+                direction = np.asarray((an.dir_x, an.dir_y, an.dir_z), dtype=np.float32)
+            else:
+                direction = np.asarray(item.direction, dtype=np.float32)
+            value = np.float32(item.load_value)
+            endpoint += np.asarray(
+                [np.float32(np.float32(coeff * value) * d) for d in direction],
+                dtype=np.float32,
+            )
+
+        if not np.any(endpoint):
+            continue
+        nodes = []
+        for node_key in quad.node_keys:
+            node = model.collections.nodes.get(node_key)
+            if node is None:
+                raise KeyError(
+                    f"Quad {quad.key} line-load integration references missing Node {node_key}"
+                )
+            nodes.append(node.point)
+        p = quad.compute_line_load_internal(
+            nodes,
+            load.points,
+            (tuple(float(x) for x in endpoint), tuple(float(x) for x in endpoint)),
+        )
+        for index in range(7):
+            quad.status.p[index] += p[index]
+
+
 def generate_self_weight_loads(model: Model, analysis_key: int, combination: int = 1):
     """
     Port of GenerateLoadsForceAnalysis for self-weight only.
@@ -521,7 +629,14 @@ def assemble_load_vector(model: Model, analysis_key: int | None = None, combinat
     Then distributes element P[i] through afference matrices.
     """
     if analysis_key is not None:
+        # C# clears every computational element P vector before generating the
+        # selected combination.  This is essential for chained analyses where
+        # the initial state came from a different load combination.
+        for quad in model.collections.quads.values():
+            for index in range(7):
+                quad.status.p[index] = 0.0
         generate_self_weight_loads(model, analysis_key, combination)
+        generate_line_loads(model, analysis_key, combination)
 
     n = model.gdl
     b = np.zeros(n)

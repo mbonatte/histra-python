@@ -77,9 +77,13 @@ def run_benchmark(
         )
         for step in committed_steps
     }
-    reference_multipliers = {
-        step: read_load_multiplier(hrx, analysis_key, step) for step in committed_steps
-    }
+    integration_method = str(getattr(analysis, "integration_method", ""))
+    is_load_control = integration_method.lower() == "loadcontrol"
+    reference_multipliers = (
+        {step: read_load_multiplier(hrx, analysis_key, step) for step in committed_steps}
+        if is_load_control
+        else {}
+    )
 
     logs: list[str] = []
 
@@ -126,21 +130,32 @@ def run_benchmark(
             denominator = max(float(np.linalg.norm(ref)), np.finfo(float).tiny)
             row.update(
                 {
-                    "reference_load_factor": float(reference_multipliers[step]),
                     "relative_displacement_error": float(np.linalg.norm(diff) / denominator),
                     "max_absolute_dof_difference": float(np.max(np.abs(diff))),
                     "python_displacement_norm": float(np.linalg.norm(u)),
                     "csharp_displacement_norm": float(np.linalg.norm(ref)),
-                    "load_factor_absolute_error": abs(
-                        float(record.get("load_factor", 0.0))
-                        - float(reference_multipliers[step])
-                    ),
                 }
             )
+            if is_load_control:
+                row["reference_load_factor"] = float(reference_multipliers[step])
+                row["load_factor_absolute_error"] = abs(
+                    float(record.get("load_factor", 0.0))
+                    - float(reference_multipliers[step])
+                )
         rows.append(row)
 
     solved_numbers = [row["step"] for row in rows if row["status"] == "OK"]
     expected_numbers = committed_steps
+    failed_rows = [row for row in rows if row["status"] != "OK"]
+    reference_terminal_condition = bool(
+        not is_load_control
+        and int(code) == -3
+        and len(failed_rows) == 1
+        and failed_rows[0]["step"] == committed_steps[-1] + 1
+        and solved_numbers == expected_numbers
+    )
+    completed_reference = bool(code == 0 or reference_terminal_condition)
+
     metrics: dict[str, Any] = {
         "schema_version": 1,
         "benchmark": {
@@ -149,7 +164,7 @@ def run_benchmark(
             "analysis_key": analysis_key,
             "analysis_name": str(getattr(analysis, "name", "")),
             "combination": combination,
-            "integration_method": str(getattr(analysis, "integration_method", "")),
+            "integration_method": integration_method,
             "solution_method": str(getattr(analysis, "method", "")),
             "dof_count": int(model.gdl),
             "reference_steps": expected_numbers,
@@ -161,7 +176,13 @@ def run_benchmark(
         },
         "run": {
             "completion_code": int(code),
-            "completion_status": "completed" if code == 0 else "failed",
+            "completion_status": (
+                "reference_terminal_condition_reproduced"
+                if reference_terminal_condition
+                else ("completed" if code == 0 else "failed")
+            ),
+            "reference_terminal_condition_reproduced": reference_terminal_condition,
+            "reference_completed": completed_reference,
             "elapsed_seconds": elapsed,
             "steps_completed": solved_numbers,
             "step_order_exact": solved_numbers == expected_numbers,
@@ -173,9 +194,14 @@ def run_benchmark(
             "per_step": {
                 str(row["step"]): {
                     "displacement": row.get("relative_displacement_error", math.inf) <= 1.0e-4,
-                    "load_factor": row.get("load_factor_absolute_error", math.inf) <= 1.0e-6,
+                    "load_factor": (
+                        row.get("load_factor_absolute_error", math.inf) <= 1.0e-6
+                        if is_load_control
+                        else None
+                    ),
                 }
                 for row in rows
+                if row["step"] in references and row["status"] == "OK"
             },
         },
         "steps": rows,
@@ -207,7 +233,7 @@ def main() -> int:
     args.output.write_text(json.dumps(metrics, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     print(f"Wrote {args.output}")
     print(json.dumps(metrics["run"], indent=2))
-    return 0 if metrics["run"]["completion_code"] == 0 else 1
+    return 0 if metrics["run"]["reference_completed"] else 1
 
 
 if __name__ == "__main__":

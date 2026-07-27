@@ -214,7 +214,11 @@ class SpringCoulomb03(Spring):
         if self.rot3n - self.rot2n != 0.0:
             self.e3n = (self.mom3n - self.mom2n) / (self.rot3n - self.rot2n)
         self.eup = max(self.e1p, self.e2p, self.e3p)
-        self.eun = min(self.e1n, self.e2n, self.e3n)  # C# uses Max (more positive) for negative side
+        # C# setEnvelope selects the numerically largest negative-side slope.
+        # The slopes are generally positive secants/tangents despite belonging
+        # to the negative envelope; using min() selected the soft descending
+        # branch and corrupted Takeda unloading/reloading after a restart.
+        self.eun = max(self.e1n, self.e2n, self.e3n)
 
     def _tau_limite(self, N: float, ratio_cohesion: float = 1.0) -> float:
         """Coulomb or Cacovic limiting shear stress (C# TauLimite)."""

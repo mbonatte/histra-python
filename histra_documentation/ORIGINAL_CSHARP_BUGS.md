@@ -44,3 +44,23 @@
 - Method: `search`.
 - Behavior: trial updates use `(eta_j - eta_previous) * dU`, but the method finishes by putting `eta_j * dU` back into the linear-system increment after state has already accumulated trial deltas. This can make the stored increment and accumulated trial state represent different quantities.
 - Python: preserves the benchmark-relevant behavior for compatibility, while complete snapshots prevent failed trials from contaminating outer state.
+
+## Static InitialInterpolated tangent omission
+
+- File: `C#_Original/SolverRuntime/SolverRuntime.SolutionAlgorithm/NewtonLineSearch.cs`.
+- Behavior: the per-iteration tangent-update condition includes other Standard methods but omits `StandardInitialInterpolatedLineSearch`.
+- Effect: the Live Load reference keeps the initial stiffness for every iteration.
+- Python: preserves this compatibility behavior for committed database parity and regression tests it.
+
+## Hidden InitialInterpolated dispatch and Work vector
+
+- File: `C#_Original/SolverRuntime/SolverRuntime.LineSearch/InitialInterpolatedSearch.cs`.
+- Defect: `new virtual` hides instead of overrides `LineSearch.search/newStep`.
+- Effect: through the base reference, search is a no-op. `LS.X` remains ArcLength's combined constrained correction and is consumed by the Work convergence test.
+- Python: preserves the base dispatch for this method; the intended algorithm remains constructible directly but is not used for the reference path.
+
+## Line-load source/database skew
+
+- C# area: Quad static line-load intrinsic-coordinate calculation (`AlignNodes`, `FindU`, `FindV`, `ComputeStaticLoadInternal`).
+- Evidence: a literal source port worsens displacement agreement by approximately two orders of magnitude, while the retained float32 Newton inverse reproduces all database steps within tolerance.
+- Python: follows the committed SQLite behavior and documents the deviation. This is treated as source/binary skew rather than silently asserted as a literal port.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import gc
 from typing import Any, Callable
 
 import numpy as np
@@ -8,6 +9,7 @@ import numpy as np
 from histra.model.model import Model
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.solver.arc_length import ArcLength
+from histra.solver.assembler import assemble_load_vector
 from histra.solver.incremental_integrator import StaticIntegrator
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager, pdelta_enabled
@@ -27,13 +29,37 @@ def solve_static_nonlinear(
     on_progress: Callable[[float], None] | None = None,
     results_path: str | Path | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
-    """Execute the translated static nonlinear solver.
+    """Execute a static nonlinear analysis with bounded snapshot GC overhead.
 
-    The execution order follows the original C# ``StaticNonLinearAnalysis``:
-    prepare load and initial stiffness, initialize the integrator, apply a load
-    step, solve iterations, optionally retry with ALS/initial stiffness, commit,
-    and return the true final status.
+    Reversible Newton trials create thousands of short-lived state containers.
+    CPython's cyclic collector can pause for minutes while scanning these fully
+    reachable constitutive graphs even though reference counting already frees
+    each prior snapshot.  Suspend cyclic collection only for the synchronous
+    solve and restore the caller's GC setting on every exit.
     """
+    gc_was_enabled = gc.isenabled()
+    if gc_was_enabled:
+        gc.disable()
+    try:
+        return _solve_static_nonlinear_impl(
+            model, analysis, combination, on_log=on_log,
+            on_progress=on_progress, results_path=results_path,
+        )
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+
+
+def _solve_static_nonlinear_impl(
+    model: Model,
+    analysis: Any,
+    combination: int = 1,
+    *,
+    on_log: Callable[[str], None] | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    results_path: str | Path | None = None,
+) -> tuple[int, list[dict[str, Any]]]:
+    """C#-ordered static nonlinear solver implementation."""
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
     if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
@@ -54,6 +80,7 @@ def solve_static_nonlinear(
     # Without this reset, the first Python increment is added to the saved local
     # element displacements, producing a completely different residual path.
     initial_analysis_key = int(getattr(analysis, "initial_analysis_key", -100))
+    initial_external_load = np.zeros(n)
     if initial_analysis_key < 0:
         _set_initial_state(model, p.u, p.v, ls)
     else:
@@ -77,9 +104,20 @@ def solve_static_nonlinear(
             f"step {restart.step}: {restart.dof_count} DOFs, "
             f"{restart.spring_count} complete spring states"
         )
+        # C# does not reconstruct the predecessor load combination here.
+        # After restoring the committed element state it calls
+        # SetFextEqualToFint(), making the chained analysis start from an
+        # exactly self-equilibrated baseline even when the predecessor was
+        # committed by a work criterion with a non-zero residual.
+        ModelManager.get_resisting_force(model, ls)
+        initial_external_load = -ls.b.copy()
+        p.log(
+            f"Restored chained baseline load from committed resisting forces: "
+            f"norm={np.linalg.norm(initial_external_load):.6g}"
+        )
 
     ModelManager._ptarget = np.zeros(n)
-    ModelManager._fext = np.zeros(n)
+    ModelManager._fext = initial_external_load.copy()
     ModelManager._pq = np.zeros(n)
     ModelManager._pq_prev = np.zeros(n)
     ModelManager._u_total = p.u
@@ -97,9 +135,13 @@ def solve_static_nonlinear(
     integrator.u_committed = p.u.copy()
 
     alfa = 0.0 if "Modified" in str(getattr(analysis, "method", "")) else 1.0
-    # C# PrepareModelForAnalysis leaves a factorable stiffness ready before the
-    # first NewStep.  This is essential for the ArcLength predictor.
-    integrator.update_k(p, model, alfa)
+    # C# PrepareModelForAnalysis calls PrepareK(..., alfa=0) for every static
+    # non-modal analysis, regardless of whether the later Newton method is
+    # labelled Standard or Modified.  Standard methods may replace this matrix
+    # inside their iteration loop; StandardInitialInterpolatedLineSearch is
+    # accidentally omitted from that loop and therefore relies on this exact
+    # initial-stiffness matrix for the whole step.
+    integrator.update_k(p, model, 0.0)
     integrator.domain_changed(p, model, n)
 
     p.current_load_factor = integrator.mult

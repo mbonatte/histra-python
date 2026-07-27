@@ -8,7 +8,10 @@ from histra.model.node import Node, NodeC
 from histra.model.quad import Quad
 from histra.model.interface import Interface
 from histra.model.restraint import Restraint
-from histra.model.load import LoadCombination, LoadCondition, LoadFunction, Analysis
+from histra.model.load import (
+    Analysis, LoadCombination, LoadCondition, LoadFunction, LoadTemplate,
+    LineLoadElement, ModelPoint,
+)
 from histra.model.masonry_material import MasonryMaterial
 
 
@@ -24,6 +27,9 @@ class Collections:
     load_combinations: Dict[int, LoadCombination] = field(default_factory=dict)
     load_conditions: Dict[int, LoadCondition] = field(default_factory=dict)
     load_functions: Dict[int, LoadFunction] = field(default_factory=dict)
+    load_templates: Dict[int, LoadTemplate] = field(default_factory=dict)
+    line_loads: Dict[int, LineLoadElement] = field(default_factory=dict)
+    model_points: Dict[int, ModelPoint] = field(default_factory=dict)
     analyses: Dict[int, Analysis] = field(default_factory=dict)
     materials: Dict[int, MasonryMaterial] = field(default_factory=dict)
 

@@ -34,3 +34,17 @@
 - Corrected stale package paths and actual model-size assertions.
 - Added focused ComputeDN, friction coupling, commit/revert, snapshot, rollback, unloading, SQLite, restart, first-step, and step-reader tests.
 - Added `tools/benchmark_csharp_sqlite.py` for machine-readable per-step comparison.
+
+## Live Load and ArcLength integration
+
+- Added HRX parsing for `LoadTemplate`, `LoadTemplateItem`, `LineLoadElement`, and `ModelPoint`.
+- Added float32-sensitive Quad line-load integration and global assembly.
+- Added explicit ArcLength selected-model-point mapping and predictor cap compatibility.
+- Reproduced chained `SetFextEqualToFint` initialization.
+- Reproduced C# static `alfa=0` preparation and the tangent-update omission for `StandardInitialInterpolatedLineSearch`.
+- Reproduced hidden base `LineSearch` dispatch and retained ArcLength's combined correction for the Work test.
+- Corrected Coulomb03 `Eun` to use the maximum negative-envelope slope.
+- Added sparse LU reuse while stiffness is unchanged.
+- Reduced snapshot allocation overhead and bounded cyclic-GC work during nonlinear solves.
+- Extended the benchmark tool to handle ArcLength references and expected terminal max-displacement stops.
+- Added `test_live_load_arc_length.py`, including an optional complete 87-step acceptance test.

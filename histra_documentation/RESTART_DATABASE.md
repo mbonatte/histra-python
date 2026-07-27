@@ -26,3 +26,9 @@ A lossless restart requires:
 5. consistent model and database key mappings.
 
 Python restores the final complete state only. It refuses intermediate compact restart with a `ResultsStateError` rather than silently filling missing history with zeros. For chained analyses, `InitialAnalysisKey` and `InitialCombinationAnalysisKey` select the prerequisite. Missing databases or incomplete state fail with precise messages.
+
+## Live Load chained analysis
+
+Analysis 22 declares `InitialAnalysisKey=1` and `InitialCombinationAnalysisKey=1`. Python restores the complete final Vert step (global vectors, 18 quads, 29 interfaces, and all 2,454 complete spring histories). It then follows the C# chained initialization behavior: assemble committed resisting forces and set the new baseline external vector to their negative. The predecessor gravity vector is not regenerated. The new Live Load reference vector is applied incrementally by ArcLength from this self-equilibrated baseline.
+
+Analysis 22 stores compact public spring states for steps 0–87 but no complete final restart tables because it terminates at the maximum-displacement condition rather than completing. Therefore analysis 22 itself is not accepted as a lossless predecessor for another chained analysis.

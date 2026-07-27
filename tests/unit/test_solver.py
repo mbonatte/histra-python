@@ -1,8 +1,6 @@
 """Tests for solver components — correct constructors (no-arg defaults)."""
 import unittest
-from histra.solver.line_search import (
-    InitialInterpolatedLineSearch, LineSearch, RegulaFalsiLineSearch,
-)
+from histra.solver.line_search import LineSearch, RegulaFalsiLineSearch
 from histra.solver.load_control import LoadControl
 from histra.solver.arc_length import ArcLength
 from histra.solver.newton_raphson import NewtonRaphson
@@ -29,10 +27,10 @@ class TestNewLineSearchFactory(unittest.TestCase):
         line_search_min_eta = 0.2
         line_search_max_iterations = 50
 
-    def test_produces_initial_interpolated(self):
+    def test_preserves_csharp_hidden_initial_interpolated_dispatch(self):
         an = self.FakeAnalysis()
         ls = _new_line_search(an)
-        self.assertIsInstance(ls, InitialInterpolatedLineSearch)
+        self.assertIs(type(ls), LineSearch)
         self.assertEqual(ls.tolerance, 0.5)
         self.assertEqual(ls.max_eta, 5.0)
         self.assertEqual(ls.min_eta, 0.2)
