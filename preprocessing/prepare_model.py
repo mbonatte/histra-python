@@ -5,7 +5,7 @@ polygonal partial intersections.  This module deliberately implements the
 solver path needed by the supplied RailBridge models:
 
 * four-node masonry ``Quad`` elements;
-* exact full-edge Quad--Quad contacts;
+* full and collinear partial-edge Quad--Quad contacts;
 * fixed line ``Restraint`` contacts already associated with a Quad face;
 * masonry diagonal, transverse, in-plane and out-of-plane springs;
 * global DOF numbering and Quad/Interface afference matrices.
@@ -604,6 +604,141 @@ def _make_interface_geometry(model: Model, intf: Interface, vertices: Sequence[n
     intf._perf_area = None
 
 
+
+def _find_or_create_geometric_node(model: Model, point: np.ndarray, *, tolerance: float = 1.0e-4) -> int:
+    """Return the C# PrepareBuildInterface endpoint node for an intersection edge.
+
+    C# first catches an existing node near the midpoint of the interface's
+    thickness edge and creates a geometry-only node only when none exists.
+    Computational DOFs remain attached to Quads, so a newly created node does
+    not alter ``model.gdl``.
+    """
+    assert model.collections is not None
+    best_key: int | None = None
+    best_distance = float("inf")
+    for key, node in model.collections.nodes.items():
+        distance = float(np.linalg.norm(_v(node.point) - point))
+        if distance <= tolerance and distance < best_distance:
+            best_key = int(key)
+            best_distance = distance
+    if best_key is not None:
+        return best_key
+
+    from histra.model.node import Node
+
+    key = max(model.collections.nodes, default=0) + 1
+    model.collections.nodes[key] = Node(key=key, point=_p(point), name=str(key))
+    return key
+
+
+def _segment_overlap(
+    p0: np.ndarray, p1: np.ndarray, q0: np.ndarray, q1: np.ndarray,
+    *, distance_tolerance: float = 1.0e-4, angle_tolerance: float = 1.0e-6,
+) -> tuple[np.ndarray, np.ndarray, float, float] | None:
+    """Return the positive collinear overlap, parameterized on ``p0 -> p1``."""
+    dp = p1 - p0
+    dq = q1 - q0
+    lp = float(np.linalg.norm(dp))
+    lq = float(np.linalg.norm(dq))
+    if lp <= distance_tolerance or lq <= distance_tolerance:
+        return None
+    up = dp / lp
+    uq = dq / lq
+    if float(np.linalg.norm(np.cross(up, uq))) > angle_tolerance:
+        return None
+    # The two centre-line edges must be on the same infinite line.
+    if float(np.linalg.norm(np.cross(q0 - p0, up))) > distance_tolerance:
+        return None
+    if float(np.linalg.norm(np.cross(q1 - p0, up))) > distance_tolerance:
+        return None
+    tq0 = float(np.dot(q0 - p0, up))
+    tq1 = float(np.dot(q1 - p0, up))
+    lo = max(0.0, min(tq0, tq1))
+    hi = min(lp, max(tq0, tq1))
+    if hi - lo <= distance_tolerance:
+        return None
+    return p0 + up * lo, p0 + up * hi, lo / lp, hi / lp
+
+
+def _partial_face_vertices(
+    model: Model, quad: Quad, face: int, t0: float, t1: float,
+) -> list[np.ndarray]:
+    """Clip a lateral Quad face to a centre-line parameter interval."""
+    assert model.collections is not None
+    nxt = (face + 1) % 4
+    n0 = _v(model.collections.nodes[quad.node_keys[face]].point)
+    n1 = _v(model.collections.nodes[quad.node_keys[nxt]].point)
+    normal0 = _unit(_v(quad.normal[face]), label=f"Quad {quad.key} normal")
+    normal1 = _unit(_v(quad.normal[nxt]), label=f"Quad {quad.key} normal")
+    minus0 = n0 - normal0 * quad.thickness[face] / 2.0
+    plus0 = n0 + normal0 * quad.thickness[face] / 2.0
+    minus1 = n1 - normal1 * quad.thickness[nxt] / 2.0
+    plus1 = n1 + normal1 * quad.thickness[nxt] / 2.0
+
+    def lerp(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+        return a + (b - a) * t
+
+    ma, mb = lerp(minus0, minus1, t0), lerp(minus0, minus1, t1)
+    pa, pb = lerp(plus0, plus1, t0), lerp(plus0, plus1, t1)
+    if face in (0, 3):
+        return [ma, mb, pb, pa]
+    return [mb, ma, pa, pb]
+
+
+def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]]:
+    """Generate C# GIQuadQuad contacts for full and collinear partial edges.
+
+    The exact-node map handles the common conforming mesh quickly.  Boundary
+    edges are then checked for T-junction/partition overlaps such as one long
+    Quad face touching two shorter faces.
+    """
+    assert model.collections is not None
+    c = model.collections
+    edge_map = _edge_face_map(c.quads.values())
+    for edge, attached in edge_map.items():
+        if len(attached) > 2:
+            raise ModelPreparationError(
+                f"Edge {edge} is shared by {len(attached)} Quads; non-manifold contacts are unsupported."
+            )
+
+    contacts: dict[tuple[int, int, int, int], tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]] = {}
+    boundary: list[tuple[Quad, int, np.ndarray, np.ndarray]] = []
+    for attached in edge_map.values():
+        if len(attached) == 2:
+            (qa, fa), (qb, fb) = sorted(attached, key=lambda pair: pair[0].key)
+            vertices = _quad_face_vertices(model, qa, fa)
+            nodes = _edge_node_order(qa, fa)
+            contacts[(qa.key, qb.key, fa, fb)] = (qa, fa, qb, fb, vertices, nodes, float(qa.length[fa]))
+        elif len(attached) == 1:
+            quad, face = attached[0]
+            p0 = _v(c.nodes[quad.node_keys[face]].point)
+            p1 = _v(c.nodes[quad.node_keys[(face + 1) % 4]].point)
+            boundary.append((quad, face, p0, p1))
+
+    for i, (qa, fa, ap0, ap1) in enumerate(boundary):
+        for qb, fb, bp0, bp1 in boundary[i + 1:]:
+            if qa.key == qb.key:
+                continue
+            if qa.key < qb.key:
+                q1, f1, p0, p1, q2, f2, r0, r1 = qa, fa, ap0, ap1, qb, fb, bp0, bp1
+            else:
+                q1, f1, p0, p1, q2, f2, r0, r1 = qb, fb, bp0, bp1, qa, fa, ap0, ap1
+            overlap = _segment_overlap(p0, p1, r0, r1)
+            if overlap is None:
+                continue
+            a, b, t0, t1 = overlap
+            # A full exact edge was already inserted from the node-key map.
+            signature = (q1.key, q2.key, f1, f2)
+            if signature in contacts:
+                continue
+            vertices = _partial_face_vertices(model, q1, f1, t0, t1)
+            start_key = _find_or_create_geometric_node(model, a)
+            end_key = _find_or_create_geometric_node(model, b)
+            node_order = (end_key, start_key) if f1 in (0, 3) else (start_key, end_key)
+            contacts[signature] = (q1, f1, q2, f2, vertices, node_order, float(np.linalg.norm(b - a)))
+
+    return [contacts[key] for key in sorted(contacts)]
+
 def _generate_interfaces(model: Model) -> tuple[int, int]:
     assert model.collections is not None
     c = model.collections
@@ -613,24 +748,9 @@ def _generate_interfaces(model: Model) -> tuple[int, int]:
     key = 1
     qq = 0
     qr = 0
-    edge_map = _edge_face_map(c.quads.values())
-    for edge, attached in edge_map.items():
-        if len(attached) > 2:
-            raise ModelPreparationError(
-                f"Edge {edge} is shared by {len(attached)} Quads; non-manifold contacts are unsupported."
-            )
-    # C# GIQuadQuad scans the element collection pairwise: parent 1 key first,
-    # then parent 2 key.  This ordering is observable in serialized interface
-    # keys and must be retained for result/database comparability.
-    pairs: list[tuple[Quad, int, Quad, int]] = []
-    for attached in edge_map.values():
-        if len(attached) != 2:
-            continue
-        (qa, fa), (qb, fb) = sorted(attached, key=lambda pair: pair[0].key)
-        pairs.append((qa, fa, qb, fb))
-    for q1, f1, q2, f2 in sorted(pairs, key=lambda item: (item[0].key, item[2].key)):
-        vertices = _quad_face_vertices(model, q1, f1)
-        node_order = _edge_node_order(q1, f1)
+    # C# GIQuadQuad scans parent 1, parent 2, then face indices.  The
+    # generated order is observable in serialized interface keys.
+    for q1, f1, q2, f2, vertices, node_order, contact_length in _quad_contact_pairs(model):
         intf = Interface(
             key=key,
             name=str(key),
@@ -642,8 +762,8 @@ def _generate_interfaces(model: Model) -> tuple[int, int]:
             face2=f2,
             thickness=[sum(q1.thickness) / 4.0, sum(q2.thickness) / 4.0],
             nrow=max(int(model.interface_nrow), 2 * (int(0.5 * max(q1.thickness) / model.interface_imax) + 1)),
-            ncol=max(int(model.interface_nrow), 2 * (int(0.5 * q1.length[f1] / model.interface_imax) + 1)),
-            nspring=max(int(model.interface_nrow), 2 * (int(0.5 * q1.length[f1] / model.interface_imax) + 1)),
+            ncol=max(int(model.interface_nrow), 2 * (int(0.5 * contact_length / model.interface_imax) + 1)),
+            nspring=max(int(model.interface_nrow), 2 * (int(0.5 * contact_length / model.interface_imax) + 1)),
             dim_aff=[6, 2, 4], dim_aff_tot=12, imax=int(model.interface_imax),
         )
         _make_interface_geometry(model, intf, vertices, node_order, _v(q1.g))
@@ -710,31 +830,59 @@ def _assign_quad_afference(model: Model) -> None:
     model.gdl = gdl - 1
 
 
-def _warping_vector(quad: Quad, node_key: int) -> np.ndarray:
-    if node_key in (quad.node_keys[0], quad.node_keys[1]):
-        return np.zeros(3)
+def _warping_nodal_vectors(quad: Quad) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     e1 = np.asarray(quad.reference_e1, dtype=float)
     e2 = np.asarray(quad.reference_e2, dtype=float)
-    if node_key == quad.node_keys[2]:
-        if abs(quad.sin[2]) <= 1.0e-12:
-            return np.zeros(3)
-        return -quad.length[3] * quad.sin[3] / quad.sin[2] * (
+    zero = np.zeros(3)
+    if abs(quad.sin[2]) <= 1.0e-12:
+        node2 = zero.copy()
+    else:
+        node2 = -quad.length[3] * quad.sin[3] / quad.sin[2] * (
             quad.sin[1] * e1 + quad.cos[1] * e2
         )
-    if node_key == quad.node_keys[3]:
-        return -quad.length[3] * (quad.sin[0] * e1 - quad.cos[0] * e2)
+    node3 = -quad.length[3] * (quad.sin[0] * e1 - quad.cos[0] * e2)
+    return zero.copy(), zero.copy(), node2, node3
+
+
+def _warping_vector_at_point(quad: Quad, point: np.ndarray, model: Model) -> np.ndarray:
+    """C# ``GetDisplacementFromShearDOF`` on a lateral-interface endpoint.
+
+    The C# method bilinearly interpolates the four nodal shear-displacement
+    vectors at the projected point.  Interface endpoints lie on a Quad edge,
+    where that interpolation reduces to a linear interpolation of the two edge
+    nodal vectors.  This also supports partial-edge contacts whose endpoint node
+    is not a vertex of both parent Quads.
+    """
+    assert model.collections is not None
+    vertices = [_v(model.collections.nodes[key].point) for key in quad.node_keys]
+    warping = _warping_nodal_vectors(quad)
+    scale = max(max(float(np.linalg.norm(vertices[(i + 1) % 4] - vertices[i])) for i in range(4)), 1.0)
+    tolerance = max(1.0e-4, scale * 1.0e-8)
+    for i in range(4):
+        a = vertices[i]
+        b = vertices[(i + 1) % 4]
+        edge = b - a
+        length2 = float(np.dot(edge, edge))
+        if length2 <= tolerance * tolerance:
+            continue
+        t = float(np.dot(point - a, edge) / length2)
+        if t < -1.0e-7 or t > 1.0 + 1.0e-7:
+            continue
+        projected = a + edge * min(max(t, 0.0), 1.0)
+        if float(np.linalg.norm(point - projected)) <= tolerance:
+            t = min(max(t, 0.0), 1.0)
+            return warping[i] + (warping[(i + 1) % 4] - warping[i]) * t
     raise ModelPreparationError(
-        f"Interface endpoint Node {node_key} is not a vertex of Quad {quad.key}; "
-        "partial-edge contacts are not translated."
+        f"Interface endpoint {point.tolist()} does not lie on a lateral face of Quad {quad.key}."
     )
 
 
-def _point_afference(quad: Quad, point: np.ndarray, node_key: int, direction: np.ndarray) -> list[AfferenceEntry]:
+def _point_afference(model: Model, quad: Quad, point: np.ndarray, node_key: int, direction: np.ndarray) -> list[AfferenceEntry]:
     r = point - _v(quad.g)
     coeff = np.zeros(7)
     coeff[:3] = direction
     coeff[3:6] = np.cross(r, direction)
-    coeff[6] = float(np.dot(_warping_vector(quad, node_key), direction))
+    coeff[6] = float(np.dot(_warping_vector_at_point(quad, point, model), direction))
     out: list[AfferenceEntry] = []
     # C# Quad.PointAfference delegates to
     # AfferenceMatrix.SetFromCoefficients, which discards coefficients whose
@@ -787,12 +935,12 @@ def _assign_interface_afference(model: Model) -> None:
                 slots_e2 = (3, 2)
                 slot_rot, slot_flex = 5, 7
                 slots_e3 = (10, 11)
-            intf.aff[slots_e2[0]] = _point_afference(quad, points[0], intf.node_keys[0], e2)
-            intf.aff[slots_e2[1]] = _point_afference(quad, points[1], intf.node_keys[1], e2)
+            intf.aff[slots_e2[0]] = _point_afference(model, quad, points[0], intf.node_keys[0], e2)
+            intf.aff[slots_e2[1]] = _point_afference(model, quad, points[1], intf.node_keys[1], e2)
             intf.aff[slot_rot] = _rotation_afference(quad, e1)
-            intf.aff[slot_flex] = _point_afference(quad, points[1], intf.node_keys[1], e1)
-            intf.aff[slots_e3[0]] = _point_afference(quad, points[0], intf.node_keys[0], e3)
-            intf.aff[slots_e3[1]] = _point_afference(quad, points[1], intf.node_keys[1], e3)
+            intf.aff[slot_flex] = _point_afference(model, quad, points[1], intf.node_keys[1], e1)
+            intf.aff[slots_e3[0]] = _point_afference(model, quad, points[0], intf.node_keys[0], e3)
+            intf.aff[slots_e3[1]] = _point_afference(model, quad, points[1], intf.node_keys[1], e3)
         intf.status = InterfaceState()
         intf.status.init_from_interface(intf)
         intf._perf_aff_pairs = None

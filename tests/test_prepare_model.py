@@ -236,3 +236,119 @@ def test_coulomb_combination_uses_actual_hardening_modulus_not_serialized_defaul
     assert combined.h == pytest.approx(0.0)
     assert combined.e2p == pytest.approx(0.0)
     assert combined.mom2p == pytest.approx(combined.mom1p)
+
+
+def test_partial_edge_quad_contacts_are_generated_and_afferenced():
+    """C# GIQuadQuad creates two interfaces when one edge meets two half-edges."""
+    from histra.model.node import Node
+    from histra.elements.quad import Quad
+    from histra.preprocessing.prepare_model import (
+        _assign_interface_afference,
+        _assign_quad_afference,
+        _generate_interfaces,
+    )
+    from histra.types.point import Point
+
+    model = load_model(LOCKED_HRX)
+    c = model.collections
+    c.nodes.clear()
+    c.quads.clear()
+    c.interfaces.clear()
+    c.restraints.clear()
+
+    coordinates = {
+        1: (0.0, 0.0, 0.0),
+        2: (2.0, 0.0, 0.0),
+        3: (2.0, 0.0, 1.0),
+        4: (0.0, 0.0, 1.0),
+        5: (0.0, 0.0, -1.0),
+        6: (1.0, 0.0, -1.0),
+        7: (1.0, 0.0, 0.0),
+        8: (2.0, 0.0, -1.0),
+    }
+    for key, xyz in coordinates.items():
+        c.nodes[key] = Node(key=key, point=Point(*xyz), name=str(key))
+
+    normal = [Point(0.0, 1.0, 0.0) for _ in range(4)]
+    common = dict(
+        thickness=[2.0] * 4,
+        normal=normal,
+        sin=[1.0] * 4,
+        cos=[0.0] * 4,
+        reference_e1=(1.0, 0.0, 0.0),
+        reference_e2=(0.0, 0.0, 1.0),
+        reference_e3=(0.0, -1.0, 0.0),
+    )
+    c.quads[1] = Quad(
+        key=1,
+        node_keys=[1, 2, 3, 4],
+        length=[2.0, 1.0, 2.0, 1.0],
+        g=Point(1.0, 0.0, 0.5),
+        **common,
+    )
+    c.quads[2] = Quad(
+        key=2,
+        node_keys=[5, 6, 7, 1],
+        length=[1.0] * 4,
+        g=Point(0.5, 0.0, -0.5),
+        **common,
+    )
+    c.quads[3] = Quad(
+        key=3,
+        node_keys=[6, 8, 2, 7],
+        length=[1.0] * 4,
+        g=Point(1.5, 0.0, -0.5),
+        **common,
+    )
+
+    qq, qr = _generate_interfaces(model)
+    assert (qq, qr) == (3, 0)  # two partial contacts plus q2--q3
+
+    partial = [
+        intf
+        for intf in c.interfaces.values()
+        if intf.parent_element_key1 == 1 and intf.face1 == 0
+    ]
+    assert [(i.parent_element_key2, i.node_keys, i.length) for i in partial] == [
+        (2, [7, 1], pytest.approx(1.0)),
+        (3, [2, 7], pytest.approx(1.0)),
+    ]
+
+    _assign_quad_afference(model)
+    _assign_interface_afference(model)
+    assert all(len(intf.aff) == 12 for intf in c.interfaces.values())
+    assert all(any(row for row in intf.aff) for intf in partial)
+
+
+def test_partial_edge_afference_interpolates_quad_warping_at_nonvertex_point():
+    from histra.model.node import Node
+    from histra.elements.quad import Quad
+    from histra.preprocessing.prepare_model import (
+        _warping_nodal_vectors,
+        _warping_vector_at_point,
+    )
+    from histra.types.point import Point
+
+    model = load_model(LOCKED_HRX)
+    c = model.collections
+    c.nodes.clear()
+    for key, xyz in {
+        1: (0.0, 0.0, 0.0),
+        2: (2.0, 0.0, 0.0),
+        3: (2.0, 0.0, 1.0),
+        4: (0.0, 0.0, 1.0),
+    }.items():
+        c.nodes[key] = Node(key=key, point=Point(*xyz), name=str(key))
+    quad = Quad(
+        key=1,
+        node_keys=[1, 2, 3, 4],
+        length=[2.0, 1.2, 2.0, 1.5],
+        sin=[0.8, 0.9, 0.7, 0.6],
+        cos=[0.6, 0.435889894, 0.714142843, 0.8],
+        reference_e1=(1.0, 0.0, 0.0),
+        reference_e2=(0.0, 0.0, 1.0),
+    )
+    nodal = _warping_nodal_vectors(quad)
+    midpoint = np.array([1.0, 0.0, 1.0])
+    actual = _warping_vector_at_point(quad, midpoint, model)
+    np.testing.assert_allclose(actual, 0.5 * (nodal[2] + nodal[3]), atol=1.0e-14)
