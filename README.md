@@ -48,3 +48,11 @@ The 560-DOF benchmark exposed several path-sensitive C# preprocessing rules.
 The current release ports them and restores the same 38-step Live Load trajectory
 as the software-generated model. See `../PREPROCESSING_EXACTNESS_REPORT.md` and
 `../PREPROCESSING_EXACTNESS_METRICS.json`.
+
+## Performance backend
+
+For supported masonry Quad/Interface models, preprocessing and nonlinear domain updates use cached Numba kernels. Dense numeric spring state is authoritative during each solve and is synchronized back to the public Python objects at commit, reaction, snapshot, and return boundaries.
+
+The first process on a new platform includes JIT compilation. Subsequent processes load Numba's disk cache. Set `HISTRA_DISABLE_COMPILED_SPRINGS=1` to force the scalar diagnostic path.
+
+See the top-level `PERFORMANCE_PROFILE.md` for measured hotspots, rejected experiments, and reproducible profiling commands.

@@ -33,6 +33,7 @@ class LinearSystem:
         self._factor_data: np.ndarray | None = None
         self._factor_indices: np.ndarray | None = None
         self._factor_indptr: np.ndarray | None = None
+        self._matrix_version = 0
 
     def sumb(self, i: int, v: float) -> None:
         self.b[i] += v
@@ -90,6 +91,12 @@ class LinearSystem:
         self._factor_data = None
         self._factor_indices = None
         self._factor_indptr = None
+        self._matrix_version += 1
+
+    @property
+    def matrix_version(self) -> int:
+        """Monotonic stiffness revision used by integrator solve caches."""
+        return self._matrix_version
 
     def set_k(self, i: int, j: int, v: float) -> None:
         if not sp.isspmatrix_lil(self.k):
@@ -149,27 +156,27 @@ class LinearSystem:
                 f"expected {(self.n, self.n)}"
             )
 
+        # Every solver-side stiffness mutation either replaces ``k`` or calls
+        # ``_invalidate_factorization``.  Identity is therefore sufficient and
+        # avoids comparing the complete sparse index/data arrays on every one
+        # of the tens of thousands of fixed-stiffness ArcLength solves.
         same_matrix = (
             self._factorization is not None
             and self._factor_matrix_id == id(self.k)
-            and self._factor_data is not None
-            and np.array_equal(matrix.data, self._factor_data)
-            and np.array_equal(matrix.indices, self._factor_indices)
-            and np.array_equal(matrix.indptr, self._factor_indptr)
         )
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MatrixRankWarning)
-            try:
-                if not same_matrix:
+        try:
+            if not same_matrix:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", MatrixRankWarning)
                     self._factorization = splu(matrix)
                     self._factor_matrix_id = id(self.k)
                     self._factor_data = matrix.data.copy()
                     self._factor_indices = matrix.indices.copy()
                     self._factor_indptr = matrix.indptr.copy()
-                solution = self._factorization.solve(vector)
-            except (MatrixRankWarning, RuntimeError, ValueError) as exc:
-                self._invalidate_factorization()
-                raise LinearSolveError(f"Unable to solve stiffness system: {exc}") from exc
+            solution = self._factorization.solve(vector)
+        except (MatrixRankWarning, RuntimeError, ValueError) as exc:
+            self._invalidate_factorization()
+            raise LinearSolveError(f"Unable to solve stiffness system: {exc}") from exc
 
         solution = np.asarray(solution, dtype=np.float64).reshape(-1)
         if solution.shape != (self.n,) or not np.all(np.isfinite(solution)):

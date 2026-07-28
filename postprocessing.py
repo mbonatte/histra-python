@@ -191,10 +191,18 @@ def compute_total_reaction(model: Model) -> ReactionResult:
     properties provide the opposite, conventional support-on-structure sign.
     """
 
+    # Dense spring state is authoritative while the compiled nonlinear loop is
+    # active. Only the few restrained interfaces are needed for ReactionSum;
+    # avoid synchronizing every generated spring at every committed step.
+    from histra.solver.model_manager import ModelManager
+
+    runtime = ModelManager.hysteretic_batch_for(model)
     total = np.zeros(3, dtype=float)
     for interface in model.collections.interfaces.values():
         if not interface.interfaccia_vincolata_computed():
             continue
+        if runtime is not None and runtime.manages(interface):
+            runtime.sync_interface_trial_to_objects(interface)
         local = _interface_local_resultant(interface)
         e1 = np.asarray(interface.reference_e1, dtype=np.float32)
         e2 = np.asarray(interface.reference_e2, dtype=np.float32)

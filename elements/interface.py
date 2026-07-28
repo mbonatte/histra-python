@@ -653,10 +653,10 @@ class Interface:
                 if hasattr(s, 'commit'):
                     s.commit()
         for s in self.slid:
-            if hasattr(s, 'commit'):
+            if not getattr(s, "_histra_batch_managed", False) and hasattr(s, 'commit'):
                 s.commit()
         for s in self.slid_out_plan:
-            if hasattr(s, 'commit'):
+            if not getattr(s, "_histra_batch_managed", False) and hasattr(s, 'commit'):
                 s.commit()
 
     # ═════════════════════════════════════════════════════════════════════════

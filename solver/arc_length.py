@@ -44,6 +44,9 @@ class ArcLength(StaticIntegrator):
         self._current_lf_item = 1
         self._initialized = False
         self._step_snapshot: dict[str, Any] | None = None
+        self._delta_u_hat_matrix_version = -1
+        self._delta_u_hat_phat: np.ndarray | None = None
+        self._delta_u_hat_phat_id = -1
 
     def _load_items(self, an: Any) -> list[tuple[float, float]]:
         items = list(getattr(getattr(an, "load_function", None), "items", []) or [])
@@ -163,6 +166,9 @@ class ArcLength(StaticIntegrator):
         self._delta_lambda_step = 0.0
         self._refresh_segment_load()
         self._dofs = None
+        self._delta_u_hat_matrix_version = -1
+        self._delta_u_hat_phat = None
+        self._delta_u_hat_phat_id = -1
 
         # Determine a stable automatic control DOF when no explicit point is
         # supplied.  A valid initial stiffness has already been assembled.
@@ -170,6 +176,9 @@ class ArcLength(StaticIntegrator):
             try:
                 p.ls.solve(rhs=self._phat)
                 self._delta_u_hat[:] = p.ls.x
+                self._delta_u_hat_matrix_version = p.ls.matrix_version
+                self._delta_u_hat_phat = self._phat.copy()
+                self._delta_u_hat_phat_id = id(self._phat)
                 self._dofs = self._select_dofs(p, model, an)
             except LinearSolveError:
                 self._dofs = np.array([0], dtype=int)
@@ -203,6 +212,9 @@ class ArcLength(StaticIntegrator):
 
         ls.solve(rhs=self._phat)
         self._delta_u_hat = ls.x.copy()
+        self._delta_u_hat_matrix_version = ls.matrix_version
+        self._delta_u_hat_phat = self._phat.copy()
+        self._delta_u_hat_phat_id = id(self._phat)
         self._dofs = self._select_dofs(p, model, an, fallback_dof=dof)
         selected_hat = self._selected(self._delta_u_hat)
         denominator = float(np.dot(selected_hat, selected_hat) + self._alpha2)
@@ -262,12 +274,21 @@ class ArcLength(StaticIntegrator):
             self.errors.append("ArcLength is not initialized")
             return -10
 
-        try:
-            ls.solve(rhs=self._phat)
-        except LinearSolveError as exc:
-            self.errors.append(f"ArcLength reference-load solve failed: {exc}")
-            return -10
-        self._delta_u_hat = ls.x.copy()
+        reference_is_cached = (
+            self._delta_u_hat is not None
+            and self._delta_u_hat_matrix_version == ls.matrix_version
+            and self._delta_u_hat_phat_id == id(self._phat)
+        )
+        if not reference_is_cached:
+            try:
+                ls.solve(rhs=self._phat)
+            except LinearSolveError as exc:
+                self.errors.append(f"ArcLength reference-load solve failed: {exc}")
+                return -10
+            self._delta_u_hat = ls.x.copy()
+            self._delta_u_hat_matrix_version = ls.matrix_version
+            self._delta_u_hat_phat = self._phat.copy()
+            self._delta_u_hat_phat_id = id(self._phat)
 
         hat = self._selected(self._delta_u_hat)
         bar = self._selected(self._delta_u_bar)

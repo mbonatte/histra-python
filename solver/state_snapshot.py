@@ -54,9 +54,18 @@ def _restore_array(target: Any, saved: Any) -> Any:
     return _copy_array(saved)
 
 
-def _iter_springs(model: Any) -> Iterable[Any]:
+def _iter_springs(
+    model: Any,
+    *,
+    quads: Iterable[Any] | None = None,
+    interfaces: Iterable[Any] | None = None,
+) -> Iterable[Any]:
     seen: set[int] = set()
-    for quad in model.collections.quads.values():
+    quad_values = model.collections.quads.values() if quads is None else quads
+    interface_values = (
+        model.collections.interfaces.values() if interfaces is None else interfaces
+    )
+    for quad in quad_values:
         spring = getattr(quad, "spring", None)
         if (
             spring is not None
@@ -65,7 +74,7 @@ def _iter_springs(model: Any) -> Iterable[Any]:
         ):
             seen.add(id(spring))
             yield spring
-    for intf in model.collections.interfaces.values():
+    for intf in interface_values:
         for name in ("trasv_1", "trasv_2", "slid", "slid_out_plan"):
             for spring in getattr(intf, name, ()):
                 if (
@@ -96,7 +105,7 @@ class SolverStateSnapshot:
     quad_state: list[tuple[Any, dict[str, Any]]]
     interface_state: list[tuple[Any, dict[str, Any]]]
     spring_state: list[tuple[Any, dict[str, Any]]]
-    batch_state: tuple[np.ndarray, np.ndarray, np.ndarray] | None
+    batch_state: tuple[np.ndarray, ...] | None
 
     @classmethod
     def capture(
@@ -137,20 +146,40 @@ class SolverStateSnapshot:
         state_data["__v"] = _copy_array(integrator.v)
         state_data["__u_committed"] = _copy_array(integrator.u_committed)
 
+        runtime = ModelManager.hysteretic_batch_for(model)
+        quad_values = (
+            runtime.unmanaged_quads
+            if runtime is not None
+            else tuple(model.collections.quads.values())
+        )
+        interface_values = (
+            runtime.unmanaged_interfaces
+            if runtime is not None
+            else tuple(model.collections.interfaces.values())
+        )
+
+        # Managed elements keep their complete reversible state in the dense
+        # batch snapshot and do not mutate object status dictionaries during a
+        # Newton trial. Avoid recursively copying their large immutable
+        # geometry/stiffness containers at every public step.
         quads = []
-        for quad in model.collections.quads.values():
+        for quad in quad_values:
             quads.append((quad, {
                 "status": _copy_state_dict(quad.status.__dict__),
                 "sigma_initial": float(getattr(quad, "sigma_initial", 0.0)),
             }))
         interfaces = []
-        for intf in model.collections.interfaces.values():
+        for intf in interface_values:
             interfaces.append((intf, {
                 "status": _copy_state_dict(intf.status.__dict__),
                 "f": _copy_array(intf.f),
             }))
-        springs = [(spring, _copy_state_dict(spring.__dict__)) for spring in _iter_springs(model)]
-        runtime = ModelManager.hysteretic_batch_for(model)
+        springs = [
+            (spring, _copy_state_dict(spring.__dict__))
+            for spring in _iter_springs(
+                model, quads=quad_values, interfaces=interface_values
+            )
+        ]
         batch_state = runtime.snapshot() if runtime is not None else None
         return cls(
             p=p,

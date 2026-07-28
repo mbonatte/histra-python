@@ -62,9 +62,13 @@ class ModelManager:
                 for name in ("_perf_hysteretic_batch", "_perf_hysteretic_slice"):
                     if hasattr(interface, name):
                         delattr(interface, name)
-            for spring in runtime.springs:
-                if hasattr(spring, "_histra_batch_managed"):
-                    delattr(spring, "_histra_batch_managed")
+            for spring in getattr(runtime, "managed_springs", runtime.springs):
+                for name in (
+                    "_histra_batch_managed", "_histra_quad_batch",
+                    "_histra_quad_batch_index",
+                ):
+                    if hasattr(spring, name):
+                        delattr(spring, name)
         cls._hysteretic_batch = None
         cls._hysteretic_batch_model_id = None
         cls._hysteretic_batch_error = None
@@ -93,7 +97,11 @@ class ModelManager:
 
     @classmethod
     def hysteretic_batch_for(cls, model: Model) -> Any | None:
-        if cls._hysteretic_batch_model_id == id(model):
+        if (
+            cls._hysteretic_batch_model_id == id(model)
+            and cls._hysteretic_batch is not None
+            and getattr(cls._hysteretic_batch, "model", None) is model
+        ):
             return cls._hysteretic_batch
         return None
 
@@ -130,6 +138,11 @@ class ModelManager:
 
     @classmethod
     def compute_ktang(cls, model: Model, ls: LinearSystem, alfa: float) -> int:
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None and alfa != 0.0:
+            # Updated-tangent methods still use the object-level ComputeK port.
+            # Publish dense trial tangents only when that path is requested.
+            runtime.sync_all_to_objects()
         cls.compute_k(model, alfa)
         cls.assemble_k(model, ls, alfa=alfa, set_zero=True)
         return 0
@@ -152,21 +165,28 @@ class ModelManager:
     @classmethod
     def get_resisting_force(cls, model: Model, ls: LinearSystem) -> None:
         ls.set_zero_load()
-        for quad in model.collections.quads.values():
-            if quad.spring is None or len(quad.aff) <= 6:
-                continue
-            quad.set_resisting_force()
-            for entry in quad.aff[6]:
-                gdl = entry.gdl - 1
-                if 0 <= gdl < ls.n:
-                    ls.sumb(gdl, -quad.status.f * entry.alfa)
         runtime = cls.hysteretic_batch_for(model)
         if runtime is not None:
-            runtime.scatter_resisting_force(ls.b)
-            for intf in model.collections.interfaces.values():
-                if not runtime.manages(intf):
-                    intf.get_resisting_force(ls)
+            runtime.copy_resisting_force_to(ls.b)
+            for quad in runtime.unmanaged_quads:
+                if quad.spring is None or len(quad.aff) <= 6:
+                    continue
+                quad.set_resisting_force()
+                for entry in quad.aff[6]:
+                    gdl = entry.gdl - 1
+                    if 0 <= gdl < ls.n:
+                        ls.sumb(gdl, -quad.status.f * entry.alfa)
+            for intf in runtime.unmanaged_interfaces:
+                intf.get_resisting_force(ls)
         else:
+            for quad in model.collections.quads.values():
+                if quad.spring is None or len(quad.aff) <= 6:
+                    continue
+                quad.set_resisting_force()
+                for entry in quad.aff[6]:
+                    gdl = entry.gdl - 1
+                    if 0 <= gdl < ls.n:
+                        ls.sumb(gdl, -quad.status.f * entry.alfa)
             for intf in model.collections.interfaces.values():
                 intf.get_resisting_force(ls)
 
@@ -176,29 +196,32 @@ class ModelManager:
         # transverse interface spring increments produced in this same trial.
         runtime = cls.hysteretic_batch_for(model)
         if runtime is not None:
-            runtime.prepare(ls.x)
-            runtime.evaluate()
-            runtime.finish()
-            for intf in model.collections.interfaces.values():
-                if not runtime.manages(intf):
-                    intf.update_domain(ls.x, state)
+            runtime.update_domain(ls.x, state)
+            for intf in runtime.unmanaged_interfaces:
+                intf.update_domain(ls.x, state)
         else:
             for intf in model.collections.interfaces.values():
                 intf.update_domain(ls.x, state)
-        for quad in model.collections.quads.values():
-            quad.update_domain(ls, state, model.collections)
+        if runtime is not None:
+            for quad in runtime.unmanaged_quads:
+                quad.update_domain(ls, state, model.collections)
+        else:
+            for quad in model.collections.quads.values():
+                quad.update_domain(ls, state, model.collections)
 
     @classmethod
     def compute_energy(cls, model: Model) -> tuple[float, float]:
         runtime = cls.hysteretic_batch_for(model)
-        if runtime is not None:
-            runtime.sync_trial_to_objects()
-        eel = 0.0
-        ed = 0.0
-        for element in (
-            list(model.collections.quads.values())
-            + list(model.collections.interfaces.values())
-        ):
+        eel, ed = runtime.compute_energy() if runtime is not None else (0.0, 0.0)
+        elements = (
+            [*runtime.unmanaged_quads, *runtime.unmanaged_interfaces]
+            if runtime is not None
+            else [
+                *model.collections.quads.values(),
+                *model.collections.interfaces.values(),
+            ]
+        )
+        for element in elements:
             de_el, de_pl, _ = element.compute_energy()
             eel += float(de_el)
             ed += float(de_pl)
@@ -206,19 +229,34 @@ class ModelManager:
 
     @classmethod
     def find_max_u(cls, model: Model, p: Program) -> None:
-        max_u = 0.0
-        max_key = 0
-        max_type = ""
-        for kind, collection in (
-            ("Quad", model.collections.quads),
-            ("Interface", model.collections.interfaces),
-        ):
-            for key, element in collection.items():
-                value = abs(float(element.max_u()))
-                if value > max_u:
-                    max_u = value
-                    max_key = int(key)
-                    max_type = kind
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            max_u, max_key, max_type = runtime.cached_max_u()
+            collections = (
+                ("Quad", runtime.unmanaged_quads),
+                ("Interface", runtime.unmanaged_interfaces),
+            )
+            for kind, elements in collections:
+                for element in elements:
+                    value = abs(float(element.max_u()))
+                    if value > max_u:
+                        max_u = value
+                        max_key = int(getattr(element, "key", 0))
+                        max_type = kind
+        else:
+            max_u = 0.0
+            max_key = 0
+            max_type = ""
+            for kind, collection in (
+                ("Quad", model.collections.quads.values()),
+                ("Interface", model.collections.interfaces.values()),
+            ):
+                for element in collection:
+                    value = abs(float(element.max_u()))
+                    if value > max_u:
+                        max_u = value
+                        max_key = int(getattr(element, "key", 0))
+                        max_type = kind
         p.max_u = max_u
         p.elem_max_u_key = max_key
         p.elem_max_u_type = max_type

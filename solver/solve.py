@@ -33,6 +33,7 @@ def solve_static_nonlinear(
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
+    max_committed_steps: int | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
 
@@ -52,8 +53,15 @@ def solve_static_nonlinear(
             initial_displacement=initial_displacement,
             restart_from_current_state=restart_from_current_state,
             auto_prepare=auto_prepare,
+            max_committed_steps=max_committed_steps,
         )
     finally:
+        runtime = ModelManager.hysteretic_batch_for(model)
+        if runtime is not None:
+            # Dense Numba state is authoritative during the solve. Publish it
+            # once for callers, chained analyses, and post-processing instead
+            # of rewriting >10k Python spring objects at every committed step.
+            runtime.sync_all_to_objects()
         if gc_was_enabled:
             gc.enable()
 
@@ -69,6 +77,7 @@ def _solve_static_nonlinear_impl(
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
+    max_committed_steps: int | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     if model.collections is None:
@@ -348,6 +357,10 @@ def _solve_static_nonlinear_impl(
             integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
         continue_steps = not stop
+
+        if max_committed_steps is not None and step >= max_committed_steps:
+            p.log(f"Requested committed-step limit reached at step {step}")
+            continue_steps = False
 
         if bool(getattr(analysis, "load_reduction_ratio_to_stop", False)):
             threshold = float(getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1))
