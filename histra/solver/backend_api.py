@@ -35,7 +35,12 @@ class PythonAnalysisRequest:
 class PythonAnalysisResult:
     execution: AnalysisExecution
     outputs: Mapping[str, Any]
-    mutation: InterfaceMaterialMutationReport | None = None
+    mutations: tuple[InterfaceMaterialMutationReport, ...] = ()
+
+    @property
+    def mutation(self) -> InterfaceMaterialMutationReport | None:
+        """Backward-compatible access for callers that supplied one mutation."""
+        return self.mutations[-1] if self.mutations else None
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,9 @@ def run_python_solver_job(
     analyses: Iterable[PythonAnalysisRequest],
     *,
     timeout_seconds: float,
-    interface_mutations: Mapping[str, ConcreteInterfaceMutation] | None = None,
+    interface_mutations: Mapping[
+        str, ConcreteInterfaceMutation | Iterable[ConcreteInterfaceMutation]
+    ] | None = None,
     combination_row: int = 1,
     on_log: Callable[[str], None] | None = None,
     on_progress: Callable[[float], None] | None = None,
@@ -120,7 +127,9 @@ def run_python_solver_job(
     run_order = _dependency_order(session, requested)
     implicit_timeout = max(float(request.timeout_seconds) for request in requested)
     mutations = interface_mutations or {}
-    mutation_by_name = {name.casefold(): value for name, value in mutations.items()}
+    mutation_by_name = {
+        name.casefold(): _normalize_mutations(value) for name, value in mutations.items()
+    }
     job_deadline = time.monotonic() + job_timeout
     results: dict[str, PythonAnalysisResult] = {}
 
@@ -136,13 +145,14 @@ def run_python_solver_job(
                 f"Deadline expired before analysis {name!r} could start."
             )
 
-        mutation_report: InterfaceMaterialMutationReport | None = None
-        mutation = mutation_by_name.get(name.casefold())
-        if mutation is not None:
-            mutation_report = session.change_interface_materials(
-                mutation.interface_keys,
-                mutation.material_key,
-                preserve_committed_state=mutation.preserve_committed_state,
+        mutation_reports: list[InterfaceMaterialMutationReport] = []
+        for mutation in mutation_by_name.get(name.casefold(), ()):
+            mutation_reports.append(
+                session.change_interface_materials(
+                    mutation.interface_keys,
+                    mutation.material_key,
+                    preserve_committed_state=mutation.preserve_committed_state,
+                )
             )
 
         def analysis_cancelled() -> bool:
@@ -171,7 +181,7 @@ def run_python_solver_job(
                     execution,
                     request.output_request,
                 ),
-                mutation=mutation_report,
+                mutations=tuple(mutation_reports),
             )
 
     return PythonSolverJobResult(
@@ -199,3 +209,14 @@ def _dependency_order(
                 seen.add(key)
                 ordered.append(definition)
     return tuple(ordered)
+
+
+def _normalize_mutations(
+    value: ConcreteInterfaceMutation | Iterable[ConcreteInterfaceMutation],
+) -> tuple[ConcreteInterfaceMutation, ...]:
+    if isinstance(value, ConcreteInterfaceMutation):
+        return (value,)
+    result = tuple(value)
+    if not all(isinstance(item, ConcreteInterfaceMutation) for item in result):
+        raise TypeError("interface_mutations values must contain ConcreteInterfaceMutation objects.")
+    return result

@@ -5,6 +5,12 @@ from typing import Any
 import numpy as np
 
 
+def _check_cancelled(program: Any) -> None:
+    callback = getattr(program, "check_cancelled", None)
+    if callback is not None:
+        callback()
+
+
 class LineSearch:
     """Base/no-op line search matching the C# solver interface."""
 
@@ -57,6 +63,7 @@ class LineSearch:
         so the first correction is ``(eta - 1) * direction``.  Trial points are
         reached incrementally, exactly as in the C# algorithm.
         """
+        _check_cancelled(p)
         ls.set_x_vector((eta - eta_previous) * direction)
         code = integrator.update(model, p, an)
         if code < 0:
@@ -103,6 +110,7 @@ class RegulaFalsiLineSearch(LineSearch):
 
         iterations = 0
         while ratio > self.tolerance and iterations < self.max_iter and not stopped:
+            _check_cancelled(p)
             iterations += 1
             denominator = s_lo - s_hi
             if denominator == 0.0:
@@ -182,6 +190,7 @@ class SecantLineSearch(LineSearch):
         baseline_ratio = self._ratio(s1, s0)
 
         for _ in range(self.max_iter):
+            _check_cancelled(p)
             denominator = s_prev2 - s_prev
             if abs(denominator) < 1e-30:
                 break
@@ -220,6 +229,7 @@ class BisectionLineSearch(LineSearch):
         # Expand the upper point until a sign change is found.
         attempts = 0
         while s_lo * s_hi > 0.0 and eta_hi < self.max_eta and attempts < self.max_iter:
+            _check_cancelled(p)
             attempts += 1
             eta_new = min(self.max_eta, 2.0 * eta_hi)
             code, s_new = self._trial(
@@ -244,6 +254,7 @@ class BisectionLineSearch(LineSearch):
 
         eta = eta_previous
         for _ in range(max(0, self.max_iter - attempts)):
+            _check_cancelled(p)
             eta = 0.5 * (eta_lo + eta_hi)
             code, s_eta = self._trial(
                 model, p, ls, integrator, an, dx0, eta, eta_previous
@@ -276,6 +287,7 @@ class InitialInterpolatedLineSearch(LineSearch):
         eta_previous = 1.0
         eta = float(np.clip(s0 / (s0 - s1), self.min_eta, self.max_eta))
         for _ in range(self.max_iter):
+            _check_cancelled(p)
             code, s_eta = self._trial(
                 model, p, ls, integrator, an, dx0, eta, eta_previous
             )

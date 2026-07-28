@@ -37,6 +37,7 @@ class NewtonRaphson(EquiSolnAlgo):
         previous_error = 1.0
 
         while result == -1:
+            p.check_cancelled()
             iteration_snapshot = SolverStateSnapshot.capture(
                 model, p, ls, self.the_integrator, self.the_test, self.the_line_search
             )

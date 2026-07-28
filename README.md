@@ -1,95 +1,95 @@
-# HiStrA Python
+# histra-python
 
-Python implementation and C#-compatibility work for nonlinear structural
-analysis of HiStrA HRX models.
+An installable, in-process Python implementation of the supported HiStrA
+static nonlinear solver workflow.
 
-> **Project status:** research/engineering integration. Supported workflows are
-> benchmarked, but this repository is not a general replacement for every
-> topology and analysis path supported by the original desktop application.
-
-## Supported workflows
-
-- Load locked, solver-ready HRX models.
-- Preprocess the validated masonry Quad/fixed-Restraint subset of unlocked HRX
-  models.
-- Generate full-edge and collinear partial-edge Quad–Quad contacts.
-- Run `Vert` followed by a chained Live Load analysis entirely in Python.
-- Keep committed nonlinear state in memory across HRX-defined analyses.
-- Change selected interface materials between committed analyses.
-- Compare selected workflows with committed C# SQLite `.Results` references.
-
-Unsupported model topologies fail explicitly instead of producing a partial
-computational model.
-
-## Installation
-
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-Run commands from the repository root so the local `histra` package is on
-`PYTHONPATH`.
-
-## Run an unrun HRX
-
-```bash
-python -m histra.tools.run_vert_live path/to/model.hrx \
-  --output-dir python-results
-```
-
-This workflow preprocesses the model when required, solves `Vert`, preserves
-the committed state, runs the chained Live Load analysis, and exports CSV files
-plus `run_summary.json`.
-
-## Analysis-session API
+## Backend service API
 
 ```python
-from histra.io.hr_loader import load_model
-from histra.solver import AnalysisSession
+from histra import PythonAnalysisRequest, run_python_solver_job
 
-model = load_model("model.hrx")
-session = AnalysisSession(model, on_log=print)
-results = session.run_to("LiveLoad_1")
+result = run_python_solver_job(
+    "model.hrx",
+    [
+        PythonAnalysisRequest(
+            name="Vert",
+            output_request=outputs,
+            timeout_seconds=600,
+        )
+    ],
+    timeout_seconds=600,
+)
 ```
 
-Material changes can be applied at committed analysis boundaries with
-`session.change_interface_materials(...)`.
+The service:
 
-## Inspect an HRX
+- loads the HRX once;
+- resolves and executes `InitialAnalysisKey` dependencies;
+- keeps committed global and constitutive state in memory;
+- applies concrete interface/material mutations between analyses;
+- enforces job and analysis deadlines cooperatively;
+- projects C#-compatible reaction and model-point displacement rows.
 
-```bash
-python -m histra path/to/model.hrx --output inspection.json
+## Install
+
+```console
+python -m pip install -e .
 ```
 
-This command loads the model, assembles the global stiffness matrix, and reports
-the displacement state embedded in the HRX. It is an inspection/assembly
-utility; use `histra.tools.run_vert_live` or the solver API for nonlinear
-analysis.
+Runtime dependencies are NumPy, SciPy, and Numba. Python 3.11 or newer is
+required.
+
+## Public API
+
+The stable root package exports:
+
+- `load_model`
+- `AnalysisSession`
+- `run_python_solver_job`
+- `PythonAnalysisRequest`
+- `ConcreteInterfaceMutation`
+- `AnalysisExecution`, `AnalysisStep`, `AnalysisOutcome`
+- capability and cancellation exceptions
+- `project_analysis_outputs`, `project_displacements`, `project_reactions`
+
+## Output compatibility
+
+`project_displacements` reproduces the fields selected by HiStrA Job Runner from
+C# `DisplModelPoints`:
+
+```text
+IdElement, ParentKey, Step, Ux, Uy, Uz
+```
+
+For supported Node model points it averages connected Quad predictions like the
+C# response operation. Quad model points use centroid or vertex displacement
+according to `IdVertex`. The mapping and numerical values are regression-tested
+against the included authoritative `model.hrx` + `model.Results` pair.
+
+Reaction projection uses the C# `ReactionSumStates` sign convention:
+
+```text
+Step, R1, R2, R3
+```
+
+## Current capability boundary
+
+Supported backend scope is the already validated static nonlinear Quad /
+Interface model subset. Capability preflight rejects unsupported model-point
+element types, P-Delta, broken analysis chains, and modal output requests.
+
+The solver uses shared class-level runtime arrays internally, so one solve is
+active per Python process. A cancellable process-wide lock prevents concurrent
+state corruption. Cooperative cancellation checks are present at load-step,
+Newton, line-search, ArcLength retry, and ALS boundaries. A single native
+linear solve cannot be interrupted in the middle.
 
 ## Tests
 
-```bash
-python -m pytest histra/tests -q
+```console
+pytest histra/tests
 ```
 
-Long benchmark acceptance tests may be opt-in. See
-[`docs/README.md`](docs/README.md) and
-[`docs/STATUS.md`](docs/STATUS.md) before interpreting benchmark claims.
-
-## Repository map
-
-- `histra/` — Python package, tests, tools, and currently retained benchmark data.
-- `docs/` — maintained guides, status, reference notes, benchmark evidence, and
-  archived audits.
-- `article-references/` — annotated source literature; migrated to
-  `docs/references/articles/` by the cleanup script.
-- `examples/` — notebooks and examples. Legacy examples are labeled as such.
-
-## Documentation rule
-
-Current behavior belongs in maintained guides and `docs/STATUS.md`. Numerical
-audit reports and generated metrics belong under `docs/benchmarks/` or
-`docs/archive/` and must identify their benchmark and provenance.
+The normal suite includes a solve of the `Vert` benchmark and compares projected
+rows with its authoritative C# `.Results` database. Longer chain and live-load
+acceptance tests remain opt-in through their documented environment variables.

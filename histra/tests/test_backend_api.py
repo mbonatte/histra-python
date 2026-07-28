@@ -131,13 +131,10 @@ def test_reaction_projection_rejects_missing_step() -> None:
         project_reactions(execution, StepRequest(all_steps=False, step=99))
 
 
-def test_output_projection_fails_closed_for_unverified_displacements() -> None:
+def test_output_projection_rejects_uninitialized_model() -> None:
     execution = AnalysisExecution(
-        analysis_key=1,
-        analysis_name="A",
-        code=0,
-        steps=(_committed(1, (1.0, 2.0, 3.0)),),
-        runtime_seconds=0.0,
+        analysis_key=1, analysis_name="A", code=0,
+        steps=(_committed(1, (1.0, 2.0, 3.0)),), runtime_seconds=0.0,
         outcome=AnalysisOutcome.COMPLETED,
         initial_step=AnalysisStep.initial(np.zeros(1)),
     )
@@ -146,8 +143,7 @@ def test_output_projection_fails_closed_for_unverified_displacements() -> None:
         displacements=StepRequest(enabled=True),
         modal_contributions=StepRequest(enabled=False),
     )
-
-    with pytest.raises(UnsupportedOutputError, match="DisplModelPoints"):
+    with pytest.raises(OutputProjectionError, match="Model.collections"):
         project_analysis_outputs(object(), execution, request)
 
 

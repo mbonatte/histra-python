@@ -79,13 +79,7 @@ def inspect_solver_capabilities(
         if request is not None:
             displacements = getattr(request, "displacements", None)
             if displacements is not None and bool(getattr(displacements, "enabled", False)):
-                issues.append(
-                    SolverCapabilityIssue(
-                        "MODEL_POINT_OUTPUT_UNVERIFIED",
-                        "Exact C# DisplModelPoints-compatible projection is not implemented.",
-                        str(requested_name),
-                    )
-                )
+                _inspect_model_points(model, str(requested_name), issues)
             modal = getattr(request, "modal_contributions", None)
             if modal is not None and bool(getattr(modal, "enabled", False)):
                 issues.append(
@@ -134,3 +128,36 @@ def _inspect_dependency_graph(
                 )
                 break
             current = analyses[predecessor]
+
+
+def _inspect_model_points(model: Any, analysis_name: str, issues: list[SolverCapabilityIssue]) -> None:
+    collections = model.collections
+    for point in collections.model_points.values():
+        element_type = str(point.element_type).casefold().split(".")[-1]
+        if element_type == "node":
+            if int(point.element_key) not in collections.nodes:
+                issues.append(SolverCapabilityIssue(
+                    "MODEL_POINT_ELEMENT_MISSING",
+                    f"ModelPoint {point.key} references missing Node {point.element_key}.",
+                    analysis_name,
+                ))
+        elif element_type == "quad":
+            quad = collections.quads.get(int(point.element_key))
+            if quad is None:
+                issues.append(SolverCapabilityIssue(
+                    "MODEL_POINT_ELEMENT_MISSING",
+                    f"ModelPoint {point.key} references missing Quad {point.element_key}.",
+                    analysis_name,
+                ))
+            elif not 0 <= int(point.id_vertex) <= len(quad.node_keys):
+                issues.append(SolverCapabilityIssue(
+                    "MODEL_POINT_VERTEX_UNSUPPORTED",
+                    f"ModelPoint {point.key} has IdVertex={point.id_vertex}.",
+                    analysis_name,
+                ))
+        else:
+            issues.append(SolverCapabilityIssue(
+                "MODEL_POINT_TYPE_UNSUPPORTED",
+                f"ModelPoint {point.key} uses unsupported element type {point.element_type!r}.",
+                analysis_name,
+            ))

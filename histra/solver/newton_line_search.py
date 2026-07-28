@@ -54,6 +54,7 @@ class NewtonLineSearch(EquiSolnAlgo):
         previous_error = 1.0
 
         while result == -1:
+            p.check_cancelled()
             # The C# InitialInterpolated class hides rather than overrides the
             # base methods, so this benchmark dispatches through the exact
             # no-op LineSearch type.  No rejected trial point exists in that

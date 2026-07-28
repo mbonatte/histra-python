@@ -31,7 +31,10 @@ from histra.solver.outcomes import (
 from histra.solver.output_projection import (
     OutputProjectionError,
     UnsupportedOutputError,
+    ModelPointDisplacement,
+    compute_model_point_displacements,
     project_analysis_outputs,
+    project_displacements,
     project_reactions,
 )
 from histra.solver.backend_api import (
@@ -83,7 +86,10 @@ __all__ = [
     "SolverCancelled",
     "OutputProjectionError",
     "UnsupportedOutputError",
+    "ModelPointDisplacement",
+    "compute_model_point_displacements",
     "project_analysis_outputs",
+    "project_displacements",
     "project_reactions",
     "SolverCapabilityIssue",
     "SolverCapabilityReport",
