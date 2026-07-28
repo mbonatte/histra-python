@@ -11,3 +11,5 @@ jobs/
 C#_Original/
 python-results/
 my_model/
+.pytest_cache/
+__pycache__/
