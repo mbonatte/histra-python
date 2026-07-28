@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "histra-python"
+version = "0.1.0"
+description = "In-process Python solver for HiStrA HRX models"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy",
+  "scipy",
+  "numba>=0.60",
+]
+
+[tool.setuptools.packages.find]
+include = ["histra*"]
+
+[tool.pytest.ini_options]
+testpaths = ["histra/tests"]

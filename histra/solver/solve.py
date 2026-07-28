@@ -5,7 +5,6 @@ import gc
 from typing import Any, Callable
 
 import numpy as np
-
 from histra.model.model import Model
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.solver.arc_length import ArcLength
@@ -20,7 +19,13 @@ from histra.solver.restart import restore_committed_analysis_state
 from histra.postprocessing import compute_total_reaction
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
 from histra.types.linear_system import LinearSolveError, LinearSystem
-
+from histra.solver.cancellation import (
+    CANCELLED_EXIT_CODE,
+    CancelCheck,
+    SolverCancelled,
+    exclusive_solver_access,
+    raise_if_cancelled,
+)
 
 def solve_static_nonlinear(
     model: Model,
@@ -34,37 +39,43 @@ def solve_static_nonlinear(
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
+    should_cancel: CancelCheck | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
-
     Reversible Newton trials create thousands of short-lived state containers.
     CPython's cyclic collector can pause for minutes while scanning these fully
     reachable constitutive graphs even though reference counting already frees
     each prior snapshot.  Suspend cyclic collection only for the synchronous
     solve and restore the caller's GC setting on every exit.
     """
-    gc_was_enabled = gc.isenabled()
-    if gc_was_enabled:
-        gc.disable()
     try:
-        return _solve_static_nonlinear_impl(
-            model, analysis, combination, on_log=on_log,
-            on_progress=on_progress, results_path=results_path,
-            initial_displacement=initial_displacement,
-            restart_from_current_state=restart_from_current_state,
-            auto_prepare=auto_prepare,
-            max_committed_steps=max_committed_steps,
-        )
-    finally:
-        runtime = ModelManager.hysteretic_batch_for(model)
-        if runtime is not None:
-            # Dense Numba state is authoritative during the solve. Publish it
-            # once for callers, chained analyses, and post-processing instead
-            # of rewriting >10k Python spring objects at every committed step.
-            runtime.sync_all_to_objects()
-        if gc_was_enabled:
-            gc.enable()
-
+        with exclusive_solver_access(should_cancel):
+            gc_was_enabled = gc.isenabled()
+            if gc_was_enabled:
+                gc.disable()
+            try:
+                return _solve_static_nonlinear_impl(
+                    model, analysis, combination, on_log=on_log,
+                    on_progress=on_progress, results_path=results_path,
+                    initial_displacement=initial_displacement,
+                    restart_from_current_state=restart_from_current_state,
+                    auto_prepare=auto_prepare,
+                    max_committed_steps=max_committed_steps,
+                    should_cancel=should_cancel,
+                )
+            finally:
+                runtime = ModelManager.hysteretic_batch_for(model)
+                if runtime is not None:
+                    # Dense Numba state is authoritative during the solve. Publish it
+                    # once for callers, chained analyses, and post-processing instead
+                    # of rewriting >10k Python spring objects at every committed step.
+                    runtime.sync_all_to_objects()
+                if gc_was_enabled:
+                    gc.enable()
+    except SolverCancelled:
+        if on_log is not None:
+            on_log("Analysis cancelled before a load-step checkpoint was available.")
+        return CANCELLED_EXIT_CODE, []
 
 def _solve_static_nonlinear_impl(
     model: Model,
@@ -78,11 +89,14 @@ def _solve_static_nonlinear_impl(
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
+    should_cancel: CancelCheck | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
+    raise_if_cancelled(should_cancel)
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
     readiness = inspect_solver_readiness(model)
+    raise_if_cancelled(should_cancel)
     if not readiness.is_ready and auto_prepare:
         if on_log is not None:
             on_log(
@@ -90,6 +104,7 @@ def _solve_static_nonlinear_impl(
                 f"({readiness.quad_count} Quads)..."
             )
         prep = ModelManager.prepare_model(model)
+        raise_if_cancelled(should_cancel)
         if on_log is not None:
             on_log(
                 "PrepareModel completed: "
@@ -97,19 +112,20 @@ def _solve_static_nonlinear_impl(
                 f"springs={prep.quad_springs + prep.transverse_springs + prep.sliding_springs + prep.out_of_plane_springs}"
             )
     require_solver_ready(model)
+    raise_if_cancelled(should_cancel)
     if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
         raise NotImplementedError(
             "P-Delta is implemented in the original C# code but the required "
             "frame/load-generation subsystem is absent from this Python port."
         )
-
     n = int(model.gdl)
-    p = Program(gdl=n, on_log=on_log, on_progress=on_progress)
+    p = Program(
+        gdl=n, on_log=on_log, on_progress=on_progress, should_cancel=should_cancel
+    )
     ls = LinearSystem(n)
     p.ls = ls
     p.u = np.zeros(n)
     p.v = np.zeros(n)
-
     # C# ModelManager.SetStatus/CommonOperations.SetInitial initializes a
     # virgin analysis independently of any solved state serialized in the HRX.
     # Without this reset, the first Python increment is added to the saved local
@@ -189,7 +205,6 @@ def _solve_static_nonlinear_impl(
             f"Restored chained baseline load from committed resisting forces: "
             f"norm={np.linalg.norm(initial_external_load):.6g}"
         )
-
     ModelManager._ptarget = np.zeros(n)
     ModelManager._fext = initial_external_load.copy()
     ModelManager._pq = np.zeros(n)
@@ -199,15 +214,15 @@ def _solve_static_nonlinear_impl(
     if getattr(analysis, "load_function_key", 0) in model.collections.load_functions:
         analysis.load_function = model.collections.load_functions[analysis.load_function_key]
 
+    p.check_cancelled()
     ModelManager.assemble_load(model, ls, getattr(analysis, "key", None), combination)
-
+    p.check_cancelled()
     algorithm = EquiSolnAlgo.new_equi_soln_algo(analysis, combination)
     integrator = algorithm.the_integrator
     assert integrator is not None
     integrator.u = p.u
     integrator.v = p.v
     integrator.u_committed = p.u.copy()
-
     alfa = 0.0 if "Modified" in str(getattr(analysis, "method", "")) else 1.0
     # C# PrepareModelForAnalysis calls PrepareK(..., alfa=0) for every static
     # non-modal analysis, regardless of whether the later Newton method is
@@ -217,7 +232,6 @@ def _solve_static_nonlinear_impl(
     # initial-stiffness matrix for the whole step.
     integrator.update_k(p, model, 0.0)
     integrator.domain_changed(p, model, n)
-
     p.current_load_factor = integrator.mult
     dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
     reference = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
@@ -229,12 +243,10 @@ def _solve_static_nonlinear_impl(
     max_force_change = 0.0
     energy_elastic = 0.0
     energy_dissipated = 0.0
-
     p.log(
         f"Analysis method: {getattr(analysis, 'integration_method', 'LoadControl')} "
         f"with {getattr(analysis, 'method', 'StandardNewtonRaphson')}"
     )
-
     while continue_steps:
         step += 1
         step_snapshot = SolverStateSnapshot.capture(
@@ -242,33 +254,62 @@ def _solve_static_nonlinear_impl(
         )
         dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
         try:
-            integrator.new_step(p, model, ls, analysis, combination, step, dof)
-            result = algorithm.solve_current_step(
-                p, ls, model, analysis, combination, step, alfa
-            )
-        except LinearSolveError as exc:
-            p.log(f"Linear solve failed at step {step}: {exc}")
-            result = -3
-
-        if result == -2 and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
-            result = _als_loop(
-                p, ls, model, analysis, combination, step, alfa, integrator, algorithm, step_snapshot
-            )
-        elif result == -2 and isinstance(integrator, ArcLength) and alfa != 0.0:
-            # Retry from a complete pre-step state, not a partial global-vector rollback.
+            p.check_cancelled()
+            try:
+                integrator.new_step(p, model, ls, analysis, combination, step, dof)
+                p.check_cancelled()
+                result = algorithm.solve_current_step(
+                    p, ls, model, analysis, combination, step, alfa
+                )
+                p.check_cancelled()
+            except LinearSolveError as exc:
+                p.log(f"Linear solve failed at step {step}: {exc}")
+                result = -3
+            if result == -2 and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
+                result = _als_loop(
+                    p, ls, model, analysis, combination, step, alfa, integrator, algorithm, step_snapshot
+                )
+            elif result == -2 and isinstance(integrator, ArcLength) and alfa != 0.0:
+                # Retry from a complete pre-step state, not a partial global-vector rollback.
+                p.check_cancelled()
+                step_snapshot.restore()
+                alfa = 0.0
+                integrator.update_k(p, model, alfa)
+                integrator.new_step(p, model, ls, analysis, combination, step, dof)
+                p.check_cancelled()
+                result = algorithm.solve_current_step(
+                    p, ls, model, analysis, combination, step, alfa
+                )
+                p.check_cancelled()
+        except SolverCancelled:
+            cancelled_load_factor = float(integrator.mult)
+            cancelled_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
             step_snapshot.restore()
-            alfa = 0.0
-            integrator.update_k(p, model, alfa)
-            integrator.new_step(p, model, ls, analysis, combination, step, dof)
-            result = algorithm.solve_current_step(
-                p, ls, model, analysis, combination, step, alfa
+            p.current_load_factor = integrator.mult
+            final_code = CANCELLED_EXIT_CODE
+            step_data.append(
+                {
+                    "step": step,
+                    "status": "CANCELLED",
+                    "exit_code": CANCELLED_EXIT_CODE,
+                    "u": p.u.copy(),
+                    "load_factor": cancelled_load_factor,
+                    "displacement": cancelled_displacement,
+                    "iterations": int(algorithm.the_test.current_iter),
+                    "convergence_error": float(algorithm.the_test.get_error()),
+                    "residual_norm": float(ls.get_b_norm()),
+                    "increment_norm": float(ls.get_x_norm()),
+                    "max_element_displacement": float(p.max_u),
+                    "max_element_key": int(p.elem_max_u_key),
+                    "max_element_type": str(p.elem_max_u_type),
+                }
             )
-
+            p.log(f"Analysis cancelled at step {step}; trial state was rolled back")
+            break
         p.current_load_factor = integrator.mult
         ModelManager._u_total = p.u
         if p.to_stop:
             result = -4
-
         if result < 0:
             # Preserve the trial termination diagnostics before restoring the
             # complete pre-step state. In particular, a -3 result represents
@@ -305,14 +346,12 @@ def _solve_static_nonlinear_impl(
             )
             p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
             break
-
         de_el, de_pl = ModelManager.compute_energy(model)
         energy_elastic += de_el
         energy_dissipated += de_pl
         _commit_state(model, ls)
 
         reaction = compute_total_reaction(model)
-
         p.current_load_factor = integrator.mult
         values = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
         displacement = values[1]
@@ -346,7 +385,6 @@ def _solve_static_nonlinear_impl(
             f"displacement={displacement:.6e}, "
             f"iterations={algorithm.the_test.current_iter}"
         )
-
         force_change = abs(values[0] - reference[0])
         max_force_change = max(max_force_change, force_change)
         load_reduction_ratio = force_change / max(max_force_change, 1e-30)
@@ -357,7 +395,6 @@ def _solve_static_nonlinear_impl(
             integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
         continue_steps = not stop
-
         if max_committed_steps is not None and step >= max_committed_steps:
             p.log(f"Requested committed-step limit reached at step {step}")
             continue_steps = False
@@ -366,7 +403,6 @@ def _solve_static_nonlinear_impl(
             threshold = float(getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1))
             if load_reduction_ratio < threshold:
                 continue_steps = False
-
     if final_code == 0:
         p.log("Analysis executed and completed" if step else "Analysis not executed")
     else:
@@ -378,7 +414,6 @@ def _set_initial_state(
     model: Model, u: np.ndarray, v: np.ndarray, ls: LinearSystem
 ) -> None:
     """Reset the supported model entities to the C# virgin state.
-
     This is the translated subset of ``CommonOperations.SetInitial`` for the
     element types implemented by this Python package.  Applied loads stored in
     ``Quad.status.p`` are deliberately preserved; they are regenerated later by
@@ -387,7 +422,6 @@ def _set_initial_state(
     ls.set_zero_displacement()
     u.fill(0.0)
     v.fill(0.0)
-
     for quad in model.collections.quads.values():
         quad.status.u[:] = [0.0] * len(quad.status.u)
         quad.status.f = 0.0
@@ -395,7 +429,6 @@ def _set_initial_state(
             quad.spring.k_tang = quad.spring.k
             quad.spring.revert_to_start()
             quad.spring.revert_to_last_commit()
-
     for intf in model.collections.interfaces.values():
         state = intf.status
         state.evd = 0.0
@@ -408,7 +441,6 @@ def _set_initial_state(
         state.committed_normal_force = 0.0
         state.max_spring_displacement = 0.0
         intf.f[:] = [0.0] * len(intf.f)
-
         for spring_group in (
             intf.trasv_1, intf.trasv_2, intf.slid, intf.slid_out_plan
         ):
@@ -423,7 +455,6 @@ def _set_initial_state(
 def _is_load_control(an: Any) -> bool:
     return "ArcLength" not in str(getattr(an, "integration_method", "LoadControl"))
 
-
 def _commit_state(model: Model, ls: LinearSystem) -> None:
     runtime = ModelManager.hysteretic_batch_for(model)
     if runtime is not None:
@@ -431,7 +462,6 @@ def _commit_state(model: Model, ls: LinearSystem) -> None:
     for collection_name in ("quads", "interfaces"):
         for element in getattr(model.collections, collection_name).values():
             element.commit(ls)
-
 
 def _als_loop(
     p: Program,
@@ -448,7 +478,6 @@ def _als_loop(
     """Automatic load-step reduction following the original C# sequence."""
     if not isinstance(integrator, LoadControl):
         return -2
-
     original_increment = integrator.incr_mult
     factor = max(2, int(getattr(an, "load_factor_als", 2)))
     max_reductions = max(1, int(getattr(an, "max_number_als", 5)))
@@ -460,8 +489,8 @@ def _als_loop(
     completed = 0.0
     sub_increment = original_increment / factor
     reduction = 0
-
     while abs(original_increment - completed) > 1e-12 and reduction <= max_reductions:
+        p.check_cancelled()
         remaining = original_increment - completed
         direction = 1.0 if remaining >= 0.0 else -1.0
         trial_increment = direction * min(abs(sub_increment), abs(remaining))
@@ -469,23 +498,23 @@ def _als_loop(
             f">>> Automatic step reduction ({reduction + 1}): "
             f"LoadIncrement={trial_increment:.6g}"
         )
-
         substep_snapshot = SolverStateSnapshot.capture(
             model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
         )
         integrator.new_step_with_incr(
             p, model, ls, an, combination, step, trial_increment
         )
+        p.check_cancelled()
         result = algorithm.solve_current_step(
             p, ls, model, an, combination, step, alfa
         )
+        p.check_cancelled()
         if result >= 0:
             _commit_state(model, ls)
             if integrator.u_committed is not None and integrator.u is not None:
                 integrator.u_committed[:] = integrator.u
             completed += trial_increment
             continue
-
         # Restore the exact last-successful substep checkpoint.
         substep_snapshot.restore()
         reduction += 1

@@ -3,37 +3,27 @@ from __future__ import annotations
 
 import copy
 import time
-from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 import numpy as np
 
+from histra.postprocessing import compute_total_reaction
+from histra.solver.cancellation import CancelCheck
 from histra.solver.interface_material import (
     InterfaceMaterialMutationReport,
     change_interface_materials,
+)
+from histra.solver.outcomes import (
+    AnalysisExecution,
+    AnalysisOutcome,
+    AnalysisStep,
+    classify_analysis_outcome,
 )
 from histra.solver.solve import solve_static_nonlinear
 
 
 class AnalysisSessionError(RuntimeError):
     """Raised when an HRX analysis chain is inconsistent with session state."""
-
-
-@dataclass(frozen=True)
-class AnalysisExecution:
-    analysis_key: int
-    analysis_name: str
-    code: int
-    steps: tuple[dict[str, Any], ...]
-    runtime_seconds: float
-
-    @property
-    def committed_steps(self) -> tuple[dict[str, Any], ...]:
-        return tuple(step for step in self.steps if step.get("status") == "OK")
-
-    @property
-    def completed(self) -> bool:
-        return self.code == 0
 
 
 class AnalysisSession:
@@ -62,6 +52,19 @@ class AnalysisSession:
         self.current_displacement: np.ndarray | None = None
         self.executions: list[AnalysisExecution] = []
         self.mutations: list[InterfaceMaterialMutationReport] = []
+        self._tainted_reason: str | None = None
+
+    @property
+    def usable(self) -> bool:
+        """Whether the session can safely start another analysis."""
+        return self._tainted_reason is None
+
+    def _require_usable(self) -> None:
+        if self._tainted_reason is not None:
+            raise AnalysisSessionError(
+                "This analysis session cannot be reused after an incomplete solve: "
+                f"{self._tainted_reason}. Reload the HRX and create a new session."
+            )
 
     def resolve_analysis(self, analysis: int | str | Any) -> Any:
         if hasattr(analysis, "key") and hasattr(analysis, "name"):
@@ -90,6 +93,7 @@ class AnalysisSession:
         *,
         preserve_committed_state: bool = True,
     ) -> InterfaceMaterialMutationReport:
+        self._require_usable()
         report = change_interface_materials(
             self.model,
             interface_keys,
@@ -109,7 +113,9 @@ class AnalysisSession:
         analysis: int | str | Any,
         *,
         max_committed_steps: int | None = None,
+        should_cancel: CancelCheck | None = None,
     ) -> AnalysisExecution:
+        self._require_usable()
         definition = copy.deepcopy(self.resolve_analysis(analysis))
         initial_key = int(getattr(definition, "initial_analysis_key", -100))
         kwargs: dict[str, Any] = {}
@@ -119,6 +125,7 @@ class AnalysisSession:
                     f"Analysis {definition.key}:{definition.name} is virgin but session "
                     f"already contains committed analysis {self.current_analysis_key}."
                 )
+            initial_step = AnalysisStep.initial(np.zeros(int(self.model.gdl), dtype=float))
         else:
             if self.current_analysis_key != initial_key or self.current_displacement is None:
                 raise AnalysisSessionError(
@@ -126,33 +133,54 @@ class AnalysisSession:
                     f"{initial_key}, but current session predecessor is "
                     f"{self.current_analysis_key}."
                 )
+            predecessor_reaction = compute_total_reaction(self.model)
+            initial_step = AnalysisStep.initial(
+                self.current_displacement,
+                reaction_x=predecessor_reaction.x,
+                reaction_y=predecessor_reaction.y,
+                reaction_z=predecessor_reaction.z,
+            )
             kwargs.update(
                 initial_displacement=self.current_displacement,
                 restart_from_current_state=True,
             )
 
         started = time.perf_counter()
-        code, steps = solve_static_nonlinear(
-            self.model,
-            definition,
-            self.combination_row,
-            on_log=self.on_log,
-            on_progress=self.on_progress,
-            max_committed_steps=max_committed_steps,
-            **kwargs,
-        )
+        try:
+            code, raw_steps = solve_static_nonlinear(
+                self.model,
+                definition,
+                self.combination_row,
+                on_log=self.on_log,
+                on_progress=self.on_progress,
+                max_committed_steps=max_committed_steps,
+                should_cancel=should_cancel,
+                **kwargs,
+            )
+        except Exception as exc:
+            self._tainted_reason = f"{type(exc).__name__}: {exc}"
+            raise
         runtime = time.perf_counter() - started
+        steps = tuple(AnalysisStep.from_mapping(step) for step in raw_steps)
+        outcome = classify_analysis_outcome(int(code), steps, definition)
         execution = AnalysisExecution(
             analysis_key=int(definition.key),
             analysis_name=str(definition.name),
             code=int(code),
-            steps=tuple(steps),
+            steps=steps,
             runtime_seconds=float(runtime),
+            outcome=outcome,
+            message=_outcome_message(outcome),
+            initial_step=initial_step,
         )
         committed = execution.committed_steps
-        if committed:
+        if execution.completed and committed:
             self.current_analysis_key = int(definition.key)
-            self.current_displacement = np.asarray(committed[-1]["u"], dtype=float).copy()
+            self.current_displacement = committed[-1].u.copy()
+        elif not execution.completed:
+            self._tainted_reason = (
+                f"analysis {definition.key}:{definition.name} ended as {outcome.value}"
+            )
         self.executions.append(execution)
         return execution
 
@@ -187,14 +215,34 @@ class AnalysisSession:
         target: int | str | Any,
         *,
         before_analysis: Callable[["AnalysisSession", Any], None] | None = None,
+        should_cancel: CancelCheck | None = None,
     ) -> tuple[AnalysisExecution, ...]:
         """Run the HRX dependency chain, optionally mutating at boundaries."""
         results: list[AnalysisExecution] = []
         for analysis in self.dependency_chain(target):
             if before_analysis is not None:
                 before_analysis(self, analysis)
-            results.append(self.run(analysis))
+            results.append(self.run(analysis, should_cancel=should_cancel))
         return tuple(results)
 
-    def run_sequence(self, analyses: Iterable[int | str | Any]) -> tuple[AnalysisExecution, ...]:
-        return tuple(self.run(analysis) for analysis in analyses)
+    def run_sequence(
+        self,
+        analyses: Iterable[int | str | Any],
+        *,
+        should_cancel: CancelCheck | None = None,
+    ) -> tuple[AnalysisExecution, ...]:
+        return tuple(
+            self.run(analysis, should_cancel=should_cancel) for analysis in analyses
+        )
+
+
+def _outcome_message(outcome: AnalysisOutcome) -> str:
+    if outcome is AnalysisOutcome.COMPLETED:
+        return "Analysis completed."
+    if outcome is AnalysisOutcome.COMPLETED_AT_DISPLACEMENT_LIMIT:
+        return "Analysis reached its configured element displacement limit."
+    if outcome is AnalysisOutcome.CANCELLED:
+        return "Analysis was cancelled and its active trial step was rolled back."
+    if outcome is AnalysisOutcome.NONCONVERGED:
+        return "Analysis did not converge."
+    return f"Analysis ended as {outcome.value}."

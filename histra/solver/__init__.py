@@ -16,7 +16,39 @@ from histra.types.convergence_test import ConvergenceTest
 from histra.solver.program import Program
 from histra.solver.solve import solve_static_nonlinear, _is_load_control, _commit_state
 from histra.solver.interface_material import change_interface_materials
-from histra.solver.session import AnalysisSession, AnalysisExecution
+from histra.solver.session import AnalysisSession, AnalysisSessionError
+from histra.solver.cancellation import (
+    CANCELLED_EXIT_CODE,
+    CancelCheck,
+    SolverCancelled,
+)
+from histra.solver.outcomes import (
+    AnalysisExecution,
+    AnalysisOutcome,
+    AnalysisStep,
+    classify_analysis_outcome,
+)
+from histra.solver.output_projection import (
+    OutputProjectionError,
+    UnsupportedOutputError,
+    project_analysis_outputs,
+    project_reactions,
+)
+from histra.solver.backend_api import (
+    ConcreteInterfaceMutation,
+    PythonAnalysisRequest,
+    PythonAnalysisResult,
+    PythonSolverJobError,
+    PythonSolverJobResult,
+    PythonSolverTimeout,
+    run_python_solver_job,
+)
+from histra.solver.capabilities import (
+    SolverCapabilityIssue,
+    SolverCapabilityReport,
+    UnsupportedSolverCapability,
+    inspect_solver_capabilities,
+)
 
 __all__ = [
     "ConvergenceTest",
@@ -41,5 +73,27 @@ __all__ = [
     "_commit_state",
     "change_interface_materials",
     "AnalysisSession",
+    "AnalysisSessionError",
     "AnalysisExecution",
+    "AnalysisOutcome",
+    "AnalysisStep",
+    "classify_analysis_outcome",
+    "CANCELLED_EXIT_CODE",
+    "CancelCheck",
+    "SolverCancelled",
+    "OutputProjectionError",
+    "UnsupportedOutputError",
+    "project_analysis_outputs",
+    "project_reactions",
+    "SolverCapabilityIssue",
+    "SolverCapabilityReport",
+    "UnsupportedSolverCapability",
+    "inspect_solver_capabilities",
+    "ConcreteInterfaceMutation",
+    "PythonAnalysisRequest",
+    "PythonAnalysisResult",
+    "PythonSolverJobError",
+    "PythonSolverJobResult",
+    "PythonSolverTimeout",
+    "run_python_solver_job",
 ]
