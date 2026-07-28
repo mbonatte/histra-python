@@ -120,6 +120,79 @@ def _restore_coulomb(spring: SpringCoulomb03, values: dict[str, Any]) -> None:
     spring.revert_to_last_commit()
 
 
+
+def capture_committed_spring_state(spring: Any) -> dict[str, Any]:
+    """Capture the C# ``SpringStates`` fields from a live committed spring.
+
+    This intentionally captures state/history only.  Immutable constitutive
+    definitions (``k``, envelope points, material coefficients) belong to the
+    target spring and are not copied during an interface-material mutation.
+    """
+    common: dict[str, Any] = {
+        "U": float(getattr(spring, "_cstrain", spring.u)),
+        "F": float(getattr(spring, "_cstress", spring.f)),
+        "K_tang": float(getattr(spring, "k_tang_committed", spring.k_tang)),
+        "Phase": int(spring.phase),
+        "Umax1": float(spring.umax[0]),
+        "Umax2": float(spring.umax[1]),
+        "Fy1": float(spring.fy[0]),
+        "Fy2": float(spring.fy[1]),
+        "Uu1": float(getattr(spring, "_crot_pu", 0.0)),
+        "Uu2": float(getattr(spring, "_crot_nu", 0.0)),
+        "LoadIndicator": int(getattr(spring, "_cload_indicator", 0)),
+        "Ed": float(getattr(spring, "cenergy_d", 0.0)),
+    }
+    if isinstance(spring, SpringHysteretic):
+        common.update({
+            "Uy1": float(spring.uy_corr[0]),
+            "Uy2": float(spring.uy_corr[1]),
+            "F0": float(spring.f0),
+        })
+        return common
+    if isinstance(spring, SpringCoulomb03):
+        common.update({
+            "N": float(spring._cstress_normal),
+            "ContactArea": float(spring._ccontact_area),
+            "Up1": float(spring._cup),
+            "Up2": float(spring._cup),
+            "CmomMin": float(spring._cmom_min),
+            "CmomMax": float(spring._cmom_max),
+            "CrotLimNu": float(spring._crot_lim_nu),
+            "CrotLimPu": float(spring._crot_lim_pu),
+            "CrotYn": float(spring._crot_yn),
+            "CrotYp": float(spring._crot_yp),
+            "CPhaseUnload_t": int(spring._c_phase_unload_t),
+            "CPhaseUnload_c": int(spring._c_phase_unload_c),
+            "TangentReload_c": float(spring.tangent_reload_c),
+            "TangentReload_t": float(spring.tangent_reload_t),
+            "CplasticTensionIndicator": bool(spring._cplastic_tension_indicator),
+            "CplasticCompressionIndicator": bool(spring._cplastic_compression_indicator),
+        })
+        return common
+    raise ResultsStateError(
+        f"Unsupported spring state capture type {type(spring).__name__}"
+    )
+
+
+def transfer_committed_spring_state(source: Any, target: Any) -> None:
+    """Apply a source committed history to a newly defined target spring.
+
+    This is the in-memory equivalent of C# rebuilding an interface and then
+    restoring the predecessor analysis through ``SpringStateDBclass.SetSpring``.
+    """
+    values = capture_committed_spring_state(source)
+    if isinstance(target, SpringHysteretic) and isinstance(source, SpringHysteretic):
+        _restore_hysteretic(target, values)
+        return
+    if isinstance(target, SpringCoulomb03) and isinstance(source, SpringCoulomb03):
+        _restore_coulomb(target, values)
+        return
+    raise ResultsStateError(
+        "Cannot transfer committed spring state across different laws: "
+        f"{type(source).__name__} -> {type(target).__name__}"
+    )
+
+
 def restore_committed_analysis_state(
     model: Any,
     results_path: str | Path,

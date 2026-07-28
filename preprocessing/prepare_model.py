@@ -1430,15 +1430,23 @@ def _quad_spring(model: Model, quad: Quad) -> SpringCoulomb03 | SpringHysteretic
 
 
 def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, face: int,
-                            intf: Interface, cell: Sequence[np.ndarray]) -> tuple[SpringHysteretic, _HystereticLaw]:
+                            intf: Interface, cell: Sequence[np.ndarray],
+                            material_override: MasonryMaterial | None = None) -> tuple[SpringHysteretic, _HystereticLaw]:
     assert model.collections is not None
     if parent_type == "Restraint":
         sp = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
         sp.k = -1.0
         sp.area = _polygon_area_3d(cell)
-        return sp, _flex_law(_material(model, model.collections.quads[intf.parent_element_key2].material_key))
+        if material_override is not None:
+            return sp, _flex_law(material_override)
+        quad_key = (
+            intf.parent_element_key1
+            if intf.parent_type_element1 == "Quad"
+            else intf.parent_element_key2
+        )
+        return sp, _flex_law(_material(model, model.collections.quads[quad_key].material_key))
     quad = model.collections.quads[parent_key]
-    material = _material(model, quad.material_key)
+    material = material_override if material_override is not None else _material(model, quad.material_key)
     # Current bridge materials are flexurally isotropic. Choose vertical for
     # predominantly vertical interface normal, horizontal otherwise.
     vertical = abs(float(np.dot(np.asarray(intf.reference_e2), np.asarray((0.0,0.0,1.0))))) > math.cos(math.radians(45.0))
@@ -1448,7 +1456,8 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
 
 
 def _side_sliding_spring(model: Model, parent_type: str, parent_key: int, intf: Interface,
-                         *, out_of_plane: bool, area: float, vertical: bool) -> SpringCoulomb03:
+                         *, out_of_plane: bool, area: float, vertical: bool,
+                         material_override: MasonryMaterial | None = None) -> SpringCoulomb03:
     assert model.collections is not None
     if parent_type == "Restraint":
         spring = SpringCoulomb03(type_of="HiStrA.Objects.SpringCoulomb03")
@@ -1456,7 +1465,8 @@ def _side_sliding_spring(model: Model, parent_type: str, parent_key: int, intf: 
         spring.area = area
         return spring
     quad = model.collections.quads[parent_key]
-    law = _sliding_law(_material(model, quad.material_key), out_of_plane=out_of_plane, vertical=vertical)
+    material = material_override if material_override is not None else _material(model, quad.material_key)
+    law = _sliding_law(material, out_of_plane=out_of_plane, vertical=vertical)
     distance = _distance_to_interface_plane(quad, intf)
     if distance <= 1.0e-12:
         raise ModelPreparationError(f"Quad {quad.key}, Interface {intf.key}: zero sliding distance.")
@@ -1475,18 +1485,25 @@ def _side_sliding_spring(model: Model, parent_type: str, parent_key: int, intf: 
 def _transverse_side_properties_batch(
     model: Model, parent_type: str, parent_key: int, face: int,
     intf: Interface, cells: np.ndarray,
+    material_override: MasonryMaterial | None = None,
 ) -> tuple[np.ndarray, _HystereticLaw]:
     assert model.collections is not None
     if parent_type == "Restraint":
         props = np.zeros((len(cells), 3), dtype=np.float64)
         props[:, 0] = -1.0
         props[:, 1] = np.asarray([_polygon_area_3d(cell) for cell in cells])
-        law = _flex_law(
-            _material(model, model.collections.quads[intf.parent_element_key2].material_key)
-        )
+        if material_override is not None:
+            law = _flex_law(material_override)
+        else:
+            quad_key = (
+                intf.parent_element_key1
+                if intf.parent_type_element1 == "Quad"
+                else intf.parent_element_key2
+            )
+            law = _flex_law(_material(model, model.collections.quads[quad_key].material_key))
         return props, law
     quad = model.collections.quads[parent_key]
-    material = _material(model, quad.material_key)
+    material = material_override if material_override is not None else _material(model, quad.material_key)
     vertical = abs(float(np.dot(
         np.asarray(intf.reference_e2), np.asarray((0.0, 0.0, 1.0))
     ))) > math.cos(math.radians(45.0))
@@ -1496,15 +1513,18 @@ def _transverse_side_properties_batch(
 
 def _create_interface_springs(model: Model, intf: Interface) -> None:
     restrained = intf.parent_type_element1 == "Restraint" or intf.parent_type_element2 == "Restraint"
+    custom_material = None
+    if int(intf.material_key) != 0:
+        custom_material = _material(model, int(intf.material_key))
     cell_count = intf.nrow * intf.ncol
     cells = np.asarray([_cell_vertices(intf, index) for index in range(cell_count)], dtype=np.float64)
     props1, law1 = _transverse_side_properties_batch(
         model, intf.parent_type_element1, intf.parent_element_key1,
-        intf.face1, intf, cells,
+        intf.face1, intf, cells, custom_material,
     )
     props2, law2 = _transverse_side_properties_batch(
         model, intf.parent_type_element2, intf.parent_element_key2,
-        intf.face2, intf, cells,
+        intf.face2, intf, cells, custom_material,
     )
     intf.trasv_1 = []
     for index in range(cell_count):
@@ -1520,7 +1540,13 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
             sp2.k, sp2.area = -1.0, area2
         else:
             sp2 = _configure_hysteretic(k2, area2, length2, law2)
-        spring = _combine_hysteretic(sp1, sp2, restrained, law1, law2)
+        if custom_material is not None and restrained:
+            # C# Interface.SetSpring: for a custom material on a restraint/Quad
+            # interface, clone the non-restraint spring rather than combining
+            # it with the rigid restraint-side placeholder.
+            spring = copy.deepcopy(sp2 if intf.parent_type_element1 == "Restraint" else sp1)
+        else:
+            spring = _combine_hysteretic(sp1, sp2, restrained, law1, law2)
         spring.key = index
         spring.parent_key = intf.key
         spring.parent_type = "Interface"
@@ -1531,12 +1557,18 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
     area = intf.area()
     vertical = abs(float(np.dot(np.asarray(intf.reference_e2), np.asarray((0.0,0.0,1.0))))) > math.cos(math.radians(45.0))
     s1 = _side_sliding_spring(model, intf.parent_type_element1, intf.parent_element_key1, intf,
-                              out_of_plane=False, area=area, vertical=vertical)
+                              out_of_plane=False, area=area, vertical=vertical,
+                              material_override=custom_material)
     s2 = _side_sliding_spring(model, intf.parent_type_element2, intf.parent_element_key2, intf,
-                              out_of_plane=False, area=area, vertical=vertical)
+                              out_of_plane=False, area=area, vertical=vertical,
+                              material_override=custom_material)
     slid = _combine_coulomb(s1, s2, restrained)
     # C# invokes SetUltimateDisplacement after combining both sides.
     def _law_for(parent_type: str, parent_key: int, *, out_plane: bool) -> _CoulombLaw:
+        if custom_material is not None:
+            return _sliding_law(
+                custom_material, out_of_plane=out_plane, vertical=vertical
+            )
         if parent_type == "Restraint":
             if intf.parent_type_element1 == "Quad":
                 other_key = intf.parent_element_key1
@@ -1569,9 +1601,11 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
     for index in range(2):
         half_area = area / 2.0
         o1 = _side_sliding_spring(model, intf.parent_type_element1, intf.parent_element_key1, intf,
-                                  out_of_plane=True, area=half_area, vertical=vertical)
+                                  out_of_plane=True, area=half_area, vertical=vertical,
+                                  material_override=custom_material)
         o2 = _side_sliding_spring(model, intf.parent_type_element2, intf.parent_element_key2, intf,
-                                  out_of_plane=True, area=half_area, vertical=vertical)
+                                  out_of_plane=True, area=half_area, vertical=vertical,
+                                  material_override=custom_material)
         out = _combine_coulomb(o1, o2, restrained)
         _set_coulomb_ultimate(
             out,
@@ -1586,6 +1620,24 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
     intf.status.init_from_interface(intf)
     intf._perf_di = intf._perf_dj = intf._perf_ecc = None
     intf._perf_area = None
+
+
+def rebuild_interface_springs(model: Model, interface: Interface | int) -> Interface:
+    """Recreate one interface's constitutive definitions from its material key.
+
+    Geometry, topology, DOFs and afference matrices are preserved.  A nonzero
+    ``Interface.material_key`` overrides both parent material laws, matching
+    C# ``InterfaceOperations.ReSetInterfaces``.
+    """
+    if model.collections is None:
+        raise ModelPreparationError("Model.collections is not initialized.")
+    intf = (
+        model.collections.interfaces[int(interface)]
+        if isinstance(interface, int)
+        else interface
+    )
+    _create_interface_springs(model, intf)
+    return intf
 
 
 def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
