@@ -145,10 +145,30 @@ class SpringCoulomb03(Spring):
     dn: float = 0.0
     area_corrente: float = 0.0
     k_tang_committed: float = 0.0
-    tangent_reload_t: float = 0.0
-    tangent_reload_c: float = 0.0
+    _tangent_reload_t: float = 0.0
+    _tangent_reload_c: float = 0.0
     phase: int = 0     # PhaseEnum.Elastic  (committed)
     t_phase: int = 0   # PhaseEnum.Elastic  (trial)
+
+    # C# SpringCoulomb03 does not expose the raw stored reload tangent.
+    # Its TangentReload_t/c getters enforce a lower bound of 0.0001 * K.
+    # Keeping that behaviour is essential because the Takeda state machine
+    # divides by these values while resolving yielding displacements.
+    @property
+    def tangent_reload_t(self) -> float:
+        return max(1.0e-4 * self.k, self._tangent_reload_t)
+
+    @tangent_reload_t.setter
+    def tangent_reload_t(self, value: float) -> None:
+        self._tangent_reload_t = value
+
+    @property
+    def tangent_reload_c(self) -> float:
+        return max(1.0e-4 * self.k, self._tangent_reload_c)
+
+    @tangent_reload_c.setter
+    def tangent_reload_c(self, value: float) -> None:
+        self._tangent_reload_c = value
 
     # ===================================================================
     # XML construction

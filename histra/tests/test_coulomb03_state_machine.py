@@ -66,6 +66,63 @@ def test_unload_reload():
 
     print("[PASS] Unload/reload works")
 
+def test_reload_tangent_uses_csharp_minimum():
+    """Reload tangents must reproduce the C# 0.0001*K getter floor."""
+    s = _make_spring()
+
+    # revert_to_start intentionally stores zero in C#, but the public getter
+    # returns max(0.0001*K, stored_value).  With K=10000 the floor is 1.0.
+    s.tangent_reload_t = 0.0
+    s.tangent_reload_c = 0.0
+    assert s.tangent_reload_t == 1.0
+    assert s.tangent_reload_c == 1.0
+
+    # Exercise the exact compression branch that previously divided by zero.
+    s.t_phase = PhaseEnum.Reload_c
+    s._trot_pu = 0.0
+    yn = s._get_current_yielding_displacement_compression(
+        PhaseEnum.Elastic,
+        -1.0e-6,
+    )
+    assert math.isfinite(yn)
+    expected_yn = max(
+        s._trot_pu + s.mom1n / s.tangent_reload_c,
+        (
+            s._trot_pu * s.tangent_reload_c
+            - s.rot3n * s.e3n
+        )
+        / (
+            s.tangent_reload_c - s.e3n
+        ),
+    )
+    assert math.isclose(
+        yn,
+        expected_yn,
+        rel_tol=1.0e-12,
+        abs_tol=1.0e-12,
+    )
+
+    # The symmetric tension branch must be protected as well.
+    s.t_phase = PhaseEnum.Reload_t
+    s._trot_nu = 0.0
+    yp = s._get_current_yielding_displacement_tension(PhaseEnum.Elastic, 1.0e-6)
+    assert math.isfinite(yp)
+    expected_yp = min(
+        s._trot_nu + s.mom1p / s.tangent_reload_t,
+        (
+            s._trot_nu * s.tangent_reload_t
+            - s.rot3p * s.e3p
+        )
+        / (
+            s.tangent_reload_t - s.e3p
+        ),
+    )
+    assert math.isclose(
+        yp,
+        expected_yp,
+        rel_tol=1.0e-12,
+        abs_tol=1.0e-12,
+    )
 
 def test_negative_yield():
     """Compression (negative) loading."""
@@ -112,6 +169,7 @@ def test_slip():
 if __name__ == "__main__":
     test_elastic_then_yield()
     test_unload_reload()
+    test_reload_tangent_uses_csharp_minimum()
     test_negative_yield()
     test_slip()
     print("\nAll tests passed!")
