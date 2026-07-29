@@ -87,6 +87,23 @@ class _HystereticLaw:
 
 
 @dataclass(frozen=True)
+class _HystereticSideDefinition:
+    k: float
+    area: float
+    length: float
+    fy_t: float
+    fy_c: float
+    kt_t: float
+    kt_c: float
+    alfa_r_t: float
+    alfa_r_c: float
+    alfa_u_t: float
+    alfa_u_c: float
+    tensile_curve: str
+    compressive_curve: str
+
+
+@dataclass(frozen=True)
 class _CoulombLaw:
     E: float
     cohesion: float
@@ -467,6 +484,128 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
             spring.ur[1] = max(candidates)
 
 
+def _hysteretic_side_definition(
+    k: float, area: float, length: float, law: _HystereticLaw,
+) -> _HystereticSideDefinition:
+    if not math.isfinite(k) or k <= 0.0:
+        raise ModelPreparationError(
+            f"Cannot create a transverse hysteretic spring with stiffness K={k!r}."
+        )
+    if not math.isfinite(area) or area <= 0.0:
+        raise ModelPreparationError(
+            f"Cannot create a transverse hysteretic spring with area={area!r}."
+        )
+    if not math.isfinite(length) or length <= 0.0:
+        raise ModelPreparationError(
+            f"Cannot create a transverse hysteretic spring with length={length!r}."
+        )
+
+    fy_t = area * law.fy_t
+    fy_c = -area * law.fy_c
+    kt_t = 0.0
+    kt_c = 0.0
+    if law.tensile_curve == "Elastic":
+        fy_t = k * 100000000.0
+        kt_t = k
+    elif law.tensile_curve == "LinearHardening":
+        kt_t = k * law.ratio_et_t
+    if law.compressive_curve == "Elastic":
+        fy_c = -k * 100000000.0
+        kt_c = k
+    elif law.compressive_curve == "LinearHardening":
+        kt_c = k * law.ratio_et_c
+
+    # _configure_hysteretic calls _set_ultimate_displacement before the two
+    # side springs are combined. Linear-softening laws therefore contribute
+    # their fracture-energy tangent, not the initial zero placeholder.
+    if law.tensile_curve == "LinearSoftening" and area and fy_t:
+        ultimate_t = 2.0 * law.G_t / (fy_t / area) + fy_t / k
+        kt_t = -fy_t / (ultimate_t - fy_t / k)
+    if law.compressive_curve == "LinearSoftening" and area and fy_c:
+        ultimate_c = 2.0 * law.G_c / (fy_c / area) + fy_c / k
+        kt_c = -fy_c / (ultimate_c - fy_c / k)
+
+    return _HystereticSideDefinition(
+        k=float(k), area=float(area), length=float(length),
+        fy_t=float(fy_t), fy_c=float(fy_c),
+        kt_t=float(kt_t), kt_c=float(kt_c),
+        alfa_r_t=float(law.alfa_r_t), alfa_r_c=float(law.alfa_r_c),
+        alfa_u_t=float(law.alfa_u_t), alfa_u_c=float(law.alfa_u_c),
+        tensile_curve=law.tensile_curve,
+        compressive_curve=law.compressive_curve,
+    )
+
+
+def _configure_combined_hysteretic(
+    k1: float, area1: float, length1: float, law1: _HystereticLaw,
+    k2: float, area2: float, length2: float, law2: _HystereticLaw,
+) -> SpringHysteretic:
+    """Create the final Quad/Quad fibre spring without temporary objects.
+
+    This is algebraically identical to configuring two side springs and calling
+    ``_combine_hysteretic``.  It avoids two temporary SpringHysteretic objects
+    and two full envelope initializations per generated fibre.
+    """
+    side1 = _hysteretic_side_definition(k1, area1, length1, law1)
+    side2 = _hysteretic_side_definition(k2, area2, length2, law2)
+    out = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    out.k = _series(side1.k, side2.k, False)
+
+    if side1.fy_t <= side2.fy_t:
+        out.fy[0] = side1.fy_t
+        out.tensile_curve_type = side1.tensile_curve
+    else:
+        out.fy[0] = side2.fy_t
+        out.tensile_curve_type = side2.tensile_curve
+
+    if side1.fy_c <= side2.fy_c:
+        out.fy[1] = side2.fy_c
+        out.area = side2.area
+    else:
+        out.fy[1] = side1.fy_c
+        out.area = side1.area
+    out.compressive_curve_type = (
+        side1.compressive_curve
+        if side1.fy_c >= side2.fy_c
+        else side2.compressive_curve
+    )
+    out.length = side1.length + side2.length
+    out.alfau = [
+        max(side1.alfa_u_t, side2.alfa_u_t),
+        max(side1.alfa_u_c, side2.alfa_u_c),
+    ]
+    out.alfar = [
+        max(side1.alfa_r_t, side2.alfa_r_t),
+        max(side1.alfa_r_c, side2.alfa_r_c),
+    ]
+    out.kt = [
+        out.k if out.tensile_curve_type == "Elastic" else _series(side1.kt_t, side2.kt_t, False),
+        out.k if out.compressive_curve_type == "Elastic" else _series(side1.kt_c, side2.kt_c, False),
+    ]
+    out.ur = [
+        max(out.fy[0] / out.k if out.k else 0.0, 0.0),
+        min(out.fy[1] / out.k if out.k else 0.0, 0.0),
+    ]
+    _set_ultimate_displacement(out, law1, law1)
+    ur1 = out.ur[:]
+    _set_ultimate_displacement(out, law2, law2)
+    ur2 = out.ur[:]
+    out.ur[0] = (
+        min(value for value in (ur1[0], ur2[0]) if value != 0.0)
+        if ur1[0] and ur2[0]
+        else max(ur1[0], ur2[0])
+    )
+    out.ur[1] = (
+        max(value for value in (ur1[1], ur2[1]) if value != 0.0)
+        if ur1[1] and ur2[1]
+        else min(ur1[1], ur2[1])
+    )
+    out.initialize()
+    out.revert_to_start()
+    out.revert_to_last_commit()
+    return out
+
+
 def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained: bool,
                         law1: _HystereticLaw, law2: _HystereticLaw) -> SpringHysteretic:
     if sp1.k == -1.0:
@@ -676,6 +815,31 @@ def _make_interface_geometry(
 
 
 
+def _node_bucket(point: np.ndarray, tolerance: float) -> tuple[int, int, int]:
+    return tuple(int(math.floor(float(value) / tolerance)) for value in point)
+
+
+def _build_geometric_node_index(
+    model: Model, *, tolerance: float = 1.0e-4,
+) -> tuple[dict[tuple[int, int, int], list[int]], dict[int, np.ndarray]]:
+    """Build the spatial lookup used by C#-style endpoint node reuse.
+
+    The previous implementation scanned every node for every interface endpoint.
+    The generated bridge has thousands of endpoints and nodes, making that
+    quadratic scan one of PrepareModel's dominant Python costs.
+    """
+    assert model.collections is not None
+    buckets: dict[tuple[int, int, int], list[int]] = {}
+    points: dict[int, np.ndarray] = {}
+    for key, node in model.collections.nodes.items():
+        value = _v(node.point)
+        int_key = int(key)
+        points[int_key] = value
+        buckets.setdefault(_node_bucket(value, tolerance), []).append(int_key)
+    model._prep_geometric_node_index = (float(tolerance), buckets, points)
+    return buckets, points
+
+
 def _find_or_create_geometric_node(model: Model, point: np.ndarray, *, tolerance: float = 1.0e-4) -> int:
     """Return the C# PrepareBuildInterface endpoint node for an intersection edge.
 
@@ -685,20 +849,37 @@ def _find_or_create_geometric_node(model: Model, point: np.ndarray, *, tolerance
     not alter ``model.gdl``.
     """
     assert model.collections is not None
+    cached = getattr(model, "_prep_geometric_node_index", None)
+    if cached is None or cached[0] != float(tolerance):
+        buckets, points = _build_geometric_node_index(model, tolerance=tolerance)
+    else:
+        _, buckets, points = cached
+
+    bucket = _node_bucket(point, tolerance)
     best_key: int | None = None
-    best_distance = float("inf")
-    for key, node in model.collections.nodes.items():
-        distance = float(np.linalg.norm(_v(node.point) - point))
-        if distance <= tolerance and distance < best_distance:
-            best_key = int(key)
-            best_distance = distance
+    best_distance2 = float("inf")
+    tolerance2 = tolerance * tolerance
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                for key in buckets.get(
+                    (bucket[0] + dx, bucket[1] + dy, bucket[2] + dz), ()
+                ):
+                    delta = points[key] - point
+                    distance2 = float(np.dot(delta, delta))
+                    if distance2 <= tolerance2 and distance2 < best_distance2:
+                        best_key = key
+                        best_distance2 = distance2
     if best_key is not None:
         return best_key
 
     from histra.model.node import Node
 
     key = max(model.collections.nodes, default=0) + 1
-    model.collections.nodes[key] = Node(key=key, point=_p(point), name=str(key))
+    value = np.asarray(point, dtype=float).copy()
+    model.collections.nodes[key] = Node(key=key, point=_p(value), name=str(key))
+    points[key] = value
+    buckets.setdefault(_node_bucket(value, tolerance), []).append(key)
     return key
 
 
@@ -797,17 +978,10 @@ def _clip_convex_quad_2d(
     return _clean_clipped_polygon(output)
 
 
-def _coplanar_quad_intersection(
-    first: np.ndarray, second: np.ndarray,
+def _coplanar_quad_intersection_prechecked(
+    first: np.ndarray, second: np.ndarray, normal_first: np.ndarray,
 ) -> list[np.ndarray] | None:
-    normal_first = _face_normal(first)
-    normal_second = _face_normal(second)
-    if float(np.linalg.norm(np.cross(normal_first, normal_second))) > _CONTACT_ANGLE_TOLERANCE:
-        return None
-    origin = np.mean(first, axis=0)
-    if float(np.max(np.abs((second-origin) @ normal_first))) > _CONTACT_DISTANCE_TOLERANCE:
-        return None
-
+    """Clip two faces after the vectorized broad phase proved coplanarity."""
     drop = int(np.argmax(np.abs(normal_first)))
     keep = [axis for axis in range(3) if axis != drop]
     subject = [(float(point[keep[0]]), float(point[keep[1]])) for point in first]
@@ -829,6 +1003,19 @@ def _coplanar_quad_intersection(
         ) / normal_first[drop]
         result.append(point)
     return result
+
+
+def _coplanar_quad_intersection(
+    first: np.ndarray, second: np.ndarray,
+) -> list[np.ndarray] | None:
+    normal_first = _face_normal(first)
+    normal_second = _face_normal(second)
+    if float(np.linalg.norm(np.cross(normal_first, normal_second))) > _CONTACT_ANGLE_TOLERANCE:
+        return None
+    origin = np.mean(first, axis=0)
+    if float(np.max(np.abs((second-origin) @ normal_first))) > _CONTACT_DISTANCE_TOLERANCE:
+        return None
+    return _coplanar_quad_intersection_prechecked(first, second, normal_first)
 
 
 def _polygon_edge_at_point(
@@ -995,8 +1182,9 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
     contacts: list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]] = []
     for first, face1, second, face2 in surface_candidates:
         q1, q2 = quads[first], quads[second]
-        intersection = _coplanar_quad_intersection(
-            faces[first, face1], faces[second, face2]
+        intersection = _coplanar_quad_intersection_prechecked(
+            faces[first, face1], faces[second, face2],
+            face_normal[first, face1],
         )
         if intersection is None:
             continue
@@ -1016,6 +1204,7 @@ def _generate_interfaces(model: Model) -> tuple[int, int]:
     assert model.collections is not None
     c = model.collections
     c.interfaces.clear()
+    _build_geometric_node_index(model)
     for quad in c.quads.values():
         quad.interface_keys = [[] for _ in range(6)]
     key = 1
@@ -1813,6 +2002,24 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
     for index in range(cell_count):
         k1, area1, length1 = map(float, props1[index])
         k2, area2, length2 = map(float, props2[index])
+        if not restrained:
+            try:
+                spring = _configure_combined_hysteretic(
+                    k1, area1, length1, law1,
+                    k2, area2, length2, law2,
+                )
+            except ModelPreparationError as exc:
+                raise ModelPreparationError(
+                    f"Interface {intf.key}, transverse cell {index}: {exc}"
+                ) from exc
+            spring.key = index
+            spring.parent_key = intf.key
+            spring.parent_type = "Interface"
+            spring.spring_purpose = "Transversal1"
+            spring.length = 0.0
+            intf.trasv_1.append(spring)
+            continue
+
         if k1 == -1.0:
             sp1 = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
             sp1.k, sp1.area = -1.0, area1

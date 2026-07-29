@@ -11,6 +11,7 @@ from histra.io.hr_loader import load_model
 from histra.model.load import LoadFunction, LoadFunctionItem
 from histra.solver.assembler import extract_displacements
 from histra.solver.solve import solve_static_nonlinear
+from histra.solver.state_snapshot import SolverStateSnapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-output" / "model.hrx"
@@ -51,6 +52,31 @@ def test_first_nonlinear_step_matches_csharp_database():
     relative_error = np.linalg.norm(python_u - csharp_u) / np.linalg.norm(csharp_u)
     assert relative_error < 5e-5
     assert np.max(np.abs(python_u - csharp_u)) < 3e-7
+
+def test_newton_line_search_uses_only_the_step_checkpoint(monkeypatch):
+    """Do not copy every spring history for each accepted Newton correction."""
+    model = load_model(HRX)
+    analysis = _single_csharp_step_analysis(model)
+    analysis.method = "ModifiedRegulaFalsiLineSearch"
+
+    captures = 0
+    original_capture = SolverStateSnapshot.capture.__func__
+
+    def counted_capture(cls, *args, **kwargs):
+        nonlocal captures
+        captures += 1
+        return original_capture(cls, *args, **kwargs)
+
+    monkeypatch.setattr(
+        SolverStateSnapshot,
+        "capture",
+        classmethod(counted_capture),
+    )
+
+    code, steps = solve_static_nonlinear(model, analysis)
+    assert code == 0
+    assert len(steps) == 1
+    assert captures == 1  # the pre-step rollback checkpoint in solve.py
 
 
 def test_chained_analysis_restores_complete_csharp_state():
