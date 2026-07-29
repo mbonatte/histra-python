@@ -352,3 +352,198 @@ def test_partial_edge_afference_interpolates_quad_warping_at_nonvertex_point():
     midpoint = np.array([1.0, 0.0, 1.0])
     actual = _warping_vector_at_point(quad, midpoint, model)
     np.testing.assert_allclose(actual, 0.5 * (nodal[2] + nodal[3]), atol=1.0e-14)
+
+
+
+def _surface_contact_model():
+    """Return a fixture model stripped to geometry-only Quad data."""
+    model = load_model(LOCKED_HRX)
+    c = model.collections
+    c.nodes.clear()
+    c.quads.clear()
+    c.interfaces.clear()
+    c.restraints.clear()
+    model.gdl = 0
+    model.is_locked = False
+    return model
+
+
+def _add_planar_quad(model, *, key, node_start, y, z0, z1, x0, x1, thickness):
+    from histra.elements.quad import Quad
+    from histra.model.node import Node
+    from histra.types.point import Point
+
+    c = model.collections
+    coordinates = (
+        (x0, y, z0),
+        (x1, y, z0),
+        (x1, y, z1),
+        (x0, y, z1),
+    )
+    node_keys = []
+    for offset, xyz in enumerate(coordinates):
+        node_key = node_start + offset
+        c.nodes[node_key] = Node(key=node_key, point=Point(*xyz), name=str(node_key))
+        node_keys.append(node_key)
+    c.quads[key] = Quad(
+        key=key,
+        node_keys=node_keys,
+        thickness=[thickness] * 4,
+        normal=[Point(0.0, 1.0, 0.0) for _ in range(4)],
+        length=[x1-x0, z1-z0, x1-x0, z1-z0],
+        sin=[1.0] * 4,
+        cos=[0.0] * 4,
+        g=Point(0.5*(x0+x1), y, 0.5*(z0+z1)),
+        reference_e1=(1.0, 0.0, 0.0),
+        reference_e2=(0.0, 0.0, 1.0),
+        reference_e3=(0.0, -1.0, 0.0),
+    )
+
+
+def test_quad_quad_generation_intersects_broad_faces_4_and_5():
+    """C# GIQuadQuad connects adjacent transverse strips through faces 4/5."""
+    from histra.preprocessing.prepare_model import (
+        _assign_interface_afference,
+        _assign_quad_afference,
+        _generate_interfaces,
+    )
+
+    model = _surface_contact_model()
+    # Do not inherit discretisation settings from the benchmark HRX fixture.
+    # These values make the 40-unit polygon thickness use the minimum 3 rows,
+    # while the 90-unit interface length requires 4 columns.
+    model.interface_nrow = 3
+    model.interface_imax = 30.0
+    # Parent thickness is deliberately much larger than the 40-unit polygon
+    # width. C# Interface.Set derives Nrow from the intersection edge, not from
+    # the parent Quad thickness.
+    _add_planar_quad(
+        model, key=1, node_start=1, y=0.0,
+        z0=0.0, z1=40.0, x0=0.0, x1=90.0, thickness=100.0,
+    )
+    _add_planar_quad(
+        model, key=2, node_start=5, y=100.0,
+        z0=0.0, z1=40.0, x0=0.0, x1=90.0, thickness=100.0,
+    )
+
+    qq, qr = _generate_interfaces(model)
+    assert (qq, qr) == (1, 0)
+    intf = next(iter(model.collections.interfaces.values()))
+    assert (intf.face1, intf.face2) == (5, 4)
+    assert intf.length == pytest.approx(90.0)
+    assert max(intf.thickness) == pytest.approx(40.0)
+    assert intf.nrow == 3
+    assert intf.ncol == intf.nspring == 4
+
+    _assign_quad_afference(model)
+    _assign_interface_afference(model)
+    shear_gdls = {
+        model.collections.quads[1].aff[6][0].gdl,
+        model.collections.quads[2].aff[6][0].gdl,
+    }
+    interface_gdls = {
+        entry.gdl
+        for row in intf.aff
+        for entry in row
+    }
+    assert not (shear_gdls & interface_gdls)
+
+
+def test_quad_quad_generation_detects_offset_lateral_surface_overlap():
+    """The contact is an area although the two centre-line edges are offset."""
+    from histra.preprocessing.prepare_model import _generate_interfaces
+
+    model = _surface_contact_model()
+    _add_planar_quad(
+        model, key=1, node_start=1, y=0.0,
+        z0=0.0, z1=1.0, x0=0.0, x1=2.0, thickness=2.0,
+    )
+    _add_planar_quad(
+        model, key=2, node_start=5, y=1.5,
+        z0=-1.0, z1=0.0, x0=0.0, x1=2.0, thickness=2.0,
+    )
+
+    qq, qr = _generate_interfaces(model)
+    assert (qq, qr) == (1, 0)
+    intf = next(iter(model.collections.interfaces.values()))
+    assert (intf.face1, intf.face2) == (0, 2)
+    assert intf.length == pytest.approx(2.0)
+    assert intf.area() == pytest.approx(1.0)
+    # The local interface plane must coincide with z=0.  The previous centroid-
+    # based construction tilted e3 and reduced this area to 0.5547001958.
+    assert abs(intf.reference_e2[2]) == pytest.approx(1.0)
+    assert abs(intf.reference_e3[1]) == pytest.approx(1.0)
+
+
+
+def test_broad_face_fibre_stiffness_reverses_opposite_face_like_csharp():
+    """Faces 4/5 must map to the reversed opposite broad face."""
+    from histra.preprocessing.prepare_model import (
+        _cell_vertices,
+        _fiber_stiffness,
+        _fiber_stiffness_batch,
+        _generate_interfaces,
+    )
+
+    model = _surface_contact_model()
+    model.interface_nrow = 2
+    model.interface_imax = 1.0e9
+    _add_planar_quad(
+        model, key=1, node_start=1, y=0.0,
+        z0=0.0, z1=2.0, x0=0.0, x1=4.0, thickness=2.0,
+    )
+    _add_planar_quad(
+        model, key=2, node_start=5, y=2.0,
+        z0=0.0, z1=2.0, x0=0.0, x1=4.0, thickness=2.0,
+    )
+
+    qq, qr = _generate_interfaces(model)
+    assert (qq, qr) == (1, 0)
+    intf = next(iter(model.collections.interfaces.values()))
+    assert (intf.face1, intf.face2) == (5, 4)
+
+    cell = _cell_vertices(intf, 0)
+    k1, area1, length1 = _fiber_stiffness(
+        model, model.collections.quads[1], intf, cell, 1000.0, intf.face1
+    )
+    k2, area2, length2 = _fiber_stiffness(
+        model, model.collections.quads[2], intf, cell, 1000.0, intf.face2
+    )
+
+    assert k1 == pytest.approx(2000.0)
+    assert k2 == pytest.approx(2000.0)
+    assert area1 == pytest.approx(2.0)
+    assert area2 == pytest.approx(2.0)
+    assert length1 == pytest.approx(1.0)
+    assert length2 == pytest.approx(1.0)
+
+    cells = np.asarray([_cell_vertices(intf, index) for index in range(4)])
+    batch1 = _fiber_stiffness_batch(
+        model, model.collections.quads[1], intf, cells, 1000.0, intf.face1
+    )
+    batch2 = _fiber_stiffness_batch(
+        model, model.collections.quads[2], intf, cells, 1000.0, intf.face2
+    )
+    assert batch1[:, 0] == pytest.approx([2000.0] * 4)
+    assert batch2[:, 0] == pytest.approx([2000.0] * 4)
+    assert batch1[:, 1] == pytest.approx([2.0] * 4)
+    assert batch2[:, 1] == pytest.approx([2.0] * 4)
+    assert batch1[:, 2] == pytest.approx([1.0] * 4)
+    assert batch2[:, 2] == pytest.approx([1.0] * 4)
+
+def test_warping_interpolation_accepts_projected_offset_face_point():
+    """C# projects arbitrary lateral-face points to the Quad midsurface."""
+    from histra.preprocessing.prepare_model import _warping_vector_at_point
+
+    model = _surface_contact_model()
+    _add_planar_quad(
+        model, key=1, node_start=1, y=0.0,
+        z0=0.0, z1=2.0, x0=0.0, x1=4.0, thickness=2.0,
+    )
+    quad = model.collections.quads[1]
+    # This point lies on an extruded lateral surface but not on a centre-line
+    # edge. Its orthogonal projection is the midsurface point (1, 0, 0).
+    value = _warping_vector_at_point(
+        quad, np.asarray((1.0, 0.75, 0.0)), model
+    )
+    assert np.isfinite(value).all()
