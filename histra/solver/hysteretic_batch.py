@@ -3,8 +3,9 @@
 The nonlinear benchmark updates thousands of independent transverse springs on
 nearly every Newton correction.  Calling the Python state machine spring by
 spring dominates runtime.  This module keeps the same committed/trial variables
-in dense arrays and evaluates the linear-backbone hysteretic law in one compiled
-loop.  Unsupported spring curves transparently remain on the Python path.
+in dense arrays and evaluates the supported linear and exponential-tension
+hysteretic laws in one compiled loop. Unsupported curves transparently remain
+on the Python path.
 """
 from __future__ import annotations
 
@@ -33,6 +34,13 @@ RELOAD_C = int(PhaseEnum.Reload_c)
 RUPTURE = int(PhaseEnum.Rupture)
 RUPTURE_T = int(PhaseEnum.RuptureTraz)
 RUPTURE_C = int(PhaseEnum.RuptureComp)
+
+# Positive-envelope dispatch stored in the final dense parameter column.
+# Existing numeric parameter indices remain unchanged.
+TENSILE_LINEAR = 0
+TENSILE_EXPONENTIAL = 1
+TENSILE_CURVE_TYPE_PARAM = 32
+TRANSVERSE_PARAM_SIZE = 33
 
 # Dense state columns for interface SpringCoulomb03 objects using the C#
 # ``Initial`` law.  Keeping the state in one contiguous array avoids hundreds
@@ -116,6 +124,27 @@ if njit is not None:
         return mom3p
 
     @njit(cache=True, inline="always")
+    def _pos_stress_typed(
+        curve_type, strain, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
+        e1p, e2p, e3p,
+    ):
+        if curve_type == TENSILE_EXPONENTIAL:
+            if strain <= 0.0:
+                return 0.0
+            if strain <= rot1p:
+                return e1p * strain
+            denominator = rot2p - rot1p
+            # C# floating-point evaluation tends to zero for the degenerate
+            # positive-increment case; avoid a Numba ZeroDivisionError.
+            if denominator == 0.0:
+                return 0.0
+            return mom1p * np.exp(-(strain - rot1p) / denominator)
+        return _pos_stress(
+            strain, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
+            e1p, e2p, e3p,
+        )
+
+    @njit(cache=True, inline="always")
     def _neg_stress(strain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n):
         if strain >= 0.0:
             return 0.0
@@ -138,6 +167,24 @@ if njit is not None:
         if strain <= rot3p or e3p > 0.0:
             return e3p, PLASTIC_T
         return e1p * 1.0e-9, RUPTURE_T
+
+    @njit(cache=True, inline="always")
+    def _pos_tangent_typed(
+        curve_type, strain, rot1p, rot2p, rot3p, e1p, e2p, e3p,
+        tstress, cstress, cstrain,
+    ):
+        if curve_type == TENSILE_EXPONENTIAL:
+            if strain < 0.0:
+                return e1p * 1.0e-9, ELASTIC
+            if strain <= rot1p:
+                return e1p, ELASTIC
+            dstrain = strain - cstrain
+            if dstrain != 0.0:
+                return (tstress - cstress) / dstrain, PLASTIC_T
+            # The scalar Python implementation protects this otherwise
+            # undefined repeated-trial case while retaining Plastic_t phase.
+            return e1p, PLASTIC_T
+        return _pos_tangent(strain, rot1p, rot2p, rot3p, e1p, e2p, e3p)
 
     @njit(cache=True, inline="always")
     def _neg_tangent(strain, rot1n, rot2n, rot3n, e1n, e2n, e3n):
@@ -164,6 +211,27 @@ if njit is not None:
         if np.isinf(result):
             return result
         if _pos_stress(result, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p) > 0.0:
+            return np.inf
+        return result
+
+    @njit(cache=True, inline="always")
+    def _pos_rotlim_typed(
+        curve_type, strain, rot1p, mom1p, rot2p, mom2p, e2p, e3p,
+        rot3p, mom3p, e1p,
+    ):
+        result = np.inf
+        if strain <= rot1p:
+            return result
+        if strain <= rot2p and e2p < 0.0 and e2p != 0.0:
+            result = rot1p - mom1p / e2p
+        if strain > rot2p and e3p < 0.0 and e3p != 0.0:
+            result = rot2p - mom2p / e3p
+        if np.isinf(result):
+            return result
+        if _pos_stress_typed(
+            curve_type, result, rot1p, mom1p, rot2p, mom2p, rot3p,
+            mom3p, e1p, e2p, e3p,
+        ) > 0.0:
             return np.inf
         return result
 
@@ -204,6 +272,9 @@ if njit is not None:
             e1n, e1p, e2n, e2p = params[i, 22], params[i, 23], params[i, 24], params[i, 25]
             e3n, e3p, eun, eup = params[i, 26], params[i, 27], params[i, 28], params[i, 29]
             energy_a = params[i, 30]
+            tensile_curve_type = TENSILE_LINEAR
+            if params.shape[1] > TENSILE_CURVE_TYPE_PARAM:
+                tensile_curve_type = int(params[i, TENSILE_CURVE_TYPE_PARAM])
 
             umax_p, umax_n = committed[i, 0], committed[i, 1]
             trot_pu, trot_nu = committed[i, 2], committed[i, 3]
@@ -229,8 +300,14 @@ if njit is not None:
 
             if tstrain >= umax_p:
                 trot_max = tstrain
-                tstress = _pos_stress(tstrain, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p)
-                ktang, tphase = _pos_tangent(tstrain, rot1p, rot2p, rot3p, e1p, e2p, e3p)
+                tstress = _pos_stress_typed(
+                    tensile_curve_type, tstrain, rot1p, mom1p, rot2p, mom2p,
+                    rot3p, mom3p, e1p, e2p, e3p,
+                )
+                ktang, tphase = _pos_tangent_typed(
+                    tensile_curve_type, tstrain, rot1p, rot2p, rot3p,
+                    e1p, e2p, e3p, tstress, cstress, cstrain,
+                )
                 tload = 1
             elif tstrain <= umax_n:
                 trot_min = tstrain
@@ -249,14 +326,20 @@ if njit is not None:
                 if num2 <= 1.0:
                     num2 = 1.0
                 else:
-                    env = _pos_stress(umax_p, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p)
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                    )
                     num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
                 if tload == 1:
                     tload = 2
                     if cstress >= 0.0:
                         denom = eup * num2
                         trot_pu = cstrain - cstress / denom if denom != 0.0 else 0.0
-                        if _pos_stress(umax_p, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p) == 0.0:
+                        if _pos_stress_typed(
+                            tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                            mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                        ) == 0.0:
                             trot_pu = 0.0
                         num3 = cenergy - 0.5 * cstress / denom * cstress if denom != 0.0 else cenergy
                         num4 = 0.0
@@ -268,7 +351,10 @@ if njit is not None:
                 if trot_min > rot1n:
                     trot_min = rot1n
                 num5 = _neg_stress(trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
-                num6 = _pos_rotlim(umax_p, rot1p, mom1p, rot2p, mom2p, e2p, e3p, rot3p, mom3p, e1p)
+                num6 = _pos_rotlim_typed(
+                    tensile_curve_type, umax_p, rot1p, mom1p, rot2p, mom2p,
+                    e2p, e3p, rot3p, mom3p, e1p,
+                )
                 num7 = num6 if num6 < trot_pu else trot_pu
                 denom = eun * num
                 num8 = trot_min - (1.0 - pinch_yn) * num5 / denom if denom != 0.0 else trot_min
@@ -320,7 +406,10 @@ if njit is not None:
                 if num2 <= 1.0:
                     num2 = 1.0
                 else:
-                    env = _pos_stress(umax_p, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p)
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                    )
                     num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
                 if tload == 2:
                     tload = 1
@@ -338,7 +427,10 @@ if njit is not None:
                 tload = 1
                 if trot_max < rot1p:
                     trot_max = rot1p
-                num5 = _pos_stress(trot_max, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p)
+                num5 = _pos_stress_typed(
+                    tensile_curve_type, trot_max, rot1p, mom1p, rot2p, mom2p,
+                    rot3p, mom3p, e1p, e2p, e3p,
+                )
                 num6 = _neg_rotlim(umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n, rot3n, mom3n, e1n)
                 num7 = num6 if num6 > trot_nu else trot_nu
                 denom = eup * num2
@@ -423,6 +515,9 @@ if njit is not None:
             e3n, e3p, eun, eup = (
                 params[i, 26], params[i, 27], params[i, 28], params[i, 29]
             )
+            tensile_curve_type = TENSILE_LINEAR
+            if params.shape[1] > TENSILE_CURVE_TYPE_PARAM:
+                tensile_curve_type = int(params[i, TENSILE_CURVE_TYPE_PARAM])
 
             umax_p, umax_n = committed[i, 0], committed[i, 1]
             trot_pu, trot_nu = committed[i, 2], committed[i, 3]
@@ -448,12 +543,13 @@ if njit is not None:
 
             if tstrain >= umax_p:
                 trot_max = tstrain
-                tstress = _pos_stress(
-                    tstrain, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
-                    e1p, e2p, e3p,
+                tstress = _pos_stress_typed(
+                    tensile_curve_type, tstrain, rot1p, mom1p, rot2p,
+                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
                 )
-                ktang, tphase = _pos_tangent(
-                    tstrain, rot1p, rot2p, rot3p, e1p, e2p, e3p,
+                ktang, tphase = _pos_tangent_typed(
+                    tensile_curve_type, tstrain, rot1p, rot2p, rot3p,
+                    e1p, e2p, e3p, tstress, cstress, cstrain,
                 )
                 tload = 1
             elif tstrain <= umax_n:
@@ -473,9 +569,9 @@ if njit is not None:
                 if num2 <= 1.0:
                     num2 = 1.0
                 else:
-                    env = _pos_stress(
-                        umax_p, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
-                        e1p, e2p, e3p,
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
                     )
                     num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
                 if tload == 1:
@@ -483,9 +579,9 @@ if njit is not None:
                     if cstress >= 0.0:
                         denom = eup * num2
                         trot_pu = cstrain - cstress / denom if denom != 0.0 else 0.0
-                        if _pos_stress(
-                            umax_p, rot1p, mom1p, rot2p, mom2p,
-                            rot3p, mom3p, e1p, e2p, e3p,
+                        if _pos_stress_typed(
+                            tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                            mom2p, rot3p, mom3p, e1p, e2p, e3p,
                         ) == 0.0:
                             trot_pu = 0.0
                         trot_min = umax_n
@@ -496,9 +592,9 @@ if njit is not None:
                     trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
                     e1n, e2n, e3n,
                 )
-                num6 = _pos_rotlim(
-                    umax_p, rot1p, mom1p, rot2p, mom2p, e2p, e3p,
-                    rot3p, mom3p, e1p,
+                num6 = _pos_rotlim_typed(
+                    tensile_curve_type, umax_p, rot1p, mom1p, rot2p, mom2p,
+                    e2p, e3p, rot3p, mom3p, e1p,
                 )
                 num7 = num6 if num6 < trot_pu else trot_pu
                 if tstrain >= trot_pu:
@@ -530,9 +626,9 @@ if njit is not None:
                 if num2 <= 1.0:
                     num2 = 1.0
                 else:
-                    env = _pos_stress(
-                        umax_p, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
-                        e1p, e2p, e3p,
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
                     )
                     num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
                 if tload == 2:
@@ -549,9 +645,9 @@ if njit is not None:
                 tload = 1
                 if trot_max < rot1p:
                     trot_max = rot1p
-                num5 = _pos_stress(
-                    trot_max, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p,
-                    e1p, e2p, e3p,
+                num5 = _pos_stress_typed(
+                    tensile_curve_type, trot_max, rot1p, mom1p, rot2p,
+                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
                 )
                 num6 = _neg_rotlim(
                     umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n,
@@ -1592,6 +1688,9 @@ if njit is not None:
         _refresh_max_u_cache(quad_local_u, max_displacements, max_u_cache)
 
 else:
+    _pos_stress_typed = None
+    _pos_tangent_typed = None
+    _pos_rotlim_typed = None
     _evaluate_linear_batch = None
     _evaluate_simple_linear_batch = None
     _finish_transverse_batch = None
@@ -1621,6 +1720,13 @@ _PARAM_NAMES = (
 )
 
 
+if len(_PARAM_NAMES) != TENSILE_CURVE_TYPE_PARAM:
+    raise RuntimeError(
+        "Transverse hysteretic parameter layout changed without updating "
+        "TENSILE_CURVE_TYPE_PARAM"
+    )
+
+
 @dataclass(frozen=True)
 class _InterfaceSlice:
     interface: Any
@@ -1643,7 +1749,9 @@ class HystereticBatchRuntime:
                 continue
             if not all(
                 isinstance(spring, SpringHysteretic)
-                and spring.tensile_curve_type in {"LinearHardening", "LinearSoftening"}
+                and spring.tensile_curve_type in {
+                    "LinearHardening", "LinearSoftening", "Exponential"
+                }
                 and spring.compressive_curve_type in {"LinearHardening", "LinearSoftening"}
                 for spring in group
             ):
@@ -1660,13 +1768,20 @@ class HystereticBatchRuntime:
         self.springs = springs
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
         n = len(springs)
-        self.params = np.empty((n, len(_PARAM_NAMES)), dtype=np.float64)
+        self.params = np.empty((n, TRANSVERSE_PARAM_SIZE), dtype=np.float64)
         self.committed = np.empty((n, 9), dtype=np.float64)
         self.trial = np.empty((n, 10), dtype=np.float64)
         self.targets = np.empty(n, dtype=np.float64)
         self.enabled = np.empty(n, dtype=np.bool_)
         for i, spring in enumerate(springs):
-            self.params[i, :] = [float(getattr(spring, name)) for name in _PARAM_NAMES]
+            self.params[i, :len(_PARAM_NAMES)] = [
+                float(getattr(spring, name)) for name in _PARAM_NAMES
+            ]
+            self.params[i, TENSILE_CURVE_TYPE_PARAM] = (
+                TENSILE_EXPONENTIAL
+                if spring.tensile_curve_type == "Exponential"
+                else TENSILE_LINEAR
+            )
             self.committed[i, :] = (
                 spring.umax[0], spring.umax[1], spring._crot_pu, spring._crot_nu,
                 spring.cenergy_d, spring._cload_indicator, spring._cstress,
@@ -1680,7 +1795,7 @@ class HystereticBatchRuntime:
             )
             self.targets[i] = spring._tstrain
             self.enabled[i] = bool(spring.is_on)
-        self._transverse_k = self.params[:, -1].copy()
+        self._transverse_k = self.params[:, len(_PARAM_NAMES) - 1].copy()
         self._simple_hysteretic = bool(
             n
             and np.all(self.params[:, :8] == 0.0)
