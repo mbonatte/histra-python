@@ -98,6 +98,37 @@ def test_compiled_quad_reload_tangents_use_csharp_minimum():
     assert np.isfinite(yp)
     assert yp == pytest.approx(100.0 / 101.0)
 
+@pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
+def test_compiled_hysteretic_batch_can_force_general_kernel(monkeypatch):
+    monkeypatch.delenv("HISTRA_DISABLE_COMPILED_SPRINGS", raising=False)
+    monkeypatch.setenv("HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", "1")
+    model = load_model(MODEL)
+    runtime = build_hysteretic_batch(model)
+    assert runtime is not None
+    assert runtime._simple_hysteretic is False
+
+
+@pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
+def test_compiled_hysteretic_batch_can_disable_quad_batch(monkeypatch):
+    monkeypatch.delenv("HISTRA_DISABLE_COMPILED_SPRINGS", raising=False)
+    monkeypatch.setenv("HISTRA_DISABLE_COMPILED_QUADS", "1")
+    model = load_model(MODEL)
+    runtime = build_hysteretic_batch(model)
+    assert runtime is not None
+    assert runtime.quad_records == []
+    assert len(runtime.unmanaged_quads) == len(model.collections.quads)
+    assert runtime._quad_local_du.shape == (0, 7)
+    assert runtime._quad_local_u.shape == (0, 7)
+    assert runtime._quad_edge_areas.shape == (0, 4)
+
+    # Numba type-checks the complete fused kernel, including the Quad branch,
+    # even though there are no managed Quads. Exercise the interface-only
+    # update to ensure every empty Quad array retains its production rank.
+    runtime.update_domain(
+        np.zeros(int(model.gdl), dtype=np.float64),
+        type("State", (), {"step": 1})(),
+    )
+
 def test_compiled_hysteretic_batch_can_be_disabled(monkeypatch):
     monkeypatch.setenv("HISTRA_DISABLE_COMPILED_SPRINGS", "1")
     model = load_model(MODEL)

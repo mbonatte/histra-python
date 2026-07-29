@@ -1687,6 +1687,15 @@ class HystereticBatchRuntime:
             and np.all(self.params[:, 8] == 1.0)
             and np.all(self.params[:, 9] == 0.0)
         )
+        # Diagnostic/correctness switch.  The specialized zero-pinching kernel
+        # must remain bit-for-bit equivalent to the authoritative scalar state
+        # machine through unloading/reloading histories.  Force the general
+        # compiled kernel while investigating any full-analysis divergence.
+        force_general = os.environ.get(
+            "HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", ""
+        ).strip().lower()
+        if force_general in {"1", "true", "yes", "on"}:
+            self._simple_hysteretic = False
         self._record_index = np.empty(n, dtype=np.int32)
         self._di = np.empty(n, dtype=np.float64)
         self._dj = np.empty(n, dtype=np.float64)
@@ -1843,7 +1852,14 @@ class HystereticBatchRuntime:
         quad_d_alfa: list[float] = []
         quad_volumes: list[float] = []
         quad_materials: list[Any] = []
-        for quad in model.collections.quads.values():
+        # Allow the Quad Takeda batch to be isolated from the interface batch.
+        # This is intentionally an environment-controlled diagnostic path; all
+        # Quads remain on the authoritative scalar implementation when active.
+        disable_quad_batch = os.environ.get(
+            "HISTRA_DISABLE_COMPILED_QUADS", ""
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        quad_candidates = () if disable_quad_batch else model.collections.quads.values()
+        for quad in quad_candidates:
             spring = getattr(quad, "spring", None)
             material = model.collections.materials.get(quad.material_key)
             fracture_law = getattr(material, "constitutive_law_masonry_shear", None)
@@ -1915,14 +1931,20 @@ class HystereticBatchRuntime:
         self._quad_aff_coefficients = np.asarray(quad_coefficients, dtype=np.float64)
         self._quad_edge_offsets = np.asarray(edge_offsets, dtype=np.int32)
         self._quad_edge_records = np.asarray(edge_records, dtype=np.int32)
-        self._quad_edge_areas = np.asarray(edge_areas, dtype=np.float64)
+        self._quad_edge_areas = np.asarray(
+            edge_areas, dtype=np.float64
+        ).reshape((len(self.quad_records), 4))
         self._quad_d_alfa = np.asarray(quad_d_alfa, dtype=np.float64)
         self._quad_volumes = np.asarray(quad_volumes, dtype=np.float64)
         self._quad_materials = quad_materials
         self._quad_local_du = np.zeros((len(self.quad_records), 7), dtype=np.float64)
+        # ``np.asarray([])`` has shape ``(0,)``.  Keep the Quad displacement
+        # storage rank-stable when the diagnostic interface-only runtime
+        # deliberately contains no managed Quads; Numba kernels consume this
+        # array as a two-dimensional ``(n_quads, 7)`` matrix.
         self._quad_local_u = np.asarray(
             [quad.status.u[:7] for quad in self.quad_records], dtype=np.float64
-        )
+        ).reshape((len(self.quad_records), 7))
         self._quad_sigma_initial = np.asarray(
             [float(quad.sigma_initial) for quad in self.quad_records], dtype=np.float64
         )
