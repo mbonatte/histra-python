@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import histra.solver.hysteretic_batch as batch
 from histra.io.hr_loader import load_model
 from histra.solver.hysteretic_batch import (
     _evaluate_linear_batch,
@@ -59,6 +60,43 @@ def test_compiled_hysteretic_batch_matches_scalar_state_machine(monkeypatch):
             spring.commit()
         runtime.commit()
 
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_compiled_quad_reload_tangents_use_csharp_minimum():
+    """The dense Takeda path must not bypass SpringCoulomb03 getters."""
+    row = np.zeros(batch.QUAD_STATE_SIZE, dtype=np.float64)
+    params = np.zeros(batch.QUAD_PARAM_SIZE, dtype=np.float64)
+    params[batch.QPK] = 10_000.0
+    params[batch.QPE3P] = -100.0
+    params[batch.QPE3N] = -100.0
+
+    # C# stores the raw values, but every read returns max(0.0001*K, value).
+    row[batch.QTANG_RELOAD_T] = 0.0
+    row[batch.QTANG_RELOAD_C] = 0.0
+    assert batch._quad_tangent_reload_t(row, params) == 1.0
+    assert batch._quad_tangent_reload_c(row, params) == 1.0
+
+    # Exercise the same compression branch that failed in the scalar path.
+    row[batch.QTPHASE] = batch.RELOAD_C
+    row[batch.QTROT_PU] = 0.0
+    row[batch.QMOM1N] = -100.0
+    row[batch.QROT3N] = -1.0
+    yn = batch._quad_yield_compression(
+        row, params, batch.ELASTIC, -1.0e-6
+    )
+    assert np.isfinite(yn)
+    assert yn == pytest.approx(-100.0 / 101.0)
+
+    # Exercise the symmetric tension branch.
+    row[batch.QTPHASE] = batch.RELOAD_T
+    row[batch.QTROT_NU] = 0.0
+    row[batch.QMOM1P] = 100.0
+    row[batch.QROT3P] = 1.0
+    yp = batch._quad_yield_tension(
+        row, params, batch.ELASTIC, 1.0e-6
+    )
+    assert np.isfinite(yp)
+    assert yp == pytest.approx(100.0 / 101.0)
 
 def test_compiled_hysteretic_batch_can_be_disabled(monkeypatch):
     monkeypatch.setenv("HISTRA_DISABLE_COMPILED_SPRINGS", "1")

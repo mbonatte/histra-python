@@ -98,7 +98,8 @@ QPCOHESION, QPMU = 0, 1
 QPE1P, QPE2P, QPE3P = 2, 3, 4
 QPE1N, QPE2N, QPE3N = 5, 6, 7
 QPEUP, QPEUN, QPPLASTIC_STRAIN, QPENABLED = 8, 9, 10, 11
-QUAD_PARAM_SIZE = 12
+QPK = 12
+QUAD_PARAM_SIZE = 13
 
 
 if njit is not None:
@@ -990,6 +991,20 @@ if njit is not None:
         row[QTUNLOAD_C] = row[QCUNLOAD_C]
 
     @njit(cache=True, inline="always")
+    def _quad_tangent_reload_t(row, par):
+        """C# SpringCoulomb03.TangentReload_t getter semantics."""
+        minimum = 1.0e-4 * par[QPK]
+        stored = row[QTANG_RELOAD_T]
+        return minimum if stored < minimum else stored
+
+    @njit(cache=True, inline="always")
+    def _quad_tangent_reload_c(row, par):
+        """C# SpringCoulomb03.TangentReload_c getter semantics."""
+        minimum = 1.0e-4 * par[QPK]
+        stored = row[QTANG_RELOAD_C]
+        return minimum if stored < minimum else stored
+
+    @njit(cache=True, inline="always")
     def _quad_yield_tension(row, par, phase_unload, dstrain):
         if row[QTPLAST_T] == 0.0:
             num2 = row[QMOM1P]
@@ -1009,7 +1024,7 @@ if njit is not None:
                 return num3
             if phase_unload == PLASTIC_T or phase_unload == RELOAD_T:
                 num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                num5 = row[QTANG_RELOAD_T] if num2 <= 0.0 else num2 / (num3 - num4)
+                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
                 return row[QMOM1P] / num5 + num4
         if phase == UNLOAD_T:
             if phase_unload == ELASTIC:
@@ -1019,16 +1034,16 @@ if njit is not None:
             if phase_unload == RELOAD_T:
                 if row[QTSTRAIN] < row[QTROT_LIM_PU]:
                     return row[QTROT_PU] + row[QMOM1P] / par[QPE1P]
-                return row[QTROT_NU] + row[QMOM1P] / row[QTANG_RELOAD_T]
+                return row[QTROT_NU] + row[QMOM1P] / _quad_tangent_reload_t(row, par)
         if phase == UNLOAD_C:
             if phase_unload == ELASTIC:
                 return num3
             if phase_unload == PLASTIC_T or phase_unload == RELOAD_T:
-                num5 = row[QTANG_RELOAD_T] if num2 <= 0.0 else num2 / (num3 - row[QTROT_NU])
+                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - row[QTROT_NU])
                 return row[QTROT_NU] + row[QMOM1P] / num5
         if phase == RELOAD_T:
             if phase_unload == ELASTIC or phase_unload == RELOAD_T:
-                num5 = row[QTANG_RELOAD_T]
+                num5 = _quad_tangent_reload_t(row, par)
                 num = row[QTROT_NU] + row[QMOM1P] / num5
                 if par[QPE3P] < 0.0:
                     val = (row[QTROT_NU] * num5 - row[QROT3P] * par[QPE3P]) / (num5 - par[QPE3P])
@@ -1040,14 +1055,14 @@ if njit is not None:
                 return num3
             if phase_unload == PLASTIC_T:
                 num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                num5 = row[QTANG_RELOAD_T] if num2 <= 0.0 else num2 / (num3 - num4)
+                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
                 return num4 + row[QMOM1P] / num5
             if phase_unload == RELOAD_T:
                 if int(row[QTUNLOAD_C]) == RELOAD_C:
                     num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                    num5 = row[QTANG_RELOAD_T] if num2 <= 0.0 else num2 / (num3 - num4)
+                    num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
                     return row[QTROT_NU] + row[QMOM1P] / num5
-                return row[QTROT_NU] + row[QMOM1P] / row[QTANG_RELOAD_T]
+                return row[QTROT_NU] + row[QMOM1P] / _quad_tangent_reload_t(row, par)
         return num3
 
     @njit(cache=True, inline="always")
@@ -1070,13 +1085,13 @@ if njit is not None:
                 return num3
             if phase_unload == PLASTIC_C or phase_unload == RELOAD_C:
                 num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                tc = row[QTANG_RELOAD_C] if num2 == 0.0 else num2 / (num3 - num4)
+                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
                 return row[QMOM1N] / tc + num4
         if phase == UNLOAD_T:
             if phase_unload == ELASTIC:
                 return num3
             if phase_unload == PLASTIC_C or phase_unload == RELOAD_C:
-                tc = row[QTANG_RELOAD_C] if num2 == 0.0 else num2 / (num3 - row[QTROT_PU])
+                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - row[QTROT_PU])
                 return row[QTROT_PU] + row[QMOM1N] / tc
         if phase == UNLOAD_C:
             if phase_unload == ELASTIC:
@@ -1086,23 +1101,23 @@ if njit is not None:
             if phase_unload == RELOAD_C:
                 if row[QTSTRAIN] > row[QTROT_LIM_NU]:
                     return row[QTROT_NU] + row[QMOM1N] / par[QPE1N]
-                return row[QTROT_PU] + row[QMOM1N] / row[QTANG_RELOAD_C]
+                return row[QTROT_PU] + row[QMOM1N] / _quad_tangent_reload_c(row, par)
         if phase == RELOAD_T:
             if phase_unload == ELASTIC:
                 return num3
             if phase_unload == PLASTIC_C:
                 num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                tc = row[QTANG_RELOAD_C] if num2 == 0.0 else num2 / (num3 - num4)
+                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
                 return num4 + row[QMOM1N] / tc
             if phase_unload == RELOAD_C:
                 if int(row[QTUNLOAD_T]) == RELOAD_T:
                     num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                    tc = row[QTANG_RELOAD_C] if num2 == 0.0 else num2 / (num3 - num4)
+                    tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
                     return num4 + row[QMOM1N] / tc
-                return row[QTROT_PU] + row[QMOM1N] / row[QTANG_RELOAD_C]
+                return row[QTROT_PU] + row[QMOM1N] / _quad_tangent_reload_c(row, par)
         if phase == RELOAD_C:
             if phase_unload == ELASTIC or phase_unload == RELOAD_C:
-                tc = row[QTANG_RELOAD_C]
+                tc = _quad_tangent_reload_c(row, par)
                 num = row[QTROT_PU] + row[QMOM1N] / tc
                 if par[QPE3N] < 0.0:
                     val = (row[QTROT_PU] * tc - row[QROT3N] * par[QPE3N]) / (tc - par[QPE3N])
@@ -1160,13 +1175,13 @@ if njit is not None:
                     row[QKTANG] = par[QPE1P]
                     row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
                 else:
-                    row[QKTANG] = row[QTANG_RELOAD_T]
+                    row[QKTANG] = _quad_tangent_reload_t(row, par)
                     row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
         elif phase == RELOAD_C:
             row[QKTANG] = tmom_max / (row[QTROT_MAX] - trot_nu)
             row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
         elif phase == RELOAD_T:
-            row[QKTANG] = row[QTANG_RELOAD_T]
+            row[QKTANG] = _quad_tangent_reload_t(row, par)
             row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
 
     @njit(cache=True, inline="always")
@@ -1218,13 +1233,13 @@ if njit is not None:
                     row[QKTANG] = par[QPE1N]
                     row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
                 else:
-                    row[QKTANG] = row[QTANG_RELOAD_C]
+                    row[QKTANG] = _quad_tangent_reload_c(row, par)
                     row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
         elif phase == RELOAD_T:
             row[QKTANG] = tmom_min / (row[QTROT_MIN] - trot_pu)
             row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
         elif phase == RELOAD_C:
-            row[QKTANG] = row[QTANG_RELOAD_C]
+            row[QKTANG] = _quad_tangent_reload_c(row, par)
             row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
 
     @njit(cache=True, nogil=True)
@@ -1931,6 +1946,7 @@ class HystereticBatchRuntime:
                 float(spring.e1n), float(spring.e2n), float(spring.e3n),
                 float(spring.eup), float(spring.eun),
                 float(spring.plastic_strain_ratio), float(bool(spring.is_on)),
+                float(spring.k),
             )
             self._read_quad_object(index, spring)
             self._quad_k[index] = float(spring.k)
