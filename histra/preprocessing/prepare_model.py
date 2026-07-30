@@ -123,6 +123,14 @@ class _CoulombLaw:
     bcacovic: float = 0.0
 
 
+@dataclass(frozen=True)
+class _QuadAfferenceGeometry:
+    centre: np.ndarray
+    vertices: np.ndarray
+    normal: np.ndarray
+    warping_nodal: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+
+
 def _v(point: Point | Sequence[float]) -> np.ndarray:
     if isinstance(point, Point):
         return np.asarray((point.x, point.y, point.z), dtype=float)
@@ -138,6 +146,22 @@ def _norm3(value: Sequence[float]) -> float:
         float(value[0]) * float(value[0])
         + float(value[1]) * float(value[1])
         + float(value[2]) * float(value[2])
+    )
+
+
+def _cross3(first: Sequence[float], second: Sequence[float]) -> np.ndarray:
+    """Three-component cross product without NumPy axis dispatch.
+
+    ``np.cross`` spends most of its time normalizing axes for the very small
+    vectors used throughout preprocessing.  Keeping the scalar operation here
+    preserves the same arithmetic while avoiding hundreds of thousands of
+    temporary arrays and ``moveaxis`` calls.
+    """
+    ax, ay, az = float(first[0]), float(first[1]), float(first[2])
+    bx, by, bz = float(second[0]), float(second[1]), float(second[2])
+    return np.asarray(
+        (ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx),
+        dtype=float,
     )
 
 
@@ -293,6 +317,57 @@ def _sliding_law(material: MasonryMaterial, *, out_of_plane: bool, vertical: boo
         is_ductility_fixed=True,
         check_contact_area=_bool(material, "CheckContactArea", False),
     )
+
+
+def _cached_flex_law(
+    material: MasonryMaterial,
+    *,
+    vertical: bool,
+    cache: dict[tuple[int, bool], _HystereticLaw] | None,
+) -> _HystereticLaw:
+    if cache is None:
+        return _flex_law(material, vertical=vertical)
+    key = (id(material), bool(vertical))
+    law = cache.get(key)
+    if law is None:
+        law = _flex_law(material, vertical=vertical)
+        cache[key] = law
+    return law
+
+
+def _cached_diagonal_laws(
+    material: MasonryMaterial,
+    cache: dict[int, tuple[_HystereticLaw, _CoulombLaw]] | None,
+) -> tuple[_HystereticLaw, _CoulombLaw]:
+    if cache is None:
+        return _diagonal_flex_law(material), _shear_law(material)
+    key = id(material)
+    laws = cache.get(key)
+    if laws is None:
+        laws = (_diagonal_flex_law(material), _shear_law(material))
+        cache[key] = laws
+    return laws
+
+
+def _cached_sliding_law(
+    material: MasonryMaterial,
+    *,
+    out_of_plane: bool,
+    vertical: bool,
+    cache: dict[tuple[int, bool, bool], _CoulombLaw] | None,
+) -> _CoulombLaw:
+    if cache is None:
+        return _sliding_law(
+            material, out_of_plane=out_of_plane, vertical=vertical
+        )
+    key = (id(material), bool(out_of_plane), bool(vertical))
+    law = cache.get(key)
+    if law is None:
+        law = _sliding_law(
+            material, out_of_plane=out_of_plane, vertical=vertical
+        )
+        cache[key] = law
+    return law
 
 
 def _configure_coulomb(
@@ -745,8 +820,8 @@ def _make_interface_geometry(
         # vector from endpoint 1 across the face.
         across = (vertices[3] - vertices[0] + vertices[2] - vertices[1]) * 0.5
         e3 = _unit(-across, label=f"Interface {intf.key} e3")
-        e2 = _unit(np.cross(e3, e1), label=f"Interface {intf.key} e2")
-        e3 = _unit(np.cross(e1, e2), label=f"Interface {intf.key} e3")
+        e2 = _unit(_cross3(e3, e1), label=f"Interface {intf.key} e2")
+        e3 = _unit(_cross3(e1, e2), label=f"Interface {intf.key} e3")
     else:
         if parent2_g is None:
             raise ModelPreparationError(
@@ -755,20 +830,20 @@ def _make_interface_geometry(
         thickness_direction1 = edge_matches[0][1].copy()
         thickness_direction2 = edge_matches[1][1].copy()
         if float(np.dot(
-            np.cross(e1, thickness_direction1),
-            np.cross(e1, thickness_direction2),
+            _cross3(e1, thickness_direction1),
+            _cross3(e1, thickness_direction2),
         )) < 0.0:
             thickness_direction1 *= -1.0
 
         e2 = _unit(
-            np.cross(e1, thickness_direction1),
+            _cross3(e1, thickness_direction1),
             label=f"Interface {intf.key} e2",
         )
-        e3 = _unit(np.cross(e1, e2), label=f"Interface {intf.key} e3")
+        e3 = _unit(_cross3(e1, e2), label=f"Interface {intf.key} e3")
 
-        polygon_normal = np.cross(vertices[1] - vertices[0], vertices[2] - vertices[0])
+        polygon_normal = _cross3(vertices[1] - vertices[0], vertices[2] - vertices[0])
         if float(np.linalg.norm(polygon_normal)) <= 1.0e-12:
-            polygon_normal = np.cross(vertices[1] - vertices[0], vertices[3] - vertices[0])
+            polygon_normal = _cross3(vertices[1] - vertices[0], vertices[3] - vertices[0])
         polygon_normal = _unit(
             polygon_normal,
             label=f"Interface {intf.key} polygon normal",
@@ -885,10 +960,60 @@ def _find_or_create_geometric_node(model: Model, point: np.ndarray, *, tolerance
 
 def _face_normal(vertices: np.ndarray) -> np.ndarray:
     """Stable Newell normal for a four-point surface."""
-    normal = np.zeros(3, dtype=float)
-    for current, following in zip(vertices, np.roll(vertices, -1, axis=0)):
-        normal += np.cross(current, following)
-    return _unit(normal, label="Quad face normal")
+    nx = ny = nz = 0.0
+    count = len(vertices)
+    for index in range(count):
+        current = vertices[index]
+        following = vertices[(index + 1) % count]
+        nx += (
+            float(current[1]) * float(following[2])
+            - float(current[2]) * float(following[1])
+        )
+        ny += (
+            float(current[2]) * float(following[0])
+            - float(current[0]) * float(following[2])
+        )
+        nz += (
+            float(current[0]) * float(following[1])
+            - float(current[1]) * float(following[0])
+        )
+    return _unit((nx, ny, nz), label="Quad face normal")
+
+
+def _face_normals_batch(faces: np.ndarray) -> np.ndarray:
+    """Return Newell normals for ``(..., vertex, xyz)`` face arrays."""
+    faces = np.asarray(faces, dtype=np.float64)
+    if faces.ndim < 3 or faces.shape[-1] != 3:
+        raise ModelPreparationError(
+            "Quad face array must have shape (..., vertex, 3); "
+            f"received {faces.shape}."
+        )
+    following = np.roll(faces, -1, axis=-2)
+    normals = np.empty(faces.shape[:-2] + (3,), dtype=np.float64)
+    normals[..., 0] = np.sum(
+        faces[..., 1] * following[..., 2]
+        - faces[..., 2] * following[..., 1],
+        axis=-1,
+    )
+    normals[..., 1] = np.sum(
+        faces[..., 2] * following[..., 0]
+        - faces[..., 0] * following[..., 2],
+        axis=-1,
+    )
+    normals[..., 2] = np.sum(
+        faces[..., 0] * following[..., 1]
+        - faces[..., 1] * following[..., 0],
+        axis=-1,
+    )
+    lengths = np.sqrt(np.sum(normals * normals, axis=-1))
+    invalid = np.argwhere(lengths <= 1.0e-12)
+    if invalid.size:
+        location = tuple(int(value) for value in invalid[0])
+        raise ModelPreparationError(
+            "Cannot normalize zero vector while building Quad face normal "
+            f"at batch index {location}."
+        )
+    return normals / lengths[..., None]
 
 
 def _cross_2d(a: Sequence[float], b: Sequence[float], c: Sequence[float]) -> float:
@@ -1010,7 +1135,7 @@ def _coplanar_quad_intersection(
 ) -> list[np.ndarray] | None:
     normal_first = _face_normal(first)
     normal_second = _face_normal(second)
-    if float(np.linalg.norm(np.cross(normal_first, normal_second))) > _CONTACT_ANGLE_TOLERANCE:
+    if float(np.linalg.norm(_cross3(normal_first, normal_second))) > _CONTACT_ANGLE_TOLERANCE:
         return None
     origin = np.mean(first, axis=0)
     if float(np.max(np.abs((second-origin) @ normal_first))) > _CONTACT_DISTANCE_TOLERANCE:
@@ -1130,10 +1255,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
     face_min = np.min(faces, axis=2)
     face_max = np.max(faces, axis=2)
     face_center = np.mean(faces, axis=2)
-    face_normal = np.asarray([
-        [_face_normal(faces[qindex, face]) for face in range(6)]
-        for qindex in range(count)
-    ], dtype=float)
+    face_normal = _face_normals_batch(faces)
     centres = np.asarray([_v(quad.g) for quad in quads], dtype=float)
     broad_radius = np.asarray([
         max(quad.length) + max(quad.thickness) for quad in quads
@@ -1308,6 +1430,34 @@ def _warping_nodal_vectors(quad: Quad) -> tuple[np.ndarray, np.ndarray, np.ndarr
     return zero.copy(), zero.copy(), node2, node3
 
 
+def _quad_afference_geometry(model: Model, quad: Quad) -> _QuadAfferenceGeometry:
+    assert model.collections is not None
+    vertices = np.asarray(
+        [_v(model.collections.nodes[key].point) for key in quad.node_keys],
+        dtype=float,
+    )
+    normal = _unit(
+        _cross3(vertices[1] - vertices[0], vertices[2] - vertices[0]),
+        label=f"Quad {quad.key} midsurface normal",
+    )
+    return _QuadAfferenceGeometry(
+        centre=_v(quad.g),
+        vertices=vertices,
+        normal=normal,
+        warping_nodal=_warping_nodal_vectors(quad),
+    )
+
+
+def _warping_vector_from_geometry(
+    geometry: _QuadAfferenceGeometry, point: np.ndarray
+) -> np.ndarray:
+    projected = point - geometry.normal * float(
+        np.dot(point - geometry.vertices[0], geometry.normal)
+    )
+    u, v = _inverse_bilinear(geometry.vertices, projected)
+    return _bilinear(geometry.warping_nodal, u, v)
+
+
 def _warping_vector_at_point(quad: Quad, point: np.ndarray, model: Model) -> np.ndarray:
     """C# ``GetDisplacementFromShearDOF`` for an arbitrary face point.
 
@@ -1316,33 +1466,51 @@ def _warping_vector_at_point(quad: Quad, point: np.ndarray, model: Model) -> np.
     vectors. Restricting this operation to centre-line edges loses the offset
     lateral contacts created by the full surface-intersection algorithm.
     """
-    assert model.collections is not None
-    vertices = np.asarray([
-        _v(model.collections.nodes[key].point) for key in quad.node_keys
-    ], dtype=float)
-    normal = _unit(
-        np.cross(vertices[1]-vertices[0], vertices[2]-vertices[0]),
-        label=f"Quad {quad.key} midsurface normal",
+    return _warping_vector_from_geometry(
+        _quad_afference_geometry(model, quad), point
     )
-    projected = point - normal * float(np.dot(point-vertices[0], normal))
-    u, v = _inverse_bilinear(vertices, projected)
-    return _bilinear(_warping_nodal_vectors(quad), u, v)
 
 
 def _point_afference(
     model: Model, quad: Quad, point: np.ndarray, node_key: int,
     direction: np.ndarray, *, face: int,
+    _geometry: _QuadAfferenceGeometry | None = None,
+    _point_cache: dict[
+        tuple[int, int], tuple[np.ndarray, np.ndarray | None]
+    ] | None = None,
 ) -> list[AfferenceEntry]:
-    del node_key
-    r = point - _v(quad.g)
-    coeff = np.zeros(7)
-    coeff[:3] = direction
-    coeff[3:6] = np.cross(r, direction)
-    # Quad.PointAfference explicitly suppresses the in-plane shear DOF on the
-    # two broad thickness faces (Face1/Face2 > 3).
-    coeff[6] = (
-        0.0 if face > 3
-        else float(np.dot(_warping_vector_at_point(quad, point, model), direction))
+    geometry = (
+        _quad_afference_geometry(model, quad)
+        if _geometry is None
+        else _geometry
+    )
+    cache_key = (int(quad.key), int(node_key))
+    cached = None if _point_cache is None else _point_cache.get(cache_key)
+    if cached is None:
+        r = point - geometry.centre
+        warping = None
+    else:
+        r, warping = cached
+
+    if face <= 3 and warping is None:
+        warping = _warping_vector_from_geometry(geometry, point)
+    if _point_cache is not None:
+        if cached is None or (cached[1] is None and warping is not None):
+            _point_cache[cache_key] = (r, warping)
+
+    dx, dy, dz = (
+        float(direction[0]), float(direction[1]), float(direction[2])
+    )
+    rx, ry, rz = float(r[0]), float(r[1]), float(r[2])
+    shear = 0.0 if face > 3 else float(np.dot(warping, direction))
+    coeff = (
+        dx,
+        dy,
+        dz,
+        ry * dz - rz * dy,
+        rz * dx - rx * dz,
+        rx * dy - ry * dx,
+        shear,
     )
     out: list[AfferenceEntry] = []
     # C# Quad.PointAfference delegates to
@@ -1352,7 +1520,9 @@ def _point_afference(
         if abs(value) <= 1.0e-4:
             continue
         for entry in quad.aff[local]:
-            out.append(AfferenceEntry(gdl=entry.gdl, alfa=float(value * entry.alfa)))
+            out.append(
+                AfferenceEntry(gdl=entry.gdl, alfa=float(value * entry.alfa))
+            )
     return out
 
 
@@ -1372,6 +1542,10 @@ def _rotation_afference(quad: Quad, direction: np.ndarray) -> list[AfferenceEntr
 def _assign_interface_afference(model: Model) -> None:
     assert model.collections is not None
     c = model.collections
+    geometry_cache: dict[int, _QuadAfferenceGeometry] = {}
+    point_cache: dict[
+        tuple[int, int], tuple[np.ndarray, np.ndarray | None]
+    ] = {}
     for intf in c.interfaces.values():
         intf.aff = [[] for _ in range(12)]
         e1 = np.asarray(intf.reference_e1, dtype=float)
@@ -1386,8 +1560,14 @@ def _assign_interface_afference(model: Model) -> None:
             if typ == "Restraint":
                 continue
             if typ != "Quad":
-                raise ModelPreparationError(f"Interface {intf.key} has unsupported parent type {typ!r}.")
+                raise ModelPreparationError(
+                    f"Interface {intf.key} has unsupported parent type {typ!r}."
+                )
             quad = c.quads[key]
+            geometry = geometry_cache.get(int(quad.key))
+            if geometry is None:
+                geometry = _quad_afference_geometry(model, quad)
+                geometry_cache[int(quad.key)] = geometry
             parent_face = intf.face1 if side == 0 else intf.face2
             if side == 0:
                 slots_e2 = (0, 1)
@@ -1397,12 +1577,27 @@ def _assign_interface_afference(model: Model) -> None:
                 slots_e2 = (3, 2)
                 slot_rot, slot_flex = 5, 7
                 slots_e3 = (10, 11)
-            intf.aff[slots_e2[0]] = _point_afference(model, quad, points[0], intf.node_keys[0], e2, face=parent_face)
-            intf.aff[slots_e2[1]] = _point_afference(model, quad, points[1], intf.node_keys[1], e2, face=parent_face)
+            common = {
+                "face": parent_face,
+                "_geometry": geometry,
+                "_point_cache": point_cache,
+            }
+            intf.aff[slots_e2[0]] = _point_afference(
+                model, quad, points[0], intf.node_keys[0], e2, **common
+            )
+            intf.aff[slots_e2[1]] = _point_afference(
+                model, quad, points[1], intf.node_keys[1], e2, **common
+            )
             intf.aff[slot_rot] = _rotation_afference(quad, e1)
-            intf.aff[slot_flex] = _point_afference(model, quad, points[1], intf.node_keys[1], e1, face=parent_face)
-            intf.aff[slots_e3[0]] = _point_afference(model, quad, points[0], intf.node_keys[0], e3, face=parent_face)
-            intf.aff[slots_e3[1]] = _point_afference(model, quad, points[1], intf.node_keys[1], e3, face=parent_face)
+            intf.aff[slot_flex] = _point_afference(
+                model, quad, points[1], intf.node_keys[1], e1, **common
+            )
+            intf.aff[slots_e3[0]] = _point_afference(
+                model, quad, points[0], intf.node_keys[0], e3, **common
+            )
+            intf.aff[slots_e3[1]] = _point_afference(
+                model, quad, points[1], intf.node_keys[1], e3, **common
+            )
         intf.status = InterfaceState()
         intf.status.init_from_interface(intf)
         intf._perf_aff_pairs = None
@@ -1432,7 +1627,7 @@ def _bilinear(vertices: Sequence[np.ndarray], u: float, v: float) -> np.ndarray:
 def _inverse_bilinear(vertices: Sequence[np.ndarray], point: np.ndarray) -> tuple[float, float]:
     # C# solves a 2x2 Newton system.  Avoiding np.linalg.lstsq for this tiny,
     # repeated system removes tens of thousands of LAPACK/Python crossings.
-    normal = np.cross(vertices[1]-vertices[0], vertices[3]-vertices[0])
+    normal = _cross3(vertices[1]-vertices[0], vertices[3]-vertices[0])
     drop = int(np.argmax(np.abs(normal)))
     keep0, keep1 = (1, 2) if drop == 0 else ((0, 2) if drop == 1 else (0, 1))
     target0 = float(point[keep0])
@@ -1473,10 +1668,24 @@ def _cell_vertices(intf: Interface, index: int) -> list[np.ndarray]:
 
 
 def _polygon_area_3d(points: Sequence[np.ndarray]) -> float:
-    accum = np.zeros(3)
-    for idx, point in enumerate(points):
-        accum += np.cross(point, points[(idx+1) % len(points)])
-    return 0.5 * float(np.linalg.norm(accum))
+    nx = ny = nz = 0.0
+    count = len(points)
+    for index in range(count):
+        current = points[index]
+        following = points[(index + 1) % count]
+        nx += (
+            float(current[1]) * float(following[2])
+            - float(current[2]) * float(following[1])
+        )
+        ny += (
+            float(current[2]) * float(following[0])
+            - float(current[0]) * float(following[2])
+        )
+        nz += (
+            float(current[0]) * float(following[1])
+            - float(current[1]) * float(following[0])
+        )
+    return 0.5 * math.sqrt(nx * nx + ny * ny + nz * nz)
 
 
 
@@ -1497,12 +1706,64 @@ if njit is not None:
 
     @njit(cache=True, inline="always")
     def _bilinear_nb(vertices, u, v, out):
-        n0 = (1.0-u)*(1.0-v)/4.0
-        n1 = (1.0+u)*(1.0-v)/4.0
-        n2 = (1.0+u)*(1.0+v)/4.0
-        n3 = (1.0-u)*(1.0+v)/4.0
+        # Preserve the scalar/C# evaluation order exactly.  Precomputing the
+        # four shape-function weights changes floating-point rounding because
+        # ``vertex * ((1 +/- u) * (1 +/- v) / 4)`` is not bitwise identical
+        # to ``vertex * (1 +/- u) * (1 +/- v) / 4``.  Cell areas feed spring
+        # stiffnesses, so keep the authoritative operation sequence here.
         for j in range(3):
-            out[j] = vertices[0,j]*n0 + vertices[1,j]*n1 + vertices[2,j]*n2 + vertices[3,j]*n3
+            term0 = vertices[0,j]*(1.0-u)*(1.0-v)/4.0
+            term1 = vertices[1,j]*(1.0+u)*(1.0-v)/4.0
+            term2 = vertices[2,j]*(1.0+u)*(1.0+v)/4.0
+            term3 = vertices[3,j]*(1.0-u)*(1.0+v)/4.0
+            out[j] = term0 + term1 + term2 + term3
+
+    @njit(cache=True, nogil=True)
+    def _interface_cells_nb(vertices, nrow, ncol):
+        cells = np.empty((nrow * ncol, 4, 3), dtype=np.float64)
+        point = np.empty(3, dtype=np.float64)
+        index = 0
+        for row in range(nrow):
+            v0 = row * 2.0 / nrow - 1.0
+            v1 = (row + 1) * 2.0 / nrow - 1.0
+            for col in range(ncol):
+                u0 = col * 2.0 / ncol - 1.0
+                u1 = (col + 1) * 2.0 / ncol - 1.0
+                _bilinear_nb(vertices, u0, v0, point)
+                for component in range(3):
+                    cells[index, 0, component] = point[component]
+                _bilinear_nb(vertices, u1, v0, point)
+                for component in range(3):
+                    cells[index, 1, component] = point[component]
+                _bilinear_nb(vertices, u1, v1, point)
+                for component in range(3):
+                    cells[index, 2, component] = point[component]
+                _bilinear_nb(vertices, u0, v1, point)
+                for component in range(3):
+                    cells[index, 3, component] = point[component]
+                index += 1
+        return cells
+
+    @njit(cache=True, nogil=True)
+    def _polygon_areas_3d_nb(cells):
+        areas = np.empty(cells.shape[0], dtype=np.float64)
+        for cell_index in range(cells.shape[0]):
+            nx = 0.0
+            ny = 0.0
+            nz = 0.0
+            for index in range(cells.shape[1]):
+                following = (index + 1) % cells.shape[1]
+                x0 = cells[cell_index, index, 0]
+                y0 = cells[cell_index, index, 1]
+                z0 = cells[cell_index, index, 2]
+                x1 = cells[cell_index, following, 0]
+                y1 = cells[cell_index, following, 1]
+                z1 = cells[cell_index, following, 2]
+                nx += y0 * z1 - z0 * y1
+                ny += z0 * x1 - x0 * z1
+                nz += x0 * y1 - y0 * x1
+            areas[cell_index] = 0.5 * math.sqrt(nx * nx + ny * ny + nz * nz)
+        return areas
 
     @njit(cache=True, inline="always")
     def _inverse_bilinear_nb(vertices, point):
@@ -1697,6 +1958,34 @@ else:
     _fiber_stiffness_batch_nb = None
 
 
+def _interface_cells(intf: Interface) -> np.ndarray:
+    nrow = int(intf.nrow)
+    ncol = int(intf.ncol)
+    if nrow <= 0 or ncol <= 0:
+        raise ModelPreparationError(
+            f"Interface {intf.key} has invalid spring grid "
+            f"Nrow={nrow}, Ncol={ncol}."
+        )
+    vertices = getattr(intf, "_prep_vertices", None)
+    if vertices is None:
+        vertices = np.asarray([_v(point) for point in intf.vint3d], dtype=float)
+        intf._prep_vertices = vertices
+    vertices = np.asarray(vertices, dtype=np.float64)
+    if njit is not None:
+        return _interface_cells_nb(vertices, nrow, ncol)
+    return np.asarray(
+        [_cell_vertices(intf, index) for index in range(nrow * ncol)],
+        dtype=np.float64,
+    )
+
+
+def _polygon_areas_3d(cells: np.ndarray) -> np.ndarray:
+    cells = np.asarray(cells, dtype=np.float64)
+    if njit is not None:
+        return _polygon_areas_3d_nb(cells)
+    return np.asarray([_polygon_area_3d(cell) for cell in cells], dtype=np.float64)
+
+
 def _fiber_stiffness_batch(model: Model, quad: Quad, intf: Interface,
                             cells: np.ndarray, E: float, face: int) -> np.ndarray:
     if _fiber_stiffness_batch_nb is None:
@@ -1733,8 +2022,8 @@ def _fiber_stiffness(model: Model, quad: Quad, intf: Interface, cell: Sequence[n
     near_face = vints[face]
     points = [np.asarray(v, dtype=float).copy() for v in cell]
 
-    face_cross = np.cross(near_face[1] - near_face[0], near_face[3] - near_face[0])
-    cell_cross = np.cross(points[1] - points[0], points[3] - points[0])
+    face_cross = _cross3(near_face[1] - near_face[0], near_face[3] - near_face[0])
+    cell_cross = _cross3(points[1] - points[0], points[3] - points[0])
     if float(np.dot(face_cross, cell_cross)) < 0.0:
         points[1], points[3] = points[3], points[1]
 
@@ -1764,7 +2053,7 @@ def _fiber_stiffness(model: Model, quad: Quad, intf: Interface, cell: Sequence[n
     axial = float(np.dot(points[0] - center_near, cvec))
     transverse = points[0] - center_near - axial * cvec
     vector3 = _unit(transverse, label="fibre local axis")
-    value = np.cross(vector3, cvec)
+    value = _cross3(vector3, cvec)
 
     a4: list[np.ndarray] = []
     a6: list[np.ndarray] = []
@@ -1856,14 +2145,18 @@ def _fiber_stiffness(model: Model, quad: Quad, intf: Interface, cell: Sequence[n
 
 def _distance_to_interface_plane(quad: Quad, intf: Interface) -> float:
     p0 = _v(intf.vint3d[0])
-    normal = _unit(np.cross(_v(intf.vint3d[1])-p0, _v(intf.vint3d[2])-p0), label="interface plane")
+    normal = _unit(_cross3(_v(intf.vint3d[1])-p0, _v(intf.vint3d[2])-p0), label="interface plane")
     return abs(float(np.dot(_v(quad.g)-p0, normal)))
 
 
-def _quad_spring(model: Model, quad: Quad) -> SpringCoulomb03 | SpringHysteretic | SpringElastic:
+def _quad_spring(
+    model: Model,
+    quad: Quad,
+    *,
+    law_cache: dict[int, tuple[_HystereticLaw, _CoulombLaw]] | None = None,
+) -> SpringCoulomb03 | SpringHysteretic | SpringElastic:
     material = _material(model, quad.material_key)
-    flex = _diagonal_flex_law(material)
-    shear = _shear_law(material)
+    flex, shear = _cached_diagonal_laws(material, law_cache)
     length = quad.d_alfa_2d_diag()
     k = quad.get_diagonal_stiffness(flex.E, shear.E)
     if shear.sub_law in {"Coulomb", "Cacovic"}:
@@ -1927,9 +2220,52 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
     return _configure_hysteretic(k, area, length, law), law
 
 
-def _side_sliding_spring(model: Model, parent_type: str, parent_key: int, intf: Interface,
-                         *, out_of_plane: bool, area: float, vertical: bool,
-                         material_override: MasonryMaterial | None = None) -> SpringCoulomb03:
+def _interface_parent_material(
+    model: Model,
+    intf: Interface,
+    parent_type: str,
+    parent_key: int,
+    material_override: MasonryMaterial | None,
+) -> MasonryMaterial:
+    """Return the material governing one interface side.
+
+    Restraint-side ultimate-displacement rules use the material of the Quad on
+    the opposite side in the C# implementation.  Resolving that material once
+    also avoids repeating collection lookups for the three sliding springs.
+    """
+    assert model.collections is not None
+    if material_override is not None:
+        return material_override
+    if parent_type == "Quad":
+        return _material(model, model.collections.quads[parent_key].material_key)
+    if parent_type != "Restraint":
+        raise ModelPreparationError(
+            f"Interface {intf.key} has unsupported parent type {parent_type!r}."
+        )
+    if intf.parent_type_element1 == "Quad":
+        quad_key = intf.parent_element_key1
+    elif intf.parent_type_element2 == "Quad":
+        quad_key = intf.parent_element_key2
+    else:
+        raise ModelPreparationError(
+            f"Interface {intf.key} has a restraint but no Quad parent."
+        )
+    return _material(model, model.collections.quads[quad_key].material_key)
+
+
+def _side_sliding_spring(
+    model: Model,
+    parent_type: str,
+    parent_key: int,
+    intf: Interface,
+    *,
+    out_of_plane: bool,
+    area: float,
+    vertical: bool,
+    material_override: MasonryMaterial | None = None,
+    law: _CoulombLaw | None = None,
+    distance: float | None = None,
+) -> SpringCoulomb03:
     assert model.collections is not None
     if parent_type == "Restraint":
         spring = SpringCoulomb03(type_of="HiStrA.Objects.SpringCoulomb03")
@@ -1937,19 +2273,35 @@ def _side_sliding_spring(model: Model, parent_type: str, parent_key: int, intf: 
         spring.area = area
         return spring
     quad = model.collections.quads[parent_key]
-    material = material_override if material_override is not None else _material(model, quad.material_key)
-    law = _sliding_law(material, out_of_plane=out_of_plane, vertical=vertical)
-    distance = _distance_to_interface_plane(quad, intf)
+    if law is None:
+        material = (
+            material_override
+            if material_override is not None
+            else _material(model, quad.material_key)
+        )
+        law = _sliding_law(
+            material, out_of_plane=out_of_plane, vertical=vertical
+        )
+    if distance is None:
+        distance = _distance_to_interface_plane(quad, intf)
     if distance <= 1.0e-12:
-        raise ModelPreparationError(f"Quad {quad.key}, Interface {intf.key}: zero sliding distance.")
+        raise ModelPreparationError(
+            f"Quad {quad.key}, Interface {intf.key}: zero sliding distance."
+        )
     # ``area`` is already the half-interface area for the two-spring
     # out-of-plane torsion model. C# GetOutOfPlaneSlidingStiffness also uses
     # Interface.Area()/2, so no second division is applied here.
     effective_area = area
     k = law.E * effective_area / distance
-    spring = _configure_coulomb(k=k, area=area, length=intf.length, law=law,
-                                cohesion_force=area*law.cohesion, ur=100000.0,
-                                hysteretic_type="Initial")
+    spring = _configure_coulomb(
+        k=k,
+        area=area,
+        length=intf.length,
+        law=law,
+        cohesion_force=area * law.cohesion,
+        ur=100000.0,
+        hysteretic_type="Initial",
+    )
     spring.plastic_strain_ratio = 1.0
     return spring
 
@@ -1958,47 +2310,92 @@ def _transverse_side_properties_batch(
     model: Model, parent_type: str, parent_key: int, face: int,
     intf: Interface, cells: np.ndarray,
     material_override: MasonryMaterial | None = None,
+    *,
+    vertical: bool | None = None,
+    law_cache: dict[tuple[int, bool], _HystereticLaw] | None = None,
 ) -> tuple[np.ndarray, _HystereticLaw]:
     assert model.collections is not None
     if parent_type == "Restraint":
         props = np.zeros((len(cells), 3), dtype=np.float64)
         props[:, 0] = -1.0
-        props[:, 1] = np.asarray([_polygon_area_3d(cell) for cell in cells])
+        props[:, 1] = _polygon_areas_3d(cells)
         if material_override is not None:
-            law = _flex_law(material_override)
+            law = _cached_flex_law(
+                material_override, vertical=False, cache=law_cache
+            )
         else:
             quad_key = (
                 intf.parent_element_key1
                 if intf.parent_type_element1 == "Quad"
                 else intf.parent_element_key2
             )
-            law = _flex_law(_material(model, model.collections.quads[quad_key].material_key))
+            material = _material(
+                model, model.collections.quads[quad_key].material_key
+            )
+            law = _cached_flex_law(
+                material, vertical=False, cache=law_cache
+            )
         return props, law
     quad = model.collections.quads[parent_key]
-    material = material_override if material_override is not None else _material(model, quad.material_key)
-    vertical = abs(float(np.dot(
-        np.asarray(intf.reference_e2), np.asarray((0.0, 0.0, 1.0))
-    ))) > math.cos(math.radians(45.0))
-    law = _flex_law(material, vertical=vertical)
-    return _fiber_stiffness_batch(model, quad, intf, cells, law.E, face), law
+    material = (
+        material_override
+        if material_override is not None
+        else _material(model, quad.material_key)
+    )
+    if vertical is None:
+        vertical = abs(float(intf.reference_e2[2])) > math.cos(math.radians(45.0))
+    law = _cached_flex_law(
+        material, vertical=vertical, cache=law_cache
+    )
+    return _fiber_stiffness_batch(
+        model, quad, intf, cells, law.E, face
+    ), law
 
 
-def _create_interface_springs(model: Model, intf: Interface) -> None:
-    restrained = intf.parent_type_element1 == "Restraint" or intf.parent_type_element2 == "Restraint"
+def _create_interface_springs(
+    model: Model,
+    intf: Interface,
+    *,
+    flex_law_cache: dict[tuple[int, bool], _HystereticLaw] | None = None,
+    sliding_law_cache: dict[tuple[int, bool, bool], _CoulombLaw] | None = None,
+) -> None:
+    assert model.collections is not None
+    restrained = (
+        intf.parent_type_element1 == "Restraint"
+        or intf.parent_type_element2 == "Restraint"
+    )
     custom_material = None
     if int(intf.material_key) != 0:
         custom_material = _material(model, int(intf.material_key))
-    cell_count = intf.nrow * intf.ncol
-    cells = np.asarray([_cell_vertices(intf, index) for index in range(cell_count)], dtype=np.float64)
+
+    vertical = abs(float(intf.reference_e2[2])) > math.cos(math.radians(45.0))
+    cells = _interface_cells(intf)
+    cell_count = len(cells)
     props1, law1 = _transverse_side_properties_batch(
-        model, intf.parent_type_element1, intf.parent_element_key1,
-        intf.face1, intf, cells, custom_material,
+        model,
+        intf.parent_type_element1,
+        intf.parent_element_key1,
+        intf.face1,
+        intf,
+        cells,
+        custom_material,
+        vertical=vertical,
+        law_cache=flex_law_cache,
     )
     props2, law2 = _transverse_side_properties_batch(
-        model, intf.parent_type_element2, intf.parent_element_key2,
-        intf.face2, intf, cells, custom_material,
+        model,
+        intf.parent_type_element2,
+        intf.parent_element_key2,
+        intf.face2,
+        intf,
+        cells,
+        custom_material,
+        vertical=vertical,
+        law_cache=flex_law_cache,
     )
+
     intf.trasv_1 = []
+    append_transverse = intf.trasv_1.append
     for index in range(cell_count):
         k1, area1, length1 = map(float, props1[index])
         k2, area2, length2 = map(float, props2[index])
@@ -2017,7 +2414,7 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
             spring.parent_type = "Interface"
             spring.spring_purpose = "Transversal1"
             spring.length = 0.0
-            intf.trasv_1.append(spring)
+            append_transverse(spring)
             continue
 
         if k1 == -1.0:
@@ -2048,77 +2445,142 @@ def _create_interface_springs(model: Model, intf: Interface) -> None:
             # C# Interface.SetSpring: for a custom material on a restraint/Quad
             # interface, clone the non-restraint spring rather than combining
             # it with the rigid restraint-side placeholder.
-            spring = copy.deepcopy(sp2 if intf.parent_type_element1 == "Restraint" else sp1)
+            spring = copy.deepcopy(
+                sp2 if intf.parent_type_element1 == "Restraint" else sp1
+            )
         else:
-            spring = _combine_hysteretic(sp1, sp2, restrained, law1, law2)
+            spring = _combine_hysteretic(
+                sp1, sp2, restrained, law1, law2
+            )
         spring.key = index
         spring.parent_key = intf.key
         spring.parent_type = "Interface"
         spring.spring_purpose = "Transversal1"
         spring.length = 0.0
-        intf.trasv_1.append(spring)
+        append_transverse(spring)
 
     area = intf.area()
-    vertical = abs(float(np.dot(np.asarray(intf.reference_e2), np.asarray((0.0,0.0,1.0))))) > math.cos(math.radians(45.0))
-    s1 = _side_sliding_spring(model, intf.parent_type_element1, intf.parent_element_key1, intf,
-                              out_of_plane=False, area=area, vertical=vertical,
-                              material_override=custom_material)
-    s2 = _side_sliding_spring(model, intf.parent_type_element2, intf.parent_element_key2, intf,
-                              out_of_plane=False, area=area, vertical=vertical,
-                              material_override=custom_material)
+    material1 = _interface_parent_material(
+        model,
+        intf,
+        intf.parent_type_element1,
+        intf.parent_element_key1,
+        custom_material,
+    )
+    material2 = _interface_parent_material(
+        model,
+        intf,
+        intf.parent_type_element2,
+        intf.parent_element_key2,
+        custom_material,
+    )
+    in_law1 = _cached_sliding_law(
+        material1,
+        out_of_plane=False,
+        vertical=vertical,
+        cache=sliding_law_cache,
+    )
+    in_law2 = _cached_sliding_law(
+        material2,
+        out_of_plane=False,
+        vertical=vertical,
+        cache=sliding_law_cache,
+    )
+    out_law1 = _cached_sliding_law(
+        material1,
+        out_of_plane=True,
+        vertical=vertical,
+        cache=sliding_law_cache,
+    )
+    out_law2 = _cached_sliding_law(
+        material2,
+        out_of_plane=True,
+        vertical=vertical,
+        cache=sliding_law_cache,
+    )
+
+    distance1 = None
+    if intf.parent_type_element1 == "Quad":
+        distance1 = _distance_to_interface_plane(
+            model.collections.quads[intf.parent_element_key1], intf
+        )
+    distance2 = None
+    if intf.parent_type_element2 == "Quad":
+        distance2 = _distance_to_interface_plane(
+            model.collections.quads[intf.parent_element_key2], intf
+        )
+
+    s1 = _side_sliding_spring(
+        model,
+        intf.parent_type_element1,
+        intf.parent_element_key1,
+        intf,
+        out_of_plane=False,
+        area=area,
+        vertical=vertical,
+        material_override=custom_material,
+        law=in_law1,
+        distance=distance1,
+    )
+    s2 = _side_sliding_spring(
+        model,
+        intf.parent_type_element2,
+        intf.parent_element_key2,
+        intf,
+        out_of_plane=False,
+        area=area,
+        vertical=vertical,
+        material_override=custom_material,
+        law=in_law2,
+        distance=distance2,
+    )
     slid = _combine_coulomb(s1, s2, restrained)
     # C# invokes SetUltimateDisplacement after combining both sides.
-    def _law_for(parent_type: str, parent_key: int, *, out_plane: bool) -> _CoulombLaw:
-        if custom_material is not None:
-            return _sliding_law(
-                custom_material, out_of_plane=out_plane, vertical=vertical
-            )
-        if parent_type == "Restraint":
-            if intf.parent_type_element1 == "Quad":
-                other_key = intf.parent_element_key1
-            elif intf.parent_type_element2 == "Quad":
-                other_key = intf.parent_element_key2
-            else:
-                raise ModelPreparationError(
-                    f"Interface {intf.key} has a restraint but no Quad parent."
-                )
-            return _sliding_law(
-                _material(model, model.collections.quads[other_key].material_key),
-                out_of_plane=out_plane,
-                vertical=vertical,
-            )
-        return _sliding_law(
-            _material(model, model.collections.quads[parent_key].material_key),
-            out_of_plane=out_plane,
-            vertical=vertical,
-        )
-    _set_coulomb_ultimate(
-        slid,
-        _law_for(intf.parent_type_element1, intf.parent_element_key1, out_plane=False),
-        _law_for(intf.parent_type_element2, intf.parent_element_key2, out_plane=False),
-    )
-    slid.key = 0; slid.parent_key = intf.key; slid.parent_type = "Interface"; slid.spring_purpose = "Slid"
+    _set_coulomb_ultimate(slid, in_law1, in_law2)
+    slid.key = 0
+    slid.parent_key = intf.key
+    slid.parent_type = "Interface"
+    slid.spring_purpose = "Slid"
     slid.length = intf.length
     intf.slid = [slid]
 
+    half_area = area / 2.0
     intf.slid_out_plan = []
+    append_out = intf.slid_out_plan.append
     for index in range(2):
-        half_area = area / 2.0
-        o1 = _side_sliding_spring(model, intf.parent_type_element1, intf.parent_element_key1, intf,
-                                  out_of_plane=True, area=half_area, vertical=vertical,
-                                  material_override=custom_material)
-        o2 = _side_sliding_spring(model, intf.parent_type_element2, intf.parent_element_key2, intf,
-                                  out_of_plane=True, area=half_area, vertical=vertical,
-                                  material_override=custom_material)
-        out = _combine_coulomb(o1, o2, restrained)
-        _set_coulomb_ultimate(
-            out,
-            _law_for(intf.parent_type_element1, intf.parent_element_key1, out_plane=True),
-            _law_for(intf.parent_type_element2, intf.parent_element_key2, out_plane=True),
+        o1 = _side_sliding_spring(
+            model,
+            intf.parent_type_element1,
+            intf.parent_element_key1,
+            intf,
+            out_of_plane=True,
+            area=half_area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=out_law1,
+            distance=distance1,
         )
-        out.key=index; out.parent_key=intf.key; out.parent_type="Interface"; out.spring_purpose="SlidOutOfPlan"
-        out.area=half_area; out.length=intf.length/2.0
-        intf.slid_out_plan.append(out)
+        o2 = _side_sliding_spring(
+            model,
+            intf.parent_type_element2,
+            intf.parent_element_key2,
+            intf,
+            out_of_plane=True,
+            area=half_area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=out_law2,
+            distance=distance2,
+        )
+        out = _combine_coulomb(o1, o2, restrained)
+        _set_coulomb_ultimate(out, out_law1, out_law2)
+        out.key = index
+        out.parent_key = intf.key
+        out.parent_type = "Interface"
+        out.spring_purpose = "SlidOutOfPlan"
+        out.area = half_area
+        out.length = intf.length / 2.0
+        append_out(out)
 
     intf.status = InterfaceState()
     intf.status.init_from_interface(intf)
@@ -2170,17 +2632,32 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
     c = model.collections
     if not c.quads:
         raise ModelPreparationError("PrepareModel currently requires at least one Quad.")
+    diagonal_law_cache: dict[
+        int, tuple[_HystereticLaw, _CoulombLaw]
+    ] = {}
+    flex_law_cache: dict[tuple[int, bool], _HystereticLaw] = {}
+    sliding_law_cache: dict[
+        tuple[int, bool, bool], _CoulombLaw
+    ] = {}
+
     _assign_quad_afference(model)
     for quad in c.quads.values():
         quad.status = QuadState()
-        quad.spring = _quad_spring(model, quad)
+        quad.spring = _quad_spring(
+            model, quad, law_cache=diagonal_law_cache
+        )
         quad._perf_aff_pairs = None
         quad._perf_dn_edges = None
         quad._perf_dn_areas = None
     qq, qr = _generate_interfaces(model)
     _assign_interface_afference(model)
     for intf in c.interfaces.values():
-        _create_interface_springs(model, intf)
+        _create_interface_springs(
+            model,
+            intf,
+            flex_law_cache=flex_law_cache,
+            sliding_law_cache=sliding_law_cache,
+        )
     model.is_locked = True
     report = inspect_solver_readiness(model)
     if not report.is_ready:
