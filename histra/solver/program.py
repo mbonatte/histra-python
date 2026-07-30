@@ -23,6 +23,7 @@ class Program:
     on_log: Any | None = None
     on_progress: Any | None = None
     should_cancel: CancelCheck | None = None
+    diagnostics: Any | None = None
 
     def log(self, msg: str) -> None:
         if self.on_log:

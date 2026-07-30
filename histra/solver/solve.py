@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import gc
+import time
 from typing import Any, Callable
 
 import numpy as np
@@ -19,6 +20,7 @@ from histra.solver.restart import restore_committed_analysis_state
 from histra.postprocessing import compute_total_reaction
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
 from histra.types.linear_system import LinearSolveError, LinearSystem
+from histra.solver.diagnostics import DiagnosticOptions, create_diagnostics
 from histra.solver.cancellation import (
     CANCELLED_EXIT_CODE,
     CancelCheck,
@@ -40,6 +42,8 @@ def solve_static_nonlinear(
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
     should_cancel: CancelCheck | None = None,
+    diagnostics: DiagnosticOptions | str | Path | None = None,
+    linear_solver_backend: str | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
     Reversible Newton trials create thousands of short-lived state containers.
@@ -62,6 +66,8 @@ def solve_static_nonlinear(
                     auto_prepare=auto_prepare,
                     max_committed_steps=max_committed_steps,
                     should_cancel=should_cancel,
+                    diagnostics=diagnostics,
+                    linear_solver_backend=linear_solver_backend,
                 )
             finally:
                 runtime = ModelManager.hysteretic_batch_for(model)
@@ -90,6 +96,8 @@ def _solve_static_nonlinear_impl(
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
     should_cancel: CancelCheck | None = None,
+    diagnostics: DiagnosticOptions | str | Path | None = None,
+    linear_solver_backend: str | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     raise_if_cancelled(should_cancel)
@@ -103,7 +111,9 @@ def _solve_static_nonlinear_impl(
                 "Preparing unlocked HRX computational model in Python "
                 f"({readiness.quad_count} Quads)..."
             )
+        prep_started = time.perf_counter()
         prep = ModelManager.prepare_model(model)
+        prepare_model_seconds = time.perf_counter() - prep_started
         raise_if_cancelled(should_cancel)
         if on_log is not None:
             on_log(
@@ -119,10 +129,12 @@ def _solve_static_nonlinear_impl(
             "frame/load-generation subsystem is absent from this Python port."
         )
     n = int(model.gdl)
+    diagnostic_writer = create_diagnostics(diagnostics, model)
     p = Program(
-        gdl=n, on_log=on_log, on_progress=on_progress, should_cancel=should_cancel
+        gdl=n, on_log=on_log, on_progress=on_progress, should_cancel=should_cancel,
+        diagnostics=diagnostic_writer,
     )
-    ls = LinearSystem(n)
+    ls = LinearSystem(n, backend=linear_solver_backend)
     p.ls = ls
     p.u = np.zeros(n)
     p.v = np.zeros(n)
@@ -215,7 +227,13 @@ def _solve_static_nonlinear_impl(
         analysis.load_function = model.collections.load_functions[analysis.load_function_key]
 
     p.check_cancelled()
+    load_started = time.perf_counter()
     ModelManager.assemble_load(model, ls, getattr(analysis, "key", None), combination)
+    load_seconds = time.perf_counter() - load_started
+    if diagnostic_writer is not None:
+        diagnostic_writer.add_timing("load_vector_assembly", load_seconds)
+        if "prepare_model_seconds" in locals():
+            diagnostic_writer.add_timing("prepare_model", prepare_model_seconds)
     p.check_cancelled()
     algorithm = EquiSolnAlgo.new_equi_soln_algo(analysis, combination)
     integrator = algorithm.the_integrator
@@ -230,11 +248,38 @@ def _solve_static_nonlinear_impl(
     # inside their iteration loop; StandardInitialInterpolatedLineSearch is
     # accidentally omitted from that loop and therefore relies on this exact
     # initial-stiffness matrix for the whole step.
-    integrator.update_k(p, model, 0.0)
+    if diagnostic_writer is None:
+        integrator.update_k(p, model, 0.0)
+    else:
+        with diagnostic_writer.timed("tangent_assembly"):
+            integrator.update_k(p, model, 0.0)
     integrator.domain_changed(p, model, n)
     p.current_load_factor = integrator.mult
     dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
     reference = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
+
+    if diagnostic_writer is not None:
+        runtime = ModelManager.hysteretic_batch_for(model)
+        diagnostic_writer.emit(
+            "analysis_start",
+            analysis_key=int(getattr(analysis, "key", -1)),
+            analysis_name=str(getattr(analysis, "name", "")),
+            combination=int(combination),
+            initial_analysis_key=initial_analysis_key,
+            integration_method=str(getattr(analysis, "integration_method", "")),
+            nonlinear_method=str(getattr(analysis, "method", "")),
+            linear_solver_backend=ls.backend,
+            requested_linear_solver_backend=ls.requested_backend,
+            dof_count=n,
+            stiffness_nnz=int(ls.k.nnz),
+            stiffness_frobenius_norm=float(np.linalg.norm(ls.k.data)),
+            target_load_norm=float(np.linalg.norm(ModelManager._ptarget)),
+            external_load_norm=float(np.linalg.norm(ModelManager._fext)),
+            managed_transverse_springs=0 if runtime is None else len(runtime.springs),
+            managed_coulomb_springs=0 if runtime is None else len(runtime.coulomb_springs),
+            managed_quad_records=0 if runtime is None else len(runtime.quad_records),
+            **diagnostic_writer.integrator_metrics(integrator),
+        )
 
     step_data: list[dict[str, Any]] = []
     final_code = 0
@@ -249,14 +294,31 @@ def _solve_static_nonlinear_impl(
     )
     while continue_steps:
         step += 1
+        snapshot_started = time.perf_counter()
         step_snapshot = SolverStateSnapshot.capture(
             model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
         )
+        if diagnostic_writer is not None:
+            diagnostic_writer.add_timing("snapshot", time.perf_counter() - snapshot_started)
+            diagnostic_writer.emit(
+                "snapshot",
+                step=step,
+                scope="pre_step",
+                **diagnostic_writer.integrator_metrics(integrator),
+            )
         dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
         try:
             p.check_cancelled()
             try:
                 integrator.new_step(p, model, ls, analysis, combination, step, dof)
+                if diagnostic_writer is not None:
+                    diagnostic_writer.emit(
+                        "step_start",
+                        step=step,
+                        control_dof=int(dof),
+                        **diagnostic_writer.integrator_metrics(integrator),
+                        **diagnostic_writer.vector_metrics(ls),
+                    )
                 p.check_cancelled()
                 result = algorithm.solve_current_step(
                     p, ls, model, analysis, combination, step, alfa
@@ -272,7 +334,11 @@ def _solve_static_nonlinear_impl(
             elif result == -2 and isinstance(integrator, ArcLength) and alfa != 0.0:
                 # Retry from a complete pre-step state, not a partial global-vector rollback.
                 p.check_cancelled()
+                restore_started = time.perf_counter()
                 step_snapshot.restore()
+                if diagnostic_writer is not None:
+                    diagnostic_writer.add_timing("restore", time.perf_counter() - restore_started)
+                    diagnostic_writer.emit("restore", step=step, reason="arc_length_initial_tangent_retry")
                 alfa = 0.0
                 integrator.update_k(p, model, alfa)
                 integrator.new_step(p, model, ls, analysis, combination, step, dof)
@@ -284,7 +350,11 @@ def _solve_static_nonlinear_impl(
         except SolverCancelled:
             cancelled_load_factor = float(integrator.mult)
             cancelled_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
+            restore_started = time.perf_counter()
             step_snapshot.restore()
+            if diagnostic_writer is not None:
+                diagnostic_writer.add_timing("restore", time.perf_counter() - restore_started)
+                diagnostic_writer.emit("restore", step=step, reason="cancelled")
             p.current_load_factor = integrator.mult
             final_code = CANCELLED_EXIT_CODE
             step_data.append(
@@ -324,7 +394,34 @@ def _solve_static_nonlinear_impl(
             failure_increment = float(ls.get_x_norm())
             failure_load_factor = float(integrator.mult)
             failure_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
+            if diagnostic_writer is not None:
+                captured = diagnostic_writer.capture_state(
+                    label="failed",
+                    step=step,
+                    iteration=max(0, failure_iterations),
+                    program=p,
+                    model=model,
+                )
+                diagnostic_writer.emit(
+                    "step_failure",
+                    step=step,
+                    exit_code=int(result),
+                    reason=diagnostic_writer.result_reason(result, algorithm.the_test, p),
+                    convergence_error=failure_error,
+                    iterations=failure_iterations,
+                    max_element_displacement=failure_max_u,
+                    max_element_key=failure_max_key,
+                    max_element_type=failure_max_type,
+                    vector_snapshot=captured,
+                    **diagnostic_writer.integrator_metrics(integrator),
+                    **diagnostic_writer.vector_metrics(ls),
+                    **diagnostic_writer.spring_metrics(model),
+                )
+            restore_started = time.perf_counter()
             step_snapshot.restore()
+            if diagnostic_writer is not None:
+                diagnostic_writer.add_timing("restore", time.perf_counter() - restore_started)
+                diagnostic_writer.emit("restore", step=step, reason="failed_step")
             p.current_load_factor = integrator.mult
             final_code = result
             step_data.append(
@@ -349,12 +446,16 @@ def _solve_static_nonlinear_impl(
         de_el, de_pl = ModelManager.compute_energy(model)
         energy_elastic += de_el
         energy_dissipated += de_pl
+        commit_started = time.perf_counter()
         _commit_state(model, ls)
+        if diagnostic_writer is not None:
+            diagnostic_writer.add_timing("commit", time.perf_counter() - commit_started)
 
         reaction = compute_total_reaction(model)
         p.current_load_factor = integrator.mult
         values = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
         displacement = values[1]
+        relative_displacement = displacement - reference[1]
         step_data.append(
             {
                 "step": step,
@@ -390,7 +491,35 @@ def _solve_static_nonlinear_impl(
         load_reduction_ratio = force_change / max(max_force_change, 1e-30)
 
         changed = [False]
-        stop = integrator.commit(model, analysis, displacement, dof, changed)
+        # C# subtracts the initial graph displacement before ArcLength/LoadControl
+        # commit decisions.  This matters for chained analyses whose predecessor
+        # already displaced the control point.
+        stop = integrator.commit(model, analysis, relative_displacement, dof, changed)
+        if diagnostic_writer is not None:
+            captured = diagnostic_writer.capture_state(
+                label="committed",
+                step=step,
+                iteration=int(algorithm.the_test.current_iter),
+                program=p,
+                model=model,
+            )
+            diagnostic_writer.emit(
+                "commit",
+                step=step,
+                iterations=int(algorithm.the_test.current_iter),
+                load_factor=float(values[0]),
+                absolute_displacement=float(displacement),
+                relative_displacement=float(relative_displacement),
+                reaction_x=float(reaction.x),
+                reaction_y=float(reaction.y),
+                reaction_z=float(reaction.z),
+                domain_changed=bool(changed[0]),
+                stop=bool(stop),
+                vector_snapshot=captured,
+                **diagnostic_writer.integrator_metrics(integrator),
+                **diagnostic_writer.vector_metrics(ls),
+                **diagnostic_writer.spring_metrics(model),
+            )
         if changed[0]:
             integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
@@ -407,6 +536,14 @@ def _solve_static_nonlinear_impl(
         p.log("Analysis executed and completed" if step else "Analysis not executed")
     else:
         p.log("Analysis executed but not completed")
+    if diagnostic_writer is not None:
+        diagnostic_writer.emit(
+            "analysis_end",
+            exit_code=final_code,
+            committed_steps=sum(1 for row in step_data if row.get("status") == "OK"),
+            attempted_steps=len(step_data),
+        )
+        diagnostic_writer.close()
     return final_code, step_data
 
 
@@ -484,7 +621,11 @@ def _als_loop(
 
     # Start ALS from an exact pre-step snapshot.  This restores external loads,
     # pseudo-time, all local element values, and every trial/committed spring field.
+    restore_started = time.perf_counter()
     step_snapshot.restore()
+    if p.diagnostics is not None:
+        p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+        p.diagnostics.emit("restore", step=step, reason="als_start")
 
     completed = 0.0
     sub_increment = original_increment / factor
@@ -498,9 +639,19 @@ def _als_loop(
             f">>> Automatic step reduction ({reduction + 1}): "
             f"LoadIncrement={trial_increment:.6g}"
         )
+        snapshot_started = time.perf_counter()
         substep_snapshot = SolverStateSnapshot.capture(
             model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
         )
+        if p.diagnostics is not None:
+            p.diagnostics.add_timing("snapshot", time.perf_counter() - snapshot_started)
+            p.diagnostics.emit(
+                "als_substep_start",
+                step=step,
+                reduction=reduction + 1,
+                trial_increment=float(trial_increment),
+                completed_increment=float(completed),
+            )
         integrator.new_step_with_incr(
             p, model, ls, an, combination, step, trial_increment
         )
@@ -510,16 +661,38 @@ def _als_loop(
         )
         p.check_cancelled()
         if result >= 0:
+            commit_started = time.perf_counter()
             _commit_state(model, ls)
+            if p.diagnostics is not None:
+                p.diagnostics.add_timing("commit", time.perf_counter() - commit_started)
+                p.diagnostics.emit(
+                    "als_substep_commit",
+                    step=step,
+                    reduction=reduction + 1,
+                    trial_increment=float(trial_increment),
+                )
             if integrator.u_committed is not None and integrator.u is not None:
                 integrator.u_committed[:] = integrator.u
             completed += trial_increment
             continue
         # Restore the exact last-successful substep checkpoint.
+        restore_started = time.perf_counter()
         substep_snapshot.restore()
+        if p.diagnostics is not None:
+            p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+            p.diagnostics.emit(
+                "restore",
+                step=step,
+                reason="als_substep_failure",
+                reduction=reduction + 1,
+            )
         reduction += 1
         if reduction > max_reductions:
+            restore_started = time.perf_counter()
             step_snapshot.restore()
+            if p.diagnostics is not None:
+                p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+                p.diagnostics.emit("restore", step=step, reason="als_exhausted")
             return -2
         sub_increment /= factor
 

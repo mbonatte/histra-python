@@ -45,9 +45,14 @@ class NewtonLineSearch(EquiSolnAlgo):
         assert self.the_test is not None
         if self.the_line_search is None:
             self.the_line_search = _new_line_search(an)
+        diagnostics = p.diagnostics
 
         self.the_test.start()
-        self.the_integrator.form_unbalance(p, model, an)
+        if diagnostics is None:
+            self.the_integrator.form_unbalance(p, model, an)
+        else:
+            with diagnostics.timed("residual_assembly"):
+                self.the_integrator.form_unbalance(p, model, an)
         result = -1
         previous_error = 1.0
 
@@ -61,10 +66,18 @@ class NewtonLineSearch(EquiSolnAlgo):
             # retries), so an additional per-iteration copy is redundant.
             residual0 = ls.b.copy()
             if _updates_tangent_each_iteration(an) and alfa != 0.0:
-                self.the_integrator.update_k(p, model, alfa)
+                if diagnostics is None:
+                    self.the_integrator.update_k(p, model, alfa)
+                else:
+                    with diagnostics.timed("tangent_assembly"):
+                        self.the_integrator.update_k(p, model, alfa)
 
             try:
-                self.the_integrator.compute_increment(p, ls, model, an)
+                if diagnostics is None:
+                    self.the_integrator.compute_increment(p, ls, model, an)
+                else:
+                    with diagnostics.timed("linear_solver"):
+                        self.the_integrator.compute_increment(p, ls, model, an)
             except LinearSolveError as exc:
                 p.log(f"Stiffness matrix is singular at step {step}: {exc}")
                 return -3
@@ -73,15 +86,29 @@ class NewtonLineSearch(EquiSolnAlgo):
             self.the_line_search.new_step(p, ls)
             s0 = -float(np.dot(dx0, residual0))
 
-            update_code = self.the_integrator.update(model, p, an)
+            if diagnostics is None:
+                update_code = self.the_integrator.update(model, p, an)
+            else:
+                with diagnostics.timed("update_domain"):
+                    update_code = self.the_integrator.update(model, p, an)
             if update_code < 0:
                 return update_code
 
-            self.the_integrator.form_unbalance(p, model, an)
+            if diagnostics is None:
+                self.the_integrator.form_unbalance(p, model, an)
+            else:
+                with diagnostics.timed("residual_assembly"):
+                    self.the_integrator.form_unbalance(p, model, an)
             s1 = -float(np.dot(dx0, ls.b))
-            eta = self.the_line_search.search(
-                model, p, ls, self.the_integrator, an, dx0, s0, s1
-            )
+            if diagnostics is None:
+                eta = self.the_line_search.search(
+                    model, p, ls, self.the_integrator, an, dx0, s0, s1
+                )
+            else:
+                with diagnostics.timed("line_search"):
+                    eta = self.the_line_search.search(
+                        model, p, ls, self.the_integrator, an, dx0, s0, s1
+                    )
             if eta < 0.0:
                 return -10
 
@@ -89,6 +116,38 @@ class NewtonLineSearch(EquiSolnAlgo):
             # eta*dx0 in LS.x for displacement/work convergence tests.
             result = self.the_test.test(p, model, ls)
             error = self.the_test.get_error()
+            if diagnostics is not None:
+                tested_iteration = max(
+                    1,
+                    int(self.the_test.current_iter)
+                    - (1 if result in {-1, -2} else 0),
+                )
+                captured = diagnostics.capture_state(
+                    label="newton",
+                    step=step,
+                    iteration=tested_iteration,
+                    program=p,
+                    model=model,
+                )
+                diagnostics.emit(
+                    "iteration",
+                    step=step,
+                    iteration=tested_iteration,
+                    solver="NewtonLineSearch",
+                    line_search=type(self.the_line_search).__name__,
+                    eta=float(eta),
+                    s0=float(s0),
+                    s1=float(s1),
+                    convergence_error=float(error),
+                    convergence_tolerance=float(self.the_test.tolerance),
+                    convergence_criterion=str(self.the_test.criterion),
+                    convergence_result=int(result),
+                    convergence_reason=diagnostics.result_reason(result, self.the_test, p),
+                    vector_snapshot=captured,
+                    **diagnostics.integrator_metrics(self.the_integrator),
+                    **diagnostics.vector_metrics(ls),
+                    **diagnostics.spring_metrics(model),
+                )
             if not math.isfinite(error):
                 p.log(
                     f"Non-finite convergence error at step={step}, "

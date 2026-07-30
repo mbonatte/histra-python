@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import os
 import warnings
 
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import MatrixRankWarning, splu
+
+from histra.types.umfpack import (
+    UmfpackError,
+    UmfpackFactorization,
+    UmfpackUnavailable,
+    find_umfpack_library,
+)
 
 
 class LinearSolveError(RuntimeError):
@@ -20,8 +28,21 @@ class LinearSystem:
     ``K`` *after* the residual has already been assembled in ``b``.
     """
 
-    def __init__(self, n: int):
+    def __init__(self, n: int, *, backend: str | None = None):
         self.n = int(n)
+        requested = (backend or os.environ.get("HISTRA_LINEAR_SOLVER", "superlu")).strip().lower()
+        aliases = {"suite_sparse": "umfpack", "suitesparse": "umfpack", "super_lu": "superlu"}
+        requested = aliases.get(requested, requested)
+        if requested not in {"auto", "umfpack", "superlu"}:
+            raise ValueError(
+                "linear solver backend must be one of: auto, umfpack, superlu; "
+                f"received {requested!r}"
+            )
+        self.requested_backend = requested
+        self.backend = (
+            "umfpack" if requested == "auto" and find_umfpack_library() else
+            "superlu" if requested == "auto" else requested
+        )
         self.k = sp.csc_matrix((self.n, self.n), dtype=np.float64)
         self.m = sp.csc_matrix((self.n, self.n), dtype=np.float64)
         self.c = sp.csc_matrix((self.n, self.n), dtype=np.float64)
@@ -29,7 +50,9 @@ class LinearSystem:
         self.b = np.zeros(self.n, dtype=np.float64)
         self.b0 = np.zeros(self.n, dtype=np.float64)
         self._factorization = None
+        self._factor_backend: str | None = None
         self._factor_matrix_id: int | None = None
+        self._factor_matrix_version: int | None = None
         self._factor_data: np.ndarray | None = None
         self._factor_indices: np.ndarray | None = None
         self._factor_indptr: np.ndarray | None = None
@@ -86,8 +109,13 @@ class LinearSystem:
         return float(self.b[i])
 
     def _invalidate_factorization(self) -> None:
+        factorization = self._factorization
+        if factorization is not None and hasattr(factorization, "close"):
+            factorization.close()
         self._factorization = None
+        self._factor_backend = None
         self._factor_matrix_id = None
+        self._factor_matrix_version = None
         self._factor_data = None
         self._factor_indices = None
         self._factor_indptr = None
@@ -162,21 +190,34 @@ class LinearSystem:
         # of the tens of thousands of fixed-stiffness ArcLength solves.
         same_matrix = (
             self._factorization is not None
+            and self._factor_backend == self.backend
             and self._factor_matrix_id == id(self.k)
+            and self._factor_matrix_version == self._matrix_version
         )
         try:
             if not same_matrix:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("error", MatrixRankWarning)
-                    self._factorization = splu(matrix)
-                    self._factor_matrix_id = id(self.k)
-                    self._factor_data = matrix.data.copy()
-                    self._factor_indices = matrix.indices.copy()
-                    self._factor_indptr = matrix.indptr.copy()
+                self._invalidate_factorization()
+                if self.backend == "umfpack":
+                    self._factorization = UmfpackFactorization(matrix)
+                else:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error", MatrixRankWarning)
+                        self._factorization = splu(matrix)
+                self._factor_backend = self.backend
+                self._factor_matrix_id = id(self.k)
+                self._factor_matrix_version = self._matrix_version
+                self._factor_data = matrix.data.copy()
+                self._factor_indices = matrix.indices.copy()
+                self._factor_indptr = matrix.indptr.copy()
             solution = self._factorization.solve(vector)
-        except (MatrixRankWarning, RuntimeError, ValueError) as exc:
+        except (
+            MatrixRankWarning, RuntimeError, ValueError,
+            UmfpackUnavailable, UmfpackError,
+        ) as exc:
             self._invalidate_factorization()
-            raise LinearSolveError(f"Unable to solve stiffness system: {exc}") from exc
+            raise LinearSolveError(
+                f"Unable to solve stiffness system with {self.backend}: {exc}"
+            ) from exc
 
         solution = np.asarray(solution, dtype=np.float64).reshape(-1)
         if solution.shape != (self.n,) or not np.all(np.isfinite(solution)):

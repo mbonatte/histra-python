@@ -163,3 +163,33 @@ def test_complete_live_load_reference_path():
         relative = np.linalg.norm(row["u"] - reference) / np.linalg.norm(reference)
         assert relative <= 1.0e-4
         assert np.all(np.isfinite(row["u"]))
+
+
+def test_arc_length_commit_uses_displacement_relative_to_predecessor(monkeypatch):
+    """C# subtracts the predecessor graph displacement before Commit()."""
+    captured: list[float] = []
+    original_commit = ArcLength.commit
+
+    def capture_and_stop(self, model, analysis, displacement, dof, changed):
+        captured.append(float(displacement))
+        original_commit(self, model, analysis, displacement, dof, changed)
+        return True
+
+    monkeypatch.setattr(ArcLength, "commit", capture_and_stop)
+    model = load_model(HRX)
+    analysis = copy.deepcopy(model.collections.analyses[22])
+    dof = int(analysis.master_point)
+    predecessor = read_global_displacements(
+        RESULTS,
+        analysis.initial_analysis_key,
+        analysis.initial_combination_analysis_key,
+        model_or_hrx=model,
+        size=model.gdl,
+    )
+
+    code, rows = solve_static_nonlinear(model, analysis, 1, results_path=RESULTS)
+
+    assert code == 0
+    assert len(rows) == 1
+    assert captured == pytest.approx([rows[0]["displacement"] - predecessor[dof]])
+    assert abs(captured[0] - rows[0]["displacement"]) > 1.0e-12

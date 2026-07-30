@@ -84,6 +84,20 @@ state corruption. Cooperative cancellation checks are present at load-step,
 Newton, line-search, ArcLength retry, and ALS boundaries. A single native
 linear solve cannot be interrupted in the middle.
 
+## C# numerical parity mode
+
+The authoritative C# solver uses SuiteSparse UMFPACK. For branch-sensitive
+parity regressions, select the same native backend explicitly with
+`HISTRA_LINEAR_SOLVER=umfpack` and point `HISTRA_UMFPACK_LIBRARY` to the native
+shared library. The default remains SciPy SuperLU to preserve existing production behavior.
+Use `auto` only when environment-dependent backend selection is intentional; it
+uses UMFPACK when available and otherwise falls back to SuperLU.
+
+An optional deterministic JSONL/NPZ diagnostic stream records step and Newton
+iteration metrics with stable C# spring identifiers. It is disabled by default.
+See [C# parity diagnostics](docs/guides/csharp-parity-diagnostics.md) and the
+[branch-divergence investigation](docs/investigations/csharp-python-branch-divergence.md).
+
 ## Tests
 
 ```console
