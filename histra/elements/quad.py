@@ -13,6 +13,7 @@ from histra.types.point import Point
 from histra.types.afference_entry import AfferenceEntry
 from histra.springs.base import Spring
 from histra.elements.quad_state import QuadState
+from histra.elements.quad_static_load import compute_static_load_area
 
 
 if njit is not None:
@@ -133,7 +134,53 @@ class Quad:
     _perf_dn_edges: tuple[tuple[tuple[object, bool], ...], ...] | None = field(default=None, init=False, repr=False, compare=False)
     _perf_dn_areas: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
 
-    def compute_static_load_internal(self, node_coords: List[Point], nodal_forces: List[Tuple[float, float, float]]) -> List[float]:
+    def compute_static_load_internal(
+        self,
+        node_coords: List[Point],
+        nodal_forces: List[Tuple[float, float, float]],
+    ) -> List[float]:
+        """Integrate an area load using the compiled C#-parity kernel.
+
+        The kernel deliberately retains every Single-precision boundary and
+        left-associative sum used by ``Quad.ComputeStaticLoadInternal``.  The
+        public method only validates and packs Python objects into contiguous
+        arrays; no constitutive or load-control behaviour is changed.
+        """
+        if len(node_coords) != 4:
+            raise ValueError(
+                "Quad area-load integration requires exactly four node coordinates; "
+                f"received {len(node_coords)}"
+            )
+        node_array = np.empty((4, 3), dtype=np.float32)
+        for index, point in enumerate(node_coords):
+            node_array[index, 0] = np.float32(point.x)
+            node_array[index, 1] = np.float32(point.y)
+            node_array[index, 2] = np.float32(point.z)
+
+        force_array = np.asarray(nodal_forces, dtype=np.float32)
+        if force_array.shape != (4, 3):
+            raise ValueError(
+                "Quad area-load integration requires four three-component nodal "
+                f"forces; received shape {force_array.shape}"
+            )
+
+        result = compute_static_load_area(
+            node_array,
+            force_array,
+            np.asarray((self.g.x, self.g.y, self.g.z), dtype=np.float32),
+            np.asarray(self.reference_e1, dtype=np.float32),
+            np.asarray(self.reference_e2, dtype=np.float32),
+            np.asarray(self.length, dtype=np.float64),
+            np.asarray(self.sin, dtype=np.float64),
+            np.asarray(self.cos, dtype=np.float64),
+        )
+        return result.tolist()
+
+    def _compute_static_load_internal_scalar(
+        self,
+        node_coords: List[Point],
+        nodal_forces: List[Tuple[float, float, float]],
+    ) -> List[float]:
         """Port C# ``Quad.ComputeStaticLoadInternal`` for area loads.
 
         The original implementation stores geometry, shape functions, force
