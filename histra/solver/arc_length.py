@@ -147,7 +147,6 @@ class ArcLength(StaticIntegrator):
         self._target_displacement = self._target_displacement_base * multiplier
 
     def domain_changed(self, p: Program, model: Model, size: int) -> None:
-        del model
         an = self.state.analysis
         if not self._initialized:
             self._lf_items = self._load_items(an)

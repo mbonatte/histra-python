@@ -48,8 +48,8 @@ class Interface:
     # Local 12-DOF resisting-force vector (port of ComputationalElement.F)
     f: List[float] = field(default_factory=lambda: [0.0] * 12)
 
-    # Immutable geometry/afference caches. These are built lazily after XML
-    # loading and deliberately excluded from serialized/rollback state.
+    # Geometry/afference and scalar-update caches. These are built lazily after
+    # XML loading and deliberately excluded from serialized/rollback state.
     _perf_di: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
     _perf_dj: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
     _perf_ecc: tuple[float, ...] | None = field(default=None, init=False, repr=False, compare=False)
@@ -57,6 +57,14 @@ class Interface:
     _perf_area: float | None = field(default=None, init=False, repr=False, compare=False)
     _perf_dist: tuple[float, float] | None = field(default=None, init=False, repr=False, compare=False)
     _perf_dist_for: tuple[float, float] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_local_du: list[float] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_inv_length: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_half_length: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_constrained: bool | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_d0: int | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_d1: int | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_custom_force_access: tuple[bool, ...] | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_has_custom_force_access: bool | None = field(default=None, init=False, repr=False, compare=False)
 
     def area(self) -> float:
         """Return the cached C# ``Operations.Area(VInt2D)`` polygon area."""
@@ -187,12 +195,24 @@ class Interface:
         )
         self._perf_dist = self.compute_dist_spring()
         self._perf_dist_for = self.compute_dist_spring_for(self)
+        self._perf_local_du = [0.0] * self.dim_aff_tot
+        self._perf_inv_length = 1.0 / self.length
+        self._perf_half_length = 0.5 * self.length
+        self._perf_constrained = self.interfaccia_vincolata_computed()
+        self._perf_d0 = self.dim_aff[0] if self.dim_aff else 6
+        self._perf_d1 = self.dim_aff[1] if len(self.dim_aff) > 1 else 2
+        self._perf_custom_force_access = tuple(
+            "get_incr_force" in spring.__dict__ or "get_force" in spring.__dict__
+            for spring in self.trasv_1[:count]
+        )
+        self._perf_has_custom_force_access = any(self._perf_custom_force_access)
 
     def _local_increment(self, x: np.ndarray) -> list[float]:
         self._ensure_performance_cache()
         assert self._perf_aff_pairs is not None
+        assert self._perf_local_du is not None
         size = len(x)
-        out = [0.0] * self.dim_aff_tot
+        out = self._perf_local_du
         for i, pairs in enumerate(self._perf_aff_pairs):
             total = 0.0
             for gdl, coefficient in pairs:
@@ -480,17 +500,24 @@ class Interface:
         assert self._perf_di is not None
         assert self._perf_dj is not None
         assert self._perf_ecc is not None
+        assert self._perf_inv_length is not None
+        assert self._perf_half_length is not None
+        assert self._perf_constrained is not None
+        assert self._perf_d0 is not None
+        assert self._perf_d1 is not None
+        assert self._perf_custom_force_access is not None
+        assert self._perf_has_custom_force_access is not None
 
         local_du = self._local_increment(x)
         status_u = self.status.u
         for i, value in enumerate(local_du):
             status_u[i] += float(value)
 
-        if not self.interfaccia_vincolata_computed():
+        if not self._perf_constrained:
             num = local_du[3] - local_du[0]
             num2 = local_du[2] - local_du[1]
         else:
-            half_length = self.length / 2.0
+            half_length = self._perf_half_length
             num = local_du[3] - (local_du[0] - local_du[1] * half_length)
             num2 = local_du[2] - (local_du[0] + local_du[1] * half_length)
         num3 = local_du[4]
@@ -500,25 +527,45 @@ class Interface:
         committed_normal_force = 0.0
         max_displacement = 0.0
         delta_flex = num4 - num3
-        inv_length = 1.0 / self.length
-        for spring, di, dj, ecc in zip(
-            self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
-        ):
-            increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
-            new_u = spring.u + increment
-            spring.u = new_u
-            spring.set_trial_strain(new_u)
-            if "get_incr_force" in spring.__dict__ or "get_force" in spring.__dict__:
-                trial = float(spring.get_force())
-                committed = trial - float(spring.get_incr_force())
-            else:
+        inv_length = self._perf_inv_length
+        if not self._perf_has_custom_force_access:
+            # Standard translated springs expose their trial/committed values
+            # directly. Avoid two instance-dictionary probes per fibre while
+            # preserving the original spring and accumulation order exactly.
+            for spring, di, dj, ecc in zip(
+                self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
+            ):
+                increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
+                new_u = spring.u + increment
+                spring.u = new_u
+                spring.set_trial_strain(new_u)
                 trial = float(spring._tstress)
                 committed = float(spring._cstress)
-            normal_increment -= trial - committed
-            committed_normal_force += committed
-            abs_u = abs(new_u)
-            if abs_u > max_displacement:
-                max_displacement = abs_u
+                normal_increment -= trial - committed
+                committed_normal_force += committed
+                abs_u = abs(new_u)
+                if abs_u > max_displacement:
+                    max_displacement = abs_u
+        else:
+            for spring, di, dj, ecc, custom_force_access in zip(
+                self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc,
+                self._perf_custom_force_access,
+            ):
+                increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
+                new_u = spring.u + increment
+                spring.u = new_u
+                spring.set_trial_strain(new_u)
+                if custom_force_access:
+                    trial = float(spring.get_force())
+                    committed = trial - float(spring.get_incr_force())
+                else:
+                    trial = float(spring._tstress)
+                    committed = float(spring._cstress)
+                normal_increment -= trial - committed
+                committed_normal_force += committed
+                abs_u = abs(new_u)
+                if abs_u > max_displacement:
+                    max_displacement = abs_u
 
         self.status.normal_increment = normal_increment
         self.status.committed_normal_force = committed_normal_force
@@ -536,7 +583,7 @@ class Interface:
             spring.set_trial_strain(spring.u)
             max_displacement = max(max_displacement, abs(float(spring.u)))
 
-        d1 = self.dim_aff[1] if len(self.dim_aff) > 1 else 2
+        d1 = self._perf_d1
         du_op_a = local_du[d0 + d1] - local_du[d0 + d1 + 2]
         du_op_b = local_du[d0 + d1 + 1] - local_du[d0 + d1 + 3]
         assert self._perf_dist_for is not None

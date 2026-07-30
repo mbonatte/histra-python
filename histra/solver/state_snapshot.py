@@ -18,6 +18,43 @@ import numpy as np
 
 from histra.solver.model_manager import ModelManager
 
+# Exact built-in scalar types dominate nonlinear spring state.  Using a set of
+# exact types avoids the comparatively expensive recursive ``isinstance`` path
+# for every scalar in every spring dictionary.  Enum values remain immutable,
+# but need a separate ``isinstance`` check because each enum has its own type.
+_IMMUTABLE_SCALAR_TYPES = {
+    type(None),
+    bool,
+    int,
+    float,
+    complex,
+    str,
+    bytes,
+}
+_MISSING = object()
+
+
+def _is_immutable_scalar(value: Any) -> bool:
+    return type(value) in _IMMUTABLE_SCALAR_TYPES or isinstance(value, Enum)
+
+
+def _copy_list(value: list[Any]) -> list[Any]:
+    """Copy a list while fast-pathing the short numeric lists used by springs."""
+    if not value:
+        return []
+    if all(_is_immutable_scalar(item) for item in value):
+        return value.copy()
+    return [_copy_array(item) for item in value]
+
+
+def _copy_tuple(value: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Return immutable scalar tuples directly; recursively copy other tuples."""
+    if not value or all(_is_immutable_scalar(item) for item in value):
+        return value
+    return tuple(_copy_array(item) for item in value)
+
+
+
 
 def _copy_array(value: Any) -> Any:
     """Fast value copy for solver state.
@@ -28,31 +65,123 @@ def _copy_array(value: Any) -> Any:
     long pauses in multi-step ArcLength runs.  Copy the supported state shapes
     directly and retain ``deepcopy`` only as an explicit fallback.
     """
+    value_type = type(value)
+    if value_type in _IMMUTABLE_SCALAR_TYPES or isinstance(value, Enum):
+        return value
     if isinstance(value, np.ndarray):
         return value.copy()
-    if value is None or isinstance(value, (bool, int, float, complex, str, bytes, Enum)):
-        return value
-    if isinstance(value, list):
-        return [_copy_array(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_copy_array(item) for item in value)
-    if isinstance(value, dict):
-        return {key: _copy_array(item) for key, item in value.items()}
-    if isinstance(value, set):
+    if value_type is list:
+        return _copy_list(value)
+    if value_type is tuple:
+        return _copy_tuple(value)
+    if value_type is dict:
+        return _copy_state_dict(value)
+    if value_type is set:
         return {_copy_array(item) for item in value}
     return deepcopy(value)
 
 
 def _copy_state_dict(values: dict[str, Any]) -> dict[str, Any]:
-    return {key: _copy_array(value) for key, value in values.items()}
+    """Copy an object state dictionary with an inlined common-type dispatch.
+
+    Calling ``_copy_array`` for every scalar was the dominant overhead in
+    snapshots containing many unmanaged springs.  This loop preserves the
+    exact copied values but handles scalars, arrays, and short scalar lists
+    without an additional Python function call per field.
+    """
+    copied: dict[str, Any] = {}
+    for key, value in values.items():
+        value_type = type(value)
+        if value_type in _IMMUTABLE_SCALAR_TYPES or isinstance(value, Enum):
+            copied[key] = value
+        elif isinstance(value, np.ndarray):
+            copied[key] = value.copy()
+        elif value_type is list:
+            copied[key] = _copy_list(value)
+        elif value_type is tuple:
+            copied[key] = _copy_tuple(value)
+        elif value_type is dict:
+            copied[key] = _copy_state_dict(value)
+        elif value_type is set:
+            copied[key] = {_copy_array(item) for item in value}
+        else:
+            copied[key] = deepcopy(value)
+    return copied
 
 
 def _restore_array(target: Any, saved: Any) -> Any:
-    if isinstance(target, np.ndarray) and isinstance(saved, np.ndarray) and target.shape == saved.shape:
-        target[...] = saved
+    """Restore one saved value without making an unnecessary second snapshot."""
+    if isinstance(target, np.ndarray) and isinstance(saved, np.ndarray):
+        if target.shape == saved.shape:
+            target[...] = saved
+            return target
+        return saved.copy()
+
+    target_type = type(target)
+    saved_type = type(saved)
+    if target_type is list and saved_type is list:
+        if not saved or all(_is_immutable_scalar(item) for item in saved):
+            target[:] = saved
+        else:
+            target[:] = [_copy_array(item) for item in saved]
+        return target
+    if target_type is dict and saved_type is dict:
+        _restore_state_dict(target, saved)
+        return target
+    if target_type is set and saved_type is set:
+        target.clear()
+        target.update(_copy_array(item) for item in saved)
         return target
     return _copy_array(saved)
 
+def _restore_state_dict(target: dict[str, Any], saved: dict[str, Any]) -> None:
+    """Restore a state dictionary in place while preserving mutable aliases.
+
+    The previous restore path copied the complete saved dictionary again and
+    then replaced the target dictionary.  Besides repeating the snapshot cost,
+    that invalidated aliases to nested arrays/lists.  This routine removes
+    fields created after capture, restores existing containers in place where
+    possible, and copies only replacement values.
+    """
+    if target.keys() != saved.keys():
+        for key in tuple(target):
+            if key not in saved:
+                del target[key]
+
+    for key, saved_value in saved.items():
+        saved_type = type(saved_value)
+        if saved_type in _IMMUTABLE_SCALAR_TYPES or isinstance(saved_value, Enum):
+            target[key] = saved_value
+            continue
+
+        current = target.get(key, _MISSING)
+        if current is _MISSING:
+            target[key] = _copy_array(saved_value)
+        elif isinstance(saved_value, np.ndarray):
+            if (
+                isinstance(current, np.ndarray)
+                and current.shape == saved_value.shape
+            ):
+                current[...] = saved_value
+            else:
+                target[key] = saved_value.copy()
+        elif saved_type is list:
+            if type(current) is list:
+                if not saved_value or all(
+                    _is_immutable_scalar(item) for item in saved_value
+                ):
+                    current[:] = saved_value
+                else:
+                    current[:] = [_copy_array(item) for item in saved_value]
+            else:
+                target[key] = _copy_list(saved_value)
+        elif saved_type is dict and type(current) is dict:
+            _restore_state_dict(current, saved_value)
+        elif saved_type is set and type(current) is set:
+            current.clear()
+            current.update(_copy_array(item) for item in saved_value)
+        else:
+            target[key] = _copy_array(saved_value)
 
 def _iter_springs(
     model: Any,
@@ -249,23 +378,18 @@ class SolverStateSnapshot:
         ModelManager._u_total = self.p.u
 
         if self.convergence_test is not None and self.convergence_state is not None:
-            self.convergence_test.__dict__.clear()
-            self.convergence_test.__dict__.update(_copy_state_dict(self.convergence_state))
+            _restore_state_dict(self.convergence_test.__dict__, self.convergence_state)
         if self.line_search is not None and self.line_search_state is not None:
-            self.line_search.__dict__.clear()
-            self.line_search.__dict__.update(_copy_state_dict(self.line_search_state))
+            _restore_state_dict(self.line_search.__dict__, self.line_search_state)
 
         for quad, saved in self.quad_state:
-            quad.status.__dict__.clear()
-            quad.status.__dict__.update(_copy_state_dict(saved["status"]))
+            _restore_state_dict(quad.status.__dict__, saved["status"])
             quad.sigma_initial = saved["sigma_initial"]
         for intf, saved in self.interface_state:
-            intf.status.__dict__.clear()
-            intf.status.__dict__.update(_copy_state_dict(saved["status"]))
-            intf.f[:] = _copy_array(saved["f"])
+            _restore_state_dict(intf.status.__dict__, saved["status"])
+            intf.f[:] = saved["f"]
         for spring, saved in self.spring_state:
-            spring.__dict__.clear()
-            spring.__dict__.update(_copy_state_dict(saved))
+            _restore_state_dict(spring.__dict__, saved)
         if self.batch_state is not None:
             runtime = ModelManager.hysteretic_batch_for(self.integrator.state.model) if hasattr(self.integrator.state, "model") else None
             if runtime is None:

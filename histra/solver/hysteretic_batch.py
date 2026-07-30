@@ -1814,19 +1814,30 @@ class HystereticBatchRuntime:
             raise RuntimeError("Numba is unavailable")
         self.model = model
         self.records: list[_InterfaceSlice] = []
+        self.interface_rejection_reasons: Counter[str] = Counter()
         springs: list[SpringHysteretic] = []
         for interface in model.collections.interfaces.values():
             group = list(interface.trasv_1)
             if not group:
+                self.interface_rejection_reasons["no_transverse_springs"] += 1
                 continue
-            if not all(
-                isinstance(spring, SpringHysteretic)
-                and spring.tensile_curve_type in {
+            rejection_reason = ""
+            for spring in group:
+                if not isinstance(spring, SpringHysteretic):
+                    rejection_reason = "unsupported_transverse_spring_type"
+                    break
+                if spring.tensile_curve_type not in {
                     "LinearHardening", "LinearSoftening", "Exponential"
-                }
-                and spring.compressive_curve_type in {"LinearHardening", "LinearSoftening"}
-                for spring in group
-            ):
+                }:
+                    rejection_reason = "unsupported_tensile_curve_type"
+                    break
+                if spring.compressive_curve_type not in {
+                    "LinearHardening", "LinearSoftening"
+                }:
+                    rejection_reason = "unsupported_compressive_curve_type"
+                    break
+            if rejection_reason:
+                self.interface_rejection_reasons[rejection_reason] += 1
                 continue
             start = len(springs)
             springs.extend(group)
@@ -1940,7 +1951,7 @@ class HystereticBatchRuntime:
         # out-of-plane) when they use the simple C# Initial law.  Unsupported
         # variants remain on the scalar object path.
         from histra.springs.coulomb03 import SpringCoulomb03
-
+        self.interface_coulomb_rejection_reasons: Counter[str] = Counter()
         coulomb_springs: list[SpringCoulomb03] = []
         self._slid_index = np.full(len(self.records), -1, dtype=np.int32)
         self._oop0_index = np.full(len(self.records), -1, dtype=np.int32)
@@ -1964,13 +1975,19 @@ class HystereticBatchRuntime:
                      ("oop1", interface.slid_out_plan[1]))
                 )
             for kind, spring in candidates:
-                compatible = (
-                    isinstance(spring, SpringCoulomb03)
-                    and spring.hysteretic_type == "Initial"
-                    and spring.sub_law == "Coulomb"
-                    and not spring.check_contact_area
-                )
-                if not compatible:
+                rejection_reason = ""
+                if not isinstance(spring, SpringCoulomb03):
+                    rejection_reason = "unsupported_spring_type"
+                elif spring.hysteretic_type != "Initial":
+                    rejection_reason = "unsupported_hysteretic_type"
+                elif spring.sub_law != "Coulomb":
+                    rejection_reason = "unsupported_shear_sublaw"
+                elif spring.check_contact_area:
+                    rejection_reason = "contact_area_check"
+                if rejection_reason:
+                    self.interface_coulomb_rejection_reasons[
+                        f"{kind}:{rejection_reason}"
+                    ] += 1
                     continue
                 index = len(coulomb_springs)
                 coulomb_springs.append(spring)
@@ -2241,6 +2258,12 @@ class HystereticBatchRuntime:
             "managed_quad_records": len(self.quad_records),
             "unmanaged_interfaces": len(self.unmanaged_interfaces),
             "unmanaged_quads": len(self.unmanaged_quads),
+            "interface_rejection_reasons": dict(
+                sorted(self.interface_rejection_reasons.items())
+            ),
+            "interface_coulomb_rejection_reasons": dict(
+                sorted(self.interface_coulomb_rejection_reasons.items())
+            ),
             "quad_rejection_reasons": dict(sorted(self.quad_rejection_reasons.items())),
         }
 
