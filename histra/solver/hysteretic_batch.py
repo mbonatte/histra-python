@@ -9,12 +9,19 @@ on the Python path.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import os
 from typing import Any
 
 import numpy as np
 
+from histra.model.shear_law import (
+    ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION,
+    ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
+    fracture_energy_shear,
+    masonry_shear_law_code,
+)
 from histra.springs.hysteretic import SpringHysteretic
 from histra.types.phase_enum import PhaseEnum
 
@@ -107,10 +114,59 @@ QPE1P, QPE2P, QPE3P = 2, 3, 4
 QPE1N, QPE2N, QPE3N = 5, 6, 7
 QPEUP, QPEUN, QPPLASTIC_STRAIN, QPENABLED = 8, 9, 10, 11
 QPK = 12
-QUAD_PARAM_SIZE = 13
+QPSUBLAW = 13
+QPBCACOVIC = 14
+QPFRACTURE_MODE = 15
+QPFRACTURE_ENERGY = 16
+QUAD_PARAM_SIZE = 17
+
+QUAD_SUBLAW_COULOMB = 0
+QUAD_SUBLAW_CACOVIC = 1
+QUAD_FRACTURE_NONE = 0
+QUAD_FRACTURE_FIXED = ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED
+QUAD_FRACTURE_INTERPOLATED = ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
 
 
 if njit is not None:
+    @njit(cache=True, inline="always")
+    def _quad_tau_limit(par, normal_stress):
+        cohesion = par[QPCOHESION]
+        if int(par[QPSUBLAW]) == QUAD_SUBLAW_CACOVIC:
+            value = 1.0 + normal_stress / (1.5 * cohesion)
+            if value < 0.0:
+                return 0.0
+            return 1.5 / par[QPBCACOVIC] * cohesion * np.sqrt(value)
+        value = cohesion + par[QPMU] * normal_stress
+        return value if value > 0.0 else 0.0
+
+    @njit(cache=True, inline="always")
+    def _quad_interpolated_shear_energy(sigma):
+        # C# MasonryMaterial.GetShearUltimateStrain interpolates at -sigma.
+        x = -sigma
+        if x <= 0.05:
+            return 0.0012385
+        if x >= 0.07:
+            return 0.0001699
+        if x <= 0.055:
+            return 0.0012385 + (0.0007775 - 0.0012385) * (x - 0.05) / 0.005
+        if x <= 0.06:
+            return 0.0007775 + (0.0004402 - 0.0007775) * (x - 0.055) / 0.005
+        return 0.0004402 + (0.0001699 - 0.0004402) * (x - 0.06) / 0.01
+
+    @njit(cache=True, inline="always")
+    def _quad_shear_ultimate_strain(par, f_limit, yield_strain, volume, sigma):
+        mode = int(par[QPFRACTURE_MODE])
+        if mode == QUAD_FRACTURE_INTERPOLATED:
+            energy = _quad_interpolated_shear_energy(sigma)
+        else:
+            energy = par[QPFRACTURE_ENERGY]
+        if f_limit == 0.0:
+            numerator = energy * volume
+            if numerator == 0.0:
+                return np.nan
+            return np.inf if numerator > 0.0 else -np.inf
+        return energy * volume / f_limit + 0.5 * yield_strain
+
     @njit(cache=True, inline="always")
     def _pos_stress(strain, rot1p, mom1p, rot2p, mom2p, rot3p, mom3p, e1p, e2p, e3p):
         if strain <= 0.0:
@@ -1339,7 +1395,7 @@ if njit is not None:
             row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
 
     @njit(cache=True, nogil=True)
-    def _evaluate_quad_takeda_batch(params, state, strains, dns):
+    def _evaluate_quad_takeda_batch(params, state, strains, dns, volumes, sigma_initial):
         for i in range(state.shape[0]):
             row = state[i]
             par = params[i]
@@ -1353,24 +1409,36 @@ if njit is not None:
             _quad_revert_trial(row)
             row[QTSTRAIN] = strain
             dstrain = strain - row[QCSTRAIN]
-            tau = par[QPCOHESION] + par[QPMU] * row[QTSTRESS_NORMAL]
-            if tau < 0.0:
-                tau = 0.0
+            tau = _quad_tau_limit(par, row[QTSTRESS_NORMAL])
             rot1p = tau / par[QPE1P] if par[QPE1P] != 0.0 else 0.0
-            row[QMOM1P] = tau
-            row[QROT1P] = rot1p
-            if par[QPE3P] < 0.0:
-                rot2p = par[QPPLASTIC_STRAIN]
-                candidate = rot1p * 1.0001
-                if candidate > rot2p:
-                    rot2p = candidate
-                row[QROT2P] = rot2p
-                row[QROT3P] = rot2p - row[QMOM2P] / par[QPE3P]
-            if row[QROT2P] < rot1p:
-                row[QROT2P] = rot1p * 1.0001
-            if row[QROT3P] < row[QROT2P]:
-                row[QROT3P] = row[QROT2P] * 1.0001
-            row[QMOM2P] = tau + par[QPE2P] * (row[QROT2P] - rot1p)
+            if int(par[QPFRACTURE_MODE]) in (
+                QUAD_FRACTURE_FIXED, QUAD_FRACTURE_INTERPOLATED
+            ):
+                ultimate = _quad_shear_ultimate_strain(
+                    par, tau, rot1p, volumes[i], sigma_initial[i]
+                )
+                row[QUR0] = ultimate
+                row[QUR1] = -ultimate
+                row[QMOM1P] = tau
+                row[QMOM2P] = tau
+                row[QROT1P] = rot1p
+                row[QROT2P] = max(ultimate, rot1p * 1.0001)
+                row[QROT3P] = max(ultimate, row[QROT2P] * 1.0001)
+            else:
+                row[QMOM1P] = tau
+                row[QROT1P] = rot1p
+                if par[QPE3P] < 0.0:
+                    rot2p = par[QPPLASTIC_STRAIN]
+                    candidate = rot1p * 1.0001
+                    if candidate > rot2p:
+                        rot2p = candidate
+                    row[QROT2P] = rot2p
+                    row[QROT3P] = rot2p - row[QMOM2P] / par[QPE3P]
+                if row[QROT2P] < rot1p:
+                    row[QROT2P] = rot1p * 1.0001
+                if row[QROT3P] < row[QROT2P]:
+                    row[QROT3P] = row[QROT2P] * 1.0001
+                row[QMOM2P] = tau + par[QPE2P] * (row[QROT2P] - rot1p)
             row[QMOM1N] = -row[QMOM1P]
             row[QROT1N] = -row[QROT1P]
             row[QMOM2N] = -row[QMOM2P]
@@ -1617,7 +1685,7 @@ if njit is not None:
         dist, local_full_forces,
         quad_aff_offsets, quad_aff_gdls, quad_aff_coefficients, quad_local_du,
         quad_local_u, quad_edge_offsets, quad_edge_records, quad_edge_areas,
-        quad_d_alfa, step, quad_sigma_initial, quad_strains, quad_dns,
+        quad_d_alfa, quad_volumes, step, quad_sigma_initial, quad_strains, quad_dns,
         quad_params, quad_state, quad_forces, quad_force_offsets,
         quad_force_gdls, quad_force_coefficients, global_resisting_force,
         max_u_cache,
@@ -1679,6 +1747,7 @@ if njit is not None:
             )
             _evaluate_quad_takeda_batch(
                 quad_params, quad_state, quad_strains, quad_dns,
+                quad_volumes, quad_sigma_initial,
             )
         _refresh_global_resisting_force(
             quad_d_alfa, quad_state, quad_forces, quad_force_offsets,
@@ -1688,6 +1757,9 @@ if njit is not None:
         _refresh_max_u_cache(quad_local_u, max_displacements, max_u_cache)
 
 else:
+    _quad_tau_limit = None
+    _quad_interpolated_shear_energy = None
+    _quad_shear_ultimate_strain = None
     _pos_stress_typed = None
     _pos_tangent_typed = None
     _pos_rotlim_typed = None
@@ -1953,11 +2025,12 @@ class HystereticBatchRuntime:
         )
         self._local_full_forces = np.zeros((len(self.records), 12), dtype=np.float64)
 
-        # Dense Quad kinematics / ComputeDN preparation.  The constitutive
-        # spring is still evaluated by its authoritative Python Takeda method
-        # in this first optimization stage; only repeated afference and edge
-        # scans are compiled.
+        # Dense Quad kinematics / ComputeDN preparation. Compatible diagonal
+        # SpringCoulomb03 laws are evaluated in the fused Numba kernel.  Every
+        # rejected Quad is classified so production profiles can explain the
+        # residual scalar path instead of only reporting its aggregate cost.
         self.quad_records: list[Any] = []
+        self.quad_rejection_reasons: Counter[str] = Counter()
         quad_offsets = [0]
         quad_gdls: list[int] = []
         quad_coefficients: list[float] = []
@@ -1967,41 +2040,71 @@ class HystereticBatchRuntime:
         quad_d_alfa: list[float] = []
         quad_volumes: list[float] = []
         quad_materials: list[Any] = []
-        # Allow the Quad Takeda batch to be isolated from the interface batch.
-        # This is intentionally an environment-controlled diagnostic path; all
-        # Quads remain on the authoritative scalar implementation when active.
+        quad_sublaws: list[int] = []
+        quad_fracture_modes: list[int] = []
+        quad_fracture_energies: list[float] = []
         disable_quad_batch = os.environ.get(
             "HISTRA_DISABLE_COMPILED_QUADS", ""
         ).strip().lower() in {"1", "true", "yes", "on"}
-        quad_candidates = () if disable_quad_batch else model.collections.quads.values()
-        for quad in quad_candidates:
-            spring = getattr(quad, "spring", None)
-            material = model.collections.materials.get(quad.material_key)
-            fracture_law = getattr(material, "constitutive_law_masonry_shear", None)
-            if not (
-                isinstance(spring, SpringCoulomb03)
-                and spring.hysteretic_type == "Takeda"
-                and spring.sub_law == "Coulomb"
-                and not spring.check_contact_area
-                and fracture_law not in (4, 5)
-                and _evaluate_quad_takeda_batch is not None
-            ):
+        for quad in model.collections.quads.values():
+            if disable_quad_batch:
+                self.quad_rejection_reasons["disabled_by_environment"] += 1
                 continue
+            spring = getattr(quad, "spring", None)
+            if not isinstance(spring, SpringCoulomb03):
+                self.quad_rejection_reasons["unsupported_spring_type"] += 1
+                continue
+            if spring.hysteretic_type != "Takeda":
+                self.quad_rejection_reasons["unsupported_hysteretic_type"] += 1
+                continue
+            sub_law_name = str(spring.sub_law).strip().lower()
+            if sub_law_name == "coulomb":
+                sub_law = QUAD_SUBLAW_COULOMB
+            elif sub_law_name == "cacovic":
+                if float(spring.cohesion) == 0.0 or float(spring.bcacovic) == 0.0:
+                    self.quad_rejection_reasons["invalid_cacovic_parameters"] += 1
+                    continue
+                sub_law = QUAD_SUBLAW_CACOVIC
+            else:
+                self.quad_rejection_reasons["unsupported_shear_sublaw"] += 1
+                continue
+            if spring.check_contact_area:
+                self.quad_rejection_reasons["contact_area_check"] += 1
+                continue
+            if _evaluate_quad_takeda_batch is None:
+                self.quad_rejection_reasons["numba_kernel_unavailable"] += 1
+                continue
+
+            material = model.collections.materials.get(quad.material_key)
+            fracture_mode = masonry_shear_law_code(material)
+            if fracture_mode not in (
+                ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
+                ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION,
+            ):
+                fracture_mode = QUAD_FRACTURE_NONE
+
             quad._ensure_dn_cache(model.collections)
             assert quad._perf_dn_edges is not None
             assert quad._perf_dn_areas is not None
             compatible = True
+            rejection_reason = ""
             local_edge_records: list[int] = []
             local_edge_counts: list[int] = []
             for refs in quad._perf_dn_edges:
                 count = 0
                 for interface, custom_springs in refs:
-                    if custom_springs or "compute_dn" in interface.__dict__:
+                    if custom_springs:
                         compatible = False
+                        rejection_reason = "custom_edge_springs"
+                        break
+                    if "compute_dn" in interface.__dict__:
+                        compatible = False
+                        rejection_reason = "custom_interface_compute_dn"
                         break
                     record_index = self._record_by_id.get(id(interface))
                     if record_index is None:
                         compatible = False
+                        rejection_reason = "edge_interface_not_batched"
                         break
                     local_edge_records.append(record_index)
                     count += 1
@@ -2009,7 +2112,9 @@ class HystereticBatchRuntime:
                     break
                 local_edge_counts.append(count)
             if not compatible:
+                self.quad_rejection_reasons[rejection_reason] += 1
                 continue
+
             self.quad_records.append(quad)
             if quad._perf_aff_pairs is None:
                 quad._perf_aff_pairs = tuple(
@@ -2031,6 +2136,9 @@ class HystereticBatchRuntime:
             quad_d_alfa.append(float(quad.d_alfa_2d_diag()))
             quad_volumes.append(float(quad.compute_volume()))
             quad_materials.append(material)
+            quad_sublaws.append(sub_law)
+            quad_fracture_modes.append(fracture_mode)
+            quad_fracture_energies.append(fracture_energy_shear(material))
 
         self.quad_ids = frozenset(id(quad) for quad in self.quad_records)
         self.unmanaged_interfaces = tuple(
@@ -2083,7 +2191,9 @@ class HystereticBatchRuntime:
                 float(spring.e1n), float(spring.e2n), float(spring.e3n),
                 float(spring.eup), float(spring.eun),
                 float(spring.plastic_strain_ratio), float(bool(spring.is_on)),
-                float(spring.k),
+                float(spring.k), float(quad_sublaws[index]),
+                float(spring.bcacovic), float(quad_fracture_modes[index]),
+                float(quad_fracture_energies[index]),
             )
             self._read_quad_object(index, spring)
             self._quad_k[index] = float(spring.k)
@@ -2114,6 +2224,25 @@ class HystereticBatchRuntime:
     @property
     def active(self) -> bool:
         return bool(self.springs or self.coulomb_springs or self.quad_records)
+
+    def performance_counts(self) -> dict[str, Any]:
+        """Return stable production-backend coverage and rejection counters."""
+        managed_quad_coulomb = sum(
+            1 for row in self.quad_params
+            if int(row[QPSUBLAW]) == QUAD_SUBLAW_COULOMB
+        )
+        managed_quad_cacovic = len(self.quad_records) - managed_quad_coulomb
+        return {
+            "managed_transverse_springs": len(self.springs),
+            "managed_interface_coulomb_springs": len(self.coulomb_springs),
+            "managed_quad_coulomb_springs": managed_quad_coulomb,
+            "managed_quad_cacovic_springs": managed_quad_cacovic,
+            "managed_coulomb_springs": len(self.coulomb_springs) + managed_quad_coulomb,
+            "managed_quad_records": len(self.quad_records),
+            "unmanaged_interfaces": len(self.unmanaged_interfaces),
+            "unmanaged_quads": len(self.unmanaged_quads),
+            "quad_rejection_reasons": dict(sorted(self.quad_rejection_reasons.items())),
+        }
 
     def _read_quad_object(self, index: int, spring: Any) -> None:
         row = self.quad_state[index]
@@ -2407,7 +2536,8 @@ class HystereticBatchRuntime:
             self._quad_aff_coefficients, self._quad_local_du,
             self._quad_local_u, self._quad_edge_offsets,
             self._quad_edge_records, self._quad_edge_areas,
-            self._quad_d_alfa, int(getattr(state, "step", 0)),
+            self._quad_d_alfa, self._quad_volumes,
+            int(getattr(state, "step", 0)),
             self._quad_sigma_initial, self._quad_strains, self._quad_dns,
             self.quad_params, self.quad_state, self._quad_forces,
             self._quad_force_offsets, self._quad_force_gdls,
@@ -2434,6 +2564,7 @@ class HystereticBatchRuntime:
         _evaluate_quad_takeda_batch(
             self.quad_params, self.quad_state,
             self._quad_strains, self._quad_dns,
+            self._quad_volumes, self._quad_sigma_initial,
         )
         for index, quad in enumerate(self.quad_records):
             quad.status.u[:7] = self._quad_local_u[index].tolist()
