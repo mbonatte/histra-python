@@ -1114,7 +1114,21 @@ def _coplanar_quad_intersection_prechecked(
     clipped = _clip_convex_quad_2d(subject, clipper)
     # C# GIQuadQuad accepts only four-point surface intersections. Point/line
     # contacts and higher-order polygons are deliberately not interfaces.
-    if len(clipped) != 4 or abs(_polygon_area_2d(clipped)) <= _CONTACT_AREA_TOLERANCE:
+    area = abs(_polygon_area_2d(clipped)) if len(clipped) == 4 else 0.0
+    if len(clipped) != 4 or area <= _CONTACT_AREA_TOLERANCE:
+        return None
+
+    # The C# intersection path does not emit finite interfaces for contacts
+    # whose apparent width is only a coordinate-tolerance artefact.  The
+    # vectorized Python broad phase intentionally uses a 2e-4 distance
+    # tolerance, so clipping can otherwise turn a 3e-5 gap into a very thin
+    # quadrilateral.  Reject these slivers by their area/longest-edge width.
+    edge_lengths = [
+        math.hypot(float(end[0])-float(start[0]), float(end[1])-float(start[1]))
+        for start, end in zip(clipped, (*clipped[1:], clipped[0]))
+    ]
+    longest_edge = max(edge_lengths, default=0.0)
+    if longest_edge <= 0.0 or area / longest_edge <= _CONTACT_DISTANCE_TOLERANCE:
         return None
 
     plane_origin = first[0]
@@ -1184,7 +1198,14 @@ def _prepare_interface_endpoints(
     """Exact endpoint selection from C# ``PrepareBuildInterface``."""
     polygon = np.asarray(vertices, dtype=float)
     reference_start, reference_end = _quad_face_reference_edge(model, q1, face1)
-    if face1 >= 4 or face2 >= 4:
+    # C# derives the reference direction from the intersection polygon when a
+    # horizontal face meets a lateral face.  When *both* faces are horizontal,
+    # however, relying on the polygon's cyclic start makes the result dependent
+    # on the clipping implementation.  C#'s NodeListOut happens to start on the
+    # parent-1 reference edge; Sutherland-Hodgman may start 90 degrees away.
+    # Retain q1's actual face reference in the both-horizontal case so endpoint
+    # selection, local axes and NRow/NCol are invariant and match C#.
+    if (face1 >= 4) != (face2 >= 4):
         reference_start = 0.5*(polygon[0]+polygon[1])
         reference_end = 0.5*(polygon[2]+polygon[3])
         if face1 < 4:

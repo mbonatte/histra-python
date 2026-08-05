@@ -547,3 +547,73 @@ def test_warping_interpolation_accepts_projected_offset_face_point():
         quad, np.asarray((1.0, 0.75, 0.0)), model
     )
     assert np.isfinite(value).all()
+
+
+def test_both_horizontal_interface_endpoints_use_parent_face_reference(monkeypatch):
+    """Clipping order must not rotate a horizontal/horizontal interface by 90°.
+
+    C#'s NodeListOut starts on the parent-1 reference edge for the Ersino pier
+    contacts. Sutherland-Hodgman returns the same polygon with another cyclic
+    start, so the parent face direction must be retained explicitly.
+    """
+    import importlib
+    from types import SimpleNamespace
+
+    prepare_model_module = importlib.import_module("histra.preprocessing.prepare_model")
+
+    # Polygon ordering returned by the Python clipper for Ersino Quad
+    # 1332 face 5 against Quad 1336 face 4.
+    polygon = [
+        np.array([128.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, -160.0]),
+        np.array([128.0, 0.0, -160.0]),
+    ]
+    created: list[np.ndarray] = []
+
+    monkeypatch.setattr(
+        prepare_model_module,
+        "_quad_face_reference_edge",
+        lambda model, quad, face: (
+            np.array([0.0, 0.0, -80.0]),
+            np.array([128.0, 0.0, -80.0]),
+        ),
+    )
+
+    def remember_node(model, point):
+        created.append(np.asarray(point, dtype=float))
+        return len(created)
+
+    monkeypatch.setattr(
+        prepare_model_module, "_find_or_create_geometric_node", remember_node
+    )
+    q1 = SimpleNamespace(reference_e3=(0.0, 1.0, 0.0))
+    q2 = SimpleNamespace(reference_e3=(0.0, 1.0, 0.0))
+
+    _, length = prepare_model_module._prepare_interface_endpoints(
+        object(), q1, 5, q2, 4, polygon
+    )
+
+    assert length == pytest.approx(128.0)
+    np.testing.assert_allclose(np.abs(created[1] - created[0]), [128.0, 0.0, 0.0])
+
+
+def test_contact_clipping_rejects_coordinate_tolerance_slivers():
+    """A 3e-5-wide overlap is a tolerance artefact, not a finite interface."""
+    import importlib
+
+    prepare_model_module = importlib.import_module("histra.preprocessing.prepare_model")
+
+    first = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
+    )
+    second = np.array(
+        [
+            [0.99997, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.0, 1.0, 0.0],
+            [0.99997, 1.0, 0.0],
+        ]
+    )
+
+    assert prepare_model_module._coplanar_quad_intersection(first, second) is None
