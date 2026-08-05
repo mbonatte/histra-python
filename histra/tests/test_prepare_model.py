@@ -617,3 +617,44 @@ def test_contact_clipping_rejects_coordinate_tolerance_slivers():
     )
 
     assert prepare_model_module._coplanar_quad_intersection(first, second) is None
+
+
+def test_broad_face_sliding_uses_csharp_direction3_modulus_even_when_ortsc_false():
+    """C# SlidingOrthotropyType is always true; ``ortsc`` is not a selector."""
+    from histra.preprocessing.prepare_model import _sliding_law
+    from histra.model.masonry_material import MasonryMaterial
+
+    material = MasonryMaterial(
+        key=18,
+        properties={
+            "Gd": "50.0",
+            "AlfaShearUser": "0.9",
+            "ortsc": "false",
+            "CohesionSlidingHor": "1.0",
+            "CohesionSlidingVert": "2.0",
+            "CohesionSlidingDir3": "3.0",
+            "FrictionRatioSlidingHor": "0.1",
+            "FrictionRatioSlidingVert": "0.2",
+            "FrictionRatioSlidingDir3": "0.3",
+            "SlidingPlasticStiffnessRatioHor": "0.0",
+            "SlidingPlasticStiffnessRatioVert": "0.0",
+            "SlidingPlasticStiffnessRatioDir3": "0.0",
+        },
+    )
+
+    horizontal = _sliding_law(material, out_of_plane=False, direction="hor")
+    direction3 = _sliding_law(material, out_of_plane=False, direction="dir3")
+
+    assert horizontal.E == pytest.approx(1000.0)
+    assert direction3.E == pytest.approx(50.0)
+    assert horizontal.E / direction3.E == pytest.approx(20.0)
+    assert direction3.cohesion == pytest.approx(3.0)
+    assert direction3.mu == pytest.approx(0.3)
+
+
+def test_interface_subdivision_preserves_csharp_single_precision_boundary():
+    """A nominal 160 mm face must produce six rows, not four."""
+    from histra.preprocessing.prepare_model import _interface_division_count
+
+    assert _interface_division_count(159.999959, minimum=4, imax=40.0) == 6
+    assert _interface_division_count(128.0, minimum=4, imax=40.0) == 4

@@ -8,7 +8,7 @@ Last reviewed: 2026-08-05
 |---|---|
 | HRX loading | Supported for committed benchmark models |
 | Locked models | Supported when required computational objects are present |
-| Unlocked preprocessing | Validated masonry four-node Quad and fixed line-Restraint subset |
+| Unlocked preprocessing | Validated masonry four-node Quad and fixed line-Restraint subset, including C# directional sliding-law selection |
 | Quad–Quad contacts | Full-edge and collinear partial-edge contacts, including partition/T-junction overlaps |
 | Springs | Masonry diagonal, transverse hysteretic, in-plane and out-of-plane Coulomb paths used by the benchmarks |
 | Static integration | LoadControl and ArcLength paths used by committed benchmarks |

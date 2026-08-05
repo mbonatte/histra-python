@@ -48,6 +48,22 @@ _CONTACT_AREA_TOLERANCE = 1.0e-6
 _CONTACT_BATCH_SIZE = 4096
 
 
+def _interface_division_count(size: float, *, minimum: int, imax: float) -> int:
+    """Return C# ``Interface.Set``'s even subdivision count.
+
+    XNA geometry is evaluated in single precision.  Add the same contact
+    tolerance used by the C# intersection search before the integer boundary
+    so values such as 159.99996 mm do not fall below the intended 160 mm bin.
+    """
+    if imax <= 0.0:
+        raise ModelPreparationError(f"Interface maximum size must be positive, got {imax}.")
+    csharp_size = float(np.float32(size))
+    return max(
+        int(minimum),
+        2 * (int(0.5 * (csharp_size + _CONTACT_DISTANCE_TOLERANCE) / imax) + 1),
+    )
+
+
 class ModelPreparationError(RuntimeError):
     """Raised when an HRX uses a preprocessing feature not yet translated."""
 
@@ -294,25 +310,56 @@ def _shear_law(material: MasonryMaterial) -> _CoulombLaw:
     )
 
 
-def _sliding_law(material: MasonryMaterial, *, out_of_plane: bool, vertical: bool) -> _CoulombLaw:
-    if out_of_plane:
+def _sliding_law(
+    material: MasonryMaterial,
+    *,
+    out_of_plane: bool,
+    direction: str,
+) -> _CoulombLaw:
+    """Return one of C#'s horizontal, vertical or direction-3 laws.
+
+    ``ConstitutiveLawOperations`` creates three in-plane laws and three
+    out-of-plane laws.  Direction 3 is materially different for in-plane
+    sliding: it uses ``Gd`` directly, while horizontal/vertical use
+    ``2*Gd/(1-AlfaShear)``.  This distinction is decisive on Quad faces 4/5.
+    """
+    normalized = direction.casefold()
+    if normalized not in {"hor", "vert", "dir3"}:
+        raise ValueError(f"Unsupported sliding-law direction {direction!r}.")
+    if out_of_plane or normalized == "dir3":
         E = _float(material, "Gd")
     else:
         alpha = _float(material, "AlfaShearUser", 0.9)
         if abs(1.0 - alpha) <= 1.0e-12:
             raise ModelPreparationError(f"Material {material.key} has AlfaShearUser=1.")
         E = 2.0 * _float(material, "Gd") / (1.0 - alpha)
-    suffix = "Vert" if vertical else "Hor"
+
+    if normalized == "hor":
+        suffix = "Hor"
+        fracture_name = "SlidingFractureEnergy"
+        energy_name = "Gs"
+        max_tensile_name = "SlidingMaxTensileRatioHor"
+    elif normalized == "vert":
+        suffix = "Vert"
+        fracture_name = "SlidingFractureEnergyVer"
+        energy_name = "GsVer"
+        max_tensile_name = "SlidingMaxTensileRatioVer"
+    else:
+        suffix = "Dir3"
+        fracture_name = "SlidingFractureEnergyDir3"
+        energy_name = "GsDir3"
+        # C# uses the vertical maximum-tension ratio for direction 3.
+        max_tensile_name = "SlidingMaxTensileRatioVer"
     return _CoulombLaw(
         E=E,
         cohesion=_float(material, f"CohesionSliding{suffix}"),
         mu=_float(material, f"FrictionRatioSliding{suffix}"),
         plastic_stiffness_ratio=_float(material, f"SlidingPlasticStiffnessRatio{suffix}"),
-        max_tensile_ratio=_float(material, f"SlidingMaxTensileRatio{suffix}", 0.8),
+        max_tensile_ratio=_float(material, max_tensile_name, 0.8),
         sub_law=str(material.value(f"SlidingYieldingDomain{suffix}", "Coulomb")),
         hysteretic_type="Initial",
-        fracture_energy=_bool(material, f"SlidingFractureEnergy{'Ver' if vertical else ''}", False),
-        G=_float(material, f"Gs{'Ver' if vertical else ''}"),
+        fracture_energy=_bool(material, fracture_name, False),
+        G=_float(material, energy_name),
         ductility=100000.0,
         is_ductility_fixed=True,
         check_contact_area=_bool(material, "CheckContactArea", False),
@@ -353,21 +400,117 @@ def _cached_sliding_law(
     material: MasonryMaterial,
     *,
     out_of_plane: bool,
-    vertical: bool,
-    cache: dict[tuple[int, bool, bool], _CoulombLaw] | None,
+    direction: str,
+    cache: dict[tuple[int, bool, str], _CoulombLaw] | None,
 ) -> _CoulombLaw:
     if cache is None:
         return _sliding_law(
-            material, out_of_plane=out_of_plane, vertical=vertical
+            material, out_of_plane=out_of_plane, direction=direction
         )
-    key = (id(material), bool(out_of_plane), bool(vertical))
+    key = (id(material), bool(out_of_plane), direction.casefold())
     law = cache.get(key)
     if law is None:
         law = _sliding_law(
-            material, out_of_plane=out_of_plane, vertical=vertical
+            material, out_of_plane=out_of_plane, direction=direction
         )
         cache[key] = law
     return law
+
+
+def _blend_coulomb_laws(
+    primary: _CoulombLaw,
+    secondary: _CoulombLaw,
+    c1: float,
+    c2: float,
+) -> _CoulombLaw:
+    """Port ``ConstitutiveLawCoulomb.PropOrthotropyParameter``.
+
+    The C# method modifies only E, Fy_0, Mu and U_r.  Other envelope settings
+    remain those of the primary (horizontal) law.
+    """
+    w1 = float(c1) * float(c1)
+    w2 = float(c2) * float(c2)
+    return _CoulombLaw(
+        E=primary.E * w1 + secondary.E * w2,
+        cohesion=primary.cohesion * w1 + secondary.cohesion * w2,
+        mu=primary.mu * w1 + secondary.mu * w2,
+        plastic_stiffness_ratio=primary.plastic_stiffness_ratio,
+        max_tensile_ratio=primary.max_tensile_ratio,
+        reload_stiffness_ratio=primary.reload_stiffness_ratio,
+        plastic_stiffness_ratio2=primary.plastic_stiffness_ratio2,
+        plastic_strain=primary.plastic_strain,
+        sub_law=primary.sub_law,
+        hysteretic_type=primary.hysteretic_type,
+        fracture_energy=primary.fracture_energy,
+        G=primary.G,
+        ductility=primary.ductility * w1 + secondary.ductility * w2,
+        is_ductility_fixed=primary.is_ductility_fixed,
+        check_contact_area=primary.check_contact_area,
+        bcacovic=primary.bcacovic,
+    )
+
+
+def _interface_sliding_law(
+    model: Model,
+    intf: Interface,
+    *,
+    parent_type: str,
+    parent_key: int,
+    face: int,
+    material: MasonryMaterial,
+    out_of_plane: bool,
+    vertical: bool,
+    cache: dict[tuple[int, bool, str], _CoulombLaw] | None,
+) -> _CoulombLaw:
+    """Select/blend the same constitutive-law slot used by C# Interface.SetSpring."""
+    assert model.collections is not None
+    effective_face = int(face)
+    quad = None
+    if parent_type == "Quad":
+        quad = model.collections.quads[parent_key]
+    elif parent_type == "Restraint":
+        if intf.parent_type_element1 == "Quad":
+            quad = model.collections.quads[intf.parent_element_key1]
+            effective_face = int(intf.face1)
+        elif intf.parent_type_element2 == "Quad":
+            quad = model.collections.quads[intf.parent_element_key2]
+            effective_face = int(intf.face2)
+
+    # C# ``MasonryMaterial.SlidingOrthotropyType`` is a read-only property
+    # that always returns true. ``ortsc`` only controls whether SetIsotropic
+    # copies the horizontal parameters into the vertical/dir3 fields; it does
+    # not disable directional law selection in Interface.SetSpring.
+    orthotropic = True
+    if orthotropic and effective_face in (4, 5):
+        return _cached_sliding_law(
+            material,
+            out_of_plane=out_of_plane,
+            direction="dir3",
+            cache=cache,
+        )
+    if orthotropic and quad is not None:
+        horizontal = _cached_sliding_law(
+            material,
+            out_of_plane=out_of_plane,
+            direction="hor",
+            cache=cache,
+        )
+        vertical_law = _cached_sliding_law(
+            material,
+            out_of_plane=out_of_plane,
+            direction="vert",
+            cache=cache,
+        )
+        c1 = abs(float(np.dot(np.asarray(intf.reference_e1), np.asarray(quad.reference_e1))))
+        c1 = min(1.0, max(0.0, c1))
+        c2 = math.sqrt(max(0.0, 1.0 - c1 * c1))
+        return _blend_coulomb_laws(horizontal, vertical_law, c1, c2)
+    return _cached_sliding_law(
+        material,
+        out_of_plane=out_of_plane,
+        direction="hor" if vertical else "vert",
+        cache=cache,
+    )
 
 
 def _configure_coulomb(
@@ -874,16 +1017,20 @@ def _make_interface_geometry(
         )
         for v in vertices
     ]
-    intf.length = float(np.linalg.norm(p2 - p1))
+    # XNA ``Vector3.Distance`` is evaluated in Single precision in C# and
+    # then promoted into the interface's double-valued Length property.
+    intf.length = float(np.float32(np.linalg.norm(p2 - p1)))
 
     intf.thickness = [match[0] for match in edge_matches]
-    intf.nrow = max(
-        int(model.interface_nrow),
-        2 * (int(0.5 * max(intf.thickness) / model.interface_imax) + 1),
+    intf.nrow = _interface_division_count(
+        max(intf.thickness),
+        minimum=int(model.interface_nrow),
+        imax=float(model.interface_imax),
     )
-    intf.ncol = max(
-        int(model.interface_nrow),
-        2 * (int(0.5 * intf.length / model.interface_imax) + 1),
+    intf.ncol = _interface_division_count(
+        intf.length,
+        minimum=int(model.interface_nrow),
+        imax=float(model.interface_imax),
     )
     intf.nspring = intf.ncol
     intf._perf_area = None
@@ -1171,7 +1318,8 @@ def _polygon_edge_at_point(
         projected = start + min(max(parameter, 0.0), 1.0) * edge
         distance = float(np.linalg.norm(point-projected))
         if -1.0e-6 <= parameter <= 1.0+1.0e-6 and distance <= tolerance:
-            length = math.sqrt(length2)
+            # C# obtains the edge length through XNA ``Vector3.Distance``.
+            length = float(np.float32(math.sqrt(length2)))
             direction = _unit(start-end, label="Interface thickness direction")
             if best is None or distance < best[0]:
                 best = (distance, length, direction)
@@ -1234,7 +1382,9 @@ def _prepare_interface_endpoints(
         second = 0.5*(polygon[2]+polygon[3])
     first_key = _find_or_create_geometric_node(model, first)
     second_key = _find_or_create_geometric_node(model, second)
-    return (first_key, second_key), float(np.linalg.norm(second-first))
+    return (first_key, second_key), float(
+        np.float32(np.linalg.norm(second-first))
+    )
 
 
 def _passes_csharp_lateral_area_filter(
@@ -2378,7 +2528,7 @@ def _create_interface_springs(
     intf: Interface,
     *,
     flex_law_cache: dict[tuple[int, bool], _HystereticLaw] | None = None,
-    sliding_law_cache: dict[tuple[int, bool, bool], _CoulombLaw] | None = None,
+    sliding_law_cache: dict[tuple[int, bool, str], _CoulombLaw] | None = None,
 ) -> None:
     assert model.collections is not None
     restrained = (
@@ -2495,26 +2645,46 @@ def _create_interface_springs(
         intf.parent_element_key2,
         custom_material,
     )
-    in_law1 = _cached_sliding_law(
-        material1,
+    in_law1 = _interface_sliding_law(
+        model,
+        intf,
+        parent_type=intf.parent_type_element1,
+        parent_key=intf.parent_element_key1,
+        face=intf.face1,
+        material=material1,
         out_of_plane=False,
         vertical=vertical,
         cache=sliding_law_cache,
     )
-    in_law2 = _cached_sliding_law(
-        material2,
+    in_law2 = _interface_sliding_law(
+        model,
+        intf,
+        parent_type=intf.parent_type_element2,
+        parent_key=intf.parent_element_key2,
+        face=intf.face2,
+        material=material2,
         out_of_plane=False,
         vertical=vertical,
         cache=sliding_law_cache,
     )
-    out_law1 = _cached_sliding_law(
-        material1,
+    out_law1 = _interface_sliding_law(
+        model,
+        intf,
+        parent_type=intf.parent_type_element1,
+        parent_key=intf.parent_element_key1,
+        face=intf.face1,
+        material=material1,
         out_of_plane=True,
         vertical=vertical,
         cache=sliding_law_cache,
     )
-    out_law2 = _cached_sliding_law(
-        material2,
+    out_law2 = _interface_sliding_law(
+        model,
+        intf,
+        parent_type=intf.parent_type_element2,
+        parent_key=intf.parent_element_key2,
+        face=intf.face2,
+        material=material2,
         out_of_plane=True,
         vertical=vertical,
         cache=sliding_law_cache,
@@ -2658,7 +2828,7 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
     ] = {}
     flex_law_cache: dict[tuple[int, bool], _HystereticLaw] = {}
     sliding_law_cache: dict[
-        tuple[int, bool, bool], _CoulombLaw
+        tuple[int, bool, str], _CoulombLaw
     ] = {}
 
     _assign_quad_afference(model)
