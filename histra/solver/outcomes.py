@@ -123,6 +123,7 @@ class AnalysisExecution:
     outcome: AnalysisOutcome | None = None
     message: str | None = None
     initial_step: AnalysisStep | None = None
+    modal_result: Any | None = None
 
     @property
     def committed_steps(self) -> tuple[AnalysisStep, ...]:

@@ -80,6 +80,11 @@ def load_model(path: Union[str, Path]) -> Model:
                 _attr(elem, "InterfaceImax", default=str(model.interface_imax)),
                 model.interface_imax,
             )
+            model.mass_matrix_type = _attr(
+                elem,
+                "MassMatrixType",
+                default=model.mass_matrix_type,
+            )
             elem.clear()
 
         elif tag == "Node":
@@ -333,6 +338,18 @@ def load_model(path: Union[str, Path]) -> Model:
                     _attr(elem, "MaxIterations", default="1000"), 1000
                 ),
                 max_u=_safe_float(_attr(elem, "maxU", "MaxU", default="100"), 100.0),
+                number_of_eigen_modes=_safe_int(
+                    _attr(elem, "NumberOfEigenModes", default="1"), 1
+                ),
+                number_of_lanczos_eigen_vectors=_safe_int(
+                    _attr(elem, "NumberOfLanczosEigenVectors", default="3"), 3
+                ),
+                modal_procedure=_attr(
+                    elem, "ModalProcedure", default="SubspaceIterations"
+                ),
+                modal_convergence_criteria=_attr(
+                    elem, "ModalConvergenceCriteria", default="Frquency"
+                ),
                 pdelta_effect=_attr(elem, "PdeltaEffect", default="None"),
                 als=_safe_bool(_attr(elem, "ALS", default="false")),
                 max_number_als=_safe_int(

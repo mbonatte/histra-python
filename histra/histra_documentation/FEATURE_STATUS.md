@@ -21,5 +21,6 @@
 | P-Delta | Unsupported | Both selected analyses declare `None` |
 | ALS | Rollback infrastructure tested | Not used by selected Live Load reference |
 | Other load families | Incomplete | Unsupported cases must raise explicitly |
-| Modal/dynamic analyses | Unsupported/incomplete | Outside selected benchmarks |
+| Modal analysis | Supported for Quad/Interface models | C# mass integration, SubSpaceIteration2, InverseIterations, modal values/shapes; Ersino real-file regression |
+| Dynamic analyses | Unsupported/incomplete | Time-history procedures remain outside selected benchmarks |
 | C#-compatible result database writer | Unsupported | Reader/benchmark only |

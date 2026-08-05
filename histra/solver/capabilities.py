@@ -84,8 +84,9 @@ def inspect_solver_capabilities(
             if modal is not None and bool(getattr(modal, "enabled", False)):
                 issues.append(
                     SolverCapabilityIssue(
-                        "MODAL_OUTPUT_UNSUPPORTED",
-                        "Modal contribution output is not implemented by the Python solver.",
+                        "MODAL_CONTRIBUTION_OUTPUT_UNSUPPORTED",
+                        "Response-spectrum modal contribution projection is not implemented; "
+                        "modal eigenanalysis itself is supported.",
                         str(requested_name),
                     )
                 )

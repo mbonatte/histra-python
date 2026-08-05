@@ -1,7 +1,7 @@
 # histra-python
 
 An installable, in-process Python implementation of the supported HiStrA
-static nonlinear solver workflow.
+static nonlinear and modal-analysis workflows.
 
 ## Backend service API
 
@@ -29,6 +29,8 @@ The service:
 - applies concrete interface/material mutations between analyses;
 - enforces job and analysis deadlines cooperatively;
 - projects C#-compatible reaction and model-point displacement rows.
+- executes `AnalysisType=5` modal analyses and projects C#-compatible modal
+  summaries and complete global-DOF mode shapes.
 
 ## Install
 
@@ -49,6 +51,7 @@ The stable root package exports:
 - `PythonAnalysisRequest`
 - `ConcreteInterfaceMutation`
 - `AnalysisExecution`, `AnalysisStep`, `AnalysisOutcome`
+- `solve_modal_analysis`, `ModalAnalysisResult`, `ModalMode`
 - capability and cancellation exceptions
 - `project_analysis_outputs`, `project_displacements`, `project_reactions`
 
@@ -74,9 +77,15 @@ Step, R1, R2, R3
 
 ## Current capability boundary
 
-Supported backend scope is the already validated static nonlinear Quad /
+Supported backend scope is the validated static nonlinear and modal Quad /
 Interface model subset. Capability preflight rejects unsupported model-point
-element types, P-Delta, broken analysis chains, and modal output requests.
+element types, P-Delta, broken analysis chains, and response-spectrum modal
+contribution requests. Modal eigenanalysis itself is supported.
+
+The modal solver ports the active C# consistent Quad mass integration,
+`SubSpaceIteration2`, inverse iteration, mass normalization, participation
+coefficients and effective modal masses. See
+[Modal analysis](docs/guides/modal-analysis.md).
 
 The solver uses shared class-level runtime arrays internally, so one solve is
 active per Python process. A cancellable process-wide lock prevents concurrent
@@ -107,3 +116,5 @@ pytest histra/tests
 The normal suite includes a solve of the `Vert` benchmark and compares projected
 rows with its authoritative C# `.Results` database. Longer chain and live-load
 acceptance tests remain opt-in through their documented environment variables.
+The Ersino modal regression is opt-in through `HISTRA_MODAL_HRX` and
+`HISTRA_MODAL_RESULTS`.

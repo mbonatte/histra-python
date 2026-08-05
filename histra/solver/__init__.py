@@ -15,6 +15,20 @@ from histra.solver.model_manager import ModelManager
 from histra.types.convergence_test import ConvergenceTest
 from histra.solver.program import Program
 from histra.solver.solve import solve_static_nonlinear, _is_load_control, _commit_state
+from histra.solver.modal import (
+    ModalAnalysisError,
+    ModalAnalysisResult,
+    ModalMode,
+    solve_modal_analysis,
+)
+from histra.solver.mass_matrix import (
+    GRAVITY_ACCELERATION,
+    MassMatrixAssembly,
+    MassMatrixError,
+    assemble_mass_matrix,
+    build_translational_pseudovectors,
+    compute_quad_local_mass,
+)
 from histra.solver.interface_material import change_interface_materials
 from histra.solver.session import AnalysisSession, AnalysisSessionError
 from histra.solver.cancellation import (
@@ -72,6 +86,16 @@ __all__ = [
     "ModelManager",
     "Program",
     "solve_static_nonlinear",
+    "solve_modal_analysis",
+    "ModalAnalysisError",
+    "ModalAnalysisResult",
+    "ModalMode",
+    "GRAVITY_ACCELERATION",
+    "MassMatrixAssembly",
+    "MassMatrixError",
+    "assemble_mass_matrix",
+    "build_translational_pseudovectors",
+    "compute_quad_local_mass",
     "_is_load_control",
     "_commit_state",
     "change_interface_materials",

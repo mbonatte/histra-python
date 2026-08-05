@@ -105,3 +105,34 @@ def test_incomplete_execution_invalidates_session(monkeypatch: pytest.MonkeyPatc
     assert not session.usable
     with pytest.raises(AnalysisSessionError, match="cannot be reused"):
         session.run("Root")
+
+
+def test_session_dispatches_modal_analysis_without_changing_physical_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    modal = SimpleNamespace(
+        key=30,
+        name="Modal",
+        initial_analysis_key=-100,
+        analysis_type=5,
+        max_u=1.0,
+    )
+    model = SimpleNamespace(
+        collections=SimpleNamespace(analyses={30: modal}),
+        gdl=3,
+    )
+    modal_result = SimpleNamespace(converged_modes=2)
+
+    monkeypatch.setattr(
+        "histra.solver.session.solve_modal_analysis",
+        lambda *args, **kwargs: modal_result,
+    )
+    session = AnalysisSession(model)
+
+    execution = session.run("Modal")
+
+    assert execution.completed
+    assert execution.modal_result is modal_result
+    assert execution.steps == ()
+    assert session.current_analysis_key == 30
+    assert np.array_equal(session.current_displacement, np.zeros(3))

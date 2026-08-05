@@ -147,6 +147,35 @@ def test_output_projection_rejects_uninitialized_model() -> None:
         project_analysis_outputs(object(), execution, request)
 
 
+def test_output_projection_includes_modal_summary() -> None:
+    modal_result = SimpleNamespace(
+        as_dict=lambda include_shapes=False: {
+            "converged_modes": 2,
+            "include_shapes": include_shapes,
+        }
+    )
+    execution = AnalysisExecution(
+        analysis_key=30,
+        analysis_name="Modal",
+        code=0,
+        steps=(),
+        runtime_seconds=0.1,
+        outcome=AnalysisOutcome.COMPLETED,
+        initial_step=AnalysisStep.initial(np.zeros(3)),
+        modal_result=modal_result,
+    )
+    request = SimpleNamespace(
+        include_modal_shapes=True,
+        reactions=StepRequest(enabled=False),
+        displacements=StepRequest(enabled=False),
+        modal_contributions=StepRequest(enabled=False),
+    )
+
+    assert project_analysis_outputs(SimpleNamespace(collections=object()), execution, request) == {
+        "modal_analysis": {"converged_modes": 2, "include_shapes": True}
+    }
+
+
 def test_capability_preflight_resolves_dependencies_and_outputs() -> None:
     root = SimpleNamespace(key=1, name="Root", initial_analysis_key=-100, pdelta_effect=False)
     child = SimpleNamespace(key=2, name="Child", initial_analysis_key=1, pdelta_effect=False)

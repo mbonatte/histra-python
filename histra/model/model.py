@@ -45,4 +45,5 @@ class Model:
     source_path: Optional[str] = None
     interface_nrow: int = 3
     interface_imax: float = 40.0
+    mass_matrix_type: str = "Consistent"
     collections: Optional[Collections] = None

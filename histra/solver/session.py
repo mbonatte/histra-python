@@ -19,6 +19,7 @@ from histra.solver.outcomes import (
     AnalysisStep,
     classify_analysis_outcome,
 )
+from histra.solver.modal import solve_modal_analysis
 from histra.solver.solve import solve_static_nonlinear
 
 
@@ -147,16 +148,30 @@ class AnalysisSession:
 
         started = time.perf_counter()
         try:
-            code, raw_steps = solve_static_nonlinear(
-                self.model,
-                definition,
-                self.combination_row,
-                on_log=self.on_log,
-                on_progress=self.on_progress,
-                max_committed_steps=max_committed_steps,
-                should_cancel=should_cancel,
-                **kwargs,
-            )
+            if int(getattr(definition, "analysis_type", 0)) == 5:
+                modal_result = solve_modal_analysis(
+                    self.model,
+                    definition,
+                    self.combination_row,
+                    on_log=self.on_log,
+                    on_progress=self.on_progress,
+                    should_cancel=should_cancel,
+                    **kwargs,
+                )
+                code = 0
+                raw_steps: list[dict[str, Any]] = []
+            else:
+                modal_result = None
+                code, raw_steps = solve_static_nonlinear(
+                    self.model,
+                    definition,
+                    self.combination_row,
+                    on_log=self.on_log,
+                    on_progress=self.on_progress,
+                    max_committed_steps=max_committed_steps,
+                    should_cancel=should_cancel,
+                    **kwargs,
+                )
         except Exception as exc:
             self._tainted_reason = f"{type(exc).__name__}: {exc}"
             raise
@@ -172,9 +187,13 @@ class AnalysisSession:
             outcome=outcome,
             message=_outcome_message(outcome),
             initial_step=initial_step,
+            modal_result=modal_result,
         )
         committed = execution.committed_steps
-        if execution.completed and committed:
+        if execution.completed and execution.modal_result is not None:
+            self.current_analysis_key = int(definition.key)
+            self.current_displacement = initial_step.u.copy()
+        elif execution.completed and committed:
             self.current_analysis_key = int(definition.key)
             self.current_displacement = committed[-1].u.copy()
         elif not execution.completed:

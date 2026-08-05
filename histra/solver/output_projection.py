@@ -196,6 +196,11 @@ def project_analysis_outputs(
     """Project supported outputs without depending on Job Runner classes."""
     result: dict[str, Any] = {}
 
+    if execution.modal_result is not None:
+        result["modal_analysis"] = execution.modal_result.as_dict(
+            include_shapes=bool(getattr(request, "include_modal_shapes", False))
+        )
+
     displacements = getattr(request, "displacements", None)
     if displacements is not None and bool(getattr(displacements, "enabled", False)):
         result["displacements"] = project_displacements(model, execution, displacements)
@@ -207,7 +212,8 @@ def project_analysis_outputs(
     modal = getattr(request, "modal_contributions", None)
     if modal is not None and bool(getattr(modal, "enabled", False)):
         raise UnsupportedOutputError(
-            "Modal contribution projection is not supported by the Python solver."
+            "Response-spectrum modal contribution projection is not supported. "
+            "Modal eigenanalysis summaries are returned under 'modal_analysis'."
         )
 
     return result

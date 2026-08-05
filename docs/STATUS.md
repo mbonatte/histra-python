@@ -1,6 +1,6 @@
 # Current feature status
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-08-05
 
 ## Supported
 
@@ -16,6 +16,7 @@ Last reviewed: 2026-07-28
 | Interface material changes | Supported between committed analyses with committed-state transfer |
 | C# results database | Readable as a numerical reference and restart source for supported schemas |
 | Performance backend | Numba-compiled paths with scalar diagnostic fallback |
+| Modal eigenanalysis | C#-compatible Quad mass matrix, SubspaceIterations, InverseIterations, modal quantities and shapes |
 
 ## Important limitations
 
@@ -29,6 +30,8 @@ Last reviewed: 2026-07-28
 - The first run on a new platform may include Numba compilation time.
 - `python -m histra` inspects/assembles the HRX; it does not execute the full
   standalone nonlinear workflow.
+- Modal mass for future Vertex, Solid, Frame and Fiber domain entities is not
+  yet ported; populated unsupported collections fail explicitly.
 
 ## Source of truth
 

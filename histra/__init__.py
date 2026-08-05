@@ -31,14 +31,24 @@ from histra.solver.output_projection import (
     project_reactions,
 )
 from histra.solver.session import AnalysisSession, AnalysisSessionError
+from histra.solver.modal import (
+    ModalAnalysisError,
+    ModalAnalysisResult,
+    ModalMode,
+    solve_modal_analysis,
+)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "__version__",
     "load_model",
     "AnalysisSession",
     "AnalysisSessionError",
+    "solve_modal_analysis",
+    "ModalAnalysisError",
+    "ModalAnalysisResult",
+    "ModalMode",
     "AnalysisExecution",
     "AnalysisOutcome",
     "AnalysisStep",

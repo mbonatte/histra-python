@@ -150,7 +150,7 @@ class ModelPoint:
 
 @dataclass
 class Analysis:
-    """Static-analysis definition used by the translated solver."""
+    """Static/modal analysis definition used by the translated solver."""
 
     key: int = 0
     name: str = ""
@@ -171,6 +171,11 @@ class Analysis:
     convergence_tolerance: float = 1e-4
     max_iterations: int = 1000
     max_u: float = 100.0
+
+    number_of_eigen_modes: int = 1
+    number_of_lanczos_eigen_vectors: int = 3
+    modal_procedure: str = "SubspaceIterations"
+    modal_convergence_criteria: str = "Frquency"
 
     pdelta_effect: str = "None"
     als: bool = False
