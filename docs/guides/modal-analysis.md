@@ -165,6 +165,56 @@ python -m histra.tools.run_modal Ersino.hrx \
 
 For a modal analysis with a predecessor, also pass `--results model.Results`.
 
+### Batch C#/Python validation
+
+`run_modal` also accepts a directory, multiple inputs, or a wildcard. In batch
+mode each HRX is paired automatically with a same-stem C# results database in
+the same directory (`Bridge01.hrx` -> `Bridge01.Results`). For example on
+Windows:
+
+```console
+python -m histra.tools.run_modal my_model\modal-tests\* --analysis 30
+```
+
+Passing the folder directly is equivalent and avoids shell wildcard differences:
+
+```console
+python -m histra.tools.run_modal my_model\modal-tests --analysis 30
+```
+
+For every model the runner:
+
+1. **regenerates the computational interfaces and springs with Python by default**,
+   even when the HRX was already prepared by C#;
+2. executes the Python modal analysis;
+3. reads all C# `ModalValues` for the selected analysis;
+4. compares all stored modal summary fields with configurable `--rtol` and
+   `--atol` tolerances;
+5. compares `ModalShapeValues` with a sign- and scale-invariant Modal Assurance
+   Criterion (MAC);
+6. writes a per-model Python summary and comparison JSON;
+7. writes consolidated `comparison.json` and `comparison.csv` reports.
+
+This forced regeneration is intentional: otherwise an HRX that has already been
+run by C# contains C#-generated springs, so the test would validate only the
+Python eigensolver and could miss Python preprocessing errors. Use
+`--preprocessing stored` when that narrower solver-only check is desired, or
+`--preprocessing auto` to prepare only HRX files that are not solver-ready.
+
+By default the reports are stored under `modal-comparison` in the common model
+directory. The process exits with code 0 only when every discovered model has a
+C# reference and passes. Use `--no-compare-shapes` to skip the potentially large
+mode-shape database read, `--save-shapes` to retain Python NPZ mode vectors, or
+`--results-dir` if the C# databases live in another directory.
+
+The default comparison uses stricter primary tolerances for frequencies/periods
+(`--frequency-rtol 1e-4`, `--frequency-atol 1e-6`) and total directional mass
+(`--mass-rtol 1e-4`, `--mass-atol 1e-6`). Participation, effective-mass, mass-
+percentage and maximum-component fields use a mixed `--rtol 5e-3` /
+`--atol 1e-4` test because near-zero modal quantities otherwise produce
+meaningless relative errors. The default mode-shape threshold is
+`--min-mac 0.999`.
+
 ## C# database validation
 
 ```console
@@ -173,8 +223,10 @@ python -m histra.tools.validate_modal_results \
   --output modal-validation.json
 ```
 
-The validator compares frequencies, total mass and mass-weighted mode
-correlations against `ModalValues` and `ModalShapeValues`.
+The validator compares every stored modal summary field and computes a
+sign- and scale-invariant MAC for each corresponding mode in
+`ModalShapeValues`. `GammaX/Y/Z` are compared by magnitude because the global
+sign of an eigenvector is arbitrary.
 
 ## Ersino regression
 

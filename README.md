@@ -75,6 +75,22 @@ Reaction projection uses the C# `ReactionSumStates` sign convention:
 Step, R1, R2, R3
 ```
 
+## Batch modal C#/Python parity
+
+A directory or wildcard can be used to validate many models against C# in one
+command:
+
+```console
+python -m histra.tools.run_modal my_model\modal-tests\* --analysis 30
+```
+
+For each HRX, the runner automatically looks for a same-stem `.Results` file,
+regenerates the computational springs with Python (even if C# already prepared
+the HRX), runs the modal analysis, and compares every `ModalValues` quantity and
+the corresponding `ModalShapeValues` using MAC. Consolidated JSON/CSV reports
+are written under `<models-root>/modal-comparison`. Use
+`--preprocessing stored` for a narrower eigensolver-only check.
+
 ## Current capability boundary
 
 Supported backend scope is the validated static nonlinear and modal Quad /
@@ -84,8 +100,10 @@ contribution requests. Modal eigenanalysis itself is supported.
 
 The modal solver ports the active C# consistent Quad mass integration,
 `SubSpaceIteration2`, inverse iteration, mass normalization, participation
-coefficients and effective modal masses. See
-[Modal analysis](docs/guides/modal-analysis.md).
+coefficients and effective modal masses. `histra.tools.run_modal` supports
+single-model execution and batch C#/Python parity validation of folders or
+wildcards, including all `ModalValues` and sign-invariant mode-shape MAC checks.
+See [Modal analysis](docs/guides/modal-analysis.md).
 
 The solver uses shared class-level runtime arrays internally, so one solve is
 active per Python process. A cancellable process-wide lock prevents concurrent
