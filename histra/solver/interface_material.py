@@ -41,6 +41,22 @@ class InterfaceMaterialMutationReport:
         )
 
 
+def _backup_interface(interface: Any) -> Any:
+    """Return a rollback-safe backup without duplicating the object graph.
+
+    ``rebuild_interface_springs`` replaces the mutable constitutive containers
+    (spring lists and ``status``) instead of mutating their predecessors.  A
+    shallow copy therefore keeps the exact predecessor objects needed for
+    committed-state transfer and rollback while sharing immutable geometry,
+    afference data and cached arrays.  Only ``f`` is copied because it is
+    restored in-place on a successful mutation and must remain independent if
+    a later step fails.
+    """
+    backup = copy.copy(interface)
+    backup.f = list(interface.f)
+    return backup
+
+
 def _groups(interface: Any) -> tuple[list[Any], list[Any], list[Any]]:
     return interface.trasv_1, interface.slid, interface.slid_out_plan
 
@@ -96,18 +112,34 @@ def change_interface_materials(
             f"Unknown interface keys: {missing}."
         )
 
-    backups = {key: copy.deepcopy(model.collections.interfaces[key]) for key in keys}
+    backups = {
+        key: _backup_interface(model.collections.interfaces[key]) for key in keys
+    }
     records: list[InterfaceMaterialMutationRecord] = []
+    # Material-law construction depends only on the material and direction.
+    # Share these caches across this mutation batch, exactly as full model
+    # preparation does, instead of rebuilding identical law objects for every
+    # interface.
+    flex_law_cache: dict[Any, Any] = {}
+    sliding_law_cache: dict[Any, Any] = {}
     try:
         for key in keys:
             interface = model.collections.interfaces[key]
             old = backups[key]
+            # Preserve the existing SetStatus semantics exactly. InterfaceState
+            # is intentionally tiny (small fixed-size vectors/matrices), so this
+            # copy is negligible compared with deepcopying the whole Interface.
             old_status = copy.deepcopy(interface.status)
             old_force = list(interface.f)
             old_material_key = int(interface.material_key)
 
             interface.material_key = material_key
-            rebuild_interface_springs(model, interface)
+            rebuild_interface_springs(
+                model,
+                interface,
+                flex_law_cache=flex_law_cache,
+                sliding_law_cache=sliding_law_cache,
+            )
             if preserve_committed_state:
                 _transfer_groups(old, interface)
 

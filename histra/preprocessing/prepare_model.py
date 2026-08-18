@@ -2779,12 +2779,22 @@ def _create_interface_springs(
     intf._perf_area = None
 
 
-def rebuild_interface_springs(model: Model, interface: Interface | int) -> Interface:
+def rebuild_interface_springs(
+    model: Model,
+    interface: Interface | int,
+    *,
+    flex_law_cache: dict[tuple[int, bool], _HystereticLaw] | None = None,
+    sliding_law_cache: dict[tuple[int, bool, str], _CoulombLaw] | None = None,
+) -> Interface:
     """Recreate one interface's constitutive definitions from its material key.
 
     Geometry, topology, DOFs and afference matrices are preserved.  A nonzero
     ``Interface.material_key`` overrides both parent material laws, matching
     C# ``InterfaceOperations.ReSetInterfaces``.
+
+    Optional law caches let callers rebuilding several interfaces reuse the
+    same immutable material-law definitions.  Omitting them preserves the
+    existing one-interface behaviour.
     """
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
@@ -2793,7 +2803,12 @@ def rebuild_interface_springs(model: Model, interface: Interface | int) -> Inter
         if isinstance(interface, int)
         else interface
     )
-    _create_interface_springs(model, intf)
+    _create_interface_springs(
+        model,
+        intf,
+        flex_law_cache=flex_law_cache,
+        sliding_law_cache=sliding_law_cache,
+    )
     return intf
 
 
