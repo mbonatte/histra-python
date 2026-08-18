@@ -34,15 +34,16 @@ def test_linear_system_set_zero_preserves_vectors():
 def test_model_manager_assembles_requested_tangent(monkeypatch):
     seen = []
 
-    def fake_assemble(model, alfa):
-        seen.append(alfa)
+    def fake_assemble(model, alfa, *, recompute_elements=True):
+        seen.append((alfa, recompute_elements))
         return sp.eye(model.gdl, format="csc") * (1.0 + alfa)
 
     monkeypatch.setattr("histra.solver.model_manager.assemble_global_k", fake_assemble)
     model = empty_model(2)
     ls = LinearSystem(2)
     ModelManager.compute_ktang(model, ls, 1.0)
-    assert seen == [1.0]
+
+    assert seen == [(1.0, False)]
     np.testing.assert_allclose(ls.k.diagonal(), [2.0, 2.0])
 
 

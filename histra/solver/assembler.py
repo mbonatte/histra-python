@@ -244,7 +244,12 @@ def _assemble_afference(
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
-def assemble_global_k(model: Model, alfa: float = 0.0) -> sp.csc_matrix:
+def assemble_global_k(
+    model: Model,
+    alfa: float = 0.0,
+    *,
+    recompute_elements: bool = True,
+) -> sp.csc_matrix:
     """
     Assemble the global stiffness matrix K (CSC format).
 
@@ -253,13 +258,20 @@ def assemble_global_k(model: Model, alfa: float = 0.0) -> sp.csc_matrix:
       - Interface flexural (DimAff[0]×DimAff[0] block) via Trasv_1 springs
       - Interface sliding (DimAff[1]×DimAff[1] block) via Slid springs
       - Interface out-of-plane (DimAff[2]×DimAff[2] block) via SlidOutPlan springs
+
+    When ``recompute_elements`` is false, assemble the stiffness blocks already
+    stored on each element by ``ModelManager.compute_k``. This avoids executing
+    every constitutive/geometry stiffness calculation twice in the normal
+    ``compute_ktang -> compute_k -> assemble_k`` path while keeping standalone
+    assembler behaviour unchanged by default.
     """
     n = model.gdl
     rows, cols, vals = [], [], []
 
     # ── Quad contributions ──
     for quad in model.collections.quads.values():
-        quad.compute_k(alfa)
+        if recompute_elements:
+            quad.compute_k(alfa)
         k_scalar = quad.status.k
         if not quad.aff or len(quad.aff) <= 6:
             continue
@@ -287,7 +299,11 @@ def assemble_global_k(model: Model, alfa: float = 0.0) -> sp.csc_matrix:
         d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else dim2
 
         # Flexural block
-        k_flex = _compute_interface_kfless(intf, alfa)
+        k_flex = (
+            _compute_interface_kfless(intf, alfa)
+            if recompute_elements
+            else intf.status.k
+        )
         for i in range(d0):
             for j in range(d0):
                 k_ij = k_flex[i][j]
@@ -297,7 +313,11 @@ def assemble_global_k(model: Model, alfa: float = 0.0) -> sp.csc_matrix:
 
         # Sliding block
         if intf.slid:
-            k_slid = _compute_interface_kslid(intf, alfa)
+            k_slid = (
+                _compute_interface_kslid(intf, alfa)
+                if recompute_elements
+                else intf.status.kslid
+            )
             for i in range(d1):
                 for j in range(d1):
                     ai = d0 + i
@@ -309,7 +329,11 @@ def assemble_global_k(model: Model, alfa: float = 0.0) -> sp.csc_matrix:
 
         # Out-of-plane sliding block
         if len(intf.slid_out_plan) >= 2:
-            k_sop = _compute_interface_kslid_op(intf, alfa)
+            k_sop = (
+                _compute_interface_kslid_op(intf, alfa)
+                if recompute_elements
+                else intf.status.kslid_out_plan
+            )
             for i in range(d2):
                 for j in range(d2):
                     ai = d0 + d1 + i

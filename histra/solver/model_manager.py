@@ -113,6 +113,7 @@ class ModelManager:
         alfa: float = 1.0,
         *,
         set_zero: bool = True,
+        recompute_elements: bool = True,
     ) -> None:
         """Assemble the element stiffness selected by ``alfa``.
 
@@ -123,7 +124,9 @@ class ModelManager:
         """
         if set_zero:
             ls.set_zero()
-        ls.k = assemble_global_k(model, alfa=alfa).tocsc()
+        ls.k = assemble_global_k(
+            model, alfa=alfa, recompute_elements=recompute_elements
+        ).tocsc()
 
     @classmethod
     def assemble_load(
@@ -144,7 +147,9 @@ class ModelManager:
             # Publish dense trial tangents only when that path is requested.
             runtime.sync_all_to_objects()
         cls.compute_k(model, alfa)
-        cls.assemble_k(model, ls, alfa=alfa, set_zero=True)
+        cls.assemble_k(
+            model, ls, alfa=alfa, set_zero=True, recompute_elements=False
+        )
         return 0
 
     @classmethod
