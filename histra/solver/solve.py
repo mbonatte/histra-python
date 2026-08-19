@@ -256,7 +256,15 @@ def _solve_static_nonlinear_impl(
     integrator.domain_changed(p, model, n)
     p.current_load_factor = integrator.mult
     dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
-    reference = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
+    # C# StaticNonLinearAnalysis computes the step-0 ReactionSum before the
+    # initial GetValueGraphAnalysis call, so the reference graph force is the
+    # projected reaction of the initial (restored or zero) state.
+    initial_reaction = compute_total_reaction(model)
+    reference_displ: list[float] = []
+    reference = p.get_value_graph_analysis(
+        model.collections, analysis, dof, initial_reaction, reference_displ
+    )
+    reference_displacement = reference_displ[0] if reference_displ else 0.0
 
     if diagnostic_writer is not None:
         runtime = ModelManager.hysteretic_batch_for(model)
@@ -453,16 +461,19 @@ def _solve_static_nonlinear_impl(
 
         reaction = compute_total_reaction(model)
         p.current_load_factor = integrator.mult
-        values = p.get_value_graph_analysis(model.collections, analysis, dof, None, [])
-        displacement = values[1]
-        relative_displacement = displacement - reference[1]
+        graph_displ: list[float] = []
+        values = p.get_value_graph_analysis(
+            model.collections, analysis, dof, reaction, graph_displ
+        )
+        displacement = graph_displ[0] if graph_displ else 0.0
+        relative_displacement = displacement - reference_displacement
         step_data.append(
             {
                 "step": step,
                 "status": "OK",
                 "exit_code": result,
                 "u": p.u.copy(),
-                "load_factor": values[0],
+                "load_factor": p.current_load_factor,
                 "displacement": displacement,
                 "iterations": algorithm.the_test.current_iter,
                 "convergence_error": float(algorithm.the_test.get_error()),
@@ -482,7 +493,7 @@ def _solve_static_nonlinear_impl(
             }
         )
         p.log(
-            f"Step {step}: committed, load_factor={values[0]:.6f}, "
+            f"Step {step}: committed, load_factor={p.current_load_factor:.6f}, "
             f"displacement={displacement:.6e}, "
             f"iterations={algorithm.the_test.current_iter}"
         )
@@ -507,7 +518,7 @@ def _solve_static_nonlinear_impl(
                 "commit",
                 step=step,
                 iterations=int(algorithm.the_test.current_iter),
-                load_factor=float(values[0]),
+                load_factor=float(p.current_load_factor),
                 absolute_displacement=float(displacement),
                 relative_displacement=float(relative_displacement),
                 reaction_x=float(reaction.x),

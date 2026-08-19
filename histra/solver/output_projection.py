@@ -63,6 +63,75 @@ def project_reactions(execution: AnalysisExecution, request: Any) -> list[dict[s
     return rows
 
 
+def model_point_displacement(
+    collections: Any,
+    point: Any,
+    u: Sequence[float] | np.ndarray,
+) -> np.ndarray:
+    """Return the global X/Y/Z displacement of one HRX model point.
+
+    Port of the element switch in C# ``ModelPointOperations.AddStateModelPoints``
+    for the supported element subset (Node and Quad model points).
+    """
+    element_key = int(point.element_key)
+    element_type = str(point.element_type).casefold().split(".")[-1]
+    if element_type == "node":
+        try:
+            node = collections.nodes[element_key]
+        except KeyError as exc:
+            raise OutputProjectionError(
+                f"ModelPoint {point.key} references missing Node {element_key}."
+            ) from exc
+        contributions = [
+            quad_node_displacement(quad, node.point, index, u)
+            for quad in collections.quads.values()
+            for index, node_key in enumerate(quad.node_keys)
+            if int(node_key) == element_key
+        ]
+        if not contributions:
+            raise UnsupportedOutputError(
+                f"Node ModelPoint {point.key} references Node {element_key}, which "
+                "has no supported Quad contribution."
+            )
+        return np.mean(np.asarray(contributions, dtype=float), axis=0)
+    if element_type == "quad":
+        try:
+            quad = collections.quads[element_key]
+        except KeyError as exc:
+            raise OutputProjectionError(
+                f"ModelPoint {point.key} references missing Quad {element_key}."
+            ) from exc
+        vertex = int(point.id_vertex)
+        if vertex == 0:
+            # C# ModelPointOperations uses Quad.Status.U[0..2] at the centre.
+            return np.asarray(
+                [
+                    sum(
+                        float(u[entry.gdl - 1]) * float(entry.alfa)
+                        for entry in quad.aff[local_dof]
+                        if 0 <= entry.gdl - 1 < len(u)
+                    )
+                    for local_dof in range(3)
+                ],
+                dtype=float,
+            )
+        if 1 <= vertex <= len(quad.node_keys):
+            node_key = int(quad.node_keys[vertex - 1])
+            try:
+                node = collections.nodes[node_key]
+            except KeyError as exc:
+                raise OutputProjectionError(
+                    f"Quad {element_key} vertex {vertex} references missing Node {node_key}."
+                ) from exc
+            return quad_node_displacement(quad, node.point, vertex - 1, u)
+        raise UnsupportedOutputError(
+            f"ModelPoint {point.key} has unsupported IdVertex={vertex}."
+        )
+    raise UnsupportedOutputError(
+        f"ModelPoint {point.key} uses unsupported element type {point.element_type!r}."
+    )
+
+
 def compute_model_point_displacements(
     model: Any,
     global_displacement: Sequence[float] | np.ndarray,
@@ -94,64 +163,7 @@ def compute_model_point_displacements(
         element_key = int(point.element_key)
         if requested_elements and element_key not in requested_elements:
             continue
-        element_type = str(point.element_type).casefold().split(".")[-1]
-        if element_type == "node":
-            try:
-                node = collections.nodes[element_key]
-            except KeyError as exc:
-                raise OutputProjectionError(
-                    f"ModelPoint {point.key} references missing Node {element_key}."
-                ) from exc
-            contributions = [
-                quad_node_displacement(quad, node.point, index, u)
-                for quad in collections.quads.values()
-                for index, node_key in enumerate(quad.node_keys)
-                if int(node_key) == element_key
-            ]
-            if not contributions:
-                raise UnsupportedOutputError(
-                    f"Node ModelPoint {point.key} references Node {element_key}, which "
-                    "has no supported Quad contribution."
-                )
-            displacement = np.mean(np.asarray(contributions, dtype=float), axis=0)
-        elif element_type == "quad":
-            try:
-                quad = collections.quads[element_key]
-            except KeyError as exc:
-                raise OutputProjectionError(
-                    f"ModelPoint {point.key} references missing Quad {element_key}."
-                ) from exc
-            vertex = int(point.id_vertex)
-            if vertex == 0:
-                # C# ModelPointOperations uses Quad.Status.U[0..2] at the centre.
-                displacement = np.asarray(
-                    [
-                        sum(
-                            float(u[entry.gdl - 1]) * float(entry.alfa)
-                            for entry in quad.aff[local_dof]
-                            if 0 <= entry.gdl - 1 < u.size
-                        )
-                        for local_dof in range(3)
-                    ],
-                    dtype=float,
-                )
-            elif 1 <= vertex <= len(quad.node_keys):
-                node_key = int(quad.node_keys[vertex - 1])
-                try:
-                    node = collections.nodes[node_key]
-                except KeyError as exc:
-                    raise OutputProjectionError(
-                        f"Quad {element_key} vertex {vertex} references missing Node {node_key}."
-                    ) from exc
-                displacement = quad_node_displacement(quad, node.point, vertex - 1, u)
-            else:
-                raise UnsupportedOutputError(
-                    f"Quad ModelPoint {point.key} has unsupported IdVertex={vertex}."
-                )
-        else:
-            raise UnsupportedOutputError(
-                f"ModelPoint {point.key} uses unsupported element type {point.element_type!r}."
-            )
+        displacement = model_point_displacement(collections, point, u)
         rows.append(
             ModelPointDisplacement(
                 id_element=element_key,

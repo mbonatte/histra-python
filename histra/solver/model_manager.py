@@ -321,12 +321,17 @@ class ModelManager:
 
     @classmethod
     def get_dof_for_max_displacement(cls, p: Program, model: Model, an: Any) -> int:
+        """Port of C# ``ModelManager.GetDofForMaxDisplacement``.
+
+        C# only selects a DOF when ``MasterPoint == -10`` (auto-selection from
+        the stiffness-solved shape).  With an explicit master point the graph
+        displacement comes from ``GetValueGraphAnalysis``'s model-point branch,
+        and the returned DOF id is -1/unused there.
+        """
         del model
         master = int(getattr(an, "master_point", -10))
-        # HRX/C# external DOF identifiers are commonly one-based; accept a
-        # valid zero-based value too and clamp only at the usage site.
         if master != -10:
-            return master
+            return -1
         if p.u is not None and len(p.u):
             return int(np.argmax(np.abs(p.u)))
         return 0

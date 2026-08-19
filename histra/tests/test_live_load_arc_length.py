@@ -17,6 +17,7 @@ from histra.solver.arc_length import ArcLength
 from histra.solver.assembler import assemble_load_vector
 from histra.solver.line_search import LineSearch
 from histra.solver.solve import solve_static_nonlinear
+from histra.solver.output_projection import model_point_displacement
 from histra.springs.coulomb03 import SpringCoulomb03
 from histra.types.linear_system import LinearSystem
 
@@ -166,7 +167,14 @@ def test_complete_live_load_reference_path():
 
 
 def test_arc_length_commit_uses_displacement_relative_to_predecessor(monkeypatch):
-    """C# subtracts the predecessor graph displacement before Commit()."""
+    """C# measures the graph displacement at the master model point.
+
+    ``GetValueGraphAnalysis`` projects the master model point's displacement on
+    the analysis direction; ``StaticNonLinearAnalysis`` subtracts the
+    predecessor graph displacement before calling the integrator's Commit().
+    Model-live's LiveLoad_1 ships with master point 1 inactive, so the
+    activation below is required for a meaningful relative-displacement check.
+    """
     captured: list[float] = []
     original_commit = ArcLength.commit
 
@@ -178,7 +186,7 @@ def test_arc_length_commit_uses_displacement_relative_to_predecessor(monkeypatch
     monkeypatch.setattr(ArcLength, "commit", capture_and_stop)
     model = load_model(HRX)
     analysis = copy.deepcopy(model.collections.analyses[22])
-    dof = int(analysis.master_point)
+    analysis.active_model_points = {1: True, 2: True}
     predecessor = read_global_displacements(
         RESULTS,
         analysis.initial_analysis_key,
@@ -186,10 +194,55 @@ def test_arc_length_commit_uses_displacement_relative_to_predecessor(monkeypatch
         model_or_hrx=model,
         size=model.gdl,
     )
+    point = model.collections.model_points[int(analysis.master_point)]
+    predecessor_vector = model_point_displacement(model.collections, point, predecessor)
+    predecessor_displacement = -float(predecessor_vector[2])  # direction (0,0,-1)
 
     code, rows = solve_static_nonlinear(model, analysis, 1, results_path=RESULTS)
 
     assert code == 0
     assert len(rows) == 1
-    assert captured == pytest.approx([rows[0]["displacement"] - predecessor[dof]])
+    assert captured == pytest.approx(
+        [rows[0]["displacement"] - predecessor_displacement]
+    )
     assert abs(captured[0] - rows[0]["displacement"]) > 1.0e-12
+
+
+def test_arc_length_commit_displacement_is_zero_for_inactive_master_point(monkeypatch):
+    """C# leaves the graph displacement at 0 when the master point is inactive.
+
+    Model-live's LiveLoad_1 master point (key 1) is inactive, so C# can never
+    reach its TargetDisplacement and the analysis runs until another exit.
+    """
+    captured: list[float] = []
+    original_commit = ArcLength.commit
+
+    def capture_and_stop(self, model, analysis, displacement, dof, changed):
+        captured.append(float(displacement))
+        original_commit(self, model, analysis, displacement, dof, changed)
+        return True
+
+    monkeypatch.setattr(ArcLength, "commit", capture_and_stop)
+    model = load_model(HRX)
+    analysis = copy.deepcopy(model.collections.analyses[22])
+
+    code, rows = solve_static_nonlinear(model, analysis, 1, results_path=RESULTS)
+
+    assert code == 0
+    assert len(rows) == 1
+    assert captured == pytest.approx([0.0])
+    assert rows[0]["displacement"] == pytest.approx(0.0)
+
+
+def test_graph_displacement_projects_active_master_model_point():
+    """The committed-step displacement is the master model-point projection."""
+    model = load_model(HRX)
+    analysis = copy.deepcopy(model.collections.analyses[1])  # Vert: master 1 active
+    code, rows = solve_static_nonlinear(model, analysis, 1, max_committed_steps=1)
+
+    assert code == 0
+    assert len(rows) == 1
+    point = model.collections.model_points[int(analysis.master_point)]
+    vector = model_point_displacement(model.collections, point, rows[0]["u"])
+    expected = -float(vector[2])  # direction (0, 0, -1)
+    assert rows[0]["displacement"] == pytest.approx(expected)

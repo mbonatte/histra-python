@@ -41,7 +41,6 @@ class Program:
     def check_cancelled(self) -> None:
         """Raise at a solver-safe checkpoint when cancellation is requested."""
         raise_if_cancelled(self.should_cancel)
-
     def get_value_graph_analysis(
         self,
         collections: Any,
@@ -50,17 +49,65 @@ class Program:
         reaction_sum: Any,
         out_displ: list,
     ) -> list[float]:
-        """Return the core force/displacement pair used by solver monitoring.
-        Full C# graph extraction can sum reactions and query model points.  This
-        snapshot lacks those subsystems, so it returns the actual integrator
-        load factor and a real generalized displacement instead of the former
-        hard-coded load factor ``1.0``.
+        """Port of C# ``Program.GetValueGraphAnalysis``.
+
+        Returns the graph force/displacement pair used by solver monitoring:
+        ``values[0]`` is the reaction sum projected on the analysis direction
+        and ``values[1:]`` are the active model-point displacements projected
+        on the same direction.  ``out_displ`` receives the control displacement
+        C# uses for commit/stop decisions: the master model-point projection
+        when ``master_point > 0``, the maximum absolute projection when the
+        master is not a positive key, or ``|u[dof]|`` when no model point is
+        defined.
         """
-        del collections, an, reaction_sum, out_displ
-        displacement = 0.0
-        if self.u is not None and 0 <= int(dof) < len(self.u):
-            displacement = float(self.u[int(dof)])
-        return [float(self.current_load_factor), displacement]
+        direction = (
+            float(getattr(an, "dir_x", 0.0) or 0.0),
+            float(getattr(an, "dir_y", 0.0) or 0.0),
+            float(getattr(an, "dir_z", 0.0) or 0.0),
+        )
+        force = 0.0
+        if reaction_sum is not None:
+            force = (
+                float(getattr(reaction_sum, "x", 0.0)) * direction[0]
+                + float(getattr(reaction_sum, "y", 0.0)) * direction[1]
+                + float(getattr(reaction_sum, "z", 0.0)) * direction[2]
+            )
+        master = int(getattr(an, "master_point", -10))
+        points = getattr(collections, "model_points", None) or {}
+        if master in points:
+            from histra.solver.output_projection import model_point_displacement
+
+            values = [force]
+            displ = 0.0
+            for key, active in (getattr(an, "active_model_points", None) or {}).items():
+                if not active:
+                    continue
+                point = points.get(int(key))
+                if point is None:
+                    continue
+                if self.u is None:
+                    point_value = 0.0
+                else:
+                    vector = model_point_displacement(collections, point, self.u)
+                    point_value = (
+                        float(vector[0]) * direction[0]
+                        + float(vector[1]) * direction[1]
+                        + float(vector[2]) * direction[2]
+                    )
+                values.append(point_value)
+                if master > 0:
+                    if int(key) == master:
+                        displ = point_value
+                else:
+                    displ = max(displ, abs(point_value))
+            out_displ.append(displ)
+            return values
+        if self.u is not None and dof is not None and 0 <= int(dof) < len(self.u):
+            displ = abs(float(self.u[int(dof)]))
+            out_displ.append(displ)
+            return [force, displ]
+        out_displ.append(0.0)
+        return [force, 0.0]
     def add_value_graph_static_analysis(
         self,
         collections: Any,
