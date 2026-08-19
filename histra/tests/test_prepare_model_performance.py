@@ -15,6 +15,7 @@ from histra.preprocessing.prepare_model import (
     _combine_hysteretic,
     _configure_combined_hysteretic,
     _configure_hysteretic,
+    _new_hysteretic_spring,
     _set_ultimate_displacement,
     _find_or_create_geometric_node,
 )
@@ -100,6 +101,37 @@ def test_direct_combined_hysteretic_matches_legacy_path(
     assert direct.compressive_curve_type == legacy.compressive_curve_type
     assert direct.phase == legacy.phase
     assert direct.t_phase == legacy.t_phase
+
+
+
+def test_fast_hysteretic_factory_matches_constructor_and_owns_mutables():
+    from histra.springs.hysteretic import SpringHysteretic
+
+    expected = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    first = _new_hysteretic_spring()
+    second = _new_hysteretic_spring()
+
+    assert vars(first) == vars(expected)
+    assert vars(second) == vars(expected)
+
+    # Every mutable dataclass default must be independent.  This also makes the
+    # performance factory fail loudly if a future spring field adds another
+    # mutable default that the factory does not recreate.
+    for name, value in vars(expected).items():
+        if isinstance(value, (dict, list, set)):
+            assert getattr(first, name) is not getattr(second, name)
+            assert getattr(first, name) is not getattr(expected, name)
+
+    first.extra["probe"] = "1"
+    first.fy[0] = 123.0
+    first.kt[1] = 456.0
+    first.ur[0] = 789.0
+    first.alfau[0] = 0.9
+    first.alfar[1] = 0.8
+    first.umax[0] = 0.7
+    first.uy_corr[1] = 0.6
+
+    assert vars(second) == vars(expected)
 
 
 

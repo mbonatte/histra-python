@@ -122,6 +122,36 @@ class _CoulombLaw:
     bcacovic: float = 0.0
 
 
+
+
+_HYSTERETIC_SPRING_TEMPLATE = SpringHysteretic(
+    type_of="HiStrA.Objects.SpringHysteretic"
+)
+
+
+def _new_hysteretic_spring() -> SpringHysteretic:
+    """Return a virgin programmatic hysteretic spring efficiently.
+
+    ``SpringHysteretic`` is a large dataclass.  Preparing a bridge creates one
+    object per transverse fibre, so repeatedly executing the generated
+    constructor spends substantial time assigning identical scalar defaults.
+    Copy the already-initialised default namespace instead, then recreate every
+    mutable default so springs remain completely independent.  XML construction
+    continues to use the normal dataclass constructor.
+    """
+    spring = object.__new__(SpringHysteretic)
+    spring.__dict__ = _HYSTERETIC_SPRING_TEMPLATE.__dict__.copy()
+    spring.extra = {}
+    spring.fy = [0.0, 0.0]
+    spring.kt = [0.0, 0.0]
+    spring.ur = [0.0, 0.0]
+    spring.alfau = [0.0, 0.0]
+    spring.alfar = [0.0, 0.0]
+    spring.umax = [0.0, 0.0]
+    spring.uy_corr = [0.0, 0.0]
+    return spring
+
+
 @dataclass(frozen=True)
 class _QuadAfferenceGeometry:
     centre: np.ndarray
@@ -617,7 +647,7 @@ def _configure_hysteretic(k: float, area: float, length: float, law: _Hysteretic
         raise ModelPreparationError(
             f"Cannot create a transverse hysteretic spring with length={length!r}."
         )
-    spring = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    spring = _new_hysteretic_spring()
     spring.k = float(k)
     spring.area = float(area)
     spring.length = float(length)
@@ -791,7 +821,7 @@ def _configure_combined_hysteretic(
         s2_alfa_r_t, s2_alfa_r_c, s2_alfa_u_t, s2_alfa_u_c,
         s2_tensile_curve, s2_compressive_curve,
     ) = _hysteretic_side_definition(k2, area2, length2, law2)
-    out = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    out = _new_hysteretic_spring()
     out.k = _series(s1_k, s2_k, False)
 
     if s1_fy_t <= s2_fy_t:
@@ -876,7 +906,7 @@ def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained
     elif sp2.k == -1.0:
         out = _copy_hysteretic_spring(sp1)
     else:
-        out = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+        out = _new_hysteretic_spring()
         out.k = _series(sp1.k, sp2.k, restrained)
         # C# SetSpringYieldingForce: weakest tension and least-compressive
         # compression, carrying the associated area.
@@ -2413,7 +2443,7 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
                             material_override: MasonryMaterial | None = None) -> tuple[SpringHysteretic, _HystereticLaw]:
     assert model.collections is not None
     if parent_type == "Restraint":
-        sp = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+        sp = _new_hysteretic_spring()
         sp.k = -1.0
         sp.area = _polygon_area_3d(cell)
         if material_override is not None:
@@ -2632,7 +2662,7 @@ def _create_interface_springs(
             continue
 
         if k1 == -1.0:
-            sp1 = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+            sp1 = _new_hysteretic_spring()
             sp1.k, sp1.area = -1.0, area1
         else:
             try:
@@ -2644,7 +2674,7 @@ def _create_interface_springs(
                     f"face {intf.face1}): {exc}"
                 ) from exc
         if k2 == -1.0:
-            sp2 = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+            sp2 = _new_hysteretic_spring()
             sp2.k, sp2.area = -1.0, area2
         else:
             try:
