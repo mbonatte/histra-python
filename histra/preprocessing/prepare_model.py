@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import copy
 import math
-from typing import Iterable, NamedTuple, Sequence
+from typing import Iterable, Sequence
 
 import numpy as np
 
@@ -100,22 +100,6 @@ class _HystereticLaw:
     eps_u_t: float
     eps_u_c: float
     law_type: str
-
-
-class _HystereticSideDefinition(NamedTuple):
-    k: float
-    area: float
-    length: float
-    fy_t: float
-    fy_c: float
-    kt_t: float
-    kt_c: float
-    alfa_r_t: float
-    alfa_r_c: float
-    alfa_u_t: float
-    alfa_u_c: float
-    tensile_curve: str
-    compressive_curve: str
 
 
 @dataclass(frozen=True)
@@ -737,7 +721,10 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
 
 def _hysteretic_side_definition(
     k: float, area: float, length: float, law: _HystereticLaw,
-) -> _HystereticSideDefinition:
+) -> tuple[
+    float, float, float, float, float, float, float,
+    float, float, float, float, str, str,
+]:
     if not math.isfinite(k) or k <= 0.0:
         raise ModelPreparationError(
             f"Cannot create a transverse hysteretic spring with stiffness K={k!r}."
@@ -776,14 +763,12 @@ def _hysteretic_side_definition(
         ultimate_c = 2.0 * law.G_c / (fy_c / area) + fy_c / k
         kt_c = -fy_c / (ultimate_c - fy_c / k)
 
-    return _HystereticSideDefinition(
-        k=float(k), area=float(area), length=float(length),
-        fy_t=float(fy_t), fy_c=float(fy_c),
-        kt_t=float(kt_t), kt_c=float(kt_c),
-        alfa_r_t=float(law.alfa_r_t), alfa_r_c=float(law.alfa_r_c),
-        alfa_u_t=float(law.alfa_u_t), alfa_u_c=float(law.alfa_u_c),
-        tensile_curve=law.tensile_curve,
-        compressive_curve=law.compressive_curve,
+    return (
+        float(k), float(area), float(length),
+        float(fy_t), float(fy_c), float(kt_t), float(kt_c),
+        float(law.alfa_r_t), float(law.alfa_r_c),
+        float(law.alfa_u_t), float(law.alfa_u_c),
+        law.tensile_curve, law.compressive_curve,
     )
 
 
@@ -797,41 +782,47 @@ def _configure_combined_hysteretic(
     ``_combine_hysteretic``.  It avoids two temporary SpringHysteretic objects
     and two full envelope initializations per generated fibre.
     """
-    side1 = _hysteretic_side_definition(k1, area1, length1, law1)
-    side2 = _hysteretic_side_definition(k2, area2, length2, law2)
+    (
+        s1_k, s1_area, s1_length, s1_fy_t, s1_fy_c, s1_kt_t, s1_kt_c,
+        s1_alfa_r_t, s1_alfa_r_c, s1_alfa_u_t, s1_alfa_u_c,
+        s1_tensile_curve, s1_compressive_curve,
+    ) = _hysteretic_side_definition(k1, area1, length1, law1)
+    (
+        s2_k, s2_area, s2_length, s2_fy_t, s2_fy_c, s2_kt_t, s2_kt_c,
+        s2_alfa_r_t, s2_alfa_r_c, s2_alfa_u_t, s2_alfa_u_c,
+        s2_tensile_curve, s2_compressive_curve,
+    ) = _hysteretic_side_definition(k2, area2, length2, law2)
     out = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
-    out.k = _series(side1.k, side2.k, False)
+    out.k = _series(s1_k, s2_k, False)
 
-    if side1.fy_t <= side2.fy_t:
-        out.fy[0] = side1.fy_t
-        out.tensile_curve_type = side1.tensile_curve
+    if s1_fy_t <= s2_fy_t:
+        out.fy[0] = s1_fy_t
+        out.tensile_curve_type = s1_tensile_curve
     else:
-        out.fy[0] = side2.fy_t
-        out.tensile_curve_type = side2.tensile_curve
+        out.fy[0] = s2_fy_t
+        out.tensile_curve_type = s2_tensile_curve
 
-    if side1.fy_c <= side2.fy_c:
-        out.fy[1] = side2.fy_c
-        out.area = side2.area
+    if s1_fy_c <= s2_fy_c:
+        out.fy[1] = s2_fy_c
+        out.area = s2_area
     else:
-        out.fy[1] = side1.fy_c
-        out.area = side1.area
+        out.fy[1] = s1_fy_c
+        out.area = s1_area
     out.compressive_curve_type = (
-        side1.compressive_curve
-        if side1.fy_c >= side2.fy_c
-        else side2.compressive_curve
+        s1_compressive_curve if s1_fy_c >= s2_fy_c else s2_compressive_curve
     )
-    out.length = side1.length + side2.length
+    out.length = s1_length + s2_length
     out.alfau = [
-        max(side1.alfa_u_t, side2.alfa_u_t),
-        max(side1.alfa_u_c, side2.alfa_u_c),
+        max(s1_alfa_u_t, s2_alfa_u_t),
+        max(s1_alfa_u_c, s2_alfa_u_c),
     ]
     out.alfar = [
-        max(side1.alfa_r_t, side2.alfa_r_t),
-        max(side1.alfa_r_c, side2.alfa_r_c),
+        max(s1_alfa_r_t, s2_alfa_r_t),
+        max(s1_alfa_r_c, s2_alfa_r_c),
     ]
     out.kt = [
-        out.k if out.tensile_curve_type == "Elastic" else _series(side1.kt_t, side2.kt_t, False),
-        out.k if out.compressive_curve_type == "Elastic" else _series(side1.kt_c, side2.kt_c, False),
+        out.k if out.tensile_curve_type == "Elastic" else _series(s1_kt_t, s2_kt_t, False),
+        out.k if out.compressive_curve_type == "Elastic" else _series(s1_kt_c, s2_kt_c, False),
     ]
     out.ur = [
         max(out.fy[0] / out.k if out.k else 0.0, 0.0),

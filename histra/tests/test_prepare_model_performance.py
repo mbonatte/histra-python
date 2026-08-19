@@ -56,17 +56,23 @@ def _afference_values(model):
     ]
 
 @pytest.mark.parametrize(
-    ("tensile", "compressive"),
+    ("tensile1", "compressive1", "tensile2", "compressive2"),
     [
-        ("LinearSoftening", "LinearSoftening"),
-        ("Exponential", "Parabolic"),
-        ("LinearHardening", "LinearHardening"),
-        ("Elastic", "Elastic"),
+        ("LinearSoftening", "LinearSoftening", "LinearSoftening", "LinearSoftening"),
+        ("Exponential", "Parabolic", "Exponential", "Parabolic"),
+        ("LinearHardening", "LinearHardening", "LinearHardening", "LinearHardening"),
+        ("Elastic", "Elastic", "Elastic", "Elastic"),
+        ("LinearSoftening", "Parabolic", "Exponential", "LinearSoftening"),
+        ("Elastic", "LinearHardening", "LinearHardening", "Elastic"),
+        ("Exponential", "Elastic", "LinearSoftening", "Parabolic"),
+        ("LinearHardening", "LinearSoftening", "Elastic", "LinearHardening"),
     ],
 )
-def test_direct_combined_hysteretic_matches_legacy_path(tensile, compressive):
-    law1 = _law(tensile, compressive, scale=1.0)
-    law2 = _law(tensile, compressive, scale=1.3)
+def test_direct_combined_hysteretic_matches_legacy_path(
+    tensile1, compressive1, tensile2, compressive2,
+):
+    law1 = _law(tensile1, compressive1, scale=1.0)
+    law2 = _law(tensile2, compressive2, scale=1.3)
     legacy = _combine_hysteretic(
         _configure_hysteretic(1800.0, 2.5, 0.75, law1),
         _configure_hysteretic(2600.0, 3.0, 1.10, law2),
@@ -87,7 +93,7 @@ def test_direct_combined_hysteretic_matches_legacy_path(tensile, compressive):
         "k_tang", "k_tang_committed", "f", "u",
     )
     for name in scalar_fields:
-        assert getattr(direct, name) == pytest.approx(getattr(legacy, name))
+        assert getattr(direct, name) == getattr(legacy, name)
     for name in ("fy", "kt", "ur", "alfar", "alfau", "umax", "uy_corr"):
         np.testing.assert_allclose(getattr(direct, name), getattr(legacy, name), rtol=0.0, atol=0.0)
     assert direct.tensile_curve_type == legacy.tensile_curve_type
