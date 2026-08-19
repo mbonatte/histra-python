@@ -251,7 +251,12 @@ class Interface:
         self._perf_d0 = self.dim_aff[0] if self.dim_aff else 6
         self._perf_d1 = self.dim_aff[1] if len(self.dim_aff) > 1 else 2
         self._perf_custom_force_access = tuple(
-            "get_incr_force" in spring.__dict__ or "get_force" in spring.__dict__
+            False
+            if getattr(spring, "_histra_batch_managed", False)
+            else (
+                "get_incr_force" in spring.__dict__
+                or "get_force" in spring.__dict__
+            )
             for spring in self.trasv_1[:count]
         )
         self._perf_has_custom_force_access = any(self._perf_custom_force_access)

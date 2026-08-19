@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import copy
+from dataclasses import fields
 import itertools
 
 import importlib
@@ -110,14 +111,19 @@ def test_fast_hysteretic_factory_matches_constructor_and_owns_mutables():
     expected = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
     first = _new_hysteretic_spring()
     second = _new_hysteretic_spring()
+    field_names = tuple(field.name for field in fields(SpringHysteretic))
 
-    assert vars(first) == vars(expected)
-    assert vars(second) == vars(expected)
+    def state(spring):
+        return {name: copy.deepcopy(getattr(spring, name)) for name in field_names}
+
+    assert state(first) == state(expected)
+    assert state(second) == state(expected)
 
     # Every mutable dataclass default must be independent.  This also makes the
     # performance factory fail loudly if a future spring field adds another
     # mutable default that the factory does not recreate.
-    for name, value in vars(expected).items():
+    for name in field_names:
+        value = getattr(expected, name)
         if isinstance(value, (dict, list, set)):
             assert getattr(first, name) is not getattr(second, name)
             assert getattr(first, name) is not getattr(expected, name)
@@ -131,7 +137,23 @@ def test_fast_hysteretic_factory_matches_constructor_and_owns_mutables():
     first.umax[0] = 0.7
     first.uy_corr[1] = 0.6
 
-    assert vars(second) == vars(expected)
+    assert state(second) == state(expected)
+
+
+def test_hysteretic_fixed_schema_is_slotted_but_dynamic_overrides_remain_supported():
+    from histra.springs.hysteretic import SpringHysteretic
+
+    spring = _new_hysteretic_spring()
+
+    # Fixed numerical/constitutive fields are descriptors rather than entries
+    # in a large per-instance dictionary.  A lazy dictionary remains available
+    # solely for compatibility with deliberate instance-level overrides.
+    assert "k" not in spring.__dict__
+    assert "fy" not in spring.__dict__
+    spring.get_force = lambda: 12.5
+    assert spring.get_force() == 12.5
+    assert "get_force" in spring.__dict__
+    assert hasattr(SpringHysteretic, "__slots__")
 
 
 
@@ -162,10 +184,18 @@ def test_hysteretic_initialization_has_no_redundant_post_reset(monkeypatch):
     # and one reset of committed state.  Preparation must not repeat either.
     assert calls == {"start": 1, "commit": 1}
 
-    before = copy.deepcopy(vars(spring))
+    before = {
+        field_info.name: copy.deepcopy(getattr(spring, field_info.name))
+        for field_info in fields(SpringHysteretic)
+    }
+    before_dynamic = copy.deepcopy(spring.__dict__)
     spring.revert_to_start()
     spring.revert_to_last_commit()
-    assert vars(spring) == before
+    assert {
+        field_info.name: getattr(spring, field_info.name)
+        for field_info in fields(SpringHysteretic)
+    } == before
+    assert spring.__dict__ == before_dynamic
 
 
 def _set_ultimate_displacement_reference(spring, law1, law2):
@@ -291,8 +321,11 @@ def _assert_fast_spring_copy_matches_deepcopy(source, actual):
     reference = copy.deepcopy(source)
     assert actual is not source
     assert actual.__dict__ == reference.__dict__
-    for name, value in vars(source).items():
-        if isinstance(value, (list, dict)):
+    for field_info in fields(type(source)):
+        name = field_info.name
+        value = getattr(source, name)
+        assert getattr(actual, name) == getattr(reference, name), name
+        if isinstance(value, (list, dict, set)):
             assert getattr(actual, name) is not value, name
 
 

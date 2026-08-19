@@ -14,7 +14,7 @@ from histra.springs.registry import _register_spring
 
 
 @_register_spring("HiStrA.Objects.SpringCoulomb03")
-@dataclass
+@dataclass(slots=True)
 class SpringCoulomb03(Spring):
     """Coulomb friction spring type 03 — direct port of C# SpringCoulomb03.
 
@@ -176,7 +176,7 @@ class SpringCoulomb03(Spring):
 
     @classmethod
     def _from_xml(cls, elem: ET.Element, type_of: str = "") -> SpringCoulomb03:
-        inst = super()._from_xml(elem, type_of)
+        inst = super(SpringCoulomb03, cls)._from_xml(elem, type_of)
         inst.check_contact_area = _attr(elem, "CheckContactArea", False, lambda v: str(v).lower() == "true")
         inst.sub_law = _attr(elem, "SubLaw", "Coulomb")
         inst.hysteretic_type = _attr(elem, "HystereticType", "Takeda")

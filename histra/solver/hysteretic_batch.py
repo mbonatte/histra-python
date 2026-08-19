@@ -121,6 +121,20 @@ QPFRACTURE_MODE = 15
 QPFRACTURE_ENERGY = 16
 QUAD_PARAM_SIZE = 17
 
+# ``PhaseEnum(code)`` goes through EnumMeta on every call.  Dense batch rows
+# contain only the canonical C# phase codes 0..10, so reuse the singleton
+# IntEnum objects.  The fallback retains the former ValueError semantics if a
+# corrupted/out-of-range state ever reaches the object synchronization path.
+_PHASE_BY_CODE = tuple(PhaseEnum(code) for code in range(11))
+
+
+def _phase_from_code(value: float | int) -> PhaseEnum:
+    code = int(value)
+    if 0 <= code < len(_PHASE_BY_CODE):
+        return _PHASE_BY_CODE[code]
+    return PhaseEnum(code)
+
+
 QUAD_SUBLAW_COULOMB = 0
 QUAD_SUBLAW_CACOVIC = 1
 QUAD_FRACTURE_NONE = 0
@@ -2476,8 +2490,8 @@ class HystereticBatchRuntime:
         spring._cload_indicator = int(row[QCLOAD])
         spring._cplastic_tension_indicator = bool(row[QCPLAST_T])
         spring._cplastic_compression_indicator = bool(row[QCPLAST_C])
-        spring._c_phase_unload_t = PhaseEnum(int(row[QCUNLOAD_T]))
-        spring._c_phase_unload_c = PhaseEnum(int(row[QCUNLOAD_C]))
+        spring._c_phase_unload_t = _phase_from_code(row[QCUNLOAD_T])
+        spring._c_phase_unload_c = _phase_from_code(row[QCUNLOAD_C])
         spring._cup = float(row[QCUP])
         spring.cenergy_d = float(row[QCENERGY])
         spring._cstress = float(row[QCSTRESS])
@@ -2485,7 +2499,7 @@ class HystereticBatchRuntime:
         spring._cstress_normal = float(row[QCSTRESS_NORMAL])
         spring._cstress_normal_prev = float(row[QCSTRESS_NORMAL_PREV])
         spring._ccontact_area = float(row[QCCONTACT])
-        spring.phase = PhaseEnum(int(row[QPHASE]))
+        spring.phase = _phase_from_code(row[QPHASE])
         spring.tangent_reload_t = float(row[QTANG_RELOAD_T])
         spring.tangent_reload_c = float(row[QTANG_RELOAD_C])
         spring.k_tang_committed = float(row[QKTANG_COMMITTED])
@@ -2502,15 +2516,15 @@ class HystereticBatchRuntime:
         spring._tload_indicator = int(row[QTLOAD])
         spring._tplastic_tension_indicator = bool(row[QTPLAST_T])
         spring._tplastic_compression_indicator = bool(row[QTPLAST_C])
-        spring._t_phase_unload_t = PhaseEnum(int(row[QTUNLOAD_T]))
-        spring._t_phase_unload_c = PhaseEnum(int(row[QTUNLOAD_C]))
+        spring._t_phase_unload_t = _phase_from_code(row[QTUNLOAD_T])
+        spring._t_phase_unload_c = _phase_from_code(row[QTUNLOAD_C])
         spring._tenergy_d = float(row[QTENERGY])
         spring._tup = float(row[QTUP])
         spring._tstress = float(row[QTSTRESS])
         spring._tstrain = float(row[QTSTRAIN])
         spring._tstress_normal = float(row[QTSTRESS_NORMAL])
         spring._tcontact_area = float(row[QTCONTACT])
-        spring.t_phase = PhaseEnum(int(row[QTPHASE]))
+        spring.t_phase = _phase_from_code(row[QTPHASE])
         spring.k_tang = float(row[QKTANG])
         spring.mom1p = float(row[QMOM1P])
         spring.rot1p = float(row[QROT1P])
@@ -2575,14 +2589,14 @@ class HystereticBatchRuntime:
         spring._cstress_normal_prev = float(row[CCSTRESS_NORMAL_PREV])
         spring._ccontact_area = float(row[CCCONTACT_AREA])
         spring.cenergy_d = float(row[CCENERGY])
-        spring.phase = PhaseEnum(int(row[CCPHASE]))
+        spring.phase = _phase_from_code(row[CCPHASE])
         spring._tup = float(row[CTUP])
         spring._tstress = float(row[CTSTRESS])
         spring._tstrain = float(row[CTSTRAIN])
         spring._tstress_normal = float(row[CTSTRESS_NORMAL])
         spring._tcontact_area = float(row[CTCONTACT_AREA])
         spring._tenergy_d = float(row[CTENERGY])
-        spring.t_phase = PhaseEnum(int(row[CTPHASE]))
+        spring.t_phase = _phase_from_code(row[CTPHASE])
         spring.k_tang = float(row[CKTANG])
         spring.mom1p = float(row[CMOM1P])
         spring.rot1p = float(row[CROT1P])
@@ -2795,7 +2809,7 @@ class HystereticBatchRuntime:
             spring._tload_indicator = int(row[5])
             spring._tstress = float(row[6])
             spring._tstrain = float(row[7])
-            spring.t_phase = PhaseEnum(int(row[8]))
+            spring.t_phase = _phase_from_code(row[8])
             spring.k_tang = float(row[9])
             spring.f = spring._tstress
             spring.u = spring._tstrain
@@ -2842,7 +2856,7 @@ class HystereticBatchRuntime:
             spring._cload_indicator = int(committed[5])
             spring._cstress = float(committed[6])
             spring._cstrain = float(committed[7])
-            spring.phase = PhaseEnum(int(committed[8]))
+            spring.phase = _phase_from_code(committed[8])
             spring._trot_max = float(trial[0])
             spring._trot_min = float(trial[1])
             spring._trot_pu = float(trial[2])
@@ -2851,7 +2865,7 @@ class HystereticBatchRuntime:
             spring._tload_indicator = int(trial[5])
             spring._tstress = float(trial[6])
             spring._tstrain = float(trial[7])
-            spring.t_phase = PhaseEnum(int(trial[8]))
+            spring.t_phase = _phase_from_code(trial[8])
             spring.k_tang = float(trial[9])
             spring.k_tang_committed = float(trial[9])
             spring.f = float(trial[6])

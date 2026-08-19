@@ -22,6 +22,17 @@ def make_coulomb_xml(**kw):
     return elem
 
 
+class TestSpringCoulomb03Representation(unittest.TestCase):
+    def test_fixed_schema_is_slotted_with_dynamic_override_compatibility(self):
+        s = SpringCoulomb03(k=123.0, cohesion=4.0)
+        self.assertNotIn("k", s.__dict__)
+        self.assertNotIn("cohesion", s.__dict__)
+        s.get_force = lambda: 7.25
+        self.assertEqual(s.get_force(), 7.25)
+        self.assertIn("get_force", s.__dict__)
+        self.assertTrue(hasattr(SpringCoulomb03, "__slots__"))
+
+
 class TestSpringCoulomb03FromXml(unittest.TestCase):
     def test_create_takeda(self):
         s = spring_from_xml(make_coulomb_xml())

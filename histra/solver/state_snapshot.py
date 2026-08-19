@@ -8,7 +8,8 @@ cannot be copied.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
+from functools import lru_cache
 import hashlib
 import pickle
 from typing import Any, Iterable
@@ -133,6 +134,59 @@ def _restore_array(target: Any, saved: Any) -> Any:
         target.update(_copy_array(item) for item in saved)
         return target
     return _copy_array(saved)
+
+
+
+@lru_cache(maxsize=None)
+def _dataclass_state_fields(cls: type[Any]) -> tuple[str, ...]:
+    """Return the fixed dataclass field names for a solver object type.
+
+    Spring classes use slots for their fixed numerical schema.  Their
+    ``__dict__`` therefore contains only optional dynamic overrides and is no
+    longer a complete representation of constitutive state.  Cache the field
+    names per class so snapshots can copy the complete state without repeating
+    dataclass introspection for every spring.
+    """
+    return tuple(field.name for field in fields(cls))
+
+
+def _copy_object_state(obj: Any) -> dict[str, Any]:
+    """Copy fixed dataclass fields plus any genuinely dynamic attributes."""
+    copied: dict[str, Any] = {}
+    if is_dataclass(obj):
+        for key in _dataclass_state_fields(type(obj)):
+            copied[key] = _copy_array(getattr(obj, key))
+
+    dynamic = getattr(obj, "__dict__", None)
+    if dynamic:
+        for key, value in dynamic.items():
+            if key not in copied:
+                copied[key] = _copy_array(value)
+    return copied
+
+
+def _restore_object_state(obj: Any, saved: dict[str, Any]) -> None:
+    """Restore slotted/dataclass object state while preserving mutable aliases."""
+    fixed = (
+        frozenset(_dataclass_state_fields(type(obj)))
+        if is_dataclass(obj)
+        else frozenset()
+    )
+    dynamic = getattr(obj, "__dict__", None)
+    if dynamic is not None:
+        for key in tuple(dynamic):
+            if key not in fixed and key not in saved:
+                del dynamic[key]
+
+    for key, saved_value in saved.items():
+        current = getattr(obj, key, _MISSING)
+        if current is _MISSING:
+            setattr(obj, key, _copy_array(saved_value))
+            continue
+        restored = _restore_array(current, saved_value)
+        if restored is not current:
+            setattr(obj, key, restored)
+
 
 def _restore_state_dict(target: dict[str, Any], saved: dict[str, Any]) -> None:
     """Restore a state dictionary in place while preserving mutable aliases.
@@ -304,7 +358,7 @@ class SolverStateSnapshot:
                 "f": _copy_array(intf.f),
             }))
         springs = [
-            (spring, _copy_state_dict(spring.__dict__))
+            (spring, _copy_object_state(spring))
             for spring in _iter_springs(
                 model, quads=quad_values, interfaces=interface_values
             )
@@ -389,7 +443,7 @@ class SolverStateSnapshot:
             _restore_state_dict(intf.status.__dict__, saved["status"])
             intf.f[:] = saved["f"]
         for spring, saved in self.spring_state:
-            _restore_state_dict(spring.__dict__, saved)
+            _restore_object_state(spring, saved)
         if self.batch_state is not None:
             runtime = ModelManager.hysteretic_batch_for(self.integrator.state.model) if hasattr(self.integrator.state, "model") else None
             if runtime is None:

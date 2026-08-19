@@ -8,8 +8,10 @@ import numpy as np
 from histra.solver.state_snapshot import (
     _copy_array,
     _copy_state_dict,
+    _copy_object_state,
     _restore_array,
     _restore_state_dict,
+    _restore_object_state,
 )
 
 
@@ -120,3 +122,55 @@ def test_restore_array_replaces_incompatible_array_shape() -> None:
 def test_copy_array_handles_scalar_tuple_without_allocation() -> None:
     value = (1, 2.0, "x", Marker.A)
     assert _copy_array(value) is value
+
+
+def test_slotted_spring_object_state_roundtrip_is_lossless() -> None:
+    from histra.springs.hysteretic import SpringHysteretic
+    from histra.types.phase_enum import PhaseEnum
+
+    spring = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    spring.k = 1234.5
+    spring.fy[:] = [6.25, -17.5]
+    spring.kt[:] = [2.0, -3.0]
+    spring.ur[:] = [0.0125, -0.025]
+    spring.umax[:] = [0.01, -0.02]
+    spring._cstress = 4.75
+    spring._cstrain = 0.003
+    spring.phase = PhaseEnum.Plastic_t
+    spring.custom_probe = {"history": [1.0, 2.0]}
+
+    saved = _copy_object_state(spring)
+    original_fy = spring.fy
+    original_probe = spring.custom_probe
+
+    spring.k = -1.0
+    spring.fy[:] = [99.0, 98.0]
+    spring.kt[:] = [97.0, 96.0]
+    spring.ur[:] = [95.0, 94.0]
+    spring.umax[:] = [93.0, 92.0]
+    spring._cstress = -88.0
+    spring._cstrain = -77.0
+    spring.phase = PhaseEnum.Rupture
+    spring.custom_probe["history"][0] = 123.0
+    spring.created_after_snapshot = "remove"
+
+    _restore_object_state(spring, saved)
+
+    assert spring.k == 1234.5
+    assert spring.fy is original_fy
+    assert spring.fy == [6.25, -17.5]
+    assert spring.kt == [2.0, -3.0]
+    assert spring.ur == [0.0125, -0.025]
+    assert spring.umax == [0.01, -0.02]
+    assert spring._cstress == 4.75
+    assert spring._cstrain == 0.003
+    assert spring.phase == PhaseEnum.Plastic_t
+    assert spring.custom_probe is original_probe
+    assert spring.custom_probe == {"history": [1.0, 2.0]}
+    assert "created_after_snapshot" not in spring.__dict__
+
+    # Mutating the restored object must not mutate the immutable snapshot.
+    spring.fy[0] = 500.0
+    spring.custom_probe["history"][0] = 500.0
+    assert saved["fy"][0] == 6.25
+    assert saved["custom_probe"]["history"][0] == 1.0

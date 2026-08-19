@@ -16,7 +16,7 @@ from histra.springs.registry import _register_spring
 
 
 @_register_spring("HiStrA.Objects.SpringHysteretic")
-@dataclass
+@dataclass(slots=True)
 class SpringHysteretic(Spring):
     """Hysteretic spring with multi-linear/parabolic backbone and pinching rules.
 

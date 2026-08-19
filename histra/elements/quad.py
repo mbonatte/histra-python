@@ -1000,7 +1000,11 @@ class Quad:
                 if not belongs:
                     continue
                 custom_springs = any(
-                    "get_force" in spring.__dict__ or "get_incr_force" in spring.__dict__
+                    not getattr(spring, "_histra_batch_managed", False)
+                    and (
+                        "get_force" in spring.__dict__
+                        or "get_incr_force" in spring.__dict__
+                    )
                     for spring in intf.trasv_1
                 )
                 refs.append((intf, custom_springs))

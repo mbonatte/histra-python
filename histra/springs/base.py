@@ -9,8 +9,17 @@ from histra.types.point import Point
 from histra.types.afference_entry import AfferenceEntry
 
 
-@dataclass
-class Spring:
+class _DynamicAttributes:
+    """Provide a lazy instance dictionary for compatibility-only overrides.
+
+    Production spring fields live in slots; ``__dict__`` is allocated only if
+    callers attach a truly dynamic attribute (for example a test override).
+    """
+    __slots__ = ("__dict__",)
+
+
+@dataclass(slots=True)
+class Spring(_DynamicAttributes):
     """Base spring — used as fallback when *TypeOf* is unknown."""
     type_of: str = ""
 
@@ -34,6 +43,11 @@ class Spring:
     is_on: bool = True
     phase: int = 0       # PhaseEnum value (committed)
     t_phase: int = 0     # PhaseEnum value (trial)
+
+    # Runtime metadata used by the compiled solver.  Keeping this fixed field
+    # in a slot avoids allocating a per-spring dynamic ``__dict__`` for the
+    # hundreds of thousands of generated interface fibres.
+    _histra_batch_managed: bool = False
 
     def get_k(self, alfa: float = 0.0) -> float:
         return self.k + (self.k_tang - self.k) * alfa

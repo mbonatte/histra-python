@@ -124,32 +124,15 @@ class _CoulombLaw:
 
 
 
-_HYSTERETIC_SPRING_TEMPLATE = SpringHysteretic(
-    type_of="HiStrA.Objects.SpringHysteretic"
-)
-
-
 def _new_hysteretic_spring() -> SpringHysteretic:
-    """Return a virgin programmatic hysteretic spring efficiently.
+    """Return an independent virgin programmatic hysteretic spring.
 
-    ``SpringHysteretic`` is a large dataclass.  Preparing a bridge creates one
-    object per transverse fibre, so repeatedly executing the generated
-    constructor spends substantial time assigning identical scalar defaults.
-    Copy the already-initialised default namespace instead, then recreate every
-    mutable default so springs remain completely independent.  XML construction
-    continues to use the normal dataclass constructor.
+    ``SpringHysteretic`` uses slots for its fixed constitutive/state schema, so
+    the generated dataclass constructor is both compact and fast while still
+    creating independent mutable pair/list fields.
     """
-    spring = object.__new__(SpringHysteretic)
-    spring.__dict__ = _HYSTERETIC_SPRING_TEMPLATE.__dict__.copy()
-    spring.extra = {}
-    spring.fy = [0.0, 0.0]
-    spring.kt = [0.0, 0.0]
-    spring.ur = [0.0, 0.0]
-    spring.alfau = [0.0, 0.0]
-    spring.alfar = [0.0, 0.0]
-    spring.umax = [0.0, 0.0]
-    spring.uy_corr = [0.0, 0.0]
-    return spring
+    return SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+
 
 
 @dataclass(frozen=True)
