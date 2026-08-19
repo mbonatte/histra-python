@@ -420,52 +420,86 @@ class _StiffnessAssemblyPlan:
         return True
 
 
-def _append_interface_scatter(
-    rows: array,
-    cols: array,
-    term_indices: array,
-    alpha_i: array,
-    alpha_j: array,
+def _fill_interface_scatter_numpy(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    term_indices: np.ndarray,
+    alpha_i: np.ndarray,
+    alpha_j: np.ndarray,
     *,
-    n: int,
-    term_index: int,
-    aff_i: List[AfferenceEntry],
-    aff_j: List[AfferenceEntry],
-) -> None:
-    """Append one local coefficient's static interface scatter topology."""
-    for ei in aff_i:
-        gi = int(ei.gdl) - 1
-        if gi < 0 or gi >= n:
+    start: int,
+    aff_offsets: np.ndarray,
+    aff_gdl: np.ndarray,
+    aff_alpha: np.ndarray,
+    term_aff_i: np.ndarray,
+    term_aff_j: np.ndarray,
+    scatter_term_indices: np.ndarray,
+    chunk_terms: int = 4096,
+) -> int:
+    """Expand interface scatter topology in exact legacy order.
+
+    The legacy builder appended five Python values for every emitted COO entry.
+    This routine expands many local coefficients at once with bounded NumPy
+    temporaries while preserving the exact order ``term, aff_i, aff_j``.
+    """
+    pos = int(start)
+    total_terms = len(scatter_term_indices)
+    lengths = aff_offsets[1:] - aff_offsets[:-1]
+
+    for t0 in range(0, total_terms, chunk_terms):
+        t1 = min(t0 + chunk_terms, total_terms)
+        ai_terms = term_aff_i[t0:t1]
+        aj_terms = term_aff_j[t0:t1]
+        li = lengths[ai_terms]
+        lj = lengths[aj_terms]
+        counts = li * lj
+        entry_count = int(counts.sum(dtype=np.int64))
+        if entry_count == 0:
             continue
-        ai = float(ei.alfa)
-        for ej in aff_j:
-            gj = int(ej.gdl) - 1
-            if gj < 0 or gj >= n:
-                continue
-            rows.append(gi)
-            cols.append(gj)
-            term_indices.append(term_index)
-            alpha_i.append(ai)
-            alpha_j.append(float(ej.alfa))
+
+        owner = np.repeat(np.arange(t1 - t0, dtype=np.int32), counts)
+        starts = np.cumsum(counts, dtype=np.int64) - counts
+        within = np.arange(entry_count, dtype=np.int64)
+        within -= np.repeat(starts, counts)
+        lj_entry = lj[owner]
+
+        ai_entry = ai_terms[owner]
+        aj_entry = aj_terms[owner]
+        pi = within // lj_entry
+        pj = within - pi * lj_entry
+        src_i = aff_offsets[ai_entry] + pi
+        src_j = aff_offsets[aj_entry] + pj
+
+        end = pos + entry_count
+        rows[pos:end] = aff_gdl[src_i]
+        cols[pos:end] = aff_gdl[src_j]
+        term_indices[pos:end] = scatter_term_indices[t0:t1][owner]
+        alpha_i[pos:end] = aff_alpha[src_i]
+        alpha_j[pos:end] = aff_alpha[src_j]
+        pos = end
+
+    return pos
 
 
 def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
+    """Build immutable global scatter topology with exact-size buffers."""
     if model.collections is None:
         raise _AssemblyPlanIncompatible("Model.collections is not initialized")
     if array("i").itemsize != np.dtype(np.int32).itemsize:
         raise _AssemblyPlanIncompatible("native C int is not 32-bit")
 
     n = int(model.gdl)
-    rows = array("i")
-    cols = array("i")
-    term_indices = array("i")
-    alpha_i = array("d")
-    alpha_j = array("d")
-    term_index = 0
     all_quads = tuple(model.collections.quads.values())
     quad_terms: list[tuple[Quad, Any]] = []
 
-    # Preserve the legacy COO emission order exactly: all quads first.
+    # Quads are a small prefix and already cheap to construct. Preserve their
+    # original Python emission order exactly.
+    quad_rows = array("i")
+    quad_cols = array("i")
+    quad_term_indices = array("i")
+    quad_alpha_i = array("d")
+    quad_alpha_j = array("d")
+    term_index = 0
     for quad in all_quads:
         if not quad.aff or len(quad.aff) <= 6 or not quad.aff[6]:
             continue
@@ -475,15 +509,24 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
             gi = int(ei.gdl) - 1
             ai = float(ei.alfa)
             for ej in aff6:
-                rows.append(gi)
-                cols.append(int(ej.gdl) - 1)
-                term_indices.append(term_index)
-                alpha_i.append(ai)
-                alpha_j.append(float(ej.alfa))
+                quad_rows.append(gi)
+                quad_cols.append(int(ej.gdl) - 1)
+                quad_term_indices.append(term_index)
+                quad_alpha_i.append(ai)
+                quad_alpha_j.append(float(ej.alfa))
         term_index += 1
-    quad_entry_count = len(rows)
+    quad_entry_count = len(quad_rows)
 
+    # Flatten each afference list once. Invalid DOFs can be removed here
+    # because the legacy nested loops emitted no pair containing them.
+    aff_offsets: list[int] = [0]
+    aff_gdl = array("i")
+    aff_alpha = array("d")
+    term_aff_i = array("i")
+    term_aff_j = array("i")
+    scatter_term_indices = array("i")
     interface_layouts: list[_InterfaceAssemblyLayout] = []
+
     for intf in model.collections.interfaces.values():
         d0 = intf.dim_aff[0] if len(intf.dim_aff) > 0 else 6
         d1 = intf.dim_aff[1] if len(intf.dim_aff) > 1 else 2
@@ -501,52 +544,98 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
         )
         interface_layouts.append(layout)
 
+        aff_base = len(aff_offsets) - 1
+        for aff_list in intf.aff:
+            for entry in aff_list:
+                gdof = int(entry.gdl) - 1
+                if gdof < 0 or gdof >= n:
+                    continue
+                aff_gdl.append(gdof)
+                aff_alpha.append(float(entry.alfa))
+            aff_offsets.append(len(aff_gdl))
+
+        def record_term(local_i: int, local_j: int) -> None:
+            if local_i < len(intf.aff) and local_j < len(intf.aff):
+                term_aff_i.append(aff_base + local_i)
+                term_aff_j.append(aff_base + local_j)
+                scatter_term_indices.append(term_index)
+
         for i in range(d0):
             for j in range(d0):
-                if i < len(intf.aff) and j < len(intf.aff):
-                    _append_interface_scatter(
-                        rows, cols, term_indices, alpha_i, alpha_j,
-                        n=n, term_index=term_index,
-                        aff_i=intf.aff[i], aff_j=intf.aff[j],
-                    )
+                record_term(i, j)
                 term_index += 1
 
         if has_slid:
             for i in range(d1):
                 for j in range(d1):
-                    ai = d0 + i
-                    aj = d0 + j
-                    if ai < len(intf.aff) and aj < len(intf.aff):
-                        _append_interface_scatter(
-                            rows, cols, term_indices, alpha_i, alpha_j,
-                            n=n, term_index=term_index,
-                            aff_i=intf.aff[ai], aff_j=intf.aff[aj],
-                        )
+                    record_term(d0 + i, d0 + j)
                     term_index += 1
 
         if has_out_of_plane:
             for i in range(d2):
                 for j in range(d2):
-                    ai = d0 + d1 + i
-                    aj = d0 + d1 + j
-                    if ai < len(intf.aff) and aj < len(intf.aff):
-                        _append_interface_scatter(
-                            rows, cols, term_indices, alpha_i, alpha_j,
-                            n=n, term_index=term_index,
-                            aff_i=intf.aff[ai], aff_j=intf.aff[aj],
-                        )
+                    record_term(d0 + d1 + i, d0 + d1 + j)
                     term_index += 1
+
+    offsets_np = np.asarray(aff_offsets, dtype=np.int64)
+    aff_gdl_np = np.frombuffer(aff_gdl, dtype=np.int32)
+    aff_alpha_np = np.frombuffer(aff_alpha, dtype=np.float64)
+    term_aff_i_np = np.frombuffer(term_aff_i, dtype=np.int32)
+    term_aff_j_np = np.frombuffer(term_aff_j, dtype=np.int32)
+    scatter_terms_np = np.frombuffer(scatter_term_indices, dtype=np.int32)
+
+    if len(scatter_terms_np):
+        lengths = offsets_np[1:] - offsets_np[:-1]
+        counts = lengths[term_aff_i_np] * lengths[term_aff_j_np]
+        interface_entry_count = int(counts.sum(dtype=np.int64))
+    else:
+        interface_entry_count = 0
+
+    total_entries = quad_entry_count + interface_entry_count
+    rows = np.empty(total_entries, dtype=np.int32)
+    cols = np.empty(total_entries, dtype=np.int32)
+    term_indices = np.empty(total_entries, dtype=np.int32)
+    alpha_i = np.empty(total_entries, dtype=np.float64)
+    alpha_j = np.empty(total_entries, dtype=np.float64)
+
+    if quad_entry_count:
+        rows[:quad_entry_count] = np.frombuffer(quad_rows, dtype=np.int32)
+        cols[:quad_entry_count] = np.frombuffer(quad_cols, dtype=np.int32)
+        term_indices[:quad_entry_count] = np.frombuffer(
+            quad_term_indices, dtype=np.int32
+        )
+        alpha_i[:quad_entry_count] = np.frombuffer(quad_alpha_i, dtype=np.float64)
+        alpha_j[:quad_entry_count] = np.frombuffer(quad_alpha_j, dtype=np.float64)
+
+    end_pos = _fill_interface_scatter_numpy(
+        rows,
+        cols,
+        term_indices,
+        alpha_i,
+        alpha_j,
+        start=quad_entry_count,
+        aff_offsets=offsets_np,
+        aff_gdl=aff_gdl_np,
+        aff_alpha=aff_alpha_np,
+        term_aff_i=term_aff_i_np,
+        term_aff_j=term_aff_j_np,
+        scatter_term_indices=scatter_terms_np,
+    )
+    if end_pos != total_entries:
+        raise _AssemblyPlanIncompatible(
+            f"stiffness scatter size changed ({end_pos} != {total_entries})"
+        )
 
     return _StiffnessAssemblyPlan(
         n=n,
         all_quads=all_quads,
         quad_terms=tuple(quad_terms),
         interfaces=tuple(interface_layouts),
-        rows=np.frombuffer(rows, dtype=np.int32),
-        cols=np.frombuffer(cols, dtype=np.int32),
-        term_indices=np.frombuffer(term_indices, dtype=np.int32),
-        alpha_i=np.frombuffer(alpha_i, dtype=np.float64),
-        alpha_j=np.frombuffer(alpha_j, dtype=np.float64),
+        rows=rows,
+        cols=cols,
+        term_indices=term_indices,
+        alpha_i=alpha_i,
+        alpha_j=alpha_j,
         quad_entry_count=quad_entry_count,
         term_count=term_index,
     )

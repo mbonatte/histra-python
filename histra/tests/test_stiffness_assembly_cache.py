@@ -125,3 +125,62 @@ def test_threshold_semantics_match_legacy_exactly() -> None:
     actual = assemble_global_k(model, recompute_elements=False)
     expected = _assemble_global_k_legacy(model, recompute_elements=False)
     _assert_csc_bitwise_equal(actual, expected)
+
+
+def test_cached_plan_preserves_legacy_interface_emission_order() -> None:
+    from histra.solver.assembler import _build_stiffness_assembly_plan
+
+    model = _model(2)
+    # Exercise the legacy invalid-DOF filtering inside interface scatter.
+    model.collections.interfaces[1].aff[0].insert(
+        1, AfferenceEntry(gdl=0, alfa=9.5)
+    )
+    plan = _build_stiffness_assembly_plan(model)
+
+    expected_rows: list[int] = []
+    expected_cols: list[int] = []
+    expected_terms: list[int] = []
+    expected_alpha_i: list[float] = []
+    expected_alpha_j: list[float] = []
+    term_index = 0
+
+    for interface in model.collections.interfaces.values():
+        d0, d1, d2 = interface.dim_aff
+        blocks = [(0, d0)]
+        if interface.slid:
+            blocks.append((d0, d1))
+        if len(interface.slid_out_plan) >= 2:
+            blocks.append((d0 + d1, d2))
+
+        for offset, size in blocks:
+            for i in range(size):
+                for j in range(size):
+                    local_i = offset + i
+                    local_j = offset + j
+                    if local_i < len(interface.aff) and local_j < len(interface.aff):
+                        for ei in interface.aff[local_i]:
+                            gi = int(ei.gdl) - 1
+                            if gi < 0 or gi >= model.gdl:
+                                continue
+                            for ej in interface.aff[local_j]:
+                                gj = int(ej.gdl) - 1
+                                if gj < 0 or gj >= model.gdl:
+                                    continue
+                                expected_rows.append(gi)
+                                expected_cols.append(gj)
+                                expected_terms.append(term_index)
+                                expected_alpha_i.append(float(ei.alfa))
+                                expected_alpha_j.append(float(ej.alfa))
+                    term_index += 1
+
+    np.testing.assert_array_equal(plan.rows, np.asarray(expected_rows, dtype=np.int32))
+    np.testing.assert_array_equal(plan.cols, np.asarray(expected_cols, dtype=np.int32))
+    np.testing.assert_array_equal(
+        plan.term_indices, np.asarray(expected_terms, dtype=np.int32)
+    )
+    np.testing.assert_array_equal(
+        plan.alpha_i, np.asarray(expected_alpha_i, dtype=np.float64)
+    )
+    np.testing.assert_array_equal(
+        plan.alpha_j, np.asarray(expected_alpha_j, dtype=np.float64)
+    )
