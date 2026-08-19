@@ -929,11 +929,25 @@ def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained
     return out
 
 
-def _combine_coulomb(sp1: SpringCoulomb03, sp2: SpringCoulomb03, restrained: bool) -> SpringCoulomb03:
+def _combine_coulomb(
+    sp1: SpringCoulomb03,
+    sp2: SpringCoulomb03,
+    restrained: bool,
+    *,
+    preserve_single_side_identity: bool = False,
+) -> SpringCoulomb03:
+    # C# has two relevant dispatch paths here.  A normal restraint interface
+    # combines a LinearElastic restraint-side placeholder with the active
+    # Coulomb spring, which returns a new object.  A custom-material restraint
+    # (the Soil mutation used by scour/Vert) has Coulomb03 on both sides; its
+    # specialised overload returns the *existing* non-rigid-side object when
+    # the opposite side has K == -1.  Keep the default clone semantics for the
+    # ordinary path and opt into identity preservation only for that custom
+    # Coulomb03/Coulomb03 path.
     if sp1.k == -1.0:
-        return _copy_coulomb_spring(sp2)
+        return sp2 if preserve_single_side_identity else _copy_coulomb_spring(sp2)
     if sp2.k == -1.0:
-        return _copy_coulomb_spring(sp1)
+        return sp1 if preserve_single_side_identity else _copy_coulomb_spring(sp1)
     k = _series(sp1.k, sp2.k, restrained)
     cohesion = min(sp1.cohesion, sp2.cohesion)
     area = sp1.area if sp1.cohesion <= sp2.cohesion else sp2.area
@@ -2793,33 +2807,47 @@ def _create_interface_springs(
 
     half_area = area / 2.0
     intf.slid_out_plan = []
-    append_out = intf.slid_out_plan.append
+
+    # C# Interface.SetSpring creates the two *side* springs once, then invokes
+    # CombinationSpring twice using those same temporaries.  Usually each call
+    # returns a fresh combined spring.  For a restraint interface with a
+    # custom material, however, the restraint-side placeholder has K == -1 and
+    # CombinationSpring returns the active-side temporary itself.  Reusing the
+    # temporaries therefore makes SlidOutPlan[0] and [1] the same object.
+    # This is observable in the reference HRX (both entries serialize with
+    # Key=1) and in the C# spring displacement, which accumulates both
+    # interpolation contributions into the shared U field.
+    o1 = _side_sliding_spring(
+        model,
+        intf.parent_type_element1,
+        intf.parent_element_key1,
+        intf,
+        out_of_plane=True,
+        area=half_area,
+        vertical=vertical,
+        material_override=custom_material,
+        law=out_law1,
+        distance=distance1,
+    )
+    o2 = _side_sliding_spring(
+        model,
+        intf.parent_type_element2,
+        intf.parent_element_key2,
+        intf,
+        out_of_plane=True,
+        area=half_area,
+        vertical=vertical,
+        material_override=custom_material,
+        law=out_law2,
+        distance=distance2,
+    )
     for index in range(2):
-        o1 = _side_sliding_spring(
-            model,
-            intf.parent_type_element1,
-            intf.parent_element_key1,
-            intf,
-            out_of_plane=True,
-            area=half_area,
-            vertical=vertical,
-            material_override=custom_material,
-            law=out_law1,
-            distance=distance1,
+        out = _combine_coulomb(
+            o1,
+            o2,
+            restrained,
+            preserve_single_side_identity=(custom_material is not None and restrained),
         )
-        o2 = _side_sliding_spring(
-            model,
-            intf.parent_type_element2,
-            intf.parent_element_key2,
-            intf,
-            out_of_plane=True,
-            area=half_area,
-            vertical=vertical,
-            material_override=custom_material,
-            law=out_law2,
-            distance=distance2,
-        )
-        out = _combine_coulomb(o1, o2, restrained)
         _set_coulomb_ultimate(out, out_law1, out_law2)
         out.key = index
         out.parent_key = intf.key
@@ -2827,7 +2855,7 @@ def _create_interface_springs(
         out.spring_purpose = "SlidOutOfPlan"
         out.area = half_area
         out.length = intf.length / 2.0
-        append_out(out)
+        intf.slid_out_plan.append(out)
 
     intf.status = InterfaceState()
     intf.status.init_from_interface(intf)

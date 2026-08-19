@@ -11,6 +11,16 @@ from histra.solver.solution_algorithm import EquiSolnAlgo, _new_line_search
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
+def _csharp_dot(left: np.ndarray, right: np.ndarray) -> float:
+    """C# MatrixManager.Vector ``^`` reduction order."""
+    if left.shape != right.shape:
+        raise ValueError(f"dot shape mismatch: {left.shape} vs {right.shape}")
+    value = 0.0
+    for index in range(left.size):
+        value += float(left[index]) * float(right[index])
+    return value
+
+
 def _updates_tangent_each_iteration(an: Any) -> bool:
     """Match the exact C# NewtonLineSearch dispatch condition.
 
@@ -84,7 +94,7 @@ class NewtonLineSearch(EquiSolnAlgo):
 
             dx0 = ls.x.copy()
             self.the_line_search.new_step(p, ls)
-            s0 = -float(np.dot(dx0, residual0))
+            s0 = -_csharp_dot(dx0, residual0)
 
             if diagnostics is None:
                 update_code = self.the_integrator.update(model, p, an)
@@ -99,7 +109,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             else:
                 with diagnostics.timed("residual_assembly"):
                     self.the_integrator.form_unbalance(p, model, an)
-            s1 = -float(np.dot(dx0, ls.b))
+            s1 = -_csharp_dot(dx0, ls.b)
             if diagnostics is None:
                 eta = self.the_line_search.search(
                     model, p, ls, self.the_integrator, an, dx0, s0, s1

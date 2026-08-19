@@ -7,10 +7,15 @@ from __future__ import annotations
 
 from array import array
 from dataclasses import dataclass
-from typing import Any, List, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 import numpy as np
 import scipy.sparse as sp
+
+try:
+    from numba import njit
+except Exception:  # pragma: no cover - optional acceleration
+    njit = None
 
 from histra.model.model import Model
 from histra.model.quad import Quad
@@ -367,24 +372,26 @@ class _InterfaceAssemblyLayout:
 
 @dataclass(slots=True)
 class _StiffnessAssemblyPlan:
-    """Immutable global scatter topology for a prepared model.
+    """C#-ordered fixed CSC scatter topology for a prepared model.
 
-    The sparse row/column pattern and afference coefficients do not change
-    between nonlinear iterations or scour material mutations.  Only local
-    stiffness coefficients change, so the expensive Python object traversal is
-    performed once and compact NumPy arrays are reused afterwards.
+    HiStrA C# first maps a fixed symmetric sparse mask, then every AssembleK
+    call performs ``Ax[idx] += value`` immediately in element/local-loop order.
+    Rebuilding COO triplets and consolidating duplicates changes that floating-
+    point accumulation order.  This plan stores the exact contribution stream
+    and the target CSC slot for every contribution so nonlinear iterations can
+    replay C# assembly without Python object traversal.
     """
 
     n: int
     all_quads: tuple[Quad, ...]
     quad_terms: tuple[tuple[Quad, Any], ...]
     interfaces: tuple[_InterfaceAssemblyLayout, ...]
-    rows: np.ndarray
-    cols: np.ndarray
+    indptr: np.ndarray
+    indices: np.ndarray
+    output_indices: np.ndarray
     term_indices: np.ndarray
     alpha_i: np.ndarray
     alpha_j: np.ndarray
-    quad_entry_count: int
     term_count: int
 
     def compatible(self, model: Model) -> bool:
@@ -420,69 +427,110 @@ class _StiffnessAssemblyPlan:
         return True
 
 
-def _fill_interface_scatter_numpy(
+def _append_contribution(
+    rows: array,
+    cols: array,
+    term_indices: array,
+    alpha_i: array,
+    alpha_j: array,
+    row: int,
+    col: int,
+    term_index: int,
+    ai: float,
+    aj: float,
+) -> None:
+    rows.append(row)
+    cols.append(col)
+    term_indices.append(term_index)
+    alpha_i.append(ai)
+    alpha_j.append(aj)
+
+
+def _append_interface_scatter_csharp(
+    rows: array,
+    cols: array,
+    term_indices: array,
+    alpha_i: array,
+    alpha_j: array,
+    *,
+    n: int,
+    term_index: int,
+    aff_i: List[AfferenceEntry],
+    aff_j: List[AfferenceEntry],
+    mirror: bool,
+) -> None:
+    """Record one C# Interface.AssembleK local upper-triangle term.
+
+    ``mirror`` follows the C# ``d:false`` call and is based on *local* i != j,
+    not on whether the mapped global DOFs happen to be different.
+    """
+    for ei in aff_i:
+        gi = int(ei.gdl) - 1
+        if gi < 0 or gi >= n:
+            continue
+        ai = float(ei.alfa)
+        for ej in aff_j:
+            gj = int(ej.gdl) - 1
+            if gj < 0 or gj >= n:
+                continue
+            aj = float(ej.alfa)
+            _append_contribution(
+                rows, cols, term_indices, alpha_i, alpha_j,
+                gi, gj, term_index, ai, aj,
+            )
+            if mirror:
+                _append_contribution(
+                    rows, cols, term_indices, alpha_i, alpha_j,
+                    gj, gi, term_index, ai, aj,
+                )
+
+
+def _map_contributions_to_csc_python(
     rows: np.ndarray,
     cols: np.ndarray,
-    term_indices: np.ndarray,
-    alpha_i: np.ndarray,
-    alpha_j: np.ndarray,
-    *,
-    start: int,
-    aff_offsets: np.ndarray,
-    aff_gdl: np.ndarray,
-    aff_alpha: np.ndarray,
-    term_aff_i: np.ndarray,
-    term_aff_j: np.ndarray,
-    scatter_term_indices: np.ndarray,
-    chunk_terms: int = 4096,
-) -> int:
-    """Expand interface scatter topology in exact legacy order.
+    indptr: np.ndarray,
+    indices: np.ndarray,
+) -> np.ndarray:
+    out = np.empty(rows.size, dtype=np.int32)
+    for k in range(rows.size):
+        row = int(rows[k])
+        col = int(cols[k])
+        lo = int(indptr[col])
+        hi = int(indptr[col + 1])
+        pos = int(np.searchsorted(indices[lo:hi], row)) + lo
+        if pos >= hi or int(indices[pos]) != row:
+            out[k] = -1
+        else:
+            out[k] = pos
+    return out
 
-    The legacy builder appended five Python values for every emitted COO entry.
-    This routine expands many local coefficients at once with bounded NumPy
-    temporaries while preserving the exact order ``term, aff_i, aff_j``.
-    """
-    pos = int(start)
-    total_terms = len(scatter_term_indices)
-    lengths = aff_offsets[1:] - aff_offsets[:-1]
 
-    for t0 in range(0, total_terms, chunk_terms):
-        t1 = min(t0 + chunk_terms, total_terms)
-        ai_terms = term_aff_i[t0:t1]
-        aj_terms = term_aff_j[t0:t1]
-        li = lengths[ai_terms]
-        lj = lengths[aj_terms]
-        counts = li * lj
-        entry_count = int(counts.sum(dtype=np.int64))
-        if entry_count == 0:
-            continue
+if njit is not None:
+    _map_contributions_to_csc_impl = njit(cache=True, nogil=True)(
+        _map_contributions_to_csc_python
+    )
+else:  # pragma: no cover
+    _map_contributions_to_csc_impl = _map_contributions_to_csc_python
 
-        owner = np.repeat(np.arange(t1 - t0, dtype=np.int32), counts)
-        starts = np.cumsum(counts, dtype=np.int64) - counts
-        within = np.arange(entry_count, dtype=np.int64)
-        within -= np.repeat(starts, counts)
-        lj_entry = lj[owner]
 
-        ai_entry = ai_terms[owner]
-        aj_entry = aj_terms[owner]
-        pi = within // lj_entry
-        pj = within - pi * lj_entry
-        src_i = aff_offsets[ai_entry] + pi
-        src_j = aff_offsets[aj_entry] + pj
-
-        end = pos + entry_count
-        rows[pos:end] = aff_gdl[src_i]
-        cols[pos:end] = aff_gdl[src_j]
-        term_indices[pos:end] = scatter_term_indices[t0:t1][owner]
-        alpha_i[pos:end] = aff_alpha[src_i]
-        alpha_j[pos:end] = aff_alpha[src_j]
-        pos = end
-
-    return pos
+def _map_contributions_to_csc(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+) -> np.ndarray:
+    """Map contribution coordinates to sorted CSC slots without a huge dict."""
+    out = _map_contributions_to_csc_impl(rows, cols, indptr, indices)
+    if np.any(out < 0):
+        bad = int(np.flatnonzero(out < 0)[0])
+        raise _AssemblyPlanIncompatible(
+            f"CSC mask is missing stiffness entry ({int(rows[bad])}, {int(cols[bad])})"
+        )
+    return out
 
 
 def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
-    """Build immutable global scatter topology with exact-size buffers."""
+    """Build immutable global scatter topology in C# assembly order."""
     if model.collections is None:
         raise _AssemblyPlanIncompatible("Model.collections is not initialized")
     if array("i").itemsize != np.dtype(np.int32).itemsize:
@@ -492,47 +540,61 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
     all_quads = tuple(model.collections.quads.values())
     quad_terms: list[tuple[Quad, Any]] = []
 
-    # Quads are a small prefix and already cheap to construct. Preserve their
-    # original Python emission order exactly.
-    quad_rows = array("i")
-    quad_cols = array("i")
-    quad_term_indices = array("i")
-    quad_alpha_i = array("d")
-    quad_alpha_j = array("d")
+    # Contribution stream in the exact order used by C# AssembleK.
+    rows = array("i")
+    cols = array("i")
+    term_indices = array("i")
+    alpha_i = array("d")
+    alpha_j = array("d")
     term_index = 0
+
+    # C# ModelManager.AssembleK: all Quads first, each Aff[6] i,j pair.
     for quad in all_quads:
         if not quad.aff or len(quad.aff) <= 6 or not quad.aff[6]:
             continue
+
         aff6 = quad.aff[6]
         quad_terms.append((quad, aff6))
+
         for ei in aff6:
             gi = int(ei.gdl) - 1
-            ai = float(ei.alfa)
-            for ej in aff6:
-                quad_rows.append(gi)
-                quad_cols.append(int(ej.gdl) - 1)
-                quad_term_indices.append(term_index)
-                quad_alpha_i.append(ai)
-                quad_alpha_j.append(float(ej.alfa))
-        term_index += 1
-    quad_entry_count = len(quad_rows)
+            if gi < 0 or gi >= n:
+                continue
 
-    # Flatten each afference list once. Invalid DOFs can be removed here
-    # because the legacy nested loops emitted no pair containing them.
-    aff_offsets: list[int] = [0]
-    aff_gdl = array("i")
-    aff_alpha = array("d")
-    term_aff_i = array("i")
-    term_aff_j = array("i")
-    scatter_term_indices = array("i")
+            ai = float(ei.alfa)
+
+            for ej in aff6:
+                gj = int(ej.gdl) - 1
+                if gj < 0 or gj >= n:
+                    continue
+
+                _append_contribution(
+                    rows,
+                    cols,
+                    term_indices,
+                    alpha_i,
+                    alpha_j,
+                    gi,
+                    gj,
+                    term_index,
+                    ai,
+                    float(ej.alfa),
+                )
+
+        term_index += 1
+
+    # Then Interfaces. C# reads only the local upper triangle and immediately
+    # mirrors every off-diagonal local term via LinearSystem.SumK(..., d:false).
     interface_layouts: list[_InterfaceAssemblyLayout] = []
 
     for intf in model.collections.interfaces.values():
         d0 = intf.dim_aff[0] if len(intf.dim_aff) > 0 else 6
         d1 = intf.dim_aff[1] if len(intf.dim_aff) > 1 else 2
         d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else 4
+
         has_slid = bool(intf.slid)
         has_out_of_plane = len(intf.slid_out_plan) >= 2
+
         layout = _InterfaceAssemblyLayout(
             interface=intf,
             aff_lists=tuple(intf.aff),
@@ -544,99 +606,108 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
         )
         interface_layouts.append(layout)
 
-        aff_base = len(aff_offsets) - 1
-        for aff_list in intf.aff:
-            for entry in aff_list:
-                gdof = int(entry.gdl) - 1
-                if gdof < 0 or gdof >= n:
-                    continue
-                aff_gdl.append(gdof)
-                aff_alpha.append(float(entry.alfa))
-            aff_offsets.append(len(aff_gdl))
-
-        def record_term(local_i: int, local_j: int) -> None:
-            if local_i < len(intf.aff) and local_j < len(intf.aff):
-                term_aff_i.append(aff_base + local_i)
-                term_aff_j.append(aff_base + local_j)
-                scatter_term_indices.append(term_index)
-
+        # Flexural block.
         for i in range(d0):
-            for j in range(d0):
-                record_term(i, j)
+            for j in range(i, d0):
+                if i < len(intf.aff) and j < len(intf.aff):
+                    _append_interface_scatter_csharp(
+                        rows,
+                        cols,
+                        term_indices,
+                        alpha_i,
+                        alpha_j,
+                        n=n,
+                        term_index=term_index,
+                        aff_i=intf.aff[i],
+                        aff_j=intf.aff[j],
+                        mirror=(i != j),
+                    )
                 term_index += 1
 
+        # Sliding block.
         if has_slid:
             for i in range(d1):
-                for j in range(d1):
-                    record_term(d0 + i, d0 + j)
+                for j in range(i, d1):
+                    ai_idx = d0 + i
+                    aj_idx = d0 + j
+
+                    if ai_idx < len(intf.aff) and aj_idx < len(intf.aff):
+                        _append_interface_scatter_csharp(
+                            rows,
+                            cols,
+                            term_indices,
+                            alpha_i,
+                            alpha_j,
+                            n=n,
+                            term_index=term_index,
+                            aff_i=intf.aff[ai_idx],
+                            aff_j=intf.aff[aj_idx],
+                            mirror=(ai_idx != aj_idx),
+                        )
+
                     term_index += 1
 
+        # Out-of-plane sliding block.
         if has_out_of_plane:
             for i in range(d2):
-                for j in range(d2):
-                    record_term(d0 + d1 + i, d0 + d1 + j)
+                for j in range(i, d2):
+                    ai_idx = d0 + d1 + i
+                    aj_idx = d0 + d1 + j
+
+                    if ai_idx < len(intf.aff) and aj_idx < len(intf.aff):
+                        _append_interface_scatter_csharp(
+                            rows,
+                            cols,
+                            term_indices,
+                            alpha_i,
+                            alpha_j,
+                            n=n,
+                            term_index=term_index,
+                            aff_i=intf.aff[ai_idx],
+                            aff_j=intf.aff[aj_idx],
+                            mirror=(ai_idx != aj_idx),
+                        )
+
                     term_index += 1
 
-    offsets_np = np.asarray(aff_offsets, dtype=np.int64)
-    aff_gdl_np = np.frombuffer(aff_gdl, dtype=np.int32)
-    aff_alpha_np = np.frombuffer(aff_alpha, dtype=np.float64)
-    term_aff_i_np = np.frombuffer(term_aff_i, dtype=np.int32)
-    term_aff_j_np = np.frombuffer(term_aff_j, dtype=np.int32)
-    scatter_terms_np = np.frombuffer(scatter_term_indices, dtype=np.int32)
+    row_arr = np.frombuffer(rows, dtype=np.int32)
+    col_arr = np.frombuffer(cols, dtype=np.int32)
 
-    if len(scatter_terms_np):
-        lengths = offsets_np[1:] - offsets_np[:-1]
-        counts = lengths[term_aff_i_np] * lengths[term_aff_j_np]
-        interface_entry_count = int(counts.sum(dtype=np.int64))
-    else:
-        interface_entry_count = 0
+    # C# ComputeMaskK begins by inserting every diagonal.
+    # MapSparseMatrix then sorts row indices within each CSC column.
+    pattern = sp.coo_matrix(
+        (
+            np.ones(row_arr.size, dtype=np.int8),
+            (row_arr, col_arr),
+        ),
+        shape=(n, n),
+    ).tocsc()
 
-    total_entries = quad_entry_count + interface_entry_count
-    rows = np.empty(total_entries, dtype=np.int32)
-    cols = np.empty(total_entries, dtype=np.int32)
-    term_indices = np.empty(total_entries, dtype=np.int32)
-    alpha_i = np.empty(total_entries, dtype=np.float64)
-    alpha_j = np.empty(total_entries, dtype=np.float64)
+    pattern.setdiag(1)
+    pattern.sum_duplicates()
+    pattern.sort_indices()
 
-    if quad_entry_count:
-        rows[:quad_entry_count] = np.frombuffer(quad_rows, dtype=np.int32)
-        cols[:quad_entry_count] = np.frombuffer(quad_cols, dtype=np.int32)
-        term_indices[:quad_entry_count] = np.frombuffer(
-            quad_term_indices, dtype=np.int32
-        )
-        alpha_i[:quad_entry_count] = np.frombuffer(quad_alpha_i, dtype=np.float64)
-        alpha_j[:quad_entry_count] = np.frombuffer(quad_alpha_j, dtype=np.float64)
+    indptr = np.asarray(pattern.indptr, dtype=np.int32).copy()
+    indices = np.asarray(pattern.indices, dtype=np.int32).copy()
 
-    end_pos = _fill_interface_scatter_numpy(
-        rows,
-        cols,
-        term_indices,
-        alpha_i,
-        alpha_j,
-        start=quad_entry_count,
-        aff_offsets=offsets_np,
-        aff_gdl=aff_gdl_np,
-        aff_alpha=aff_alpha_np,
-        term_aff_i=term_aff_i_np,
-        term_aff_j=term_aff_j_np,
-        scatter_term_indices=scatter_terms_np,
+    output_indices = _map_contributions_to_csc(
+        row_arr,
+        col_arr,
+        indptr,
+        indices,
     )
-    if end_pos != total_entries:
-        raise _AssemblyPlanIncompatible(
-            f"stiffness scatter size changed ({end_pos} != {total_entries})"
-        )
 
     return _StiffnessAssemblyPlan(
         n=n,
         all_quads=all_quads,
         quad_terms=tuple(quad_terms),
         interfaces=tuple(interface_layouts),
-        rows=rows,
-        cols=cols,
-        term_indices=term_indices,
-        alpha_i=alpha_i,
-        alpha_j=alpha_j,
-        quad_entry_count=quad_entry_count,
+        indptr=indptr,
+        indices=indices,
+        output_indices=output_indices,
+        term_indices=np.frombuffer(term_indices, dtype=np.int32).copy(),
+        alpha_i=np.frombuffer(alpha_i, dtype=np.float64).copy(),
+        alpha_j=np.frombuffer(alpha_j, dtype=np.float64).copy(),
         term_count=term_index,
     )
 
@@ -651,19 +722,19 @@ def _fill_stiffness_terms(plan: _StiffnessAssemblyPlan) -> np.ndarray:
         intf = layout.interface
         for i in range(layout.d0):
             row = intf.status.k[i]
-            for j in range(layout.d0):
+            for j in range(i, layout.d0):
                 terms[index] = float(row[j])
                 index += 1
         if layout.has_slid:
             for i in range(layout.d1):
                 row = intf.status.kslid[i]
-                for j in range(layout.d1):
+                for j in range(i, layout.d1):
                     terms[index] = float(row[j])
                     index += 1
         if layout.has_out_of_plane:
             for i in range(layout.d2):
                 row = intf.status.kslid_out_plan[i]
-                for j in range(layout.d2):
+                for j in range(i, layout.d2):
                     terms[index] = float(row[j])
                     index += 1
     if index != plan.term_count:
@@ -673,35 +744,57 @@ def _fill_stiffness_terms(plan: _StiffnessAssemblyPlan) -> np.ndarray:
     return terms
 
 
+def _accumulate_csharp_order_python(
+    values: np.ndarray,
+    output_indices: np.ndarray,
+    term_indices: np.ndarray,
+    alpha_i: np.ndarray,
+    alpha_j: np.ndarray,
+    terms: np.ndarray,
+) -> None:
+    # Deliberately scalar and left-associated, matching:
+    #   a = k * alfa_i * alfa_j; Ax[idx] += a
+    for k in range(output_indices.size):
+        a = terms[term_indices[k]] * alpha_i[k]
+        a = a * alpha_j[k]
+        values[output_indices[k]] += a
+
+
+if njit is not None:
+    _accumulate_csharp_order_impl = njit(cache=True, nogil=True)(
+        _accumulate_csharp_order_python
+    )
+else:  # pragma: no cover
+    _accumulate_csharp_order_impl = _accumulate_csharp_order_python
+
+
+def _accumulate_csharp_order(
+    values: np.ndarray,
+    output_indices: np.ndarray,
+    term_indices: np.ndarray,
+    alpha_i: np.ndarray,
+    alpha_j: np.ndarray,
+    terms: np.ndarray,
+) -> None:
+    _accumulate_csharp_order_impl(
+        values, output_indices, term_indices, alpha_i, alpha_j, terms
+    )
+
+
 def _assemble_global_k_cached(model: Model, plan: _StiffnessAssemblyPlan) -> sp.csc_matrix:
     terms = _fill_stiffness_terms(plan)
-    # Reuse the indexed term copy as the output work array instead of
-    # materializing a second full-size ``entry_terms`` float64 array.
-    # Multiplication order is
-    # deliberately unchanged from the legacy Python expression:
-    #     v = k_ij * ei.alfa * ej.alfa
-    values = terms[plan.term_indices]
-    values *= plan.alpha_i
-    values *= plan.alpha_j
-
-    keep = ~(np.abs(values) < 1.0e-30)
-    # Interface scatter has an additional early k_ij threshold. Quad scatter
-    # does not.  Map a compact per-term boolean through the entry indices
-    # rather than gathering all local terms into another float64 array.
-    if plan.quad_entry_count < len(keep):
-        interface_slice = slice(plan.quad_entry_count, None)
-        nonzero_terms = ~(np.abs(terms) < 1.0e-30)
-        keep[interface_slice] &= nonzero_terms[
-            plan.term_indices[interface_slice]
-        ]
-
-    return sp.coo_matrix(
-        (
-            values[keep],
-            (plan.rows[keep], plan.cols[keep]),
-        ),
-        shape=(plan.n, plan.n),
-    ).tocsc()
+    values = np.zeros(plan.indices.size, dtype=np.float64)
+    _accumulate_csharp_order(
+        values,
+        plan.output_indices,
+        plan.term_indices,
+        plan.alpha_i,
+        plan.alpha_j,
+        terms,
+    )
+    return sp.csc_matrix(
+        (values, plan.indices, plan.indptr), shape=(plan.n, plan.n), copy=False
+    )
 
 
 def _get_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:

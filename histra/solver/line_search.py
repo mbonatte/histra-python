@@ -5,6 +5,16 @@ from typing import Any
 import numpy as np
 
 
+def _csharp_dot(left: np.ndarray, right: np.ndarray) -> float:
+    """C# MatrixManager.Vector ``^`` reduction order."""
+    if left.shape != right.shape:
+        raise ValueError(f"dot shape mismatch: {left.shape} vs {right.shape}")
+    value = 0.0
+    for index in range(left.size):
+        value += float(left[index]) * float(right[index])
+    return value
+
+
 def _check_cancelled(program: Any) -> None:
     callback = getattr(program, "check_cancelled", None)
     if callback is not None:
@@ -72,7 +82,7 @@ class LineSearch:
         # Fix an original C# inconsistency: s0/s1 use -dU·R, whereas trial
         # values used +dU·R.  A single sign convention is required for valid
         # secant/bracketing logic.
-        return 0, -float(np.dot(direction, ls.b))
+        return 0, -_csharp_dot(direction, ls.b)
 
     @staticmethod
     def _ratio(s: float, s0: float) -> float:
@@ -133,34 +143,15 @@ class RegulaFalsiLineSearch(LineSearch):
 
             # Deliberately preserve C# sign behavior: trial values use +dU.R
             # while s0/s1 were formed as -dU.R.
-            s_eta = float(np.dot(dx0, ls.b))
+            s_eta = _csharp_dot(dx0, ls.b)
             ratio = self._ratio(s_eta, s0)
 
-            # The supplied C# Regula-Falsi implementation stores ``s1`` as
-            # ``-dU·R`` but evaluates all trial values as ``+dU·R``.  When the
-            # first trial brackets the stored full-step endpoint solely
-            # because of that sign mismatch, every subsequent false-position
-            # iterate converges back to eta=1 and eventually stops only when
-            # floating-point equality is reached (typically ~50-60 expensive
-            # constitutive updates).  All supported springs recompute trial
-            # state from the last committed state and the current absolute
-            # strain, so returning to eta=1 in one update is state-equivalent
-            # to traversing the redundant sequence point by point.
-            if (
-                iterations == 1
-                and ratio > self.tolerance
-                and s0 * s1 > 0.0
-                and s_eta * s_hi < 0.0
-                and eta_hi == 1.0
-            ):
-                ls.set_x_vector((1.0 - eta) * dx0)
-                code = integrator.update(model, p, an)
-                if code < 0:
-                    return -1.0
-                integrator.form_unbalance(p, model, an)
-                eta = 1.0
-                stopped = True
-                break
+            # Do not collapse the C# endpoint cycle.  Although all supported
+            # springs rebuild trial state from committed state, the integrator
+            # reaches the endpoint through many incremental floating-point
+            # updates.  Those last bits are significant for branch selection
+            # in symmetric nonlinear models, so exact compatibility requires
+            # traversing the original sequence.
 
             if eta_previous == eta:
                 stopped = True

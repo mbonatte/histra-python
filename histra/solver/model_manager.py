@@ -232,6 +232,13 @@ class ModelManager:
             for intf in runtime.unmanaged_interfaces:
                 intf.get_resisting_force(ls)
         else:
+            # C# Model.GetComputationalElements(WithStiffness) yields
+            # Interfaces before Quads.  The production C# run uses the
+            # parallel per-DOF path, whose AffElements lists preserve that
+            # insertion order.  Accumulate in the same order so round-off in
+            # a nearly symmetric nonlinear state cannot select another branch.
+            for intf in model.collections.interfaces.values():
+                intf.get_resisting_force(ls)
             for quad in model.collections.quads.values():
                 if quad.spring is None or len(quad.aff) <= 6:
                     continue
@@ -240,8 +247,6 @@ class ModelManager:
                     gdl = entry.gdl - 1
                     if 0 <= gdl < ls.n:
                         ls.sumb(gdl, -quad.status.f * entry.alfa)
-            for intf in model.collections.interfaces.values():
-                intf.get_resisting_force(ls)
 
     @classmethod
     def update_domain(cls, model: Model, ls: LinearSystem, state: IntegratorState) -> None:

@@ -313,7 +313,10 @@ class Interface:
         num2 = max(t, L)
         if num <= 0.0:
             return 0.5
-        x_val = 3.0 * num2 / (num * (num2 / num - 0.63))
+        # C# stores this intermediate in a System.Single before taking the
+        # square root.  Preserve that precision loss: it changes the
+        # out-of-plane sliding interpolation and therefore its stiffness.
+        x_val = float(np.float32(3.0 * num2 / (num * (num2 / num - 0.63))))
         x_val = math.sqrt(x_val)
         num3 = 2.0 * num / x_val
         return 0.5 - 0.5 * num3 / L
@@ -584,7 +587,7 @@ class Interface:
         committed_normal_force = 0.0
         max_displacement = 0.0
         delta_flex = num4 - num3
-        inv_length = self._perf_inv_length
+        length = self.length
         if not self._perf_has_custom_force_access:
             # Standard translated springs expose their trial/committed values
             # directly. Avoid two instance-dictionary probes per fibre while
@@ -592,7 +595,7 @@ class Interface:
             for spring, di, dj, ecc in zip(
                 self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
             ):
-                increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
+                increment = (num * dj + num2 * di) / length - delta_flex * ecc
                 new_u = spring.u + increment
                 spring.u = new_u
                 spring.set_trial_strain(new_u)
@@ -608,7 +611,7 @@ class Interface:
                 self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc,
                 self._perf_custom_force_access,
             ):
-                increment = (num * dj + num2 * di) * inv_length - delta_flex * ecc
+                increment = (num * dj + num2 * di) / length - delta_flex * ecc
                 new_u = spring.u + increment
                 spring.u = new_u
                 spring.set_trial_strain(new_u)
@@ -689,26 +692,25 @@ class Interface:
             return
         else:
             constrained = self.interfaccia_vincolata_computed()
-            inv_length = 1.0 / self.length
+            length = self.length
             for spring, di, dj, ecc in zip(
                 self.trasv_1, self._perf_di, self._perf_dj, self._perf_ecc
             ):
                 force = float(spring._tstress) if hasattr(spring, "_tstress") else float(spring.get_force())
-                force_di = force * di * inv_length
-                force_dj = force * dj * inv_length
                 if not constrained:
-                    arr[3] += force_dj
-                    arr[2] += force_di
-                    arr[0] -= force_dj
-                    arr[1] -= force_di
+                    arr[3] += force * dj / length
+                    arr[2] += force * di / length
+                    arr[0] += (0.0 - force) * dj / length
+                    arr[1] += (0.0 - force) * di / length
                 else:
-                    arr[3] += force_dj
-                    arr[2] += force_di
-                    arr[0] -= force_di + force_dj
-                    arr[1] += 0.5 * self.length * (force_dj - force_di)
-                force_ecc = force * ecc
-                arr[4] += force_ecc
-                arr[5] -= force_ecc
+                    arr[3] += force * dj / length
+                    arr[2] += force * di / length
+                    arr[0] += (0.0 - force) * di / length - force * dj / length
+                    arr[1] += 0.5 * length * (
+                        force * dj / length - force * di / length
+                    )
+                arr[4] += force * ecc
+                arr[5] += (0.0 - force) * ecc
 
         if self.slid:
             spring = self.slid[0]
@@ -919,8 +921,19 @@ class Interface:
                 intf.slid.append(spring_from_xml(sp))
         sop = elem.find("SlidOutPlan")
         if sop is not None:
+            # C# can serialize the same Spring instance twice in SlidOutPlan.
+            # SetSpringProperty visits both list positions and mutates the
+            # shared object's Key; consequently both XML entries carry the same
+            # final Key.  Preserve that identity on import instead of creating
+            # two independent Python objects.
+            by_key: dict[int, Any] = {}
             for sp in sop.findall("Spring"):
-                intf.slid_out_plan.append(spring_from_xml(sp))
+                spring_key = int(sp.get("Key", "0"))
+                spring = by_key.get(spring_key)
+                if spring is None:
+                    spring = spring_from_xml(sp)
+                    by_key[spring_key] = spring
+                intf.slid_out_plan.append(spring)
 
         # AfferenceMatrices
         aff_elem = elem.find("AfferenceMatrices")

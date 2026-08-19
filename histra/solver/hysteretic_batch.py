@@ -762,7 +762,7 @@ if njit is not None:
 
     @njit(cache=True, nogil=True)
     def _finish_transverse_batch(
-        trial, committed, di, dj, ecc, inv_length,
+        trial, committed, di, dj, ecc, lengths,
         starts, stops, constrained, local_forces,
         normal_increments, committed_forces, max_displacements,
     ):
@@ -783,25 +783,25 @@ if njit is not None:
                 if displacement > max_displacement:
                     max_displacement = displacement
 
-                force_di = force * di[spring_index] * inv_length[spring_index]
-                force_dj = force * dj[spring_index] * inv_length[spring_index]
+                length = lengths[record_index]
                 if not constrained[record_index]:
-                    local_forces[record_index, 3] += force_dj
-                    local_forces[record_index, 2] += force_di
-                    local_forces[record_index, 0] -= force_dj
-                    local_forces[record_index, 1] -= force_di
+                    local_forces[record_index, 3] += force * dj[spring_index] / length
+                    local_forces[record_index, 2] += force * di[spring_index] / length
+                    local_forces[record_index, 0] += (0.0 - force) * dj[spring_index] / length
+                    local_forces[record_index, 1] += (0.0 - force) * di[spring_index] / length
                 else:
-                    local_forces[record_index, 3] += force_dj
-                    local_forces[record_index, 2] += force_di
-                    local_forces[record_index, 0] -= force_di + force_dj
-                    # Length/2 * (force_dj-force_di) equals the original code;
-                    # derive length from inv_length to retain one immutable array.
-                    local_forces[record_index, 1] += (
-                        0.5 / inv_length[spring_index] * (force_dj - force_di)
+                    local_forces[record_index, 3] += force * dj[spring_index] / length
+                    local_forces[record_index, 2] += force * di[spring_index] / length
+                    local_forces[record_index, 0] += (
+                        (0.0 - force) * di[spring_index] / length
+                        - force * dj[spring_index] / length
                     )
-                force_ecc = force * ecc[spring_index]
-                local_forces[record_index, 4] += force_ecc
-                local_forces[record_index, 5] -= force_ecc
+                    local_forces[record_index, 1] += 0.5 * length * (
+                        force * dj[spring_index] / length
+                        - force * di[spring_index] / length
+                    )
+                local_forces[record_index, 4] += force * ecc[spring_index]
+                local_forces[record_index, 5] += (0.0 - force) * ecc[spring_index]
             normal_increments[record_index] = normal_increment
             committed_forces[record_index] = committed_force
             max_displacements[record_index] = max_displacement
@@ -840,12 +840,12 @@ if njit is not None:
         for i in range(quad_forces.shape[0]):
             quad_forces[i, 0] = quad_d_alfa[i] * quad_state[i, QTSTRESS]
         _scatter_local_forces(
-            quad_forces, quad_offsets, quad_gdls, quad_coefficients,
-            global_force,
-        )
-        _scatter_local_forces(
             interface_forces, interface_offsets, interface_gdls,
             interface_coefficients, global_force,
+        )
+        _scatter_local_forces(
+            quad_forces, quad_offsets, quad_gdls, quad_coefficients,
+            global_force,
         )
 
     @njit(cache=True, nogil=True)
@@ -1718,7 +1718,7 @@ if njit is not None:
         for i in range(targets.size):
             ri = record_index[i]
             targets[i] = trial[i, 7] + (
-                (num[ri] * dj[i] + num2[ri] * di[i]) * inv_length[i]
+                (num[ri] * dj[i] + num2[ri] * di[i]) / lengths[ri]
                 - delta_flex[ri] * ecc[i]
             )
         if simple_hysteretic:
@@ -1730,7 +1730,7 @@ if njit is not None:
                 params, committed, trial, targets, enabled,
             )
         _finish_transverse_batch(
-            trial, committed, di, dj, ecc, inv_length, starts, stops,
+            trial, committed, di, dj, ecc, lengths, starts, stops,
             constrained, local_forces, normal_increments,
             committed_forces, max_displacements,
         )
@@ -1926,6 +1926,11 @@ class HystereticBatchRuntime:
         from histra.springs.coulomb03 import SpringCoulomb03
         self.interface_coulomb_rejection_reasons: Counter[str] = Counter()
         coulomb_springs: list[SpringCoulomb03] = []
+        # C# can hold the same SpringCoulomb03 object in both out-of-plane
+        # positions of a restraint/custom-material interface.  Preserve that
+        # identity in dense state so both kinematic increments accumulate into
+        # one row just as the two C# list accesses update one object.
+        coulomb_index_by_id: dict[int, int] = {}
         self._slid_index = np.full(len(self.records), -1, dtype=np.int32)
         self._oop0_index = np.full(len(self.records), -1, dtype=np.int32)
         self._oop1_index = np.full(len(self.records), -1, dtype=np.int32)
@@ -1954,9 +1959,13 @@ class HystereticBatchRuntime:
                         f"{kind}:{rejection_reason}"
                     ] += 1
                     continue
-                index = len(coulomb_springs)
-                coulomb_springs.append(spring)
-                spring._histra_batch_managed = True
+                spring_id = id(spring)
+                index = coulomb_index_by_id.get(spring_id, -1)
+                if index < 0:
+                    index = len(coulomb_springs)
+                    coulomb_index_by_id[spring_id] = index
+                    coulomb_springs.append(spring)
+                    spring._histra_batch_managed = True
                 if kind == "slid":
                     self._slid_index[record_index] = index
                 elif kind == "oop0":
@@ -2316,10 +2325,23 @@ class HystereticBatchRuntime:
             candidates: list[tuple[int, Any]] = []
             if len(interface.slid) > 1 or len(interface.slid_out_plan) > 2:
                 return False
+
+            old_oop0 = int(self._oop0_index[record_index])
+            old_oop1 = int(self._oop1_index[record_index])
+            old_oop_alias = old_oop0 >= 0 and old_oop0 == old_oop1
+            new_oop_alias = (
+                len(interface.slid_out_plan) >= 2
+                and interface.slid_out_plan[0] is interface.slid_out_plan[1]
+            )
+            # A material mutation can change object-identity topology (fixed
+            # restraint -> Soil is the relevant case).  Rebuild the dense
+            # runtime instead of pretending two old rows can become one.
+            if old_oop_alias != new_oop_alias:
+                return False
             layouts = (
                 (int(self._slid_index[record_index]), interface.slid[0] if interface.slid else None),
-                (int(self._oop0_index[record_index]), interface.slid_out_plan[0] if len(interface.slid_out_plan) >= 1 else None),
-                (int(self._oop1_index[record_index]), interface.slid_out_plan[1] if len(interface.slid_out_plan) >= 2 else None),
+                (old_oop0, interface.slid_out_plan[0] if len(interface.slid_out_plan) >= 1 else None),
+                (old_oop1, interface.slid_out_plan[1] if len(interface.slid_out_plan) >= 2 else None),
             )
             for dense_index, spring in layouts:
                 if dense_index < 0:
@@ -2635,7 +2657,7 @@ class HystereticBatchRuntime:
         indices = self._record_index
         self.targets[:] = self.trial[:, 7] + (
             (self._num[indices] * self._dj + self._num2[indices] * self._di)
-            * self._inv_length
+            / self._lengths[indices]
             - self._delta_flex[indices] * self._ecc
         )
 
@@ -2653,7 +2675,7 @@ class HystereticBatchRuntime:
     def _refresh_transverse_cache(self) -> None:
         _finish_transverse_batch(
             self.trial, self.committed, self._di, self._dj, self._ecc,
-            self._inv_length, self._starts, self._stops, self._constrained,
+            self._lengths, self._starts, self._stops, self._constrained,
             self._local_forces, self._normal_increments,
             self._committed_forces, self._max_displacements,
         )

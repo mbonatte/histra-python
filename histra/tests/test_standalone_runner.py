@@ -97,7 +97,7 @@ def test_analysis_autoselection_prefers_vert_and_primary_live_load():
     assert _resolve_analysis(model, "22", "live").name == "LiveLoad_1"
 
 
-def test_regula_falsi_collapses_redundant_csharp_sign_cycle():
+def test_regula_falsi_replays_csharp_sign_cycle_exactly():
     class FakeLS:
         def __init__(self):
             self.x = np.array([1.0])
@@ -134,7 +134,10 @@ def test_regula_falsi_collapses_redundant_csharp_sign_cycle():
 
     assert eta == pytest.approx(1.0)
     assert integrator.eta == pytest.approx(1.0)
-    assert integrator.update_calls == 2
+    # The C# implementation does not collapse this endpoint cycle.  Replaying
+    # all 61 updates matters because each incremental operation can perturb a
+    # nearly symmetric nonlinear state at the last-bit level.
+    assert integrator.update_calls == 61
     assert ls.x == pytest.approx([1.0])
 
 

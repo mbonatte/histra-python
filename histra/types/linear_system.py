@@ -76,7 +76,12 @@ class LinearSystem:
         return float(np.max(np.abs(self.x)))
 
     def get_x_per_b(self) -> float:
-        return float(np.dot(self.x, self.b))
+        # C# MatrixManager.Vector.operator ^ is a left-associated scalar loop.
+        # Keep this reduction order for energy convergence compatibility.
+        value = 0.0
+        for index in range(self.n):
+            value += float(self.x[index]) * float(self.b[index])
+        return value
 
     def set_x(self, i: int, v: float) -> None:
         self.x[i] = v
