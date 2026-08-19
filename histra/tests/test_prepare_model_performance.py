@@ -103,6 +103,39 @@ def test_direct_combined_hysteretic_matches_legacy_path(
 
 
 
+def test_hysteretic_initialization_has_no_redundant_post_reset(monkeypatch):
+    from histra.springs.hysteretic import SpringHysteretic
+
+    calls = {"start": 0, "commit": 0}
+    original_start = SpringHysteretic.revert_to_start
+    original_commit = SpringHysteretic.revert_to_last_commit
+
+    def counted_start(self):
+        calls["start"] += 1
+        return original_start(self)
+
+    def counted_commit(self):
+        calls["commit"] += 1
+        return original_commit(self)
+
+    monkeypatch.setattr(SpringHysteretic, "revert_to_start", counted_start)
+    monkeypatch.setattr(SpringHysteretic, "revert_to_last_commit", counted_commit)
+
+    spring = _configure_combined_hysteretic(
+        1800.0, 2.5, 0.75, _law("LinearSoftening", "Parabolic", scale=1.0),
+        2600.0, 3.0, 1.10, _law("Exponential", "LinearSoftening", scale=1.3),
+    )
+
+    # SpringHysteretic.initialize() performs exactly one reset of trial state
+    # and one reset of committed state.  Preparation must not repeat either.
+    assert calls == {"start": 1, "commit": 1}
+
+    before = copy.deepcopy(vars(spring))
+    spring.revert_to_start()
+    spring.revert_to_last_commit()
+    assert vars(spring) == before
+
+
 def _set_ultimate_displacement_reference(spring, law1, law2):
     """Pre-optimization scalar oracle; keep its operation order verbatim."""
     gt = [

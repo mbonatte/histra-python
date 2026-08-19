@@ -642,9 +642,8 @@ def _configure_hysteretic(k: float, area: float, length: float, law: _Hysteretic
     spring.ur = [max(spring.fy[0] / k if k else 0.0, law.eps_u_t * length),
                  min(spring.fy[1] / k if k else 0.0, -law.eps_u_c * length)]
     _set_ultimate_displacement(spring, law, law)
+    # initialize() already resets both trial and committed state.
     spring.initialize()
-    spring.revert_to_start()
-    spring.revert_to_last_commit()
     return spring
 
 
@@ -834,9 +833,8 @@ def _configure_combined_hysteretic(
     ur2_t, ur2_c = out.ur
     out.ur[0] = min(ur1_t, ur2_t) if ur1_t and ur2_t else max(ur1_t, ur2_t)
     out.ur[1] = max(ur1_c, ur2_c) if ur1_c and ur2_c else min(ur1_c, ur2_c)
+    # initialize() already resets both trial and committed state.
     out.initialize()
-    out.revert_to_start()
-    out.revert_to_last_commit()
     return out
 
 
@@ -909,14 +907,12 @@ def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained
         ur2 = out.ur[:]
         out.ur[0] = min(v for v in (ur1[0], ur2[0]) if v != 0.0) if ur1[0] and ur2[0] else max(ur1[0], ur2[0])
         out.ur[1] = max(v for v in (ur1[1], ur2[1]) if v != 0.0) if ur1[1] and ur2[1] else min(ur1[1], ur2[1])
+        # initialize() already resets both trial and committed state.
         out.initialize()
-        out.revert_to_start()
-        out.revert_to_last_commit()
         return out
     _set_ultimate_displacement(out, law1, law2)
+    # initialize() already resets both trial and committed state.
     out.initialize()
-    out.revert_to_start()
-    out.revert_to_last_commit()
     return out
 
 
