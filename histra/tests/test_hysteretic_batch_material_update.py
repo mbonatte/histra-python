@@ -279,3 +279,18 @@ def test_repeated_incremental_material_updates_match_repeated_full_rebuilds() ->
             )
         assert id(incremental.params) == params_id
         assert id(incremental.committed) == committed_id
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_transverse_parameter_import_matches_scalar_attribute_reference_exactly() -> None:
+    model = _model()
+    runtime = batch.HystereticBatchRuntime(model)
+
+    for index, spring in enumerate(runtime.springs):
+        expected = np.asarray(
+            [float(getattr(spring, name)) for name in batch._PARAM_NAMES],
+            dtype=np.float64,
+        )
+        np.testing.assert_array_equal(
+            runtime.params[index, : len(batch._PARAM_NAMES)], expected
+        )

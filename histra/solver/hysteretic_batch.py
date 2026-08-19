@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from operator import attrgetter
 import os
 from typing import Any
 
@@ -1798,6 +1799,8 @@ if len(_PARAM_NAMES) != TENSILE_CURVE_TYPE_PARAM:
         "TENSILE_CURVE_TYPE_PARAM"
     )
 
+_PARAM_GETTER = attrgetter(*_PARAM_NAMES)
+
 
 @dataclass(frozen=True)
 class _InterfaceSlice:
@@ -2215,9 +2218,12 @@ class HystereticBatchRuntime:
         return ""
 
     def _read_transverse_object(self, index: int, spring: SpringHysteretic) -> None:
-        self.params[index, :len(_PARAM_NAMES)] = [
-            float(getattr(spring, name)) for name in _PARAM_NAMES
-        ]
+        # ``operator.attrgetter`` performs the fixed 32-attribute traversal in
+        # C and returns the values in exactly ``_PARAM_NAMES`` order. NumPy
+        # performs the same float64 conversion on assignment as the previous
+        # Python ``float(getattr(...))`` list comprehension, without creating
+        # 32 Python float objects and a temporary list for every spring.
+        self.params[index, :len(_PARAM_NAMES)] = _PARAM_GETTER(spring)
         self.params[index, TENSILE_CURVE_TYPE_PARAM] = (
             TENSILE_EXPONENTIAL
             if spring.tensile_curve_type == "Exponential"
