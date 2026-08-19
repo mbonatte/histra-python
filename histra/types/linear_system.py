@@ -53,9 +53,6 @@ class LinearSystem:
         self._factor_backend: str | None = None
         self._factor_matrix_id: int | None = None
         self._factor_matrix_version: int | None = None
-        self._factor_data: np.ndarray | None = None
-        self._factor_indices: np.ndarray | None = None
-        self._factor_indptr: np.ndarray | None = None
         self._matrix_version = 0
 
     def sumb(self, i: int, v: float) -> None:
@@ -121,9 +118,6 @@ class LinearSystem:
         self._factor_backend = None
         self._factor_matrix_id = None
         self._factor_matrix_version = None
-        self._factor_data = None
-        self._factor_indices = None
-        self._factor_indptr = None
         self._matrix_version += 1
 
     @property
@@ -211,9 +205,6 @@ class LinearSystem:
                 self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
                 self._factor_matrix_version = self._matrix_version
-                self._factor_data = matrix.data.copy()
-                self._factor_indices = matrix.indices.copy()
-                self._factor_indptr = matrix.indptr.copy()
             solution = self._factorization.solve(vector)
         except (
             MatrixRankWarning, RuntimeError, ValueError,

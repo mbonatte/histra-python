@@ -169,17 +169,19 @@ def test_incremental_material_update_matches_fresh_full_runtime_exactly() -> Non
     incremental_model = _model()
     full_model = deepcopy(incremental_model)
     incremental = batch.HystereticBatchRuntime(incremental_model)
+    assert incremental._compact_simple_params is True
+    assert incremental._params.shape[1] == batch.SIMPLE_TRANSVERSE_PARAM_SIZE
 
     persistent_arrays = {
         name: id(getattr(incremental, name))
         for name in (
-            "params", "committed", "trial", "targets", "enabled",
+            "params", "_params", "committed", "trial", "targets", "enabled",
             "coulomb_params", "coulomb_state", "coulomb_targets",
             "_di", "_dj", "_ecc", "_aff_offsets", "_aff_gdls",
             "_aff_coefficients", "_local_u", "_local_full_forces",
         )
     }
-    unaffected_before = incremental.params[4:8].copy()
+    unaffected_before = incremental._params[4:8].copy()
     unaffected_objects = tuple(incremental.springs[4:8])
 
     _replace_definition(incremental_model.collections.interfaces[1], 1.7)
@@ -203,7 +205,7 @@ def test_incremental_material_update_matches_fresh_full_runtime_exactly() -> Non
 
     assert incremental._simple_hysteretic == rebuilt._simple_hysteretic
     assert tuple(incremental.springs[4:8]) == unaffected_objects
-    np.testing.assert_array_equal(incremental.params[4:8], unaffected_before)
+    np.testing.assert_array_equal(incremental._params[4:8], unaffected_before)
     for name, object_id in persistent_arrays.items():
         assert id(getattr(incremental, name)) == object_id
 
@@ -251,12 +253,40 @@ def test_incremental_material_update_rejects_unsynchronized_object_state() -> No
     assert runtime.try_update_material_interfaces([model.collections.interfaces[1]]) is False
     np.testing.assert_array_equal(runtime.params, params_before)
 
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_compact_parameter_runtime_rejects_non_simple_material_update_without_mutation() -> None:
+    model = _model()
+    runtime = batch.HystereticBatchRuntime(model)
+    assert runtime._compact_simple_params is True
+    params_before = runtime.params.copy()
+    springs_before = tuple(runtime.springs)
+
+    interface = model.collections.interfaces[1]
+    replacement = [deepcopy(spring) for spring in interface.trasv_1]
+    replacement[0].pinch_xp = 0.2
+    interface.trasv_1 = replacement
+
+    assert runtime.try_update_material_interfaces([interface]) is False
+    np.testing.assert_array_equal(runtime.params, params_before)
+    assert tuple(runtime.springs) == springs_before
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_force_general_uses_full_transverse_parameter_layout(monkeypatch) -> None:
+    monkeypatch.setenv("HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", "1")
+    runtime = batch.HystereticBatchRuntime(_model())
+
+    assert runtime._compact_simple_params is False
+    assert runtime._simple_hysteretic is False
+    assert runtime._params.shape[1] == batch.TRANSVERSE_PARAM_SIZE
+
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
 def test_repeated_incremental_material_updates_match_repeated_full_rebuilds() -> None:
     incremental_model = _model()
     full_model = deepcopy(incremental_model)
     incremental = batch.HystereticBatchRuntime(incremental_model)
-    params_id = id(incremental.params)
+    params_id = id(incremental._params)
     committed_id = id(incremental.committed)
 
     for key, factor in ((1, 1.2), (1, 0.85), (2, 1.4), (1, 1.1)):
@@ -277,7 +307,7 @@ def test_repeated_incremental_material_updates_match_repeated_full_rebuilds() ->
             np.testing.assert_array_equal(
                 getattr(incremental, name), getattr(rebuilt, name)
             )
-        assert id(incremental.params) == params_id
+        assert id(incremental._params) == params_id
         assert id(incremental.committed) == committed_id
 
 
@@ -287,10 +317,86 @@ def test_transverse_parameter_import_matches_scalar_attribute_reference_exactly(
     runtime = batch.HystereticBatchRuntime(model)
 
     for index, spring in enumerate(runtime.springs):
-        expected = np.asarray(
-            [float(getattr(spring, name)) for name in batch._PARAM_NAMES],
-            dtype=np.float64,
+        if runtime._compact_simple_params:
+            expected = np.asarray(
+                [float(getattr(spring, name)) for name in batch.SIMPLE_PARAM_NAMES],
+                dtype=np.float64,
+            )
+            np.testing.assert_array_equal(
+                runtime._params[index, : len(batch.SIMPLE_PARAM_NAMES)], expected
+            )
+        else:
+            expected = np.asarray(
+                [float(getattr(spring, name)) for name in batch._PARAM_NAMES],
+                dtype=np.float64,
+            )
+            np.testing.assert_array_equal(
+                runtime._params[index, : len(batch._PARAM_NAMES)], expected
+            )
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_compact_runtime_preserves_legacy_logical_parameter_columns() -> None:
+    model = _model()
+    promoted = model.collections.interfaces[1].trasv_1[0]
+    promoted.tensile_curve_type = "Exponential"
+
+    runtime = batch.HystereticBatchRuntime(model)
+
+    assert runtime._compact_simple_params is True
+    assert runtime._params.shape[1] == batch.SIMPLE_TRANSVERSE_PARAM_SIZE
+    assert runtime.params.shape[1] == batch.TRANSVERSE_PARAM_SIZE
+    assert runtime.params[0, batch.TENSILE_CURVE_TYPE_PARAM] == batch.TENSILE_EXPONENTIAL
+    assert (
+        runtime._params[0, batch.SIMPLE_TENSILE_CURVE_TYPE_PARAM]
+        == batch.TENSILE_EXPONENTIAL
+    )
+
+    expected = np.asarray(
+        [float(getattr(promoted, name)) for name in batch._PARAM_NAMES]
+        + [float(batch.TENSILE_EXPONENTIAL)],
+        dtype=np.float64,
+    )
+    np.testing.assert_array_equal(runtime.params[0], expected)
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_compact_simple_parameter_layout_is_bit_exact_with_full_layout() -> None:
+    full = np.zeros((1, batch.TRANSVERSE_PARAM_SIZE), dtype=np.float64)
+    full[0, 8] = 1.0  # BetaP; all other simple-law discriminator values are zero.
+    full[0, 10:30] = np.asarray(
+        [
+            0.01, 10.0, 0.03, 6.0, 0.05, 0.0,
+            -10.0, -0.01, -0.03, -6.0, -0.05, 0.0,
+            1000.0, 1000.0, -200.0, -200.0,
+            -120.0, -120.0, 800.0, 800.0,
+        ],
+        dtype=np.float64,
+    )
+    full[0, batch.TENSILE_CURVE_TYPE_PARAM] = batch.TENSILE_LINEAR
+    compact = np.empty((1, batch.SIMPLE_TRANSVERSE_PARAM_SIZE), dtype=np.float64)
+    compact[0, : len(batch.SIMPLE_PARAM_NAMES)] = full[0, 10:30]
+    compact[0, batch.SIMPLE_TENSILE_CURVE_TYPE_PARAM] = batch.TENSILE_LINEAR
+
+    committed_full = np.zeros((1, 9), dtype=np.float64)
+    trial_full = np.zeros((1, 10), dtype=np.float64)
+    committed_compact = committed_full.copy()
+    trial_compact = trial_full.copy()
+    targets_full = np.zeros(1, dtype=np.float64)
+    targets_compact = np.zeros(1, dtype=np.float64)
+    enabled = np.ones(1, dtype=np.bool_)
+
+    for target in (0.005, 0.02, 0.008, -0.018, -0.004, 0.025):
+        targets_full[0] = target
+        targets_compact[0] = target
+        batch._evaluate_simple_linear_batch(
+            full, committed_full, trial_full, targets_full, enabled
         )
-        np.testing.assert_array_equal(
-            runtime.params[index, : len(batch._PARAM_NAMES)], expected
+        batch._evaluate_simple_linear_batch(
+            compact, committed_compact, trial_compact, targets_compact, enabled
         )
+        np.testing.assert_array_equal(trial_compact, trial_full)
+
+        # Commit exactly the dense fields copied by HystereticBatchRuntime.
+        committed_full[0, :] = trial_full[0, :9]
+        committed_compact[0, :] = trial_compact[0, :9]

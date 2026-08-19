@@ -564,6 +564,17 @@ if njit is not None:
         damage branches avoids hundreds of millions of redundant operations
         while retaining the same state-transition ordering and envelope calls.
         """
+        # Runtime-built simple batches may use the compact 21-column layout;
+        # direct/unit callers can still pass the historical 33-column layout.
+        # Only the storage indices differ.  The constitutive arithmetic below
+        # is intentionally unchanged.
+        compact = params.shape[1] == SIMPLE_TRANSVERSE_PARAM_SIZE
+        parameter_offset = 0 if compact else 10
+        tensile_curve_column = (
+            SIMPLE_TENSILE_CURVE_TYPE_PARAM
+            if compact else TENSILE_CURVE_TYPE_PARAM
+        )
+
         for i in range(targets.size):
             if not enabled[i]:
                 continue
@@ -573,22 +584,40 @@ if njit is not None:
                 continue
 
             rot1p, mom1p, rot2p, mom2p = (
-                params[i, 10], params[i, 11], params[i, 12], params[i, 13]
+                params[i, parameter_offset],
+                params[i, parameter_offset + 1],
+                params[i, parameter_offset + 2],
+                params[i, parameter_offset + 3],
             )
-            rot3p, mom3p = params[i, 14], params[i, 15]
+            rot3p, mom3p = (
+                params[i, parameter_offset + 4],
+                params[i, parameter_offset + 5],
+            )
             mom1n, rot1n, rot2n, mom2n = (
-                params[i, 16], params[i, 17], params[i, 18], params[i, 19]
+                params[i, parameter_offset + 6],
+                params[i, parameter_offset + 7],
+                params[i, parameter_offset + 8],
+                params[i, parameter_offset + 9],
             )
-            rot3n, mom3n = params[i, 20], params[i, 21]
+            rot3n, mom3n = (
+                params[i, parameter_offset + 10],
+                params[i, parameter_offset + 11],
+            )
             e1n, e1p, e2n, e2p = (
-                params[i, 22], params[i, 23], params[i, 24], params[i, 25]
+                params[i, parameter_offset + 12],
+                params[i, parameter_offset + 13],
+                params[i, parameter_offset + 14],
+                params[i, parameter_offset + 15],
             )
             e3n, e3p, eun, eup = (
-                params[i, 26], params[i, 27], params[i, 28], params[i, 29]
+                params[i, parameter_offset + 16],
+                params[i, parameter_offset + 17],
+                params[i, parameter_offset + 18],
+                params[i, parameter_offset + 19],
             )
             tensile_curve_type = TENSILE_LINEAR
-            if params.shape[1] > TENSILE_CURVE_TYPE_PARAM:
-                tensile_curve_type = int(params[i, TENSILE_CURVE_TYPE_PARAM])
+            if params.shape[1] > tensile_curve_column:
+                tensile_curve_type = int(params[i, tensile_curve_column])
 
             umax_p, umax_n = committed[i, 0], committed[i, 1]
             trot_pu, trot_nu = committed[i, 2], committed[i, 3]
@@ -1815,6 +1844,179 @@ if len(_PARAM_NAMES) != TENSILE_CURVE_TYPE_PARAM:
 
 _PARAM_GETTER = attrgetter(*_PARAM_NAMES)
 
+# Generated masonry interface fibres use the zero-pinching/zero-damage
+# specialization below.  The specialized kernel never reads parameter columns
+# 0..9 (pinching/damage/beta), ``energy_a`` (column 30), or ``k`` (column 31).
+# Keeping those twelve float64 values for every one of the ~550k transverse
+# fibres in a representative bridge costs about 50 MiB with no numerical use.
+# A compact runtime therefore stores only columns 10..29 plus the tensile-law
+# discriminator.  The generic layout remains unchanged for non-simple springs
+# and for the diagnostic force-general switch.
+SIMPLE_PARAM_NAMES = _PARAM_NAMES[10:30]
+SIMPLE_TENSILE_CURVE_TYPE_PARAM = len(SIMPLE_PARAM_NAMES)
+SIMPLE_TRANSVERSE_PARAM_SIZE = SIMPLE_TENSILE_CURVE_TYPE_PARAM + 1
+_SIMPLE_PARAM_GETTER = attrgetter(*SIMPLE_PARAM_NAMES)
+
+
+def _force_general_hysteretic_batch() -> bool:
+    return os.environ.get(
+        "HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _uses_simple_hysteretic_parameters(spring: SpringHysteretic) -> bool:
+    """Return the exact predicate used by the specialized dense kernel."""
+    return (
+        spring.pinch_xp == 0.0
+        and spring.pinch_yp == 0.0
+        and spring.pinch_xn == 0.0
+        and spring.pinch_yn == 0.0
+        and spring.damfc1p == 0.0
+        and spring.damfc2p == 0.0
+        and spring.damfc1n == 0.0
+        and spring.damfc2n == 0.0
+        and spring.betap == 1.0
+        and spring.betan == 0.0
+    )
+
+
+class _TransverseParameterView:
+    """Logical 33-column view over transverse hysteretic parameters.
+
+    ``HystereticBatchRuntime.params`` historically exposed the complete dense
+    parameter layout.  The compact simple-law runtime stores only the 21 values
+    consumed by the specialized Numba kernel, but diagnostics and regression
+    tooling still rely on the legacy column numbers (notably column 32 for the
+    tensile-envelope discriminator).  This view preserves those read/write
+    semantics without allocating a second full matrix during normal solves.
+
+    Accessing a broad slice or coercing the view to an ndarray materializes only
+    the requested logical values.  Writing through the view promotes the runtime
+    to the full 33-column storage first; this is intentionally rare and preserves
+    the historical mutability of ``params`` without compromising the compact
+    production path.
+    """
+
+    def __init__(self, runtime: "HystereticBatchRuntime") -> None:
+        self._runtime = runtime
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return (self._runtime._params.shape[0], TRANSVERSE_PARAM_SIZE)
+
+    @property
+    def ndim(self) -> int:
+        return 2
+
+    @property
+    def dtype(self) -> np.dtype:
+        return np.dtype(np.float64)
+
+    @property
+    def size(self) -> int:
+        rows, columns = self.shape
+        return rows * columns
+
+    def __len__(self) -> int:
+        return self.shape[0]
+
+    @staticmethod
+    def _normalise_column(column: int) -> int:
+        if column < 0:
+            column += TRANSVERSE_PARAM_SIZE
+        if not 0 <= column < TRANSVERSE_PARAM_SIZE:
+            raise IndexError(
+                f"index {column} is out of bounds for axis 1 with size "
+                f"{TRANSVERSE_PARAM_SIZE}"
+            )
+        return column
+
+    def _selected_energy_a(self, rows: Any) -> Any:
+        indices = np.arange(len(self), dtype=np.intp)[rows]
+        if np.ndim(indices) == 0:
+            return float(self._runtime.springs[int(indices)].energy_a)
+        flat = np.asarray(indices, dtype=np.intp).ravel()
+        values = np.fromiter(
+            (float(self._runtime.springs[int(index)].energy_a) for index in flat),
+            dtype=np.float64,
+            count=flat.size,
+        )
+        return values.reshape(np.asarray(indices).shape)
+
+    def _materialize_rows(self, rows: Any) -> np.ndarray:
+        runtime = self._runtime
+        if not runtime._compact_simple_params:
+            return np.asarray(runtime._params[rows], dtype=np.float64).copy()
+
+        compact = runtime._params[rows]
+        output_shape = compact.shape[:-1] + (TRANSVERSE_PARAM_SIZE,)
+        result = np.empty(output_shape, dtype=np.float64)
+        result[..., :8] = 0.0
+        result[..., 8] = 1.0
+        result[..., 9] = 0.0
+        result[..., 10:30] = compact[..., :len(SIMPLE_PARAM_NAMES)]
+        result[..., 30] = self._selected_energy_a(rows)
+        result[..., 31] = runtime._transverse_k[rows]
+        result[..., TENSILE_CURVE_TYPE_PARAM] = (
+            compact[..., SIMPLE_TENSILE_CURVE_TYPE_PARAM]
+        )
+        return result
+
+    def __getitem__(self, key: Any) -> Any:
+        runtime = self._runtime
+        if not runtime._compact_simple_params:
+            return runtime._params[key]
+
+        if isinstance(key, tuple) and len(key) == 2:
+            rows, columns = key
+            if isinstance(columns, (int, np.integer)):
+                column = self._normalise_column(int(columns))
+                if column < 8 or column == 9:
+                    selected = runtime._transverse_k[rows]
+                    if np.ndim(selected) == 0:
+                        return 0.0
+                    return np.zeros_like(selected, dtype=np.float64)
+                if column == 8:
+                    selected = runtime._transverse_k[rows]
+                    if np.ndim(selected) == 0:
+                        return 1.0
+                    return np.ones_like(selected, dtype=np.float64)
+                if 10 <= column < 30:
+                    return runtime._params[rows, column - 10]
+                if column == 30:
+                    return self._selected_energy_a(rows)
+                if column == 31:
+                    return runtime._transverse_k[rows]
+                return runtime._params[rows, SIMPLE_TENSILE_CURVE_TYPE_PARAM]
+            return self._materialize_rows(rows)[..., columns]
+
+        return self._materialize_rows(key)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        runtime = self._runtime
+        if runtime._compact_simple_params:
+            runtime._promote_transverse_parameter_storage()
+        runtime._params[key] = value
+        # Column 31 historically represented ``k`` in the full parameter array;
+        # keep the dedicated stiffness cache coherent after any compatibility
+        # write.
+        runtime._transverse_k[:] = runtime._params[:, 31]
+        runtime._refresh_simple_hysteretic_flag()
+
+    def copy(self, order: str = "C") -> np.ndarray:
+        return np.array(self._materialize_rows(slice(None)), copy=True, order=order)
+
+    def __array__(self, dtype: Any = None, copy: bool | None = None) -> np.ndarray:
+        array = self._materialize_rows(slice(None))
+        if dtype is not None:
+            array = array.astype(dtype, copy=False)
+        if copy is True:
+            array = array.copy()
+        return array
+
+    def __repr__(self) -> str:
+        return repr(self._materialize_rows(slice(None)))
+
 
 @dataclass(frozen=True)
 class _InterfaceSlice:
@@ -1858,14 +2060,26 @@ class HystereticBatchRuntime:
         self.springs = springs
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
         n = len(springs)
-        self.params = np.empty((n, TRANSVERSE_PARAM_SIZE), dtype=np.float64)
+        self._compact_simple_params = bool(
+            n
+            and not _force_general_hysteretic_batch()
+            and all(_uses_simple_hysteretic_parameters(spring) for spring in springs)
+        )
+        parameter_count = (
+            SIMPLE_TRANSVERSE_PARAM_SIZE
+            if self._compact_simple_params else TRANSVERSE_PARAM_SIZE
+        )
+        self._params = np.empty((n, parameter_count), dtype=np.float64)
+        # Keep the historical 33-column logical parameter interface while the
+        # solver consumes the compact physical storage directly.
+        self.params = _TransverseParameterView(self)
         self.committed = np.empty((n, 9), dtype=np.float64)
         self.trial = np.empty((n, 10), dtype=np.float64)
         self.targets = np.empty(n, dtype=np.float64)
         self.enabled = np.empty(n, dtype=np.bool_)
+        self._transverse_k = np.empty(n, dtype=np.float64)
         for i, spring in enumerate(springs):
             self._read_transverse_object(i, spring)
-        self._transverse_k = self.params[:, len(_PARAM_NAMES) - 1].copy()
         self._refresh_simple_hysteretic_flag()
         self._record_index = np.empty(n, dtype=np.int32)
         self._di = np.empty(n, dtype=np.float64)
@@ -2246,12 +2460,21 @@ class HystereticBatchRuntime:
         # performs the same float64 conversion on assignment as the previous
         # Python ``float(getattr(...))`` list comprehension, without creating
         # 32 Python float objects and a temporary list for every spring.
-        self.params[index, :len(_PARAM_NAMES)] = _PARAM_GETTER(spring)
-        self.params[index, TENSILE_CURVE_TYPE_PARAM] = (
-            TENSILE_EXPONENTIAL
-            if spring.tensile_curve_type == "Exponential"
-            else TENSILE_LINEAR
-        )
+        if self._compact_simple_params:
+            self._params[index, :len(SIMPLE_PARAM_NAMES)] = _SIMPLE_PARAM_GETTER(spring)
+            self._params[index, SIMPLE_TENSILE_CURVE_TYPE_PARAM] = (
+                TENSILE_EXPONENTIAL
+                if spring.tensile_curve_type == "Exponential"
+                else TENSILE_LINEAR
+            )
+        else:
+            self._params[index, :len(_PARAM_NAMES)] = _PARAM_GETTER(spring)
+            self._params[index, TENSILE_CURVE_TYPE_PARAM] = (
+                TENSILE_EXPONENTIAL
+                if spring.tensile_curve_type == "Exponential"
+                else TENSILE_LINEAR
+            )
+        self._transverse_k[index] = float(spring.k)
         self.committed[index, :] = (
             spring.umax[0], spring.umax[1], spring._crot_pu, spring._crot_nu,
             spring.cenergy_d, spring._cload_indicator, spring._cstress,
@@ -2266,22 +2489,33 @@ class HystereticBatchRuntime:
         self.targets[index] = float(spring._tstrain)
         self.enabled[index] = bool(spring.is_on)
 
+    def _promote_transverse_parameter_storage(self) -> None:
+        """Materialize the historical full layout after an explicit write."""
+        if not self._compact_simple_params:
+            return
+        full = self.params._materialize_rows(slice(None))
+        self._params = full
+        self._compact_simple_params = False
+
     def _refresh_simple_hysteretic_flag(self) -> None:
         n = len(self.springs)
-        self._simple_hysteretic = bool(
-            n
-            and np.all(self.params[:, :8] == 0.0)
-            and np.all(self.params[:, 8] == 1.0)
-            and np.all(self.params[:, 9] == 0.0)
-        )
+        if self._compact_simple_params:
+            # Compact storage is created only after every spring satisfies the
+            # exact simple-law predicate, and incremental material updates are
+            # rejected before import if a replacement violates it.
+            self._simple_hysteretic = bool(n)
+        else:
+            self._simple_hysteretic = bool(
+                n
+                and np.all(self._params[:, :8] == 0.0)
+                and np.all(self._params[:, 8] == 1.0)
+                and np.all(self._params[:, 9] == 0.0)
+            )
         # Diagnostic/correctness switch.  The specialized zero-pinching kernel
         # must remain bit-for-bit equivalent to the authoritative scalar state
         # machine through unloading/reloading histories.  Force the general
         # compiled kernel while investigating any full-analysis divergence.
-        force_general = os.environ.get(
-            "HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", ""
-        ).strip().lower()
-        if force_general in {"1", "true", "yes", "on"}:
+        if _force_general_hysteretic_batch() and not self._compact_simple_params:
             self._simple_hysteretic = False
 
     @property
@@ -2320,6 +2554,14 @@ class HystereticBatchRuntime:
             if len(group) != record.stop - record.start:
                 return False
             if any(self._transverse_rejection_reason(spring) for spring in group):
+                return False
+            if self._compact_simple_params and any(
+                not _uses_simple_hysteretic_parameters(spring) for spring in group
+            ):
+                # The compact parameter matrix intentionally omits pinching,
+                # damage and beta columns.  A replacement requiring those
+                # values must trigger the established full-runtime rebuild
+                # rather than being imported into an incompatible layout.
                 return False
 
             candidates: list[tuple[int, Any]] = []
@@ -2415,6 +2657,9 @@ class HystereticBatchRuntime:
         managed_quad_cacovic = len(self.quad_records) - managed_quad_coulomb
         return {
             "managed_transverse_springs": len(self.springs),
+            "transverse_parameter_columns": TRANSVERSE_PARAM_SIZE,
+            "transverse_parameter_storage_columns": int(self._params.shape[1]),
+            "compact_simple_hysteretic_params": bool(self._compact_simple_params),
             "managed_interface_coulomb_springs": len(self.coulomb_springs),
             "managed_quad_coulomb_springs": managed_quad_coulomb,
             "managed_quad_cacovic_springs": managed_quad_cacovic,
@@ -2668,7 +2913,7 @@ class HystereticBatchRuntime:
             else _evaluate_linear_batch
         )
         evaluator(
-            self.params, self.committed, self.trial, self.targets, self.enabled
+            self._params, self.committed, self.trial, self.targets, self.enabled
         )
         self._objects_trial_synced = False
 
@@ -2710,7 +2955,7 @@ class HystereticBatchRuntime:
             self._local_du, self._local_u, self._lengths, self._constrained,
             self._d0s, self._d1s, self._num, self._num2, self._delta_flex,
             self._pending_values, self._record_index, self._di, self._dj,
-            self._ecc, self._inv_length, self.targets, self.params,
+            self._ecc, self._inv_length, self.targets, self._params,
             self.committed, self.trial, self.enabled, self._simple_hysteretic,
             self._starts,
             self._stops, self._local_forces, self._normal_increments,
