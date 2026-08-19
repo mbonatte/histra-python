@@ -790,6 +790,250 @@ if njit is not None:
             trial[i, 9] = ktang
 
     @njit(cache=True, nogil=True, parallel=True)
+    def _advance_and_evaluate_simple_linear_batch(
+        params, committed, trial, targets, enabled,
+        record_index, kin_num, kin_num2, di, dj, lengths, delta_flex, ecc,
+    ):
+        """Advance transverse target strain and evaluate the simple law in one pass.
+
+        The target expression and constitutive arithmetic are intentionally the
+        same as the separate production kernels. ``targets`` is still populated
+        so snapshots/diagnostics retain the historical dense state.
+        """
+        # Runtime-built simple batches may use the compact 21-column layout;
+        # direct/unit callers can still pass the historical 33-column layout.
+        # Only the storage indices differ.  The constitutive arithmetic below
+        # is intentionally unchanged.
+        compact = params.shape[1] == SIMPLE_TRANSVERSE_PARAM_SIZE
+        parameter_offset = 0 if compact else 10
+        tensile_curve_column = (
+            SIMPLE_TENSILE_CURVE_TYPE_PARAM
+            if compact else TENSILE_CURVE_TYPE_PARAM
+        )
+
+        for i in prange(targets.size):
+            # Target kinematics are advanced for every managed fibre.  The
+            # historical two-kernel path only applies ``enabled`` to the
+            # constitutive evaluation, so keep that ordering exactly.
+            ri = record_index[i]
+            strain = trial[i, 7] + (
+                (kin_num[ri] * dj[i] + kin_num2[ri] * di[i]) / lengths[ri]
+                - delta_flex[ri] * ecc[i]
+            )
+            targets[i] = strain
+            if not enabled[i]:
+                continue
+            previous_tload = int(trial[i, 5])
+            if previous_tload == 0 and strain == 0.0:
+                continue
+
+            rot1p, mom1p, rot2p, mom2p = (
+                params[i, parameter_offset],
+                params[i, parameter_offset + 1],
+                params[i, parameter_offset + 2],
+                params[i, parameter_offset + 3],
+            )
+            rot3p, mom3p = (
+                params[i, parameter_offset + 4],
+                params[i, parameter_offset + 5],
+            )
+            mom1n, rot1n, rot2n, mom2n = (
+                params[i, parameter_offset + 6],
+                params[i, parameter_offset + 7],
+                params[i, parameter_offset + 8],
+                params[i, parameter_offset + 9],
+            )
+            rot3n, mom3n = (
+                params[i, parameter_offset + 10],
+                params[i, parameter_offset + 11],
+            )
+            e1n, e1p, e2n, e2p = (
+                params[i, parameter_offset + 12],
+                params[i, parameter_offset + 13],
+                params[i, parameter_offset + 14],
+                params[i, parameter_offset + 15],
+            )
+            e3n, e3p, eun, eup = (
+                params[i, parameter_offset + 16],
+                params[i, parameter_offset + 17],
+                params[i, parameter_offset + 18],
+                params[i, parameter_offset + 19],
+            )
+            tensile_curve_type = TENSILE_LINEAR
+            if params.shape[1] > tensile_curve_column:
+                tensile_curve_type = int(params[i, tensile_curve_column])
+
+            umax_p, umax_n = committed[i, 0], committed[i, 1]
+            trot_pu, trot_nu = committed[i, 2], committed[i, 3]
+            cenergy = committed[i, 4]
+            tload = int(committed[i, 5])
+            cstress, cstrain = committed[i, 6], committed[i, 7]
+            phase = int(committed[i, 8])
+
+            trot_max, trot_min = umax_p, umax_n
+            tstress, tstrain, tphase = cstress, strain, phase
+            ktang = trial[i, 9]
+            dstrain = tstrain - cstrain
+            if tload == 0:
+                tload = 1 if dstrain >= 0.0 else 2
+
+            if phase == RUPTURE or phase == RUPTURE_C or phase == RUPTURE_T:
+                tstress = 0.0
+                ktang = 0.0
+                if tstrain >= umax_p:
+                    trot_max = tstrain
+                elif tstrain <= umax_n:
+                    trot_min = tstrain
+
+            if tstrain >= umax_p:
+                trot_max = tstrain
+                tstress = _pos_stress_typed(
+                    tensile_curve_type, tstrain, rot1p, mom1p, rot2p,
+                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                )
+                ktang, tphase = _pos_tangent_typed(
+                    tensile_curve_type, tstrain, rot1p, rot2p, rot3p,
+                    e1p, e2p, e3p, tstress, cstress, cstrain,
+                )
+                tload = 1
+            elif tstrain <= umax_n:
+                trot_min = tstrain
+                tstress = _neg_stress(
+                    tstrain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
+                    e1n, e2n, e3n,
+                )
+                ktang, tphase = _neg_tangent(
+                    tstrain, rot1n, rot2n, rot3n, e1n, e2n, e3n,
+                )
+                tload = 2
+            elif dstrain < 0.0:
+                tphase = UNLOAD_T if tstress > 0.0 else RELOAD_C
+                num = 1.0
+                num2 = (umax_p / rot1p) ** 1.0 if rot1p != 0.0 else 0.0
+                if num2 <= 1.0:
+                    num2 = 1.0
+                else:
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                    )
+                    num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
+                if tload == 1:
+                    tload = 2
+                    if cstress >= 0.0:
+                        denom = eup * num2
+                        trot_pu = cstrain - cstress / denom if denom != 0.0 else 0.0
+                        if _pos_stress_typed(
+                            tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                            mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                        ) == 0.0:
+                            trot_pu = 0.0
+                        trot_min = umax_n
+                tload = 2
+                if trot_min > rot1n:
+                    trot_min = rot1n
+                num5 = _neg_stress(
+                    trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
+                    e1n, e2n, e3n,
+                )
+                num6 = _pos_rotlim_typed(
+                    tensile_curve_type, umax_p, rot1p, mom1p, rot2p, mom2p,
+                    e2p, e3p, rot3p, mom3p, e1p,
+                )
+                num7 = num6 if num6 < trot_pu else trot_pu
+                if tstrain >= trot_pu:
+                    ktang = eup * num2
+                    tstress = cstress + ktang * dstrain
+                    if tstress <= 0.0:
+                        tstress = 0.0
+                elif tstrain > num7:
+                    tstress = 0.0
+                else:
+                    denom9 = trot_min - num7
+                    ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                    num10 = cstress + eun * num * dstrain
+                    num11 = (tstrain - num7) * ktang
+                    if num10 > num11:
+                        tstress = num10
+                        ktang = eun * num
+                    else:
+                        tstress = num11
+                    if cstrain > trot_pu and tstrain < trot_pu:
+                        ktang = eup * num2
+                        tstress = cstress + ktang * (trot_pu - cstrain)
+                        ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                        tstress += ktang * (tstrain - trot_pu)
+            elif dstrain > 0.0:
+                tphase = RELOAD_T if tstress > 0.0 else UNLOAD_C
+                num = 1.0
+                num2 = (umax_p / rot1p) ** 1.0 if rot1p != 0.0 else 0.0
+                if num2 <= 1.0:
+                    num2 = 1.0
+                else:
+                    env = _pos_stress_typed(
+                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
+                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                    )
+                    num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
+                if tload == 2:
+                    tload = 1
+                    if cstress <= 0.0:
+                        denom = eun * num
+                        trot_nu = cstrain - cstress / denom if denom != 0.0 else 0.0
+                        if _neg_stress(
+                            umax_n, mom1n, rot1n, rot2n, mom2n,
+                            rot3n, mom3n, e1n, e2n, e3n,
+                        ) == 0.0:
+                            trot_nu = 0.0
+                        trot_max = umax_p
+                tload = 1
+                if trot_max < rot1p:
+                    trot_max = rot1p
+                num5 = _pos_stress_typed(
+                    tensile_curve_type, trot_max, rot1p, mom1p, rot2p,
+                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                )
+                num6 = _neg_rotlim(
+                    umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n,
+                    rot3n, mom3n, e1n,
+                )
+                num7 = num6 if num6 > trot_nu else trot_nu
+                if tstrain <= trot_nu:
+                    ktang = eun * num
+                    tstress = cstress + ktang * dstrain
+                    if tstress >= 0.0:
+                        tstress = 0.0
+                elif tstrain < num7:
+                    tstress = 0.0
+                else:
+                    denom9 = trot_max - num7
+                    ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                    num10 = cstress + eup * num2 * dstrain
+                    num11 = (tstrain - num7) * ktang
+                    if num10 < num11:
+                        tstress = num10
+                        ktang = eup * num2
+                    else:
+                        tstress = num11
+                    if cstrain < trot_nu and tstrain > trot_nu:
+                        ktang = eun * num
+                        tstress = cstress + ktang * (trot_nu - cstrain)
+                        ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                        tstress += ktang * (tstrain - trot_nu)
+
+            tenergy = cenergy + 0.5 * (cstress + tstress) * dstrain
+            trial[i, 0] = trot_max
+            trial[i, 1] = trot_min
+            trial[i, 2] = trot_pu
+            trial[i, 3] = trot_nu
+            trial[i, 4] = tenergy
+            trial[i, 5] = tload
+            trial[i, 6] = tstress
+            trial[i, 7] = tstrain
+            trial[i, 8] = tphase
+            trial[i, 9] = ktang
+
+    @njit(cache=True, nogil=True, parallel=True)
     def _advance_transverse_targets(
         trial, record_index, num, num2, di, dj, lengths, delta_flex, ecc, targets,
     ):
@@ -820,6 +1064,11 @@ if njit is not None:
             normal_increment = 0.0
             committed_force = 0.0
             max_displacement = 0.0
+            # These values are constant for all fibres in the interface.  Keep
+            # the spring accumulation order unchanged while avoiding two dense
+            # array reads for every transverse spring.
+            length = lengths[record_index]
+            is_constrained = constrained[record_index]
             for spring_index in range(start, stop):
                 force = trial[spring_index, 6]
                 committed_value = committed[spring_index, 6]
@@ -829,8 +1078,7 @@ if njit is not None:
                 if displacement > max_displacement:
                     max_displacement = displacement
 
-                length = lengths[record_index]
-                if not constrained[record_index]:
+                if not is_constrained:
                     local_forces[record_index, 3] += force * dj[spring_index] / length
                     local_forces[record_index, 2] += force * di[spring_index] / length
                     local_forces[record_index, 0] += (0.0 - force) * dj[spring_index] / length
@@ -1827,6 +2075,7 @@ else:
     _evaluate_linear_batch = None
     _advance_transverse_targets = None
     _evaluate_simple_linear_batch = None
+    _advance_and_evaluate_simple_linear_batch = None
     _finish_transverse_batch = None
     _map_global_to_local = None
     _scatter_local_forces = None
@@ -3214,18 +3463,20 @@ class HystereticBatchRuntime:
             self._d0s, self._d1s, self._num, self._num2, self._delta_flex,
             self._pending_values,
         )
-        _advance_transverse_targets(
-            self.trial, self._record_index, self._num, self._num2, self._di,
-            self._dj, self._lengths, self._delta_flex, self._ecc, self.targets,
-        )
-        evaluator = (
-            _evaluate_simple_linear_batch
-            if self._simple_hysteretic
-            else _evaluate_linear_batch
-        )
-        evaluator(
-            self._params, self.committed, self.trial, self.targets, self.enabled
-        )
+        if self._simple_hysteretic:
+            _advance_and_evaluate_simple_linear_batch(
+                self._params, self.committed, self.trial, self.targets, self.enabled,
+                self._record_index, self._num, self._num2, self._di, self._dj,
+                self._lengths, self._delta_flex, self._ecc,
+            )
+        else:
+            _advance_transverse_targets(
+                self.trial, self._record_index, self._num, self._num2, self._di,
+                self._dj, self._lengths, self._delta_flex, self._ecc, self.targets,
+            )
+            _evaluate_linear_batch(
+                self._params, self.committed, self.trial, self.targets, self.enabled
+            )
         _finish_transverse_batch(
             self.trial, self.committed, self._di, self._dj, self._ecc,
             self._lengths, self._starts, self._stops, self._constrained,

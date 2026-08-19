@@ -185,6 +185,58 @@ def _unit(value: Sequence[float], *, label: str) -> np.ndarray:
     return out / norm
 
 
+def _f32(value: float) -> np.float32:
+    """Evaluate one scalar as the ``System.Single`` used by XNA ``Vector3``."""
+    return np.float32(value)
+
+
+def _cross3_f32(first: Sequence[float], second: Sequence[float]) -> np.ndarray:
+    """XNA-compatible three-component cross product.
+
+    The desktop implementation constructs interface afferences with
+    ``Microsoft.Xna.Framework.Vector3``.  Its arithmetic is single precision,
+    even though the resulting coefficients are subsequently stored as
+    ``double``.  NumPy otherwise promotes the loaded coordinates to float64
+    and produces a measurably different prepared model.
+    """
+    a = np.asarray(first, dtype=np.float32)
+    b = np.asarray(second, dtype=np.float32)
+    return np.asarray(
+        (
+            _f32(_f32(a[1] * b[2]) - _f32(a[2] * b[1])),
+            _f32(_f32(a[2] * b[0]) - _f32(a[0] * b[2])),
+            _f32(_f32(a[0] * b[1]) - _f32(a[1] * b[0])),
+        ),
+        dtype=np.float32,
+    )
+
+
+def _dot3_f32(first: Sequence[float], second: Sequence[float]) -> np.float32:
+    """XNA ``Vector3.Dot`` reduction order and precision."""
+    a = np.asarray(first, dtype=np.float32)
+    b = np.asarray(second, dtype=np.float32)
+    return _f32(
+        _f32(_f32(a[0] * b[0]) + _f32(a[1] * b[1]))
+        + _f32(a[2] * b[2])
+    )
+
+
+def _norm3_f32(value: Sequence[float]) -> np.float32:
+    """XNA ``Vector3.Length`` precision."""
+    return _f32(np.sqrt(_dot3_f32(value, value), dtype=np.float32))
+
+
+def _unit_f32(value: Sequence[float], *, label: str) -> np.ndarray:
+    out = np.asarray(value, dtype=np.float32)
+    norm = _norm3_f32(out)
+    if float(norm) <= 1.0e-12:
+        raise ModelPreparationError(f"Cannot normalize zero vector while building {label}.")
+    return np.asarray(
+        (_f32(out[0] / norm), _f32(out[1] / norm), _f32(out[2] / norm)),
+        dtype=np.float32,
+    )
+
+
 def _series(k1: float, k2: float, restrained: bool) -> float:
     if restrained and (k1 == -1.0 or k2 == -1.0):
         return k2 if k1 == -1.0 else k1
@@ -1314,9 +1366,10 @@ def _make_interface_geometry(
 ) -> None:
     assert model.collections is not None
     intf.node_keys = [int(node_keys[0]), int(node_keys[1])]
-    p1 = _v(model.collections.nodes[node_keys[0]].point)
-    p2 = _v(model.collections.nodes[node_keys[1]].point)
-    e1 = _unit(p2 - p1, label=f"Interface {intf.key} e1")
+    p1 = np.asarray(_v(model.collections.nodes[node_keys[0]].point), dtype=np.float32)
+    p2 = np.asarray(_v(model.collections.nodes[node_keys[1]].point), dtype=np.float32)
+    vertices_f = tuple(np.asarray(vertex, dtype=np.float32) for vertex in vertices)
+    e1 = _unit_f32(p2 - p1, label=f"Interface {intf.key} e1")
 
     # C# Interface.Set identifies the polygon edge containing each interface
     # endpoint.  Those edges define both the local thickness and the reference
@@ -1324,7 +1377,7 @@ def _make_interface_geometry(
     # only for centred contacts and tilts offset interfaces out of their plane.
     edge_matches: list[tuple[float, np.ndarray]] = []
     for endpoint in (p1, p2):
-        match = _polygon_edge_at_point(vertices, endpoint)
+        match = _polygon_edge_at_point(vertices_f, endpoint)
         if match is None:
             raise ModelPreparationError(
                 f"Interface {intf.key}: endpoint {endpoint.tolist()} is not aligned "
@@ -1335,10 +1388,14 @@ def _make_interface_geometry(
     if parent1_g is None:
         # Restraint VInt defines its local axes. Use the first edge and the
         # vector from endpoint 1 across the face.
-        across = (vertices[3] - vertices[0] + vertices[2] - vertices[1]) * 0.5
-        e3 = _unit(-across, label=f"Interface {intf.key} e3")
-        e2 = _unit(_cross3(e3, e1), label=f"Interface {intf.key} e2")
-        e3 = _unit(_cross3(e1, e2), label=f"Interface {intf.key} e3")
+        across = np.asarray(
+            (vertices_f[3]-vertices_f[0]+vertices_f[2]-vertices_f[1])
+            * _f32(0.5),
+            dtype=np.float32,
+        )
+        e3 = _unit_f32(-across, label=f"Interface {intf.key} e3")
+        e2 = _unit_f32(_cross3_f32(e3, e1), label=f"Interface {intf.key} e2")
+        e3 = _unit_f32(_cross3_f32(e1, e2), label=f"Interface {intf.key} e3")
     else:
         if parent2_g is None:
             raise ModelPreparationError(
@@ -1346,34 +1403,38 @@ def _make_interface_geometry(
             )
         thickness_direction1 = edge_matches[0][1].copy()
         thickness_direction2 = edge_matches[1][1].copy()
-        if float(np.dot(
-            _cross3(e1, thickness_direction1),
-            _cross3(e1, thickness_direction2),
+        if float(_dot3_f32(
+            _cross3_f32(e1, thickness_direction1),
+            _cross3_f32(e1, thickness_direction2),
         )) < 0.0:
             thickness_direction1 *= -1.0
 
-        e2 = _unit(
-            _cross3(e1, thickness_direction1),
+        e2 = _unit_f32(
+            _cross3_f32(e1, thickness_direction1),
             label=f"Interface {intf.key} e2",
         )
-        e3 = _unit(_cross3(e1, e2), label=f"Interface {intf.key} e3")
+        e3 = _unit_f32(_cross3_f32(e1, e2), label=f"Interface {intf.key} e3")
 
-        polygon_normal = _cross3(vertices[1] - vertices[0], vertices[2] - vertices[0])
+        polygon_normal = _cross3_f32(
+            vertices_f[1]-vertices_f[0], vertices_f[2]-vertices_f[0]
+        )
         if float(np.linalg.norm(polygon_normal)) <= 1.0e-12:
-            polygon_normal = _cross3(vertices[1] - vertices[0], vertices[3] - vertices[0])
-        polygon_normal = _unit(
+            polygon_normal = _cross3_f32(
+                vertices_f[1]-vertices_f[0], vertices_f[3]-vertices_f[0]
+            )
+        polygon_normal = _unit_f32(
             polygon_normal,
             label=f"Interface {intf.key} polygon normal",
         )
-        parent2_direction = _unit(
-            vertices[0] - parent2_g,
+        parent2_direction = _unit_f32(
+            vertices_f[0] - np.asarray(parent2_g, dtype=np.float32),
             label=f"Interface {intf.key} second-parent direction",
         )
-        parent2_normal = _unit(
-            float(np.dot(polygon_normal, parent2_direction)) * polygon_normal,
+        parent2_normal = _unit_f32(
+            _dot3_f32(polygon_normal, parent2_direction) * polygon_normal,
             label=f"Interface {intf.key} second-parent normal",
         )
-        if float(np.dot(e2, parent2_normal)) > 0.0:
+        if float(_dot3_f32(e2, parent2_normal)) > 0.0:
             e2 *= -1.0
             e3 *= -1.0
 
@@ -1382,14 +1443,14 @@ def _make_interface_geometry(
     intf.reference_e2 = tuple(float(x) for x in e2)
     intf.reference_e3 = tuple(float(x) for x in e3)
     intf.reference_origin = _p(origin)
-    intf.vint3d = [_p(v) for v in vertices]
+    intf.vint3d = [_p(v) for v in vertices_f]
     intf.vint2d = [
         Point(
-            float(np.dot(v - origin, e1)),
-            float(np.dot(v - origin, e3)),
+            float(_dot3_f32(v - origin, e1)),
+            float(_dot3_f32(v - origin, e3)),
             0.0,
         )
-        for v in vertices
+        for v in vertices_f
     ]
     # XNA ``Vector3.Distance`` is evaluated in Single precision in C# and
     # then promoted into the interface's double-valued Length property.
@@ -1762,7 +1823,10 @@ def _polygon_edge_at_point(
         if -1.0e-6 <= parameter <= 1.0+1.0e-6 and distance <= tolerance:
             # C# obtains the edge length through XNA ``Vector3.Distance``.
             length = float(np.float32(math.sqrt(length2)))
-            direction = _unit(start-end, label="Interface thickness direction")
+            direction = _unit_f32(
+                np.asarray(start, dtype=np.float32)-np.asarray(end, dtype=np.float32),
+                label="Interface thickness direction",
+            )
             if best is None or distance < best[0]:
                 best = (distance, length, direction)
     return None if best is None else (best[1], best[2])
@@ -2043,16 +2107,38 @@ def _assign_quad_afference(model: Model) -> None:
 
 
 def _warping_nodal_vectors(quad: Quad) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    e1 = np.asarray(quad.reference_e1, dtype=float)
-    e2 = np.asarray(quad.reference_e2, dtype=float)
-    zero = np.zeros(3)
+    # Quad.GetDisplacementFromShearDOF builds these vectors with XNA Vector3
+    # and Convert.ToSingle intermediates.
+    e1 = np.asarray(quad.reference_e1, dtype=np.float32)
+    e2 = np.asarray(quad.reference_e2, dtype=np.float32)
+    zero = np.zeros(3, dtype=np.float32)
     if abs(quad.sin[2]) <= 1.0e-12:
         node2 = zero.copy()
     else:
-        node2 = -quad.length[3] * quad.sin[3] / quad.sin[2] * (
-            quad.sin[1] * e1 + quad.cos[1] * e2
+        scale_e1 = _f32(
+            -float(quad.length[3]) * float(quad.sin[3])
+            * float(quad.sin[1]) / float(quad.sin[2])
         )
-    node3 = -quad.length[3] * (quad.sin[0] * e1 - quad.cos[0] * e2)
+        scale_e2 = _f32(
+            -float(quad.length[3]) * float(quad.sin[3])
+            * float(quad.cos[1]) / float(quad.sin[2])
+        )
+        node2 = np.asarray(
+            [
+                _f32(_f32(e1[i] * scale_e1) + _f32(e2[i] * scale_e2))
+                for i in range(3)
+            ],
+            dtype=np.float32,
+        )
+    scale_e1 = _f32(-float(quad.length[3]) * float(quad.sin[0]))
+    scale_e2 = _f32(float(quad.length[3]) * float(quad.cos[0]))
+    node3 = np.asarray(
+        [
+            _f32(_f32(e1[i] * scale_e1) + _f32(e2[i] * scale_e2))
+            for i in range(3)
+        ],
+        dtype=np.float32,
+    )
     return zero.copy(), zero.copy(), node2, node3
 
 
@@ -2060,14 +2146,14 @@ def _quad_afference_geometry(model: Model, quad: Quad) -> _QuadAfferenceGeometry
     assert model.collections is not None
     vertices = np.asarray(
         [_v(model.collections.nodes[key].point) for key in quad.node_keys],
-        dtype=float,
+        dtype=np.float32,
     )
-    normal = _unit(
-        _cross3(vertices[1] - vertices[0], vertices[2] - vertices[0]),
+    normal = _unit_f32(
+        _cross3_f32(vertices[1] - vertices[0], vertices[2] - vertices[0]),
         label=f"Quad {quad.key} midsurface normal",
     )
     return _QuadAfferenceGeometry(
-        centre=_v(quad.g),
+        centre=np.asarray(_v(quad.g), dtype=np.float32),
         vertices=vertices,
         normal=normal,
         warping_nodal=_warping_nodal_vectors(quad),
@@ -2077,11 +2163,18 @@ def _quad_afference_geometry(model: Model, quad: Quad) -> _QuadAfferenceGeometry
 def _warping_vector_from_geometry(
     geometry: _QuadAfferenceGeometry, point: np.ndarray
 ) -> np.ndarray:
-    projected = point - geometry.normal * float(
-        np.dot(point - geometry.vertices[0], geometry.normal)
+    point_f = np.asarray(point, dtype=np.float32)
+    offset = np.asarray(point_f - geometry.vertices[0], dtype=np.float32)
+    distance = _dot3_f32(offset, geometry.normal)
+    projected = np.asarray(
+        [
+            _f32(point_f[i] - _f32(geometry.normal[i] * distance))
+            for i in range(3)
+        ],
+        dtype=np.float32,
     )
-    u, v = _inverse_bilinear(geometry.vertices, projected)
-    return _bilinear(geometry.warping_nodal, u, v)
+    u, v = _inverse_bilinear_f32(geometry.vertices, projected)
+    return _bilinear_f32(geometry.warping_nodal, u, v)
 
 
 def _warping_vector_at_point(quad: Quad, point: np.ndarray, model: Model) -> np.ndarray:
@@ -2113,7 +2206,7 @@ def _point_afference(
     cache_key = (int(quad.key), int(node_key))
     cached = None if _point_cache is None else _point_cache.get(cache_key)
     if cached is None:
-        r = point - geometry.centre
+        r = np.asarray(point, dtype=np.float32) - geometry.centre
         warping = None
     else:
         r, warping = cached
@@ -2124,18 +2217,17 @@ def _point_afference(
         if cached is None or (cached[1] is None and warping is not None):
             _point_cache[cache_key] = (r, warping)
 
-    dx, dy, dz = (
-        float(direction[0]), float(direction[1]), float(direction[2])
-    )
-    rx, ry, rz = float(r[0]), float(r[1]), float(r[2])
-    shear = 0.0 if face > 3 else float(np.dot(warping, direction))
+    direction_f = np.asarray(direction, dtype=np.float32)
+    dx, dy, dz = direction_f
+    rx, ry, rz = np.asarray(r, dtype=np.float32)
+    shear = _f32(0.0) if face > 3 else _dot3_f32(warping, direction_f)
     coeff = (
-        dx,
-        dy,
-        dz,
-        ry * dz - rz * dy,
-        rz * dx - rx * dz,
-        rx * dy - ry * dx,
+        float(dx),
+        float(dy),
+        float(dz),
+        float(_f32(_f32(ry * dz) - _f32(rz * dy))),
+        float(_f32(_f32(rz * dx) - _f32(rx * dz))),
+        float(_f32(_f32(rx * dy) - _f32(ry * dx))),
         shear,
     )
     out: list[AfferenceEntry] = []
@@ -2155,7 +2247,7 @@ def _point_afference(
 def _rotation_afference(quad: Quad, direction: np.ndarray) -> list[AfferenceEntry]:
     out: list[AfferenceEntry] = []
     for local in range(3, 6):
-        value = float(direction[local - 3])
+        value = float(np.float32(direction[local - 3]))
         # InterfacePoligonalOperations.ComputeAff applies the same 1e-4
         # directional cutoff before adding rotational afference terms.
         if abs(value) <= 1.0e-4:
@@ -2248,6 +2340,248 @@ def _bilinear(vertices: Sequence[np.ndarray], u: float, v: float) -> np.ndarray:
         + vertices[2] * (1.0+u)*(1.0+v)/4.0
         + vertices[3] * (1.0-u)*(1.0+v)/4.0
     )
+
+
+def _bilinear_f32(
+    vertices: Sequence[np.ndarray], u: np.float32, v: np.float32
+) -> np.ndarray:
+    """C# ``Operations.GetValueFromIntrinsecSystem`` in single precision."""
+    one = _f32(1.0)
+    four = _f32(4.0)
+    weights = (
+        _f32(_f32(_f32(one-u) * _f32(one-v)) / four),
+        _f32(_f32(_f32(one+u) * _f32(one-v)) / four),
+        _f32(_f32(_f32(one+u) * _f32(one+v)) / four),
+        _f32(_f32(_f32(one-u) * _f32(one+v)) / four),
+    )
+    out = np.zeros(3, dtype=np.float32)
+    for vertex, weight in zip(vertices, weights):
+        vertex_f = np.asarray(vertex, dtype=np.float32)
+        for index in range(3):
+            out[index] = _f32(out[index] + _f32(vertex_f[index] * weight))
+    return out
+
+
+def _inverse_bilinear_f32_bisection_reference(
+    vertices: Sequence[np.ndarray], point: np.ndarray
+) -> tuple[np.float32, np.float32]:
+    """C# ``Operations.GetIntrinsecCoordinates`` compatibility path.
+
+    Despite the method's purpose, the desktop code does not use a Newton
+    inverse.  It projects the surface to a local 2-D system and bisects two
+    polygon strips to a tolerance of 0.001.  Replacing it with an algebraically
+    more accurate inverse changes the shear-DOF afference by up to 4e-3 in the
+    bridge models.
+    """
+    vertices_f = tuple(np.asarray(vertex, dtype=np.float32) for vertex in vertices)
+    point_f = np.asarray(point, dtype=np.float32)
+    e1 = _unit_f32(vertices_f[1]-vertices_f[0], label="intrinsic e1")
+    normal = _unit_f32(
+        _cross3_f32(e1, vertices_f[3]-vertices_f[0]),
+        label="intrinsic normal",
+    )
+    e2 = _cross3_f32(normal, e1)
+
+    def project(value: np.ndarray) -> np.ndarray:
+        delta = np.asarray(value-vertices_f[0], dtype=np.float32)
+        return np.asarray(
+            (_dot3_f32(delta, e1), _dot3_f32(delta, e2)),
+            dtype=np.float32,
+        )
+
+    polygon = tuple(project(vertex) for vertex in vertices_f)
+    target = project(point_f)
+    tolerance_node = 1.0
+
+    def align(value: np.ndarray, start: np.ndarray, end: np.ndarray) -> int:
+        x, y = float(value[0]), float(value[1])
+        x1, y1 = float(start[0]), float(start[1])
+        x2, y2 = float(end[0]), float(end[1])
+        if abs(x-x1) < tolerance_node and abs(y-y1) < tolerance_node:
+            return 2
+        if abs(x-x2) < tolerance_node and abs(y-y2) < tolerance_node:
+            return 3
+        dx, dy = x2-x1, y2-y1
+        px, py = x-x1, y-y1
+        length = math.sqrt(dx*dx+dy*dy)
+        point_length = math.sqrt(px*px+py*py)
+        if length == 0.0 or point_length == 0.0:
+            return 0
+        cosine = max(-1.0, min(1.0, (dx*px+dy*py)/(length*point_length)))
+        distance = math.sqrt(max(0.0, 1.0-cosine*cosine))*point_length
+        if not (-tolerance_node < distance < tolerance_node):
+            return 0
+        return 1 if cosine > 0.0 and point_length <= length else -1
+
+    def inside(poly: Sequence[np.ndarray]) -> bool:
+        previous = len(poly)-1
+        flag = False
+        for index, vertex in enumerate(poly):
+            following = poly[(index+1) % len(poly)]
+            if align(target, vertex, following) > 0:
+                return True
+            py = target[1]
+            if (
+                ((vertex[1] <= py < poly[previous][1])
+                 or (poly[previous][1] <= py < vertex[1]))
+                and target[0] < _f32(
+                    _f32(poly[previous][0]-vertex[0])
+                    * _f32(py-vertex[1])
+                    / _f32(poly[previous][1]-vertex[1])
+                    + vertex[0]
+                )
+            ):
+                flag = not flag
+            previous = index
+        return flag
+
+    if align(target, polygon[0], polygon[3]) > 0:
+        u = _f32(-1.0)
+    elif align(target, polygon[1], polygon[2]) > 0:
+        u = _f32(1.0)
+    else:
+        u = _f32(0.0)
+        lower = _f32(-1.0)
+        upper = _f32(1.0)
+        x5 = _f32((polygon[2][0]+polygon[3][0])/np.float32(2.0))
+        y5 = _f32((polygon[2][1]+polygon[3][1])/np.float32(2.0))
+        x6 = _f32((polygon[0][0]+polygon[1][0])/np.float32(2.0))
+        y6 = _f32((polygon[0][1]+polygon[1][1])/np.float32(2.0))
+        if inside(polygon):
+            for _ in range(1000):
+                if float(upper-lower) < 0.001:
+                    break
+                strip = (polygon[0], np.asarray((x6,y6),dtype=np.float32),
+                         np.asarray((x5,y5),dtype=np.float32), polygon[3])
+                if inside(strip):
+                    upper = u
+                    u = _f32((lower+u)/np.float32(2.0))
+                else:
+                    lower = u
+                    u = _f32((upper+u)/np.float32(2.0))
+                x6 = _f32(
+                    _f32(polygon[0][0]*_f32(1.0-u))/np.float32(2.0)
+                    + _f32(polygon[1][0]*_f32(1.0+u))/np.float32(2.0)
+                )
+                y6 = _f32(
+                    _f32(polygon[0][1]*_f32(1.0-u))/np.float32(2.0)
+                    + _f32(polygon[1][1]*_f32(1.0+u))/np.float32(2.0)
+                )
+                x5 = _f32(
+                    _f32(polygon[2][0]*_f32(1.0+u))/np.float32(2.0)
+                    + _f32(polygon[3][0]*_f32(1.0-u))/np.float32(2.0)
+                )
+                y5 = _f32(
+                    _f32(polygon[2][1]*_f32(1.0+u))/np.float32(2.0)
+                    + _f32(polygon[3][1]*_f32(1.0-u))/np.float32(2.0)
+                )
+
+    if align(target, polygon[0], polygon[1]) > 0:
+        v = _f32(-1.0)
+    elif align(target, polygon[3], polygon[2]) > 0:
+        v = _f32(1.0)
+    else:
+        v = _f32(0.0)
+        lower = _f32(-1.0)
+        upper = _f32(1.0)
+        x5 = _f32((polygon[2][0]+polygon[1][0])/np.float32(2.0))
+        y5 = _f32((polygon[2][1]+polygon[1][1])/np.float32(2.0))
+        x6 = _f32((polygon[0][0]+polygon[3][0])/np.float32(2.0))
+        y6 = _f32((polygon[0][1]+polygon[3][1])/np.float32(2.0))
+        if inside(polygon):
+            for _ in range(1000):
+                if float(upper-lower) < 0.001:
+                    break
+                strip = (polygon[0], polygon[1],
+                         np.asarray((x5,y5),dtype=np.float32),
+                         np.asarray((x6,y6),dtype=np.float32))
+                if inside(strip):
+                    upper = v
+                    v = _f32((lower+v)/np.float32(2.0))
+                else:
+                    lower = v
+                    v = _f32((upper+v)/np.float32(2.0))
+                x6 = _f32(
+                    _f32(polygon[0][0]*_f32(1.0-v))/np.float32(2.0)
+                    + _f32(polygon[3][0]*_f32(1.0+v))/np.float32(2.0)
+                )
+                y6 = _f32(
+                    _f32(polygon[0][1]*_f32(1.0-v))/np.float32(2.0)
+                    + _f32(polygon[3][1]*_f32(1.0+v))/np.float32(2.0)
+                )
+                x5 = _f32(
+                    _f32(polygon[1][0]*_f32(1.0-v))/np.float32(2.0)
+                    + _f32(polygon[2][0]*_f32(1.0+v))/np.float32(2.0)
+                )
+                y5 = _f32(
+                    _f32(polygon[1][1]*_f32(1.0-v))/np.float32(2.0)
+                    + _f32(polygon[2][1]*_f32(1.0+v))/np.float32(2.0)
+                )
+    return u, v
+
+
+def _inverse_bilinear_f32(
+    vertices: Sequence[np.ndarray], point: np.ndarray
+) -> tuple[np.float32, np.float32]:
+    """Stable float32 inverse used by the afference compatibility path.
+
+    The desktop bisection is retained above as a literal reference, but its
+    one-unit geometric edge tolerance depends on mutable application globals.
+    On the supplied serialized model the converged intrinsic coordinates are
+    reproduced more reliably by this float32 Newton solve.
+    """
+    vertices_f = tuple(np.asarray(vertex, dtype=np.float32) for vertex in vertices)
+    point_f = np.asarray(point, dtype=np.float32)
+    normal = _cross3_f32(vertices_f[1]-vertices_f[0], vertices_f[3]-vertices_f[0])
+    drop = int(np.argmax(np.abs(normal)))
+    keep0, keep1 = (1, 2) if drop == 0 else ((0, 2) if drop == 1 else (0, 1))
+    target0, target1 = point_f[keep0], point_f[keep1]
+    u = _f32(0.0)
+    v = _f32(0.0)
+    four = _f32(4.0)
+    one = _f32(1.0)
+    for _ in range(20):
+        mapped = _bilinear_f32(vertices_f, u, v)
+        du = np.asarray([
+            _f32(
+                _f32(
+                    _f32(-vertices_f[0][i] * _f32(one-v))
+                    + _f32(vertices_f[1][i] * _f32(one-v))
+                )
+                + _f32(
+                    _f32(vertices_f[2][i] * _f32(one+v))
+                    - _f32(vertices_f[3][i] * _f32(one+v))
+                )
+            ) / four
+            for i in range(3)
+        ], dtype=np.float32)
+        dv = np.asarray([
+            _f32(
+                _f32(
+                    _f32(-vertices_f[0][i] * _f32(one-u))
+                    - _f32(vertices_f[1][i] * _f32(one+u))
+                )
+                + _f32(
+                    _f32(vertices_f[2][i] * _f32(one+u))
+                    + _f32(vertices_f[3][i] * _f32(one-u))
+                )
+            ) / four
+            for i in range(3)
+        ], dtype=np.float32)
+        j00, j01 = du[keep0], dv[keep0]
+        j10, j11 = du[keep1], dv[keep1]
+        r0 = _f32(target0 - mapped[keep0])
+        r1 = _f32(target1 - mapped[keep1])
+        det = _f32(_f32(j00*j11) - _f32(j01*j10))
+        if abs(float(det)) <= 1.0e-20:
+            break
+        step_u = _f32(_f32(_f32(r0*j11) - _f32(j01*r1)) / det)
+        step_v = _f32(_f32(_f32(j00*r1) - _f32(r0*j10)) / det)
+        u = _f32(u + step_u)
+        v = _f32(v + step_v)
+        if max(abs(float(step_u)), abs(float(step_v))) <= 1.0e-6:
+            break
+    return u, v
 
 
 def _inverse_bilinear(vertices: Sequence[np.ndarray], point: np.ndarray) -> tuple[float, float]:
