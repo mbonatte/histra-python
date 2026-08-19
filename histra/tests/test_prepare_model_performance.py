@@ -95,7 +95,7 @@ def test_direct_combined_hysteretic_matches_legacy_path(
     for name in scalar_fields:
         assert getattr(direct, name) == getattr(legacy, name)
     for name in ("fy", "kt", "ur", "alfar", "alfau", "umax", "uy_corr"):
-        np.testing.assert_allclose(getattr(direct, name), getattr(legacy, name), rtol=0.0, atol=0.0)
+        np.testing.assert_array_equal(getattr(direct, name), getattr(legacy, name))
     assert direct.tensile_curve_type == legacy.tensile_curve_type
     assert direct.compressive_curve_type == legacy.compressive_curve_type
     assert direct.phase == legacy.phase

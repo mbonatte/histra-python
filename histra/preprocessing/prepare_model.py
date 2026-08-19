@@ -829,19 +829,11 @@ def _configure_combined_hysteretic(
         min(out.fy[1] / out.k if out.k else 0.0, 0.0),
     ]
     _set_ultimate_displacement(out, law1, law1)
-    ur1 = out.ur[:]
+    ur1_t, ur1_c = out.ur
     _set_ultimate_displacement(out, law2, law2)
-    ur2 = out.ur[:]
-    out.ur[0] = (
-        min(value for value in (ur1[0], ur2[0]) if value != 0.0)
-        if ur1[0] and ur2[0]
-        else max(ur1[0], ur2[0])
-    )
-    out.ur[1] = (
-        max(value for value in (ur1[1], ur2[1]) if value != 0.0)
-        if ur1[1] and ur2[1]
-        else min(ur1[1], ur2[1])
-    )
+    ur2_t, ur2_c = out.ur
+    out.ur[0] = min(ur1_t, ur2_t) if ur1_t and ur2_t else max(ur1_t, ur2_t)
+    out.ur[1] = max(ur1_c, ur2_c) if ur1_c and ur2_c else min(ur1_c, ur2_c)
     out.initialize()
     out.revert_to_start()
     out.revert_to_last_commit()
