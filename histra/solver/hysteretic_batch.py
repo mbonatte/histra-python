@@ -2096,8 +2096,7 @@ class HystereticBatchRuntime:
         self.targets = np.empty(n, dtype=np.float64)
         self.enabled = np.empty(n, dtype=np.bool_)
         self._transverse_k = np.empty(n, dtype=np.float64)
-        for i, spring in enumerate(springs):
-            self._read_transverse_object(i, spring)
+        self._read_transverse_objects_bulk(springs)
         self._refresh_simple_hysteretic_flag()
         self._record_index = np.empty(n, dtype=np.int32)
         self._di = np.empty(n, dtype=np.float64)
@@ -2472,6 +2471,194 @@ class HystereticBatchRuntime:
             return "contact_area_check"
         return ""
 
+    def _rebuild_interface_coulomb_storage(self) -> None:
+        """Rebuild only interface-Coulomb dense rows after topology changes.
+
+        Foundation material replacement can split an aliased fixed-restraint
+        out-of-plane spring into two independent soil springs (or the reverse).
+        That changes only the tiny interface-Coulomb identity/index topology;
+        rebuilding the complete runtime also re-imported ~550k transverse
+        hysteretic objects and all Quad metadata.
+
+        Recreate the same Coulomb coverage/order used by ``__init__`` while
+        retaining transverse, geometry and Quad dense arrays unchanged.
+        """
+        from histra.springs.coulomb03 import SpringCoulomb03
+
+        for spring in self.coulomb_springs:
+            if hasattr(spring, "_histra_batch_managed"):
+                delattr(spring, "_histra_batch_managed")
+
+        rejection_reasons: Counter[str] = Counter()
+        springs: list[SpringCoulomb03] = []
+        index_by_id: dict[int, int] = {}
+        slid_index = np.full(len(self.records), -1, dtype=np.int32)
+        oop0_index = np.full(len(self.records), -1, dtype=np.int32)
+        oop1_index = np.full(len(self.records), -1, dtype=np.int32)
+
+        for record_index, record in enumerate(self.records):
+            interface = record.interface
+            candidates: list[tuple[str, Any]] = []
+            if interface.slid:
+                candidates.append(("slid", interface.slid[0]))
+            if len(interface.slid_out_plan) >= 2:
+                candidates.extend(
+                    (
+                        ("oop0", interface.slid_out_plan[0]),
+                        ("oop1", interface.slid_out_plan[1]),
+                    )
+                )
+
+            for kind, spring in candidates:
+                rejection_reason = self._coulomb_rejection_reason(spring)
+                if rejection_reason:
+                    rejection_reasons[f"{kind}:{rejection_reason}"] += 1
+                    continue
+
+                spring_id = id(spring)
+                dense_index = index_by_id.get(spring_id, -1)
+                if dense_index < 0:
+                    dense_index = len(springs)
+                    index_by_id[spring_id] = dense_index
+                    springs.append(spring)
+                    spring._histra_batch_managed = True
+
+                if kind == "slid":
+                    slid_index[record_index] = dense_index
+                elif kind == "oop0":
+                    oop0_index[record_index] = dense_index
+                else:
+                    oop1_index[record_index] = dense_index
+
+        count = len(springs)
+        params = np.empty((count, 7), dtype=np.float64)
+        state = np.empty((count, COULOMB_STATE_SIZE), dtype=np.float64)
+        targets = np.empty(count, dtype=np.float64)
+        dns = np.zeros(count, dtype=np.float64)
+        enabled = np.empty(count, dtype=np.bool_)
+
+        # Publish storage before importing rows because _read_coulomb_object()
+        # writes through self.coulomb_state.
+        self.coulomb_springs = springs
+        self.coulomb_params = params
+        self.coulomb_state = state
+        self.coulomb_targets = targets
+        self.coulomb_dns = dns
+        self.coulomb_enabled = enabled
+        self._slid_index = slid_index
+        self._oop0_index = oop0_index
+        self._oop1_index = oop1_index
+        self.interface_coulomb_rejection_reasons = rejection_reasons
+
+        for index, spring in enumerate(springs):
+            params[index, :] = (
+                float(spring.k),
+                float(spring.h),
+                float(spring.cohesion),
+                float(spring.mu),
+                float(spring.area),
+                float(spring.e1p),
+                float(spring.e2p),
+            )
+            self._read_coulomb_object(index, spring)
+            targets[index] = float(spring.u)
+            enabled[index] = bool(spring.is_on)
+
+        # Preserve the constructor's managed-spring ordering exactly:
+        # transverse -> interface Coulomb -> Quad diagonal.
+        self.managed_springs = [
+            *self.springs,
+            *self.coulomb_springs,
+            *(quad.spring for quad in self.quad_records),
+        ]
+
+    def _read_transverse_objects_bulk(
+        self, springs: list[SpringHysteretic], *, chunk_size: int = 4096
+    ) -> None:
+        """Import the initial transverse object state in NumPy-sized chunks.
+
+        The previous constructor called ``_read_transverse_object`` once for
+        every fibre.  With ~550k fibres that means ~550k Python→NumPy row
+        assignments for each dense array.  Material updates usually touch only
+        a few interfaces and should retain the scalar importer; the initial
+        runtime build is large enough to amortize bulk conversion.
+
+        Chunking bounds temporary Python tuples/NumPy arrays to a few MiB and
+        preserves spring order and float64 conversion semantics exactly.
+        """
+        count = len(springs)
+        if count == 0:
+            return
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+
+        if self._compact_simple_params:
+            getter = _SIMPLE_PARAM_GETTER
+            fixed_parameter_count = len(SIMPLE_PARAM_NAMES)
+            curve_column = SIMPLE_TENSILE_CURVE_TYPE_PARAM
+        else:
+            getter = _PARAM_GETTER
+            fixed_parameter_count = len(_PARAM_NAMES)
+            curve_column = TENSILE_CURVE_TYPE_PARAM
+
+        for start in range(0, count, chunk_size):
+            stop = min(start + chunk_size, count)
+            group = springs[start:stop]
+            group_count = stop - start
+
+            self._params[start:stop, :fixed_parameter_count] = np.asarray(
+                [getter(spring) for spring in group], dtype=np.float64
+            )
+            self._params[start:stop, curve_column] = np.fromiter(
+                (
+                    TENSILE_EXPONENTIAL
+                    if spring.tensile_curve_type == "Exponential"
+                    else TENSILE_LINEAR
+                    for spring in group
+                ),
+                dtype=np.float64,
+                count=group_count,
+            )
+            self._transverse_k[start:stop] = np.fromiter(
+                (spring.k for spring in group),
+                dtype=np.float64,
+                count=group_count,
+            )
+            self.committed[start:stop, :] = np.asarray(
+                [
+                    (
+                        spring.umax[0], spring.umax[1], spring._crot_pu,
+                        spring._crot_nu, spring.cenergy_d,
+                        spring._cload_indicator, spring._cstress,
+                        spring._cstrain, int(spring.phase),
+                    )
+                    for spring in group
+                ],
+                dtype=np.float64,
+            )
+            self.trial[start:stop, :] = np.asarray(
+                [
+                    (
+                        spring._trot_max, spring._trot_min, spring._trot_pu,
+                        spring._trot_nu, spring._tenergy_d,
+                        spring._tload_indicator, spring._tstress,
+                        spring._tstrain, int(spring.t_phase), spring.k_tang,
+                    )
+                    for spring in group
+                ],
+                dtype=np.float64,
+            )
+            self.targets[start:stop] = np.fromiter(
+                (spring._tstrain for spring in group),
+                dtype=np.float64,
+                count=group_count,
+            )
+            self.enabled[start:stop] = np.fromiter(
+                (spring.is_on for spring in group),
+                dtype=np.bool_,
+                count=group_count,
+            )
+
     def _read_transverse_object(self, index: int, spring: SpringHysteretic) -> None:
         # ``operator.attrgetter`` performs the fixed 32-attribute traversal in
         # C and returns the values in exactly ``_PARAM_NAMES`` order. NumPy
@@ -2544,11 +2731,13 @@ class HystereticBatchRuntime:
         """Refresh changed interface constitutive rows without rebuilding the runtime.
 
         Material-only mutations preserve geometry, DOFs and afference topology.
-        This method therefore accepts an update only when every replacement
-        spring group has exactly the layout already represented by the dense
-        runtime.  Any structural or constitutive incompatibility returns
-        ``False`` *before* runtime arrays are modified, allowing callers to
-        discard this runtime and use the existing full rebuild path.
+        Transverse rows are refreshed in place; compact parameter storage is
+        promoted to the full constitutive layout when required. Compatible
+        interface-Coulomb identity/index changes (notably fixed-restraint to
+        soil out-of-plane alias splitting) rebuild only that small dense
+        subsystem. Any unsupported constitutive or structural change returns
+        ``False`` before runtime arrays are modified, preserving the existing
+        conservative full-runtime fallback.
 
         The spring objects must already contain the authoritative committed and
         trial state.  ``solve_static_nonlinear`` guarantees that condition at
@@ -2564,6 +2753,7 @@ class HystereticBatchRuntime:
 
         validated: list[tuple[int, _InterfaceSlice, tuple[Any, ...], tuple[tuple[int, Any], ...]]] = []
         requires_full_parameter_storage = False
+        requires_coulomb_rebuild = False
         for interface in changed:
             record_index = self._record_by_id.get(id(interface))
             if record_index is None:
@@ -2598,10 +2788,27 @@ class HystereticBatchRuntime:
                 and interface.slid_out_plan[0] is interface.slid_out_plan[1]
             )
             # A material mutation can change object-identity topology (fixed
-            # restraint -> Soil is the relevant case).  Rebuild the dense
-            # runtime instead of pretending two old rows can become one.
+            # restraint -> Soil is the relevant case).  Only the interface
+            # Coulomb mapping needs rebuilding; the ~550k transverse rows and
+            # all Quad/geometry arrays remain valid.
             if old_oop_alias != new_oop_alias:
-                return False
+                # Identity topology can change without invalidating any of the
+                # large transverse/Quad arrays, but only if every replacement
+                # spring still belongs to the compiled interface-Coulomb law.
+                # Otherwise this interface must return to the conservative
+                # scalar/full-runtime fallback.
+                current_coulomb = []
+                if interface.slid:
+                    current_coulomb.append(interface.slid[0])
+                current_coulomb.extend(interface.slid_out_plan[:2])
+                if any(
+                    self._coulomb_rejection_reason(spring)
+                    for spring in current_coulomb
+                ):
+                    return False
+                requires_coulomb_rebuild = True
+                validated.append((record_index, record, group, ()))
+                continue
             layouts = (
                 (int(self._slid_index[record_index]), interface.slid[0] if interface.slid else None),
                 (old_oop0, interface.slid_out_plan[0] if len(interface.slid_out_plan) >= 1 else None),
@@ -2609,13 +2816,19 @@ class HystereticBatchRuntime:
             )
             for dense_index, spring in layouts:
                 if dense_index < 0:
-                    # A spring that was previously outside the compiled layout
-                    # could become compatible after mutation.  Rebuilding is
-                    # safer than silently changing runtime coverage.
                     if spring is not None:
-                        return False
+                        # Runtime coverage may grow after a material-only
+                        # mutation, but only for laws the compiled interface
+                        # Coulomb path already supports. Unsupported laws must
+                        # keep the conservative full-runtime fallback.
+                        if self._coulomb_rejection_reason(spring):
+                            return False
+                        requires_coulomb_rebuild = True
                     continue
-                if spring is None or self._coulomb_rejection_reason(spring):
+                if spring is None:
+                    requires_coulomb_rebuild = True
+                    continue
+                if self._coulomb_rejection_reason(spring):
                     return False
                 candidates.append((dense_index, spring))
             validated.append((record_index, record, group, tuple(candidates)))
@@ -2645,23 +2858,24 @@ class HystereticBatchRuntime:
                 self._read_transverse_object(dense_index, spring)
                 self._transverse_k[dense_index] = float(spring.k)
 
-            coulomb_offset = len(self.springs)
-            for dense_index, spring in candidates:
-                predecessor = self.coulomb_springs[dense_index]
-                if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
-                    delattr(predecessor, "_histra_batch_managed")
-                self.coulomb_springs[dense_index] = spring
-                self.managed_springs[coulomb_offset + dense_index] = spring
-                spring._histra_batch_managed = True
-                self.coulomb_params[dense_index, :] = (
-                    float(spring.k), float(spring.h), float(spring.cohesion),
-                    float(spring.mu), float(spring.area), float(spring.e1p),
-                    float(spring.e2p),
-                )
-                self._read_coulomb_object(dense_index, spring)
-                self.coulomb_targets[dense_index] = float(spring.u)
-                self.coulomb_dns[dense_index] = 0.0
-                self.coulomb_enabled[dense_index] = bool(spring.is_on)
+            if not requires_coulomb_rebuild:
+                coulomb_offset = len(self.springs)
+                for dense_index, spring in candidates:
+                    predecessor = self.coulomb_springs[dense_index]
+                    if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
+                        delattr(predecessor, "_histra_batch_managed")
+                    self.coulomb_springs[dense_index] = spring
+                    self.managed_springs[coulomb_offset + dense_index] = spring
+                    spring._histra_batch_managed = True
+                    self.coulomb_params[dense_index, :] = (
+                        float(spring.k), float(spring.h), float(spring.cohesion),
+                        float(spring.mu), float(spring.area), float(spring.e1p),
+                        float(spring.e2p),
+                    )
+                    self._read_coulomb_object(dense_index, spring)
+                    self.coulomb_targets[dense_index] = float(spring.u)
+                    self.coulomb_dns[dense_index] = 0.0
+                    self.coulomb_enabled[dense_index] = bool(spring.is_on)
 
             # The interface object itself is retained by material mutation, so
             # the existing dense slice and record mapping remain valid.
@@ -2669,6 +2883,9 @@ class HystereticBatchRuntime:
             interface._perf_hysteretic_batch = self
             interface._perf_hysteretic_slice = (record.start, record.stop)
             self._local_u[record_index, :] = interface.status.u[:12]
+
+        if requires_coulomb_rebuild:
+            self._rebuild_interface_coulomb_storage()
 
         self._refresh_simple_hysteretic_flag()
         self._pending_values.fill(0.0)

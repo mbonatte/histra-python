@@ -168,13 +168,39 @@ def test_dense_runtime_maps_aliased_out_of_plane_slots_to_one_state_row() -> Non
 
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
-def test_dense_material_update_rejects_identity_topology_change() -> None:
+def test_dense_material_update_remaps_compatible_identity_topology_change() -> None:
     model = _model()
     runtime = batch.HystereticBatchRuntime(model)
     interface = model.collections.interfaces[1]
+    record_index = runtime._record_by_id[id(interface)]
+
+    # Keep references to the expensive transverse storage. A Coulomb-only
+    # identity remap must not discard/rebuild these arrays.
+    transverse_storage = {
+        name: id(getattr(runtime, name))
+        for name in (
+            "_params",
+            "committed",
+            "trial",
+            "targets",
+            "enabled",
+            "_transverse_k",
+        )
+    }
+
     shared = interface.slid_out_plan[0]
     interface.slid_out_plan = [shared, shared]
 
-    # The existing runtime was compiled with two independent OOP state rows;
-    # matching C# after a fixed->Soil mutation requires a full runtime rebuild.
-    assert runtime.try_update_material_interfaces([interface]) is False
+    # Patch 3 deliberately supports compatible OOP identity-topology changes
+    # by rebuilding only the small interface-Coulomb storage. A fresh runtime
+    # built from this mutated model would likewise contain one shared OOP row.
+    assert runtime.try_update_material_interfaces([interface]) is True
+
+    oop0 = int(runtime._oop0_index[record_index])
+    oop1 = int(runtime._oop1_index[record_index])
+    assert oop0 >= 0
+    assert oop0 == oop1
+    assert runtime.coulomb_springs[oop0] is shared
+
+    for name, object_id in transverse_storage.items():
+        assert id(getattr(runtime, name)) == object_id

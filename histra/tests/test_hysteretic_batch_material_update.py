@@ -243,6 +243,25 @@ def test_incremental_material_update_rejects_incompatible_coulomb_layout_without
 
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_incremental_material_update_rejects_unsupported_oop_alias_split() -> None:
+    model = _model()
+    interface = model.collections.interfaces[1]
+    interface.slid_out_plan[1] = interface.slid_out_plan[0]
+    runtime = batch.HystereticBatchRuntime(model)
+    state_before = runtime.coulomb_state.copy()
+    springs_before = tuple(runtime.coulomb_springs)
+
+    first = deepcopy(interface.slid_out_plan[0])
+    second = deepcopy(interface.slid_out_plan[0])
+    second.hysteretic_type = "Takeda"
+    interface.slid_out_plan = [first, second]
+
+    assert runtime.try_update_material_interfaces([interface]) is False
+    np.testing.assert_array_equal(runtime.coulomb_state, state_before)
+    assert tuple(runtime.coulomb_springs) == springs_before
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
 def test_incremental_material_update_rejects_unsynchronized_object_state() -> None:
     model = _model()
     runtime = batch.HystereticBatchRuntime(model)
@@ -458,3 +477,83 @@ def test_compact_simple_parameter_layout_is_bit_exact_with_full_layout() -> None
         # Commit exactly the dense fields copied by HystereticBatchRuntime.
         committed_full[0, :] = trial_full[0, :9]
         committed_compact[0, :] = trial_compact[0, :9]
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_incremental_material_update_rebuilds_only_coulomb_storage_when_oop_alias_splits() -> None:
+    incremental_model = _model()
+    rebuilt_model = deepcopy(incremental_model)
+
+    # Fixed/restraint-style interfaces can reference the same Coulomb object in
+    # both out-of-plane positions. Soil replacement creates two independent
+    # springs. This identity-topology change must not force a 550k-row
+    # transverse runtime rebuild.
+    for model in (incremental_model, rebuilt_model):
+        interface = model.collections.interfaces[1]
+        interface.slid_out_plan[1] = interface.slid_out_plan[0]
+
+    runtime = batch.HystereticBatchRuntime(incremental_model)
+    transverse_ids = {
+        name: id(getattr(runtime, name))
+        for name in (
+            "_params", "committed", "trial", "targets", "enabled",
+            "_transverse_k", "_di", "_dj", "_ecc", "_record_index",
+            "_starts", "_stops", "_aff_offsets", "_aff_gdls",
+            "_aff_coefficients", "_local_u", "_local_full_forces",
+        )
+    }
+    transverse_before = {
+        name: np.asarray(getattr(runtime, name)).copy()
+        for name in ("_params", "committed", "trial", "targets", "enabled", "_transverse_k")
+    }
+
+    _replace_definition(incremental_model.collections.interfaces[1], 1.7)
+    _replace_definition(rebuilt_model.collections.interfaces[1], 1.7)
+    assert (
+        incremental_model.collections.interfaces[1].slid_out_plan[0]
+        is not incremental_model.collections.interfaces[1].slid_out_plan[1]
+    )
+
+    assert runtime.try_update_material_interfaces(
+        [incremental_model.collections.interfaces[1]]
+    ) is True
+    rebuilt = batch.HystereticBatchRuntime(rebuilt_model)
+
+    # The expensive transverse/geometry storage survives the alias split.
+    for name, object_id in transverse_ids.items():
+        assert id(getattr(runtime, name)) == object_id
+
+    # The changed interface's transverse rows are imported in place, while the
+    # unaffected rows and all runtime topology stay exact.
+    for name in (
+        "_params", "committed", "trial", "targets", "enabled", "_transverse_k",
+        "coulomb_params", "coulomb_state", "coulomb_targets", "coulomb_dns",
+        "coulomb_enabled", "_slid_index", "_oop0_index", "_oop1_index",
+    ):
+        np.testing.assert_array_equal(getattr(runtime, name), getattr(rebuilt, name))
+
+    np.testing.assert_array_equal(runtime._params[4:8], transverse_before["_params"][4:8])
+    np.testing.assert_array_equal(runtime.committed[4:8], transverse_before["committed"][4:8])
+    np.testing.assert_array_equal(runtime.trial[4:8], transverse_before["trial"][4:8])
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_bulk_initial_transverse_import_matches_scalar_rows_exactly() -> None:
+    model = _model()
+    runtime = batch.HystereticBatchRuntime(model)
+    expected = {
+        name: np.asarray(getattr(runtime, name)).copy()
+        for name in (
+            "_params", "committed", "trial", "targets", "enabled", "_transverse_k"
+        )
+    }
+
+    runtime._params.fill(np.nan)
+    runtime.committed.fill(np.nan)
+    runtime.trial.fill(np.nan)
+    runtime.targets.fill(np.nan)
+    runtime.enabled.fill(False)
+    runtime._transverse_k.fill(np.nan)
+    for index, spring in enumerate(runtime.springs):
+        runtime._read_transverse_object(index, spring)
+
+    for name, values in expected.items():
+        np.testing.assert_array_equal(getattr(runtime, name), values)
