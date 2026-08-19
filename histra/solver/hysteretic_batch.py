@@ -2545,6 +2545,7 @@ class HystereticBatchRuntime:
             return False
 
         validated: list[tuple[int, _InterfaceSlice, tuple[Any, ...], tuple[tuple[int, Any], ...]]] = []
+        requires_full_parameter_storage = False
         for interface in changed:
             record_index = self._record_by_id.get(id(interface))
             if record_index is None:
@@ -2558,11 +2559,14 @@ class HystereticBatchRuntime:
             if self._compact_simple_params and any(
                 not _uses_simple_hysteretic_parameters(spring) for spring in group
             ):
-                # The compact parameter matrix intentionally omits pinching,
-                # damage and beta columns.  A replacement requiring those
-                # values must trigger the established full-runtime rebuild
-                # rather than being imported into an incompatible layout.
-                return False
+                # The compact matrix omits pinching/damage/beta columns, but a
+                # material-only mutation does not change runtime topology.  Do
+                # not discard and rebuild every dense array merely because the
+                # constitutive row now needs the general layout.  Finish
+                # validating *all* changed interfaces first, then promote the
+                # existing transverse parameter storage once and update only
+                # the changed rows below.
+                requires_full_parameter_storage = True
 
             candidates: list[tuple[int, Any]] = []
             if len(interface.slid) > 1 or len(interface.slid_out_plan) > 2:
@@ -2599,8 +2603,17 @@ class HystereticBatchRuntime:
             validated.append((record_index, record, group, tuple(candidates)))
 
         # Validation above is intentionally complete before touching any dense
-        # state.  The remaining operations are fixed-shape assignments from
-        # production spring types and cannot change runtime topology.
+        # state.  A compact runtime can be promoted in place because the
+        # mutation is constitutive-only: geometry, dense indices, afference and
+        # every state array keep the same topology.  Promotion reconstructs the
+        # historical 33-column values exactly from the current synchronized
+        # spring objects, avoiding a full 500k+ spring runtime rebuild after
+        # scour-material changes.
+        if requires_full_parameter_storage:
+            self._promote_transverse_parameter_storage()
+
+        # The remaining operations are fixed-shape assignments from production
+        # spring types and cannot change runtime topology.
         for record_index, record, group, candidates in validated:
             start = record.start
             for offset, spring in enumerate(group):

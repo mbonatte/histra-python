@@ -255,21 +255,79 @@ def test_incremental_material_update_rejects_unsynchronized_object_state() -> No
 
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
-def test_compact_parameter_runtime_rejects_non_simple_material_update_without_mutation() -> None:
+def test_compact_parameter_runtime_promotes_once_for_non_simple_material_update() -> None:
     model = _model()
+    rebuilt_model = deepcopy(model)
     runtime = batch.HystereticBatchRuntime(model)
     assert runtime._compact_simple_params is True
-    params_before = runtime.params.copy()
-    springs_before = tuple(runtime.springs)
+    assert runtime._params.shape[1] == batch.SIMPLE_TRANSVERSE_PARAM_SIZE
+
+    persistent_ids = {
+        name: id(getattr(runtime, name))
+        for name in (
+            "committed", "trial", "targets", "enabled", "_transverse_k",
+            "coulomb_params", "coulomb_state", "_di", "_dj", "_ecc",
+            "_aff_offsets", "_aff_gdls", "_aff_coefficients", "_local_u",
+            "_local_full_forces",
+        )
+    }
+    compact_params_id = id(runtime._params)
 
     interface = model.collections.interfaces[1]
+    rebuilt_interface = rebuilt_model.collections.interfaces[1]
     replacement = [deepcopy(spring) for spring in interface.trasv_1]
+    rebuilt_replacement = [deepcopy(spring) for spring in rebuilt_interface.trasv_1]
     replacement[0].pinch_xp = 0.2
+    rebuilt_replacement[0].pinch_xp = 0.2
     interface.trasv_1 = replacement
+    rebuilt_interface.trasv_1 = rebuilt_replacement
 
-    assert runtime.try_update_material_interfaces([interface]) is False
-    np.testing.assert_array_equal(runtime.params, params_before)
-    assert tuple(runtime.springs) == springs_before
+    assert runtime.try_update_material_interfaces([interface]) is True
+    assert runtime._compact_simple_params is False
+    assert runtime._params.shape[1] == batch.TRANSVERSE_PARAM_SIZE
+    assert id(runtime._params) != compact_params_id
+
+    rebuilt = batch.HystereticBatchRuntime(rebuilt_model)
+    assert rebuilt._compact_simple_params is False
+    for name in (
+        "params", "committed", "trial", "targets", "enabled",
+        "_transverse_k", "coulomb_params", "coulomb_state",
+        "coulomb_targets", "coulomb_dns", "coulomb_enabled",
+        "_di", "_dj", "_ecc", "_record_index", "_starts", "_stops",
+        "_dist", "_dist_for", "_aff_offsets", "_aff_gdls",
+        "_aff_coefficients", "_local_u", "_local_full_forces",
+        "_global_resisting_force", "_max_u_cache",
+    ):
+        np.testing.assert_array_equal(getattr(runtime, name), getattr(rebuilt, name))
+
+    for name, object_id in persistent_ids.items():
+        assert id(getattr(runtime, name)) == object_id
+
+    # A later non-simple material mutation reuses the already-promoted 33-column
+    # matrix instead of allocating/rebuilding another full dense runtime.
+    full_params_id = id(runtime._params)
+    second = model.collections.interfaces[2]
+    second_rebuilt = rebuilt_model.collections.interfaces[2]
+    second_replacement = [deepcopy(spring) for spring in second.trasv_1]
+    second_rebuilt_replacement = [deepcopy(spring) for spring in second_rebuilt.trasv_1]
+    second_replacement[1].damfc1p = 0.15
+    second_rebuilt_replacement[1].damfc1p = 0.15
+    second.trasv_1 = second_replacement
+    second_rebuilt.trasv_1 = second_rebuilt_replacement
+
+    assert runtime.try_update_material_interfaces([second]) is True
+    assert id(runtime._params) == full_params_id
+
+    rebuilt_again = batch.HystereticBatchRuntime(rebuilt_model)
+    for name in (
+        "params", "committed", "trial", "targets", "enabled",
+        "_transverse_k", "coulomb_params", "coulomb_state",
+        "coulomb_targets", "coulomb_dns", "coulomb_enabled",
+        "_local_u", "_local_full_forces", "_global_resisting_force",
+    ):
+        np.testing.assert_array_equal(
+            getattr(runtime, name), getattr(rebuilt_again, name)
+        )
 
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
