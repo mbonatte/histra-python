@@ -1120,32 +1120,37 @@ def _configure_combined_hysteretic_batch(
 
     springs: list[SpringHysteretic] = []
     append = springs.append
-    new_spring = _new_hysteretic_spring
     initialize = SpringHysteretic.initialize
+    spring_type = "HiStrA.Objects.SpringHysteretic"
     for index in range(n):
-        out = new_spring()
-        out.k = float(k[index])
-        out.fy = [float(fy_t[index]), float(fy_c[index])]
-        out.area = float(area[index])
-        out.length = float(total_length[index])
-        out.alfau = [alfau_t, alfau_c]
-        out.alfar = [alfar_t, alfar_c]
-        out.kt = [float(kt_t[index]), float(kt_c[index])]
-        out.ur = [float(ur_t[index]), float(ur_c[index])]
-        out.tensile_curve_type = (
-            law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve
+        # Supplying the five two-value parameter lists directly avoids creating
+        # and immediately discarding their dataclass default-factory lists for
+        # every generated fibre. The authoritative scalar initialize() remains
+        # unchanged.
+        out = SpringHysteretic(
+            type_of=spring_type,
+            key=index,
+            parent_key=interface_key,
+            parent_type="Interface",
+            spring_purpose="Transversal1",
+            area=float(area[index]),
+            # C# interface fibres publish zero effective length after combination.
+            length=0.0,
+            k=float(k[index]),
+            tensile_curve_type=(
+                law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve
+            ),
+            compressive_curve_type=(
+                law1.compressive_curve
+                if compression_curve_1[index]
+                else law2.compressive_curve
+            ),
+            fy=[float(fy_t[index]), float(fy_c[index])],
+            kt=[float(kt_t[index]), float(kt_c[index])],
+            ur=[float(ur_t[index]), float(ur_c[index])],
+            alfau=[alfau_t, alfau_c],
+            alfar=[alfar_t, alfar_c],
         )
-        out.compressive_curve_type = (
-            law1.compressive_curve
-            if compression_curve_1[index]
-            else law2.compressive_curve
-        )
-        out.key = index
-        out.parent_key = interface_key
-        out.parent_type = "Interface"
-        out.spring_purpose = "Transversal1"
-        # C# interface fibres publish zero effective length after combination.
-        out.length = 0.0
         initialize(out)
         append(out)
     return springs

@@ -9,6 +9,39 @@ from histra.elements.interface_state import InterfaceState, _list2d
 from histra.types.phase_enum import PhaseEnum
 
 
+_STIFFNESS_GRID_FACTOR_CACHE: dict[
+    tuple[int, int, int], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+] = {}
+
+
+def _stiffness_grid_factors(
+    nrow: int, ncol: int, count: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return immutable interpolation factors in scalar C# operation order."""
+    nrow = max(int(nrow), 1)
+    ncol = max(int(ncol), 1)
+    key = (nrow, ncol, int(count))
+    cached = _STIFFNESS_GRID_FACTOR_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    one_minus_xi = np.empty(count, dtype=np.float64)
+    one_plus_xi = np.empty(count, dtype=np.float64)
+    one_minus_eta = np.empty(count, dtype=np.float64)
+    one_plus_eta = np.empty(count, dtype=np.float64)
+    for index in range(count):
+        row, col = divmod(index, ncol)
+        xi = -1.0 + 2.0 / ncol * col + 1.0 / ncol
+        eta = -1.0 + 2.0 / nrow * row + 1.0 / nrow
+        one_minus_xi[index] = 1.0 - xi
+        one_plus_xi[index] = 1.0 + xi
+        one_minus_eta[index] = 1.0 - eta
+        one_plus_eta[index] = 1.0 + eta
+    cached = (one_minus_xi, one_plus_xi, one_minus_eta, one_plus_eta)
+    _STIFFNESS_GRID_FACTOR_CACHE[key] = cached
+    return cached
+
+
 @dataclass
 class Interface:
     key: int = 0
@@ -191,43 +224,27 @@ class Interface:
         ):
             return
 
-        nrow = max(self.nrow, 1)
-        ncol = max(self.ncol, 1)
-        xis = tuple(
-            -1.0 + 2.0 / ncol * col + 1.0 / ncol
-            for col in range(ncol)
-        )
-        row_count = max(nrow, (count + ncol - 1) // ncol)
-        etas = tuple(
-            -1.0 + 2.0 / nrow * row + 1.0 / nrow
-            for row in range(row_count)
+        one_minus_xi, one_plus_xi, one_minus_eta, one_plus_eta = (
+            _stiffness_grid_factors(self.nrow, self.ncol, count)
         )
         v0, v1, v2, v3 = self.vint2d
-        di_values: list[float] = []
-        ecc_values: list[float] = []
-        for idx in range(count):
-            row, col = divmod(idx, ncol)
-            xi = xis[col]
-            eta = etas[row]
-            one_minus_xi = 1.0 - xi
-            one_plus_xi = 1.0 + xi
-            one_minus_eta = 1.0 - eta
-            one_plus_eta = 1.0 + eta
-            di_values.append(
-                v0.x * one_minus_xi * one_minus_eta / 4.0
-                + v1.x * one_plus_xi * one_minus_eta / 4.0
-                + v2.x * one_plus_xi * one_plus_eta / 4.0
-                + v3.x * one_minus_xi * one_plus_eta / 4.0
-            )
-            ecc_values.append(
-                v0.y * one_minus_xi * one_minus_eta / 4.0
-                + v1.y * one_plus_xi * one_minus_eta / 4.0
-                + v2.y * one_plus_xi * one_plus_eta / 4.0
-                + v3.y * one_minus_xi * one_plus_eta / 4.0
-            )
-        self._perf_di = tuple(di_values)
-        self._perf_dj = tuple(self.length - value for value in di_values)
-        self._perf_ecc = tuple(ecc_values)
+        # Preserve scalar multiply/divide/add ordering exactly; precomputing a
+        # single bilinear weight changes the final bits for some geometries.
+        di_values = (
+            ((v0.x * one_minus_xi) * one_minus_eta) / 4.0
+            + ((v1.x * one_plus_xi) * one_minus_eta) / 4.0
+            + ((v2.x * one_plus_xi) * one_plus_eta) / 4.0
+            + ((v3.x * one_minus_xi) * one_plus_eta) / 4.0
+        )
+        ecc_values = (
+            ((v0.y * one_minus_xi) * one_minus_eta) / 4.0
+            + ((v1.y * one_plus_xi) * one_minus_eta) / 4.0
+            + ((v2.y * one_plus_xi) * one_plus_eta) / 4.0
+            + ((v3.y * one_minus_xi) * one_plus_eta) / 4.0
+        )
+        self._perf_di = tuple(di_values.tolist())
+        self._perf_dj = tuple((self.length - di_values).tolist())
+        self._perf_ecc = tuple(ecc_values.tolist())
 
     def _ensure_performance_cache(self) -> None:
         """Build immutable geometry and afference tuples once per interface."""

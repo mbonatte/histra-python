@@ -610,20 +610,10 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
     term_values_list: list[int] = []
     term_mirror_list: list[bool] = []
 
-    def record_term(
-        aff_i: List[AfferenceEntry],
-        aff_j: List[AfferenceEntry],
-        value_index: int,
-        mirror: bool,
-    ) -> None:
-        slot_i = register_aff(aff_i)
-        slot_j = register_aff(aff_j)
-        if not aff_lengths_list[slot_i] or not aff_lengths_list[slot_j]:
-            return
-        term_aff_i_list.append(slot_i)
-        term_aff_j_list.append(slot_j)
-        term_values_list.append(value_index)
-        term_mirror_list.append(mirror)
+    append_term_i = term_aff_i_list.append
+    append_term_j = term_aff_j_list.append
+    append_term_value = term_values_list.append
+    append_term_mirror = term_mirror_list.append
 
     term_index = 0
 
@@ -633,7 +623,12 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
             continue
         aff6 = quad.aff[6]
         quad_terms.append((quad, aff6))
-        record_term(aff6, aff6, term_index, False)
+        slot = register_aff(aff6)
+        if aff_lengths_list[slot]:
+            append_term_i(slot)
+            append_term_j(slot)
+            append_term_value(term_index)
+            append_term_mirror(False)
         term_index += 1
 
     # Then Interfaces. C# reads only the local upper triangle and immediately
@@ -648,6 +643,10 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
 
         has_slid = bool(intf.slid)
         has_out_of_plane = len(intf.slid_out_plan) >= 2
+        # Register each local afference list exactly once. The previous
+        # record_term path performed two cached function/dict lookups for every
+        # one of the ~34 local stiffness terms per interface.
+        aff_slots = [register_aff(entries) for entries in aff]
         interface_layouts.append(
             _InterfaceAssemblyLayout(
                 interface=intf,
@@ -663,7 +662,13 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
         for i in range(d0):
             for j in range(i, d0):
                 if i < aff_len and j < aff_len:
-                    record_term(aff[i], aff[j], term_index, i != j)
+                    slot_i = aff_slots[i]
+                    slot_j = aff_slots[j]
+                    if aff_lengths_list[slot_i] and aff_lengths_list[slot_j]:
+                        append_term_i(slot_i)
+                        append_term_j(slot_j)
+                        append_term_value(term_index)
+                        append_term_mirror(i != j)
                 term_index += 1
 
         if has_slid:
@@ -672,10 +677,13 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
                     ai_idx = d0 + i
                     aj_idx = d0 + j
                     if ai_idx < aff_len and aj_idx < aff_len:
-                        record_term(
-                            aff[ai_idx], aff[aj_idx], term_index,
-                            ai_idx != aj_idx,
-                        )
+                        slot_i = aff_slots[ai_idx]
+                        slot_j = aff_slots[aj_idx]
+                        if aff_lengths_list[slot_i] and aff_lengths_list[slot_j]:
+                            append_term_i(slot_i)
+                            append_term_j(slot_j)
+                            append_term_value(term_index)
+                            append_term_mirror(ai_idx != aj_idx)
                     term_index += 1
 
         if has_out_of_plane:
@@ -684,10 +692,13 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
                     ai_idx = d0 + d1 + i
                     aj_idx = d0 + d1 + j
                     if ai_idx < aff_len and aj_idx < aff_len:
-                        record_term(
-                            aff[ai_idx], aff[aj_idx], term_index,
-                            ai_idx != aj_idx,
-                        )
+                        slot_i = aff_slots[ai_idx]
+                        slot_j = aff_slots[aj_idx]
+                        if aff_lengths_list[slot_i] and aff_lengths_list[slot_j]:
+                            append_term_i(slot_i)
+                            append_term_j(slot_j)
+                            append_term_value(term_index)
+                            append_term_mirror(ai_idx != aj_idx)
                     term_index += 1
 
     aff_starts = np.asarray(aff_starts_list, dtype=np.int64)
