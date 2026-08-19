@@ -172,12 +172,25 @@ class Interface:
             + v[3].y * (1.0 - xi) * (1.0 + eta) / 4.0
         )
 
-    def _ensure_performance_cache(self) -> None:
-        """Build immutable geometry and afference tuples once per interface."""
-        if self._perf_di is not None:
+    def _ensure_stiffness_geometry_cache(self) -> None:
+        """Cache spring-point geometry used repeatedly by stiffness assembly.
+
+        The values depend only on interface geometry/topology, not on spring
+        constitutive state.  Keeping this cache separate from the broader
+        update-domain cache lets ``compute_k`` reuse geometry without forcing
+        unrelated afference/work-buffer initialization.
+        """
+        count = min(max(0, self.nrow * self.ncol), len(self.trasv_1))
+        if (
+            self._perf_di is not None
+            and self._perf_dj is not None
+            and self._perf_ecc is not None
+            and len(self._perf_di) == count
+            and len(self._perf_dj) == count
+            and len(self._perf_ecc) == count
+        ):
             return
 
-        count = min(max(0, self.nrow * self.ncol), len(self.trasv_1))
         di_values: list[float] = []
         ecc_values: list[float] = []
         for idx in range(count):
@@ -187,6 +200,14 @@ class Interface:
         self._perf_di = tuple(di_values)
         self._perf_dj = tuple(self.length - value for value in di_values)
         self._perf_ecc = tuple(ecc_values)
+
+    def _ensure_performance_cache(self) -> None:
+        """Build immutable geometry and afference tuples once per interface."""
+        self._ensure_stiffness_geometry_cache()
+        if self._perf_aff_pairs is not None:
+            return
+
+        count = len(self._perf_di or ())
         self._perf_aff_pairs = tuple(
             tuple((entry.gdl - 1, float(entry.alfa)) for entry in (
                 self.aff[local_dof] if local_dof < len(self.aff) else ()
@@ -290,6 +311,13 @@ class Interface:
 
         nrow = max(I.nrow, 1)
         ncol = max(I.ncol, 1)
+        I._ensure_stiffness_geometry_cache()
+        assert I._perf_di is not None
+        assert I._perf_dj is not None
+        assert I._perf_ecc is not None
+        di_cache = I._perf_di
+        dj_cache = I._perf_dj
+        ecc_cache = I._perf_ecc
 
         num = num2 = num3 = 0.0
         for i in range(nrow):
@@ -297,8 +325,8 @@ class Interface:
                 idx_ = I.idx(i, j)
                 if idx_ >= len(I.trasv_1):
                     continue
-                di = I.get_di(i, j)
-                dj = I.get_dj(i, j)
+                di = di_cache[idx_]
+                dj = dj_cache[idx_]
                 k = I.trasv_1[idx_].get_k(alfa)
                 num += k * di * di
                 num3 += k * di * dj
@@ -320,8 +348,8 @@ class Interface:
                     idx_ = I.idx(j_, i_)
                     if idx_ >= len(I.trasv_1):
                         continue
-                    di = I.get_di(j_, i_)
-                    dm = I.get_dm(j_, i_)
+                    di = di_cache[idx_]
+                    dm = 0.5 * I.length - di
                     k = I.trasv_1[idx_].get_k(alfa)
                     num4 += k
                     num5 -= k * dm
@@ -367,7 +395,7 @@ class Interface:
                 if idx_ >= len(I.trasv_1):
                     continue
                 k = I.trasv_1[idx_].get_k(alfa)
-                ecc = I.ecc_spring(j_, i_)
+                ecc = ecc_cache[idx_]
                 num7 += k * ecc * ecc
 
         K[4][4] = num7
@@ -383,9 +411,9 @@ class Interface:
                 if idx_ >= len(I.trasv_1):
                     continue
                 k = I.trasv_1[idx_].get_k(alfa)
-                di = I.get_di(j_, i_)
-                dj = I.get_dj(j_, i_)
-                ecc = I.ecc_spring(j_, i_)
+                di = di_cache[idx_]
+                dj = dj_cache[idx_]
+                ecc = ecc_cache[idx_]
                 num7 += k * dj * ecc
                 num8 += k * di * ecc
 

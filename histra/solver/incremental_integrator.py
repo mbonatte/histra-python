@@ -101,7 +101,9 @@ class IncrementalIntegrator(ABC):
         # Reassemble only when a valid analysis key is available.  This also
         # mirrors the C# nonlinear-load refresh for supported self-weight loads.
         if getattr(an, "key", None) is not None:
-            ModelManager.assemble_load(model, p.ls, an.key, combination)
+            ModelManager.assemble_load(
+                model, p.ls, an.key, combination, reuse_current=True
+            )
             return True
         return False
 

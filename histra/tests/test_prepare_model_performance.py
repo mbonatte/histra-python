@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import copy
+import itertools
 
 import importlib
 from pathlib import Path
@@ -13,6 +15,7 @@ from histra.preprocessing.prepare_model import (
     _combine_hysteretic,
     _configure_combined_hysteretic,
     _configure_hysteretic,
+    _set_ultimate_displacement,
     _find_or_create_geometric_node,
 )
 from histra.types.point import Point
@@ -92,6 +95,161 @@ def test_direct_combined_hysteretic_matches_legacy_path(tensile, compressive):
     assert direct.phase == legacy.phase
     assert direct.t_phase == legacy.t_phase
 
+
+
+def _set_ultimate_displacement_reference(spring, law1, law2):
+    """Pre-optimization scalar oracle; keep its operation order verbatim."""
+    gt = [
+        law.G_t
+        for law in (law1, law2)
+        if law.tensile_curve in {"LinearSoftening", "Exponential"}
+    ]
+    if gt and spring.area and spring.fy[0]:
+        g = sum(gt) / len(gt)
+        if spring.tensile_curve_type == "LinearSoftening":
+            spring.ur[0] = (
+                2.0 * g / (spring.fy[0] / spring.area)
+                + spring.fy[0] / spring.k
+            )
+            spring.kt[0] = -spring.fy[0] / (
+                spring.ur[0] - spring.fy[0] / spring.k
+            )
+        elif spring.tensile_curve_type == "Exponential":
+            spring.ur[0] = (
+                g / (spring.fy[0] / spring.area) + spring.fy[0] / spring.k
+            )
+        spring.ur[0] = max(spring.ur[0], spring.fy[0] / spring.k)
+    else:
+        candidates = []
+        for law in (law1, law2):
+            if law.tensile_curve != "Elastic" and law.fy_t and law.E:
+                candidates.append(
+                    spring.fy[0]
+                    / spring.k
+                    * law.eps_u_t
+                    / (law.fy_t / law.E)
+                )
+        if candidates:
+            spring.ur[0] = min(candidates)
+
+    gc = [
+        law.G_c
+        for law in (law1, law2)
+        if law.compressive_curve in {"LinearSoftening", "Parabolic"}
+    ]
+    if gc and spring.area and spring.fy[1]:
+        g = sum(gc) / len(gc)
+        if spring.compressive_curve_type == "LinearSoftening":
+            spring.ur[1] = (
+                2.0 * g / (spring.fy[1] / spring.area)
+                + spring.fy[1] / spring.k
+            )
+            spring.kt[1] = -spring.fy[1] / (
+                spring.ur[1] - spring.fy[1] / spring.k
+            )
+        elif spring.compressive_curve_type == "Parabolic":
+            spring.ur[1] = (
+                3.0 * g / (2.0 * spring.fy[1] / spring.area)
+                + 5.0 * spring.fy[1] / (3.0 * spring.k)
+            )
+        spring.ur[1] = min(spring.ur[1], spring.fy[1] / spring.k)
+    else:
+        candidates = []
+        for law in (law1, law2):
+            if law.compressive_curve != "Elastic" and law.fy_c and law.E:
+                candidates.append(
+                    spring.fy[1]
+                    / spring.k
+                    * law.eps_u_c
+                    / (law.fy_c / law.E)
+                )
+        if candidates:
+            spring.ur[1] = max(candidates)
+
+
+def test_ultimate_displacement_scalar_fast_path_is_bitwise_reference_equivalent():
+    tensile = ("LinearSoftening", "Exponential", "LinearHardening", "Elastic")
+    compressive = ("LinearSoftening", "Parabolic", "LinearHardening", "Elastic")
+
+    for t1, c1, t2, c2 in itertools.product(
+        tensile, compressive, tensile, compressive
+    ):
+        law1 = _law(t1, c1, scale=1.0)
+        law2 = _law(t2, c2, scale=1.3)
+        for output_t, output_c in ((t1, c2), (t2, c1)):
+            reference = pm.SpringHysteretic(
+                type_of="HiStrA.Objects.SpringHysteretic"
+            )
+            reference.k = 1800.0
+            reference.area = 2.5
+            reference.fy = [0.625, -11.25]
+            reference.kt = [0.0, 0.0]
+            reference.ur = [0.001, -0.001]
+            reference.tensile_curve_type = output_t
+            reference.compressive_curve_type = output_c
+            actual = copy.deepcopy(reference)
+
+            _set_ultimate_displacement_reference(reference, law1, law2)
+            _set_ultimate_displacement(actual, law1, law2)
+
+            np.testing.assert_array_equal(actual.ur, reference.ur)
+            np.testing.assert_array_equal(actual.kt, reference.kt)
+
+
+def test_ultimate_displacement_scalar_fast_path_preserves_zero_capacity_branches():
+    law1 = _law("LinearHardening", "LinearHardening", scale=1.0)
+    law2 = _law("Elastic", "Elastic", scale=1.3)
+    reference = pm.SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
+    reference.k = 1800.0
+    reference.area = 0.0
+    reference.fy = [0.0, 0.0]
+    reference.kt = [12.5, -3.25]
+    reference.ur = [0.125, -0.25]
+    reference.tensile_curve_type = "LinearHardening"
+    reference.compressive_curve_type = "LinearHardening"
+    actual = copy.deepcopy(reference)
+
+    _set_ultimate_displacement_reference(reference, law1, law2)
+    _set_ultimate_displacement(actual, law1, law2)
+
+    np.testing.assert_array_equal(actual.ur, reference.ur)
+    np.testing.assert_array_equal(actual.kt, reference.kt)
+
+
+def _assert_fast_spring_copy_matches_deepcopy(source, actual):
+    reference = copy.deepcopy(source)
+    assert actual is not source
+    assert actual.__dict__ == reference.__dict__
+    for name, value in vars(source).items():
+        if isinstance(value, (list, dict)):
+            assert getattr(actual, name) is not value, name
+
+
+def test_hysteretic_preparation_copy_matches_deepcopy_with_independent_mutables():
+    spring = _configure_hysteretic(
+        1800.0, 2.5, 0.75,
+        _law("LinearSoftening", "LinearSoftening", scale=1.0),
+    )
+    spring.extra["marker"] = "source"
+
+    actual = pm._copy_hysteretic_spring(spring)
+
+    _assert_fast_spring_copy_matches_deepcopy(spring, actual)
+
+
+def test_coulomb_preparation_copy_matches_deepcopy_with_independent_mutables():
+    law = pm._CoulombLaw(
+        E=1000.0, cohesion=2.0, mu=0.45,
+        plastic_stiffness_ratio=0.01, max_tensile_ratio=0.8,
+    )
+    spring = pm._configure_coulomb(
+        k=1200.0, area=2.0, length=0.5, law=law
+    )
+    spring.extra["marker"] = "source"
+
+    actual = pm._copy_coulomb_spring(spring)
+
+    _assert_fast_spring_copy_matches_deepcopy(spring, actual)
 
 def test_geometric_node_spatial_index_preserves_tolerance_reuse():
     nodes = {

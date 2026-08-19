@@ -91,7 +91,8 @@ def change_interface_materials(
     2. restore the predecessor's committed local history onto those new
        definitions;
     3. preserve the committed Interface state and geometry/afference mapping;
-    4. invalidate the compiled constitutive runtime.
+    4. update compatible dense constitutive rows in place, otherwise fall
+       back to the existing full compiled-runtime rebuild.
 
     The global displacement and all unaffected elements remain unchanged.
     """
@@ -114,6 +115,19 @@ def change_interface_materials(
 
     backups = {
         key: _backup_interface(model.collections.interfaces[key]) for key in keys
+    }
+    # The geometry cache is immutable across a material-only rebuild.  The
+    # spring factory clears these fields because it is also used during full
+    # model preparation; retain them here to avoid redoing geometry work after
+    # every scour step.
+    geometry_caches = {
+        key: (
+            getattr(model.collections.interfaces[key], "_perf_di", None),
+            getattr(model.collections.interfaces[key], "_perf_dj", None),
+            getattr(model.collections.interfaces[key], "_perf_ecc", None),
+            getattr(model.collections.interfaces[key], "_perf_area", None),
+        )
+        for key in keys
     }
     records: list[InterfaceMaterialMutationRecord] = []
     # Material-law construction depends only on the material and direction.
@@ -148,9 +162,12 @@ def change_interface_materials(
             # preserve that same committed state directly.
             interface.status = old_status
             interface.f[:] = old_force
-            interface._perf_di = interface._perf_dj = interface._perf_ecc = None
-            interface._perf_aff_pairs = None
-            interface._perf_dist = interface._perf_dist_for = None
+            (
+                interface._perf_di,
+                interface._perf_dj,
+                interface._perf_ecc,
+                interface._perf_area,
+            ) = geometry_caches[key]
 
             records.append(
                 InterfaceMaterialMutationRecord(
@@ -168,7 +185,12 @@ def change_interface_materials(
         ModelManager.clear_hysteretic_batch()
         raise
 
-    # Dense Numba arrays contain the old spring definitions and must never be
-    # reused after a material mutation.  The next solve rebuilds them once.
-    ModelManager.clear_hysteretic_batch()
+    # Keep the large dense runtime when the replacement spring layout is
+    # structurally identical.  The runtime validates *all* changed interfaces
+    # before touching its arrays; any incompatibility or update error clears it
+    # so the next solve follows the existing full-build path.
+    changed_interfaces = tuple(model.collections.interfaces[key] for key in keys)
+    ModelManager.update_hysteretic_batch_material_interfaces(
+        model, changed_interfaces
+    )
     return InterfaceMaterialMutationReport(material_key, tuple(records))

@@ -27,6 +27,7 @@ class ModelManager:
     """Global assembly/state operations aligned with the C# ``ModelManager``."""
 
     _ptarget: np.ndarray | None = None
+    _ptarget_signature: tuple[int, int | None, int] | None = None
     _fext: np.ndarray | None = None
     _pq: np.ndarray | None = None
     _pq_prev: np.ndarray | None = None
@@ -106,6 +107,32 @@ class ModelManager:
         return None
 
     @classmethod
+    def update_hysteretic_batch_material_interfaces(
+        cls, model: Model, interfaces: list[Any] | tuple[Any, ...]
+    ) -> bool:
+        """Update a compatible compiled runtime after material-only changes.
+
+        The dense runtime is an optional acceleration layer.  Any mismatch or
+        unexpected update failure discards it and leaves the authoritative
+        Python spring objects to seed the existing full rebuild on the next
+        analysis.
+        """
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is None:
+            cls.clear_hysteretic_batch()
+            return False
+        try:
+            if runtime.try_update_material_interfaces(interfaces):
+                return True
+        except Exception:
+            # Never let an acceleration-only refresh compromise the mutation.
+            # New spring objects are already authoritative; a fresh runtime
+            # will be created from them before the next solve.
+            pass
+        cls.clear_hysteretic_batch()
+        return False
+
+    @classmethod
     def assemble_k(
         cls,
         model: Model,
@@ -135,8 +162,29 @@ class ModelManager:
         ls: LinearSystem,
         analysis_key: int | None = None,
         combination: int = 1,
+        *,
+        reuse_current: bool = False,
     ) -> None:
-        cls._ptarget = assemble_load_vector(model, analysis_key, combination)
+        """Assemble or reuse the static target load for one analysis.
+
+        The currently translated load generators are model self-weight and
+        direct Quad line loads.  They are invariant during a static analysis;
+        unsupported nonlinear P-Delta refreshes are rejected before this path.
+        ``reuse_current`` is therefore used only by the incremental integrator
+        after the solver has performed the mandatory fresh assembly at the
+        beginning of the analysis.  A model/analysis/combination mismatch
+        always forces a new vector.
+        """
+        signature = (id(model), analysis_key, int(combination))
+        if not (
+            reuse_current
+            and cls._ptarget is not None
+            and cls._ptarget_signature == signature
+        ):
+            cls._ptarget = assemble_load_vector(
+                model, analysis_key, combination
+            )
+            cls._ptarget_signature = signature
         ls.set_zero_load()
 
     @classmethod

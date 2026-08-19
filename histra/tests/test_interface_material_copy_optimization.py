@@ -194,3 +194,88 @@ def test_change_interface_materials_still_rejects_spring_count_changes(
 
     with pytest.raises(InterfaceMaterialMutationError, match="spring count changed"):
         change_interface_materials(model, [1], 2)
+
+
+def test_model_manager_keeps_compatible_hysteretic_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _model(_interface(1))
+    changed = tuple(model.collections.interfaces.values())
+    received: list[tuple[object, ...]] = []
+    clear_calls = 0
+
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.model = model
+
+        def try_update_material_interfaces(self, interfaces):
+            received.append(tuple(interfaces))
+            return True
+
+    runtime = FakeRuntime()
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch", runtime)
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch_model_id", id(model))
+
+    def fake_clear() -> None:
+        nonlocal clear_calls
+        clear_calls += 1
+
+    monkeypatch.setattr(interface_material.ModelManager, "clear_hysteretic_batch", fake_clear)
+
+    assert interface_material.ModelManager.update_hysteretic_batch_material_interfaces(
+        model, changed
+    ) is True
+    assert received == [changed]
+    assert clear_calls == 0
+
+
+def test_model_manager_discards_incompatible_hysteretic_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _model(_interface(1))
+    changed = tuple(model.collections.interfaces.values())
+    clear_calls = 0
+
+    runtime = SimpleNamespace(
+        model=model,
+        try_update_material_interfaces=lambda _interfaces: False,
+    )
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch", runtime)
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch_model_id", id(model))
+
+    def fake_clear() -> None:
+        nonlocal clear_calls
+        clear_calls += 1
+
+    monkeypatch.setattr(interface_material.ModelManager, "clear_hysteretic_batch", fake_clear)
+
+    assert interface_material.ModelManager.update_hysteretic_batch_material_interfaces(
+        model, changed
+    ) is False
+    assert clear_calls == 1
+
+
+def test_model_manager_discards_runtime_if_incremental_refresh_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _model(_interface(1))
+    changed = tuple(model.collections.interfaces.values())
+    clear_calls = 0
+
+    def fail(_interfaces):
+        raise RuntimeError("synthetic dense update failure")
+
+    runtime = SimpleNamespace(model=model, try_update_material_interfaces=fail)
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch", runtime)
+    monkeypatch.setattr(interface_material.ModelManager, "_hysteretic_batch_model_id", id(model))
+
+    def fake_clear() -> None:
+        nonlocal clear_calls
+        clear_calls += 1
+
+    monkeypatch.setattr(interface_material.ModelManager, "clear_hysteretic_batch", fake_clear)
+
+    assert interface_material.ModelManager.update_hysteretic_batch_material_interfaces(
+        model, changed
+    ) is False
+    assert clear_calls == 1

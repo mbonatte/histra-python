@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import copy
 import math
-from typing import Iterable, Sequence
+from typing import Iterable, NamedTuple, Sequence
 
 import numpy as np
 
@@ -102,8 +102,7 @@ class _HystereticLaw:
     law_type: str
 
 
-@dataclass(frozen=True)
-class _HystereticSideDefinition:
+class _HystereticSideDefinition(NamedTuple):
     k: float
     area: float
     length: float
@@ -666,10 +665,16 @@ def _configure_hysteretic(k: float, area: float, length: float, law: _Hysteretic
 
 
 def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, law2: _HystereticLaw) -> None:
-    # Exact fracture-energy branches used by the supplied materials.
-    gt = [law.G_t for law in (law1, law2) if law.tensile_curve in {"LinearSoftening", "Exponential"}]
-    if gt and spring.area and spring.fy[0]:
-        g = sum(gt) / len(gt)
+    # Exact fracture-energy branches used by the supplied materials.  Keep the
+    # law-1/law-2 evaluation order of the former list-based implementation,
+    # but avoid allocating four short Python lists for every generated fibre.
+    gt1 = law1.tensile_curve in {"LinearSoftening", "Exponential"}
+    gt2 = law2.tensile_curve in {"LinearSoftening", "Exponential"}
+    if (gt1 or gt2) and spring.area and spring.fy[0]:
+        if gt1:
+            g = (law1.G_t + law2.G_t) / 2 if gt2 else law1.G_t
+        else:
+            g = law2.G_t
         if spring.tensile_curve_type == "LinearSoftening":
             spring.ur[0] = 2.0 * g / (spring.fy[0] / spring.area) + spring.fy[0] / spring.k
             spring.kt[0] = -spring.fy[0] / (spring.ur[0] - spring.fy[0] / spring.k)
@@ -677,16 +682,32 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
             spring.ur[0] = g / (spring.fy[0] / spring.area) + spring.fy[0] / spring.k
         spring.ur[0] = max(spring.ur[0], spring.fy[0] / spring.k)
     else:
-        candidates = []
-        for law in (law1, law2):
-            if law.tensile_curve != "Elastic" and law.fy_t and law.E:
-                candidates.append(spring.fy[0] / spring.k * law.eps_u_t / (law.fy_t / law.E))
-        if candidates:
-            spring.ur[0] = min(candidates)
+        candidate1 = (
+            spring.fy[0] / spring.k * law1.eps_u_t / (law1.fy_t / law1.E)
+            if law1.tensile_curve != "Elastic" and law1.fy_t and law1.E
+            else None
+        )
+        candidate2 = (
+            spring.fy[0] / spring.k * law2.eps_u_t / (law2.fy_t / law2.E)
+            if law2.tensile_curve != "Elastic" and law2.fy_t and law2.E
+            else None
+        )
+        if candidate1 is not None:
+            spring.ur[0] = (
+                min(candidate1, candidate2)
+                if candidate2 is not None
+                else candidate1
+            )
+        elif candidate2 is not None:
+            spring.ur[0] = candidate2
 
-    gc = [law.G_c for law in (law1, law2) if law.compressive_curve in {"LinearSoftening", "Parabolic"}]
-    if gc and spring.area and spring.fy[1]:
-        g = sum(gc) / len(gc)
+    gc1 = law1.compressive_curve in {"LinearSoftening", "Parabolic"}
+    gc2 = law2.compressive_curve in {"LinearSoftening", "Parabolic"}
+    if (gc1 or gc2) and spring.area and spring.fy[1]:
+        if gc1:
+            g = (law1.G_c + law2.G_c) / 2 if gc2 else law1.G_c
+        else:
+            g = law2.G_c
         if spring.compressive_curve_type == "LinearSoftening":
             spring.ur[1] = 2.0 * g / (spring.fy[1] / spring.area) + spring.fy[1] / spring.k
             spring.kt[1] = -spring.fy[1] / (spring.ur[1] - spring.fy[1] / spring.k)
@@ -694,12 +715,24 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
             spring.ur[1] = 3.0 * g / (2.0 * spring.fy[1] / spring.area) + 5.0 * spring.fy[1] / (3.0 * spring.k)
         spring.ur[1] = min(spring.ur[1], spring.fy[1] / spring.k)
     else:
-        candidates = []
-        for law in (law1, law2):
-            if law.compressive_curve != "Elastic" and law.fy_c and law.E:
-                candidates.append(spring.fy[1] / spring.k * law.eps_u_c / (law.fy_c / law.E))
-        if candidates:
-            spring.ur[1] = max(candidates)
+        candidate1 = (
+            spring.fy[1] / spring.k * law1.eps_u_c / (law1.fy_c / law1.E)
+            if law1.compressive_curve != "Elastic" and law1.fy_c and law1.E
+            else None
+        )
+        candidate2 = (
+            spring.fy[1] / spring.k * law2.eps_u_c / (law2.fy_c / law2.E)
+            if law2.compressive_curve != "Elastic" and law2.fy_c and law2.E
+            else None
+        )
+        if candidate1 is not None:
+            spring.ur[1] = (
+                max(candidate1, candidate2)
+                if candidate2 is not None
+                else candidate1
+            )
+        elif candidate2 is not None:
+            spring.ur[1] = candidate2
 
 
 def _hysteretic_side_definition(
@@ -824,12 +857,43 @@ def _configure_combined_hysteretic(
     return out
 
 
+def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:
+    """Copy one configured hysteretic spring without recursive deepcopy.
+
+    All non-scalar mutable state in ``SpringHysteretic`` is held by the base
+    ``extra`` mapping and the seven list-backed constitutive/state fields
+    below.  C# restraint-side combination needs an independent spring object,
+    but recursively walking dozens of immutable scalar attributes is wasted
+    work during preprocessing.
+    """
+    out = copy.copy(sp)
+    out.extra = sp.extra.copy()
+    out.fy = sp.fy.copy()
+    out.kt = sp.kt.copy()
+    out.ur = sp.ur.copy()
+    out.alfau = sp.alfau.copy()
+    out.alfar = sp.alfar.copy()
+    out.umax = sp.umax.copy()
+    out.uy_corr = sp.uy_corr.copy()
+    return out
+
+
+def _copy_coulomb_spring(sp: SpringCoulomb03) -> SpringCoulomb03:
+    """Copy one configured Coulomb spring with independent mutable state."""
+    out = copy.copy(sp)
+    out.extra = sp.extra.copy()
+    out.fy = sp.fy.copy()
+    out.ur = sp.ur.copy()
+    out.umax = sp.umax.copy()
+    return out
+
+
 def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained: bool,
                         law1: _HystereticLaw, law2: _HystereticLaw) -> SpringHysteretic:
     if sp1.k == -1.0:
-        out = copy.deepcopy(sp2)
+        out = _copy_hysteretic_spring(sp2)
     elif sp2.k == -1.0:
-        out = copy.deepcopy(sp1)
+        out = _copy_hysteretic_spring(sp1)
     else:
         out = SpringHysteretic(type_of="HiStrA.Objects.SpringHysteretic")
         out.k = _series(sp1.k, sp2.k, restrained)
@@ -875,9 +939,9 @@ def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained
 
 def _combine_coulomb(sp1: SpringCoulomb03, sp2: SpringCoulomb03, restrained: bool) -> SpringCoulomb03:
     if sp1.k == -1.0:
-        return copy.deepcopy(sp2)
+        return _copy_coulomb_spring(sp2)
     if sp2.k == -1.0:
-        return copy.deepcopy(sp1)
+        return _copy_coulomb_spring(sp1)
     k = _series(sp1.k, sp2.k, restrained)
     cohesion = min(sp1.cohesion, sp2.cohesion)
     area = sp1.area if sp1.cohesion <= sp2.cohesion else sp2.area
@@ -2616,7 +2680,7 @@ def _create_interface_springs(
             # C# Interface.SetSpring: for a custom material on a restraint/Quad
             # interface, clone the non-restraint spring rather than combining
             # it with the rigid restraint-side placeholder.
-            spring = copy.deepcopy(
+            spring = _copy_hysteretic_spring(
                 sp2 if intf.parent_type_element1 == "Restraint" else sp1
             )
         else:

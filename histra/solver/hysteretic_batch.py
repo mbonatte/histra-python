@@ -1823,18 +1823,8 @@ class HystereticBatchRuntime:
                 continue
             rejection_reason = ""
             for spring in group:
-                if not isinstance(spring, SpringHysteretic):
-                    rejection_reason = "unsupported_transverse_spring_type"
-                    break
-                if spring.tensile_curve_type not in {
-                    "LinearHardening", "LinearSoftening", "Exponential"
-                }:
-                    rejection_reason = "unsupported_tensile_curve_type"
-                    break
-                if spring.compressive_curve_type not in {
-                    "LinearHardening", "LinearSoftening"
-                }:
-                    rejection_reason = "unsupported_compressive_curve_type"
+                rejection_reason = self._transverse_rejection_reason(spring)
+                if rejection_reason:
                     break
             if rejection_reason:
                 self.interface_rejection_reasons[rejection_reason] += 1
@@ -1857,43 +1847,9 @@ class HystereticBatchRuntime:
         self.targets = np.empty(n, dtype=np.float64)
         self.enabled = np.empty(n, dtype=np.bool_)
         for i, spring in enumerate(springs):
-            self.params[i, :len(_PARAM_NAMES)] = [
-                float(getattr(spring, name)) for name in _PARAM_NAMES
-            ]
-            self.params[i, TENSILE_CURVE_TYPE_PARAM] = (
-                TENSILE_EXPONENTIAL
-                if spring.tensile_curve_type == "Exponential"
-                else TENSILE_LINEAR
-            )
-            self.committed[i, :] = (
-                spring.umax[0], spring.umax[1], spring._crot_pu, spring._crot_nu,
-                spring.cenergy_d, spring._cload_indicator, spring._cstress,
-                spring._cstrain, int(spring.phase),
-            )
-            self.trial[i, :] = (
-                spring._trot_max, spring._trot_min, spring._trot_pu,
-                spring._trot_nu, spring._tenergy_d, spring._tload_indicator,
-                spring._tstress, spring._tstrain, int(spring.t_phase),
-                spring.k_tang,
-            )
-            self.targets[i] = spring._tstrain
-            self.enabled[i] = bool(spring.is_on)
+            self._read_transverse_object(i, spring)
         self._transverse_k = self.params[:, len(_PARAM_NAMES) - 1].copy()
-        self._simple_hysteretic = bool(
-            n
-            and np.all(self.params[:, :8] == 0.0)
-            and np.all(self.params[:, 8] == 1.0)
-            and np.all(self.params[:, 9] == 0.0)
-        )
-        # Diagnostic/correctness switch.  The specialized zero-pinching kernel
-        # must remain bit-for-bit equivalent to the authoritative scalar state
-        # machine through unloading/reloading histories.  Force the general
-        # compiled kernel while investigating any full-analysis divergence.
-        force_general = os.environ.get(
-            "HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", ""
-        ).strip().lower()
-        if force_general in {"1", "true", "yes", "on"}:
-            self._simple_hysteretic = False
+        self._refresh_simple_hysteretic_flag()
         self._record_index = np.empty(n, dtype=np.int32)
         self._di = np.empty(n, dtype=np.float64)
         self._dj = np.empty(n, dtype=np.float64)
@@ -1975,15 +1931,7 @@ class HystereticBatchRuntime:
                      ("oop1", interface.slid_out_plan[1]))
                 )
             for kind, spring in candidates:
-                rejection_reason = ""
-                if not isinstance(spring, SpringCoulomb03):
-                    rejection_reason = "unsupported_spring_type"
-                elif spring.hysteretic_type != "Initial":
-                    rejection_reason = "unsupported_hysteretic_type"
-                elif spring.sub_law != "Coulomb":
-                    rejection_reason = "unsupported_shear_sublaw"
-                elif spring.check_contact_area:
-                    rejection_reason = "contact_area_check"
+                rejection_reason = self._coulomb_rejection_reason(spring)
                 if rejection_reason:
                     self.interface_coulomb_rejection_reasons[
                         f"{kind}:{rejection_reason}"
@@ -2238,9 +2186,183 @@ class HystereticBatchRuntime:
         self._refresh_max_u_cache()
         self._objects_trial_synced = True
 
+    @staticmethod
+    def _transverse_rejection_reason(spring: Any) -> str:
+        if not isinstance(spring, SpringHysteretic):
+            return "unsupported_transverse_spring_type"
+        if spring.tensile_curve_type not in {
+            "LinearHardening", "LinearSoftening", "Exponential"
+        }:
+            return "unsupported_tensile_curve_type"
+        if spring.compressive_curve_type not in {
+            "LinearHardening", "LinearSoftening"
+        }:
+            return "unsupported_compressive_curve_type"
+        return ""
+
+    @staticmethod
+    def _coulomb_rejection_reason(spring: Any) -> str:
+        from histra.springs.coulomb03 import SpringCoulomb03
+
+        if not isinstance(spring, SpringCoulomb03):
+            return "unsupported_spring_type"
+        if spring.hysteretic_type != "Initial":
+            return "unsupported_hysteretic_type"
+        if spring.sub_law != "Coulomb":
+            return "unsupported_shear_sublaw"
+        if spring.check_contact_area:
+            return "contact_area_check"
+        return ""
+
+    def _read_transverse_object(self, index: int, spring: SpringHysteretic) -> None:
+        self.params[index, :len(_PARAM_NAMES)] = [
+            float(getattr(spring, name)) for name in _PARAM_NAMES
+        ]
+        self.params[index, TENSILE_CURVE_TYPE_PARAM] = (
+            TENSILE_EXPONENTIAL
+            if spring.tensile_curve_type == "Exponential"
+            else TENSILE_LINEAR
+        )
+        self.committed[index, :] = (
+            spring.umax[0], spring.umax[1], spring._crot_pu, spring._crot_nu,
+            spring.cenergy_d, spring._cload_indicator, spring._cstress,
+            spring._cstrain, int(spring.phase),
+        )
+        self.trial[index, :] = (
+            spring._trot_max, spring._trot_min, spring._trot_pu,
+            spring._trot_nu, spring._tenergy_d, spring._tload_indicator,
+            spring._tstress, spring._tstrain, int(spring.t_phase),
+            spring.k_tang,
+        )
+        self.targets[index] = float(spring._tstrain)
+        self.enabled[index] = bool(spring.is_on)
+
+    def _refresh_simple_hysteretic_flag(self) -> None:
+        n = len(self.springs)
+        self._simple_hysteretic = bool(
+            n
+            and np.all(self.params[:, :8] == 0.0)
+            and np.all(self.params[:, 8] == 1.0)
+            and np.all(self.params[:, 9] == 0.0)
+        )
+        # Diagnostic/correctness switch.  The specialized zero-pinching kernel
+        # must remain bit-for-bit equivalent to the authoritative scalar state
+        # machine through unloading/reloading histories.  Force the general
+        # compiled kernel while investigating any full-analysis divergence.
+        force_general = os.environ.get(
+            "HISTRA_FORCE_GENERAL_HYSTERETIC_BATCH", ""
+        ).strip().lower()
+        if force_general in {"1", "true", "yes", "on"}:
+            self._simple_hysteretic = False
+
     @property
     def active(self) -> bool:
         return bool(self.springs or self.coulomb_springs or self.quad_records)
+
+    def try_update_material_interfaces(self, interfaces: list[Any] | tuple[Any, ...]) -> bool:
+        """Refresh changed interface constitutive rows without rebuilding the runtime.
+
+        Material-only mutations preserve geometry, DOFs and afference topology.
+        This method therefore accepts an update only when every replacement
+        spring group has exactly the layout already represented by the dense
+        runtime.  Any structural or constitutive incompatibility returns
+        ``False`` *before* runtime arrays are modified, allowing callers to
+        discard this runtime and use the existing full rebuild path.
+
+        The spring objects must already contain the authoritative committed and
+        trial state.  ``solve_static_nonlinear`` guarantees that condition at
+        analysis boundaries by synchronizing the dense runtime in ``finally``.
+        """
+        changed = tuple(interfaces)
+        if not changed:
+            return True
+        if not self._objects_trial_synced:
+            # Do not import potentially stale object state into the dense
+            # runtime.  A full rebuild is the conservative fallback.
+            return False
+
+        validated: list[tuple[int, _InterfaceSlice, tuple[Any, ...], tuple[tuple[int, Any], ...]]] = []
+        for interface in changed:
+            record_index = self._record_by_id.get(id(interface))
+            if record_index is None:
+                return False
+            record = self.records[record_index]
+            group = tuple(interface.trasv_1)
+            if len(group) != record.stop - record.start:
+                return False
+            if any(self._transverse_rejection_reason(spring) for spring in group):
+                return False
+
+            candidates: list[tuple[int, Any]] = []
+            if len(interface.slid) > 1 or len(interface.slid_out_plan) > 2:
+                return False
+            layouts = (
+                (int(self._slid_index[record_index]), interface.slid[0] if interface.slid else None),
+                (int(self._oop0_index[record_index]), interface.slid_out_plan[0] if len(interface.slid_out_plan) >= 1 else None),
+                (int(self._oop1_index[record_index]), interface.slid_out_plan[1] if len(interface.slid_out_plan) >= 2 else None),
+            )
+            for dense_index, spring in layouts:
+                if dense_index < 0:
+                    # A spring that was previously outside the compiled layout
+                    # could become compatible after mutation.  Rebuilding is
+                    # safer than silently changing runtime coverage.
+                    if spring is not None:
+                        return False
+                    continue
+                if spring is None or self._coulomb_rejection_reason(spring):
+                    return False
+                candidates.append((dense_index, spring))
+            validated.append((record_index, record, group, tuple(candidates)))
+
+        # Validation above is intentionally complete before touching any dense
+        # state.  The remaining operations are fixed-shape assignments from
+        # production spring types and cannot change runtime topology.
+        for record_index, record, group, candidates in validated:
+            start = record.start
+            for offset, spring in enumerate(group):
+                dense_index = start + offset
+                predecessor = self.springs[dense_index]
+                if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
+                    delattr(predecessor, "_histra_batch_managed")
+                self.springs[dense_index] = spring
+                self.managed_springs[dense_index] = spring
+                spring._histra_batch_managed = True
+                self._read_transverse_object(dense_index, spring)
+                self._transverse_k[dense_index] = float(spring.k)
+
+            coulomb_offset = len(self.springs)
+            for dense_index, spring in candidates:
+                predecessor = self.coulomb_springs[dense_index]
+                if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
+                    delattr(predecessor, "_histra_batch_managed")
+                self.coulomb_springs[dense_index] = spring
+                self.managed_springs[coulomb_offset + dense_index] = spring
+                spring._histra_batch_managed = True
+                self.coulomb_params[dense_index, :] = (
+                    float(spring.k), float(spring.h), float(spring.cohesion),
+                    float(spring.mu), float(spring.area), float(spring.e1p),
+                    float(spring.e2p),
+                )
+                self._read_coulomb_object(dense_index, spring)
+                self.coulomb_targets[dense_index] = float(spring.u)
+                self.coulomb_dns[dense_index] = 0.0
+                self.coulomb_enabled[dense_index] = bool(spring.is_on)
+
+            # The interface object itself is retained by material mutation, so
+            # the existing dense slice and record mapping remain valid.
+            interface = record.interface
+            interface._perf_hysteretic_batch = self
+            interface._perf_hysteretic_slice = (record.start, record.stop)
+            self._local_u[record_index, :] = interface.status.u[:12]
+
+        self._refresh_simple_hysteretic_flag()
+        self._pending_values.fill(0.0)
+        self._refresh_transverse_cache()
+        self._refresh_full_force_cache()
+        self._refresh_global_resisting_force_cache()
+        self._refresh_max_u_cache()
+        self._objects_trial_synced = True
+        return True
 
     def performance_counts(self) -> dict[str, Any]:
         """Return stable production-backend coverage and rejection counters."""

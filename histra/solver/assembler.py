@@ -5,9 +5,12 @@ Maps .NET HiStrA element assembly into COO / CSC format for scipy.
 """
 from __future__ import annotations
 
+from array import array
+from dataclasses import dataclass
+from typing import Any, List, Set, Tuple
+
 import numpy as np
 import scipy.sparse as sp
-from typing import List, Set, Tuple
 
 from histra.model.model import Model
 from histra.model.quad import Quad
@@ -244,7 +247,7 @@ def _assemble_afference(
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
-def assemble_global_k(
+def _assemble_global_k_legacy(
     model: Model,
     alfa: float = 0.0,
     *,
@@ -345,6 +348,310 @@ def assemble_global_k(
 
     K = sp.coo_matrix((vals, (rows, cols)), shape=(n, n)).tocsc()
     return K
+
+
+class _AssemblyPlanIncompatible(RuntimeError):
+    """Internal signal requesting the exact legacy scatter fallback."""
+
+
+@dataclass(slots=True)
+class _InterfaceAssemblyLayout:
+    interface: Interface
+    aff_lists: tuple[Any, ...]
+    d0: int
+    d1: int
+    d2: int
+    has_slid: bool
+    has_out_of_plane: bool
+
+
+@dataclass(slots=True)
+class _StiffnessAssemblyPlan:
+    """Immutable global scatter topology for a prepared model.
+
+    The sparse row/column pattern and afference coefficients do not change
+    between nonlinear iterations or scour material mutations.  Only local
+    stiffness coefficients change, so the expensive Python object traversal is
+    performed once and compact NumPy arrays are reused afterwards.
+    """
+
+    n: int
+    all_quads: tuple[Quad, ...]
+    quad_terms: tuple[tuple[Quad, Any], ...]
+    interfaces: tuple[_InterfaceAssemblyLayout, ...]
+    rows: np.ndarray
+    cols: np.ndarray
+    term_indices: np.ndarray
+    alpha_i: np.ndarray
+    alpha_j: np.ndarray
+    quad_entry_count: int
+    term_count: int
+
+    def compatible(self, model: Model) -> bool:
+        if int(model.gdl) != self.n or model.collections is None:
+            return False
+        quads = model.collections.quads
+        interfaces = model.collections.interfaces
+        if len(quads) != len(self.all_quads) or len(interfaces) != len(self.interfaces):
+            return False
+        for current, expected in zip(quads.values(), self.all_quads):
+            if current is not expected:
+                return False
+        for current, layout in zip(interfaces.values(), self.interfaces):
+            if current is not layout.interface:
+                return False
+            d0 = current.dim_aff[0] if len(current.dim_aff) > 0 else 6
+            d1 = current.dim_aff[1] if len(current.dim_aff) > 1 else 2
+            d2 = current.dim_aff[2] if len(current.dim_aff) > 2 else 4
+            if (d0, d1, d2) != (layout.d0, layout.d1, layout.d2):
+                return False
+            if bool(current.slid) != layout.has_slid:
+                return False
+            if (len(current.slid_out_plan) >= 2) != layout.has_out_of_plane:
+                return False
+            if len(current.aff) != len(layout.aff_lists):
+                return False
+            for current_aff, expected_aff in zip(current.aff, layout.aff_lists):
+                if current_aff is not expected_aff:
+                    return False
+        for quad, aff6 in self.quad_terms:
+            if len(quad.aff) <= 6 or quad.aff[6] is not aff6:
+                return False
+        return True
+
+
+def _append_interface_scatter(
+    rows: array,
+    cols: array,
+    term_indices: array,
+    alpha_i: array,
+    alpha_j: array,
+    *,
+    n: int,
+    term_index: int,
+    aff_i: List[AfferenceEntry],
+    aff_j: List[AfferenceEntry],
+) -> None:
+    """Append one local coefficient's static interface scatter topology."""
+    for ei in aff_i:
+        gi = int(ei.gdl) - 1
+        if gi < 0 or gi >= n:
+            continue
+        ai = float(ei.alfa)
+        for ej in aff_j:
+            gj = int(ej.gdl) - 1
+            if gj < 0 or gj >= n:
+                continue
+            rows.append(gi)
+            cols.append(gj)
+            term_indices.append(term_index)
+            alpha_i.append(ai)
+            alpha_j.append(float(ej.alfa))
+
+
+def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
+    if model.collections is None:
+        raise _AssemblyPlanIncompatible("Model.collections is not initialized")
+    if array("i").itemsize != np.dtype(np.int32).itemsize:
+        raise _AssemblyPlanIncompatible("native C int is not 32-bit")
+
+    n = int(model.gdl)
+    rows = array("i")
+    cols = array("i")
+    term_indices = array("i")
+    alpha_i = array("d")
+    alpha_j = array("d")
+    term_index = 0
+    all_quads = tuple(model.collections.quads.values())
+    quad_terms: list[tuple[Quad, Any]] = []
+
+    # Preserve the legacy COO emission order exactly: all quads first.
+    for quad in all_quads:
+        if not quad.aff or len(quad.aff) <= 6 or not quad.aff[6]:
+            continue
+        aff6 = quad.aff[6]
+        quad_terms.append((quad, aff6))
+        for ei in aff6:
+            gi = int(ei.gdl) - 1
+            ai = float(ei.alfa)
+            for ej in aff6:
+                rows.append(gi)
+                cols.append(int(ej.gdl) - 1)
+                term_indices.append(term_index)
+                alpha_i.append(ai)
+                alpha_j.append(float(ej.alfa))
+        term_index += 1
+    quad_entry_count = len(rows)
+
+    interface_layouts: list[_InterfaceAssemblyLayout] = []
+    for intf in model.collections.interfaces.values():
+        d0 = intf.dim_aff[0] if len(intf.dim_aff) > 0 else 6
+        d1 = intf.dim_aff[1] if len(intf.dim_aff) > 1 else 2
+        d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else 4
+        has_slid = bool(intf.slid)
+        has_out_of_plane = len(intf.slid_out_plan) >= 2
+        layout = _InterfaceAssemblyLayout(
+            interface=intf,
+            aff_lists=tuple(intf.aff),
+            d0=d0,
+            d1=d1,
+            d2=d2,
+            has_slid=has_slid,
+            has_out_of_plane=has_out_of_plane,
+        )
+        interface_layouts.append(layout)
+
+        for i in range(d0):
+            for j in range(d0):
+                if i < len(intf.aff) and j < len(intf.aff):
+                    _append_interface_scatter(
+                        rows, cols, term_indices, alpha_i, alpha_j,
+                        n=n, term_index=term_index,
+                        aff_i=intf.aff[i], aff_j=intf.aff[j],
+                    )
+                term_index += 1
+
+        if has_slid:
+            for i in range(d1):
+                for j in range(d1):
+                    ai = d0 + i
+                    aj = d0 + j
+                    if ai < len(intf.aff) and aj < len(intf.aff):
+                        _append_interface_scatter(
+                            rows, cols, term_indices, alpha_i, alpha_j,
+                            n=n, term_index=term_index,
+                            aff_i=intf.aff[ai], aff_j=intf.aff[aj],
+                        )
+                    term_index += 1
+
+        if has_out_of_plane:
+            for i in range(d2):
+                for j in range(d2):
+                    ai = d0 + d1 + i
+                    aj = d0 + d1 + j
+                    if ai < len(intf.aff) and aj < len(intf.aff):
+                        _append_interface_scatter(
+                            rows, cols, term_indices, alpha_i, alpha_j,
+                            n=n, term_index=term_index,
+                            aff_i=intf.aff[ai], aff_j=intf.aff[aj],
+                        )
+                    term_index += 1
+
+    return _StiffnessAssemblyPlan(
+        n=n,
+        all_quads=all_quads,
+        quad_terms=tuple(quad_terms),
+        interfaces=tuple(interface_layouts),
+        rows=np.frombuffer(rows, dtype=np.int32),
+        cols=np.frombuffer(cols, dtype=np.int32),
+        term_indices=np.frombuffer(term_indices, dtype=np.int32),
+        alpha_i=np.frombuffer(alpha_i, dtype=np.float64),
+        alpha_j=np.frombuffer(alpha_j, dtype=np.float64),
+        quad_entry_count=quad_entry_count,
+        term_count=term_index,
+    )
+
+
+def _fill_stiffness_terms(plan: _StiffnessAssemblyPlan) -> np.ndarray:
+    terms = np.empty(plan.term_count, dtype=np.float64)
+    index = 0
+    for quad, _aff6 in plan.quad_terms:
+        terms[index] = float(quad.status.k)
+        index += 1
+    for layout in plan.interfaces:
+        intf = layout.interface
+        for i in range(layout.d0):
+            row = intf.status.k[i]
+            for j in range(layout.d0):
+                terms[index] = float(row[j])
+                index += 1
+        if layout.has_slid:
+            for i in range(layout.d1):
+                row = intf.status.kslid[i]
+                for j in range(layout.d1):
+                    terms[index] = float(row[j])
+                    index += 1
+        if layout.has_out_of_plane:
+            for i in range(layout.d2):
+                row = intf.status.kslid_out_plan[i]
+                for j in range(layout.d2):
+                    terms[index] = float(row[j])
+                    index += 1
+    if index != plan.term_count:
+        raise _AssemblyPlanIncompatible(
+            f"stiffness term layout changed ({index} != {plan.term_count})"
+        )
+    return terms
+
+
+def _assemble_global_k_cached(model: Model, plan: _StiffnessAssemblyPlan) -> sp.csc_matrix:
+    terms = _fill_stiffness_terms(plan)
+    # Reuse the indexed term copy as the output work array instead of
+    # materializing a second full-size ``entry_terms`` float64 array.
+    # Multiplication order is
+    # deliberately unchanged from the legacy Python expression:
+    #     v = k_ij * ei.alfa * ej.alfa
+    values = terms[plan.term_indices]
+    values *= plan.alpha_i
+    values *= plan.alpha_j
+
+    keep = ~(np.abs(values) < 1.0e-30)
+    # Interface scatter has an additional early k_ij threshold. Quad scatter
+    # does not.  Map a compact per-term boolean through the entry indices
+    # rather than gathering all local terms into another float64 array.
+    if plan.quad_entry_count < len(keep):
+        interface_slice = slice(plan.quad_entry_count, None)
+        nonzero_terms = ~(np.abs(terms) < 1.0e-30)
+        keep[interface_slice] &= nonzero_terms[
+            plan.term_indices[interface_slice]
+        ]
+
+    return sp.coo_matrix(
+        (
+            values[keep],
+            (plan.rows[keep], plan.cols[keep]),
+        ),
+        shape=(plan.n, plan.n),
+    ).tocsc()
+
+
+def _get_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
+    plan = getattr(model, "_perf_stiffness_assembly_plan", None)
+    if isinstance(plan, _StiffnessAssemblyPlan) and plan.compatible(model):
+        return plan
+    plan = _build_stiffness_assembly_plan(model)
+    setattr(model, "_perf_stiffness_assembly_plan", plan)
+    return plan
+
+
+def assemble_global_k(
+    model: Model,
+    alfa: float = 0.0,
+    *,
+    recompute_elements: bool = True,
+) -> sp.csc_matrix:
+    """Assemble global stiffness, reusing static scatter topology when safe.
+
+    ``recompute_elements=True`` intentionally retains the original standalone
+    implementation. The nonlinear solver first computes every element block
+    and calls this function with ``recompute_elements=False``; only that path
+    uses the topology cache. If the prepared topology has changed, the cache is
+    rebuilt. If a cached layout cannot be consumed safely, the authoritative
+    legacy scatter remains the fallback.
+    """
+    if recompute_elements:
+        return _assemble_global_k_legacy(
+            model, alfa=alfa, recompute_elements=True
+        )
+    try:
+        plan = _get_stiffness_assembly_plan(model)
+        return _assemble_global_k_cached(model, plan)
+    except _AssemblyPlanIncompatible:
+        if hasattr(model, "_perf_stiffness_assembly_plan"):
+            delattr(model, "_perf_stiffness_assembly_plan")
+        return _assemble_global_k_legacy(
+            model, alfa=alfa, recompute_elements=False
+        )
 
 
 def get_restrained_dofs(model: Model, K: Optional[sp.csc_matrix] = None) -> Set[int]:

@@ -110,3 +110,180 @@ def test_local_increment_reuses_private_work_buffer() -> None:
     second = interface._local_increment(np.zeros(12, dtype=np.float64))
     assert id(second) == first_id
     assert second == [0.0] * 12
+
+
+def _old_compute_kfless(interface: Interface, alfa: float) -> list[list[float]]:
+    """Pre-cache scalar stiffness path retained as a bitwise oracle."""
+    d0 = interface.dim_aff[0] if interface.dim_aff else 6
+    size = d0 if d0 > 4 else 6
+    stiffness = [[0.0 for _ in range(size)] for _ in range(size)]
+    nrow = max(interface.nrow, 1)
+    ncol = max(interface.ncol, 1)
+
+    num = num2 = num3 = 0.0
+    for row in range(nrow):
+        for col in range(ncol):
+            spring_index = interface.idx(row, col)
+            if spring_index >= len(interface.trasv_1):
+                continue
+            di = interface.get_di(row, col)
+            dj = interface.get_dj(row, col)
+            spring_k = interface.trasv_1[spring_index].get_k(alfa)
+            num += spring_k * di * di
+            num3 += spring_k * di * dj
+            num2 += spring_k * dj * dj
+
+    length = interface.length
+    length2 = length * length
+    if length2 > 1.0e-30:
+        num /= length2
+        num3 /= length2
+        num2 /= length2
+
+    constrained = interface.interfaccia_vincolata_computed()
+    if constrained:
+        num4 = num5 = num6 = 0.0
+        for col in range(ncol):
+            for row in range(nrow):
+                spring_index = interface.idx(row, col)
+                if spring_index >= len(interface.trasv_1):
+                    continue
+                di = interface.get_di(row, col)
+                dm = interface.get_dm(row, col)
+                spring_k = interface.trasv_1[spring_index].get_k(alfa)
+                num4 += spring_k
+                num5 -= spring_k * dm
+                num6 += spring_k * dm * dm
+        stiffness[0][0] = num4
+        stiffness[0][1] = num5
+        stiffness[1][1] = num6
+        stiffness[0][2] = -num - num3
+        stiffness[0][3] = -num3 - num2
+        stiffness[1][2] = num3 * length / 2.0 - num * length / 2.0
+        stiffness[1][3] = num2 * length / 2.0 - num3 * length / 2.0
+        stiffness[2][2] = num
+        stiffness[2][3] = num3
+        stiffness[3][3] = num2
+    else:
+        stiffness[0][0] = num2
+        stiffness[0][1] = num3
+        stiffness[0][2] = -num3
+        stiffness[0][3] = -num2
+        stiffness[1][1] = num
+        stiffness[1][2] = -num
+        stiffness[1][3] = -num3
+        stiffness[2][2] = num
+        stiffness[2][3] = num3
+        stiffness[3][3] = num2
+
+    for row in range(4):
+        for col in range(row + 1, 4):
+            stiffness[col][row] = stiffness[row][col]
+
+    d2 = interface.dim_aff[2] if len(interface.dim_aff) > 2 else 4
+    if d2 <= 0:
+        return stiffness
+
+    num7 = 0.0
+    for col in range(ncol):
+        for row in range(nrow):
+            spring_index = interface.idx(row, col)
+            if spring_index >= len(interface.trasv_1):
+                continue
+            spring_k = interface.trasv_1[spring_index].get_k(alfa)
+            ecc = interface.ecc_spring(row, col)
+            num7 += spring_k * ecc * ecc
+    stiffness[4][4] = num7
+    stiffness[5][5] = num7
+    stiffness[4][5] = -num7
+    stiffness[5][4] = -num7
+
+    num7 = 0.0
+    num8 = 0.0
+    for col in range(ncol):
+        for row in range(nrow):
+            spring_index = interface.idx(row, col)
+            if spring_index >= len(interface.trasv_1):
+                continue
+            spring_k = interface.trasv_1[spring_index].get_k(alfa)
+            di = interface.get_di(row, col)
+            dj = interface.get_dj(row, col)
+            ecc = interface.ecc_spring(row, col)
+            num7 += spring_k * dj * ecc
+            num8 += spring_k * di * ecc
+    if length > 1.0e-30:
+        num7 /= length
+        num8 /= length
+
+    if not constrained:
+        stiffness[0][4] = -num7
+        stiffness[1][4] = -num8
+        stiffness[2][4] = num8
+        stiffness[3][4] = num7
+        stiffness[0][5] = num7
+        stiffness[1][5] = num8
+        stiffness[2][5] = -num8
+        stiffness[3][5] = -num7
+    else:
+        stiffness[0][4] = -num7 - num8
+        stiffness[1][4] = (-num8 + num7) * length / 2.0
+        stiffness[2][4] = num8
+        stiffness[3][4] = num7
+        stiffness[0][5] = num7 + num8
+        stiffness[1][5] = (num8 - num7) * length / 2.0
+        stiffness[2][5] = -num8
+        stiffness[3][5] = -num7
+
+    for row in range(4):
+        stiffness[4][row] = stiffness[row][4]
+        stiffness[5][row] = stiffness[row][5]
+    return stiffness
+
+
+def _make_stiffness_interface(*, constrained: bool) -> Interface:
+    from histra.springs.base import Spring
+    from histra.types.point import Point
+
+    interface = Interface(length=2.75, nrow=3, ncol=4, nspring=12)
+    interface.vint2d = [
+        Point(x=0.10, y=-0.85),
+        Point(x=2.55, y=-0.70),
+        Point(x=2.70, y=0.95),
+        Point(x=0.05, y=0.80),
+    ]
+    interface.trasv_1 = [
+        Spring(k=2.0 + 0.17 * index, k_tang=3.0 + 0.13 * index)
+        for index in range(12)
+    ]
+    if constrained:
+        interface.parent_type_element1 = "Restraint"
+    return interface
+
+
+def test_cached_flexural_stiffness_is_bitwise_equal_to_scalar_reference() -> None:
+    for constrained in (False, True):
+        for alfa in (0.0, 0.37, 1.0):
+            interface = _make_stiffness_interface(constrained=constrained)
+            expected = np.asarray(_old_compute_kfless(interface, alfa))
+
+            interface._compute_kfless(alfa)
+            actual = np.asarray(interface.status.k)
+
+            np.testing.assert_array_equal(actual, expected)
+
+
+def test_stiffness_geometry_cache_reuses_values_without_geometry_calls(monkeypatch) -> None:
+    interface = _make_stiffness_interface(constrained=False)
+    interface._compute_kfless(1.0)
+    expected = np.asarray(interface.status.k).copy()
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("cached stiffness must not recompute spring geometry")
+
+    monkeypatch.setattr(interface, "get_di", fail)
+    monkeypatch.setattr(interface, "get_dj", fail)
+    monkeypatch.setattr(interface, "get_dm", fail)
+    monkeypatch.setattr(interface, "ecc_spring", fail)
+    interface._compute_kfless(1.0)
+
+    np.testing.assert_array_equal(np.asarray(interface.status.k), expected)
