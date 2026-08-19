@@ -306,3 +306,43 @@ def test_flexural_stiffness_reads_each_transverse_tangent_once(monkeypatch) -> N
     interface._compute_kfless(0.37)
 
     assert calls == len(interface.trasv_1)
+
+
+def test_stiffness_geometry_cache_is_bitwise_equal_to_geometry_helpers() -> None:
+    """Cache construction must preserve the scalar bilinear interpolation exactly."""
+    from histra.springs.base import Spring
+    from histra.types.point import Point
+
+    cases = (
+        (1, 1, 1, 2.75),
+        (3, 4, 12, 2.75),
+        (9, 9, 81, 342.4),
+        (7, 11, 53, 139.8),
+        (-2, -3, 6, 10.0),
+    )
+    points = [
+        Point(x=0.123456789, y=-8.765432101),
+        Point(x=139.71234567, y=-7.125678901),
+        Point(x=141.03456789, y=336.9876543),
+        Point(x=-0.456789012, y=342.1234567),
+    ]
+
+    for nrow, ncol, count, length in cases:
+        interface = Interface(length=length, nrow=nrow, ncol=ncol, nspring=count)
+        interface.vint2d = deepcopy(points)
+        interface.trasv_1 = [Spring(k=1.0) for _ in range(count)]
+
+        expected_di: list[float] = []
+        expected_ecc: list[float] = []
+        effective_ncol = max(ncol, 1)
+        for index in range(count):
+            row, col = divmod(index, effective_ncol)
+            expected_di.append(interface.get_di(row, col))
+            expected_ecc.append(interface.ecc_spring(row, col))
+        expected_dj = [length - value for value in expected_di]
+
+        interface._ensure_stiffness_geometry_cache()
+
+        np.testing.assert_array_equal(interface._perf_di, expected_di)
+        np.testing.assert_array_equal(interface._perf_dj, expected_dj)
+        np.testing.assert_array_equal(interface._perf_ecc, expected_ecc)

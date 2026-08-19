@@ -191,12 +191,40 @@ class Interface:
         ):
             return
 
+        nrow = max(self.nrow, 1)
+        ncol = max(self.ncol, 1)
+        xis = tuple(
+            -1.0 + 2.0 / ncol * col + 1.0 / ncol
+            for col in range(ncol)
+        )
+        row_count = max(nrow, (count + ncol - 1) // ncol)
+        etas = tuple(
+            -1.0 + 2.0 / nrow * row + 1.0 / nrow
+            for row in range(row_count)
+        )
+        v0, v1, v2, v3 = self.vint2d
         di_values: list[float] = []
         ecc_values: list[float] = []
         for idx in range(count):
-            row, col = divmod(idx, max(self.ncol, 1))
-            di_values.append(self.get_di(row, col))
-            ecc_values.append(self.ecc_spring(row, col))
+            row, col = divmod(idx, ncol)
+            xi = xis[col]
+            eta = etas[row]
+            one_minus_xi = 1.0 - xi
+            one_plus_xi = 1.0 + xi
+            one_minus_eta = 1.0 - eta
+            one_plus_eta = 1.0 + eta
+            di_values.append(
+                v0.x * one_minus_xi * one_minus_eta / 4.0
+                + v1.x * one_plus_xi * one_minus_eta / 4.0
+                + v2.x * one_plus_xi * one_plus_eta / 4.0
+                + v3.x * one_minus_xi * one_plus_eta / 4.0
+            )
+            ecc_values.append(
+                v0.y * one_minus_xi * one_minus_eta / 4.0
+                + v1.y * one_plus_xi * one_minus_eta / 4.0
+                + v2.y * one_plus_xi * one_plus_eta / 4.0
+                + v3.y * one_minus_xi * one_plus_eta / 4.0
+            )
         self._perf_di = tuple(di_values)
         self._perf_dj = tuple(self.length - value for value in di_values)
         self._perf_ecc = tuple(ecc_values)
