@@ -287,3 +287,22 @@ def test_stiffness_geometry_cache_reuses_values_without_geometry_calls(monkeypat
     interface._compute_kfless(1.0)
 
     np.testing.assert_array_equal(np.asarray(interface.status.k), expected)
+
+
+def test_flexural_stiffness_reads_each_transverse_tangent_once(monkeypatch) -> None:
+    """Repeated stiffness sums must reuse the same pure ``Spring.get_k`` value."""
+    from histra.springs.base import Spring
+
+    interface = _make_stiffness_interface(constrained=True)
+    calls = 0
+    original = Spring.get_k
+
+    def counted_get_k(self: Spring, alfa: float = 0.0) -> float:
+        nonlocal calls
+        calls += 1
+        return original(self, alfa)
+
+    monkeypatch.setattr(Spring, "get_k", counted_get_k)
+    interface._compute_kfless(0.37)
+
+    assert calls == len(interface.trasv_1)

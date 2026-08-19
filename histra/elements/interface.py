@@ -319,15 +319,19 @@ class Interface:
         dj_cache = I._perf_dj
         ecc_cache = I._perf_ecc
 
+        spring_count = min(nrow * ncol, len(I.trasv_1))
+        spring_k = [I.trasv_1[index].get_k(alfa) for index in range(spring_count)]
+
         num = num2 = num3 = 0.0
         for i in range(nrow):
+            row_offset = i * ncol
             for j in range(ncol):
-                idx_ = I.idx(i, j)
-                if idx_ >= len(I.trasv_1):
+                idx_ = row_offset + j
+                if idx_ >= spring_count:
                     continue
                 di = di_cache[idx_]
                 dj = dj_cache[idx_]
-                k = I.trasv_1[idx_].get_k(alfa)
+                k = spring_k[idx_]
                 num += k * di * di
                 num3 += k * di * dj
                 num2 += k * dj * dj
@@ -345,12 +349,12 @@ class Interface:
             num4 = num5 = num6 = 0.0
             for i_ in range(ncol):
                 for j_ in range(nrow):
-                    idx_ = I.idx(j_, i_)
-                    if idx_ >= len(I.trasv_1):
+                    idx_ = j_ * ncol + i_
+                    if idx_ >= spring_count:
                         continue
                     di = di_cache[idx_]
                     dm = 0.5 * I.length - di
-                    k = I.trasv_1[idx_].get_k(alfa)
+                    k = spring_k[idx_]
                     num4 += k
                     num5 -= k * dm
                     num6 += k * dm * dm
@@ -388,34 +392,26 @@ class Interface:
             return
 
         # ── Out-of-plane coupling (DOFs 4,5) ────────────────────────────────
-        num7 = 0.0
-        for i_ in range(ncol):
-            for j_ in range(nrow):
-                idx_ = I.idx(j_, i_)
-                if idx_ >= len(I.trasv_1):
-                    continue
-                k = I.trasv_1[idx_].get_k(alfa)
-                ecc = ecc_cache[idx_]
-                num7 += k * ecc * ecc
-
-        K[4][4] = num7
-        K[5][5] = num7
-        K[4][5] = -num7
-        K[5][4] = -num7
-
+        out_of_plane_diag = 0.0
         num7 = 0.0
         num8 = 0.0
         for i_ in range(ncol):
             for j_ in range(nrow):
-                idx_ = I.idx(j_, i_)
-                if idx_ >= len(I.trasv_1):
+                idx_ = j_ * ncol + i_
+                if idx_ >= spring_count:
                     continue
-                k = I.trasv_1[idx_].get_k(alfa)
+                k = spring_k[idx_]
                 di = di_cache[idx_]
                 dj = dj_cache[idx_]
                 ecc = ecc_cache[idx_]
+                out_of_plane_diag += k * ecc * ecc
                 num7 += k * dj * ecc
                 num8 += k * di * ecc
+
+        K[4][4] = out_of_plane_diag
+        K[5][5] = out_of_plane_diag
+        K[4][5] = -out_of_plane_diag
+        K[5][4] = -out_of_plane_diag
 
         if L > 1e-30:
             num7 /= L
