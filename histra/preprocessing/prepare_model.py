@@ -851,6 +851,305 @@ def _configure_combined_hysteretic(
     return out
 
 
+
+def _series_array(k1: np.ndarray, k2: np.ndarray) -> np.ndarray:
+    """Vector form of ``_series(..., restrained=False)``."""
+    denominator = k1 + k2
+    result = np.zeros_like(denominator, dtype=np.float64)
+    np.divide(k1 * k2, denominator, out=result, where=denominator != 0.0)
+    return result
+
+
+def _hysteretic_side_arrays(
+    props: np.ndarray,
+    law: _HystereticLaw,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute side yielding/tangent arrays for one interface in bulk.
+
+    ``props`` has columns ``K, area, length`` and has already passed the exact
+    scalar validity checks.  Material-law branches are invariant for every
+    fibre on this side, so evaluating them once per NumPy array avoids hundreds
+    of thousands of repeated Python calls and attribute lookups.
+    """
+    k = props[:, 0]
+    area = props[:, 1]
+
+    if law.tensile_curve == "Elastic":
+        fy_t = k * 100000000.0
+        kt_t = k.copy()
+    else:
+        fy_t = area * law.fy_t
+        if law.tensile_curve == "LinearHardening":
+            kt_t = k * law.ratio_et_t
+        elif law.tensile_curve == "LinearSoftening" and law.fy_t != 0.0:
+            # Preserve scalar operation order: fy_t is first formed from
+            # area*law.fy_t and then divided by area again.
+            ultimate_t = 2.0 * law.G_t / (fy_t / area) + fy_t / k
+            kt_t = -fy_t / (ultimate_t - fy_t / k)
+        else:
+            kt_t = np.zeros_like(k)
+
+    if law.compressive_curve == "Elastic":
+        fy_c = -k * 100000000.0
+        kt_c = k.copy()
+    else:
+        fy_c = -area * law.fy_c
+        if law.compressive_curve == "LinearHardening":
+            kt_c = k * law.ratio_et_c
+        elif law.compressive_curve == "LinearSoftening" and law.fy_c != 0.0:
+            # Preserve scalar operation order for the same reason as tension.
+            ultimate_c = 2.0 * law.G_c / (fy_c / area) + fy_c / k
+            kt_c = -fy_c / (ultimate_c - fy_c / k)
+        else:
+            kt_c = np.zeros_like(k)
+
+    return fy_t, fy_c, kt_t, kt_c
+
+
+def _apply_ultimate_displacement_arrays(
+    *,
+    law: _HystereticLaw,
+    k: np.ndarray,
+    area: np.ndarray,
+    fy_t: np.ndarray,
+    fy_c: np.ndarray,
+    tensile_linear_softening: np.ndarray,
+    tensile_exponential: np.ndarray,
+    compressive_linear_softening: np.ndarray,
+    compressive_parabolic: np.ndarray,
+    ur_t: np.ndarray,
+    ur_c: np.ndarray,
+    kt_t: np.ndarray,
+    kt_c: np.ndarray,
+) -> None:
+    """Vector equivalent of ``_set_ultimate_displacement(out, law, law)``."""
+    base_t = fy_t / k
+    if law.tensile_curve in {"LinearSoftening", "Exponential"}:
+        active = (area != 0.0) & (fy_t != 0.0)
+        mask = active & tensile_linear_softening
+        if np.any(mask):
+            value = 2.0 * law.G_t / (fy_t[mask] / area[mask]) + base_t[mask]
+            ur_t[mask] = value
+            kt_t[mask] = -fy_t[mask] / (value - base_t[mask])
+        mask = active & tensile_exponential
+        if np.any(mask):
+            ur_t[mask] = (
+                law.G_t / (fy_t[mask] / area[mask]) + base_t[mask]
+            )
+        # Scalar code applies this clamp for every active row even when the
+        # selected combined curve family is neither softening nor exponential.
+        if np.any(active):
+            ur_t[active] = np.maximum(ur_t[active], base_t[active])
+    elif law.tensile_curve != "Elastic" and law.fy_t and law.E:
+        ur_t[:] = base_t * law.eps_u_t / (law.fy_t / law.E)
+
+    base_c = fy_c / k
+    if law.compressive_curve in {"LinearSoftening", "Parabolic"}:
+        active = (area != 0.0) & (fy_c != 0.0)
+        mask = active & compressive_linear_softening
+        if np.any(mask):
+            value = 2.0 * law.G_c / (fy_c[mask] / area[mask]) + base_c[mask]
+            ur_c[mask] = value
+            kt_c[mask] = -fy_c[mask] / (value - base_c[mask])
+        mask = active & compressive_parabolic
+        if np.any(mask):
+            ur_c[mask] = (
+                3.0 * law.G_c / (2.0 * fy_c[mask] / area[mask])
+                + 5.0 * fy_c[mask] / (3.0 * k[mask])
+            )
+        if np.any(active):
+            ur_c[active] = np.minimum(ur_c[active], base_c[active])
+    elif law.compressive_curve != "Elastic" and law.fy_c and law.E:
+        ur_c[:] = base_c * law.eps_u_c / (law.fy_c / law.E)
+
+
+def _configure_combined_hysteretic_batch(
+    props1: np.ndarray,
+    law1: _HystereticLaw,
+    props2: np.ndarray,
+    law2: _HystereticLaw,
+    *,
+    interface_key: int,
+) -> list[SpringHysteretic]:
+    """Create all Quad/Quad transverse springs for one interface numerically.
+
+    This is the array form of repeated ``_configure_combined_hysteretic``.
+    Constitutive arithmetic remains float64 and follows the same operation
+    sequence.  The unavoidable Python work is reduced to constructing and
+    publishing the final spring objects.
+    """
+    p1 = np.asarray(props1, dtype=np.float64)
+    p2 = np.asarray(props2, dtype=np.float64)
+    if p1.shape != p2.shape or p1.ndim != 2 or p1.shape[1] != 3:
+        raise ValueError(
+            f"Expected matching (n, 3) transverse-property arrays; "
+            f"received {p1.shape} and {p2.shape}"
+        )
+    n = p1.shape[0]
+    if n == 0:
+        return []
+
+    # Preserve the scalar validation/error order:
+    # cell -> side1(K,area,length) -> side2(K,area,length).
+    invalid = np.column_stack((
+        (~np.isfinite(p1[:, 0])) | (p1[:, 0] <= 0.0),
+        (~np.isfinite(p1[:, 1])) | (p1[:, 1] <= 0.0),
+        (~np.isfinite(p1[:, 2])) | (p1[:, 2] <= 0.0),
+        (~np.isfinite(p2[:, 0])) | (p2[:, 0] <= 0.0),
+        (~np.isfinite(p2[:, 1])) | (p2[:, 1] <= 0.0),
+        (~np.isfinite(p2[:, 2])) | (p2[:, 2] <= 0.0),
+    ))
+    bad = np.flatnonzero(invalid)
+    if bad.size:
+        flat = int(bad[0])
+        index, field = divmod(flat, 6)
+        side = p1 if field < 3 else p2
+        component = field if field < 3 else field - 3
+        value = side[index, component]
+        if component == 0:
+            detail = (
+                "Cannot create a transverse hysteretic spring with "
+                f"stiffness K={value!r}."
+            )
+        elif component == 1:
+            detail = (
+                "Cannot create a transverse hysteretic spring with "
+                f"area={value!r}."
+            )
+        else:
+            detail = (
+                "Cannot create a transverse hysteretic spring with "
+                f"length={value!r}."
+            )
+        raise ModelPreparationError(
+            f"Interface {interface_key}, transverse cell {index}: {detail}"
+        )
+
+    k1, area1, length1 = p1[:, 0], p1[:, 1], p1[:, 2]
+    k2, area2, length2 = p2[:, 0], p2[:, 1], p2[:, 2]
+    fy1_t, fy1_c, kt1_t, kt1_c = _hysteretic_side_arrays(p1, law1)
+    fy2_t, fy2_c, kt2_t, kt2_c = _hysteretic_side_arrays(p2, law2)
+
+    k = _series_array(k1, k2)
+
+    tension_from_1 = fy1_t <= fy2_t
+    fy_t = np.where(tension_from_1, fy1_t, fy2_t)
+    tension_curve_1 = tension_from_1
+
+    # Preserve the two distinct C# tie conditions from the scalar code.
+    compression_area_from_2 = fy1_c <= fy2_c
+    fy_c = np.where(compression_area_from_2, fy2_c, fy1_c)
+    area = np.where(compression_area_from_2, area2, area1)
+    compression_curve_1 = fy1_c >= fy2_c
+
+    tensile_linear_softening = np.where(
+        tension_curve_1,
+        law1.tensile_curve == "LinearSoftening",
+        law2.tensile_curve == "LinearSoftening",
+    )
+    tensile_exponential = np.where(
+        tension_curve_1,
+        law1.tensile_curve == "Exponential",
+        law2.tensile_curve == "Exponential",
+    )
+    tensile_elastic = np.where(
+        tension_curve_1,
+        law1.tensile_curve == "Elastic",
+        law2.tensile_curve == "Elastic",
+    )
+    compressive_linear_softening = np.where(
+        compression_curve_1,
+        law1.compressive_curve == "LinearSoftening",
+        law2.compressive_curve == "LinearSoftening",
+    )
+    compressive_parabolic = np.where(
+        compression_curve_1,
+        law1.compressive_curve == "Parabolic",
+        law2.compressive_curve == "Parabolic",
+    )
+    compressive_elastic = np.where(
+        compression_curve_1,
+        law1.compressive_curve == "Elastic",
+        law2.compressive_curve == "Elastic",
+    )
+
+    series_kt_t = _series_array(kt1_t, kt2_t)
+    series_kt_c = _series_array(kt1_c, kt2_c)
+    kt_t = np.where(tensile_elastic, k, series_kt_t)
+    kt_c = np.where(compressive_elastic, k, series_kt_c)
+
+    ur_t = np.maximum(fy_t / k, 0.0)
+    ur_c = np.minimum(fy_c / k, 0.0)
+
+    _apply_ultimate_displacement_arrays(
+        law=law1, k=k, area=area, fy_t=fy_t, fy_c=fy_c,
+        tensile_linear_softening=tensile_linear_softening,
+        tensile_exponential=tensile_exponential,
+        compressive_linear_softening=compressive_linear_softening,
+        compressive_parabolic=compressive_parabolic,
+        ur_t=ur_t, ur_c=ur_c, kt_t=kt_t, kt_c=kt_c,
+    )
+    ur1_t = ur_t.copy()
+    ur1_c = ur_c.copy()
+    _apply_ultimate_displacement_arrays(
+        law=law2, k=k, area=area, fy_t=fy_t, fy_c=fy_c,
+        tensile_linear_softening=tensile_linear_softening,
+        tensile_exponential=tensile_exponential,
+        compressive_linear_softening=compressive_linear_softening,
+        compressive_parabolic=compressive_parabolic,
+        ur_t=ur_t, ur_c=ur_c, kt_t=kt_t, kt_c=kt_c,
+    )
+    ur2_t = ur_t
+    ur2_c = ur_c
+    ur_t = np.where(
+        (ur1_t != 0.0) & (ur2_t != 0.0),
+        np.minimum(ur1_t, ur2_t),
+        np.maximum(ur1_t, ur2_t),
+    )
+    ur_c = np.where(
+        (ur1_c != 0.0) & (ur2_c != 0.0),
+        np.maximum(ur1_c, ur2_c),
+        np.minimum(ur1_c, ur2_c),
+    )
+
+    alfau_t = max(float(law1.alfa_u_t), float(law2.alfa_u_t))
+    alfau_c = max(float(law1.alfa_u_c), float(law2.alfa_u_c))
+    alfar_t = max(float(law1.alfa_r_t), float(law2.alfa_r_t))
+    alfar_c = max(float(law1.alfa_r_c), float(law2.alfa_r_c))
+    total_length = length1 + length2
+
+    springs: list[SpringHysteretic] = []
+    append = springs.append
+    new_spring = _new_hysteretic_spring
+    initialize = SpringHysteretic.initialize
+    for index in range(n):
+        out = new_spring()
+        out.k = float(k[index])
+        out.fy = [float(fy_t[index]), float(fy_c[index])]
+        out.area = float(area[index])
+        out.length = float(total_length[index])
+        out.alfau = [alfau_t, alfau_c]
+        out.alfar = [alfar_t, alfar_c]
+        out.kt = [float(kt_t[index]), float(kt_c[index])]
+        out.ur = [float(ur_t[index]), float(ur_c[index])]
+        out.tensile_curve_type = (
+            law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve
+        )
+        out.compressive_curve_type = (
+            law1.compressive_curve
+            if compression_curve_1[index]
+            else law2.compressive_curve
+        )
+        out.key = index
+        out.parent_key = interface_key
+        out.parent_type = "Interface"
+        out.spring_purpose = "Transversal1"
+        # C# interface fibres publish zero effective length after combination.
+        out.length = 0.0
+        initialize(out)
+        append(out)
+    return springs
+
 def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:
     """Copy one configured hysteretic spring without recursive deepcopy.
 
@@ -1320,6 +1619,74 @@ def _clip_convex_quad_2d(
     return _clean_clipped_polygon(output)
 
 
+def _convex_quad_overlap_prefilter_batch(
+    first: np.ndarray, second: np.ndarray, normals: np.ndarray,
+) -> np.ndarray:
+    """Conservatively reject separated coplanar convex quads in bulk.
+
+    The broad phase intentionally uses axis-aligned boxes, so many coplanar
+    face pairs reach the Python Sutherland-Hodgman narrow phase even though
+    their polygons are clearly separated.  For convex quads, the separating
+    axis theorem provides a numerical prefilter using the four edge normals
+    from each polygon.
+
+    This function is *not* an alternate intersection implementation: surviving
+    pairs still go through ``_coplanar_quad_intersection_prechecked``.  The
+    separation tolerance is twice the clipping tolerance so borderline/touching
+    contacts are deliberately retained for the authoritative scalar path.
+    """
+    first = np.asarray(first, dtype=np.float64)
+    second = np.asarray(second, dtype=np.float64)
+    normals = np.asarray(normals, dtype=np.float64)
+    if first.shape != second.shape or first.ndim != 3 or first.shape[1:] != (4, 3):
+        raise ValueError(
+            f"Expected matching (n, 4, 3) quad batches; got "
+            f"{first.shape} and {second.shape}"
+        )
+    if normals.shape != (first.shape[0], 3):
+        raise ValueError(
+            f"Expected normals shape {(first.shape[0], 3)}; got {normals.shape}"
+        )
+    if first.shape[0] == 0:
+        return np.empty(0, dtype=np.bool_)
+
+    first_edges = np.roll(first, -1, axis=1) - first
+    second_edges = np.roll(second, -1, axis=1) - second
+    axes = np.concatenate(
+        (
+            np.cross(normals[:, None, :], first_edges),
+            np.cross(normals[:, None, :], second_edges),
+        ),
+        axis=1,
+    )
+    axis_norm2 = np.sum(axes * axes, axis=2)
+
+    first_projection = np.einsum(
+        "nvd,nad->nav", first, axes, optimize=False
+    )
+    second_projection = np.einsum(
+        "nvd,nad->nav", second, axes, optimize=False
+    )
+    # Use a *physical-distance* margin twice the clipping tolerance. The SAT
+    # axes have magnitude equal to the source edge length, hence the projection
+    # tolerance must be scaled by |axis|. This is deliberately more conservative
+    # than the scalar clipping half-space tolerance for long edges.
+    tolerance = (
+        2.0 * _CONTACT_DISTANCE_TOLERANCE * np.sqrt(axis_norm2)
+    )
+    separated = (
+        (
+            np.max(first_projection, axis=2)
+            < np.min(second_projection, axis=2) - tolerance
+        )
+        | (
+            np.max(second_projection, axis=2)
+            < np.min(first_projection, axis=2) - tolerance
+        )
+    ) & (axis_norm2 > 1.0e-24)
+    return ~np.any(separated, axis=1)
+
+
 def _coplanar_quad_intersection_prechecked(
     first: np.ndarray, second: np.ndarray, normal_first: np.ndarray,
 ) -> list[np.ndarray] | None:
@@ -1536,9 +1903,22 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
             axis=1,
         ))
         coplanar = plane_distance <= _CONTACT_DISTANCE_TOLERANCE
+        candidate = candidate[coplanar]
+        face1 = face1[coplanar]
+        face2 = face2[coplanar]
+        normals1 = normals1[coplanar]
+        if candidate.size:
+            first_faces = faces[first[candidate], face1]
+            second_faces = faces[second[candidate], face2]
+            overlap = _convex_quad_overlap_prefilter_batch(
+                first_faces, second_faces, normals1
+            )
+            candidate = candidate[overlap]
+            face1 = face1[overlap]
+            face2 = face2[overlap]
         surface_candidates.extend(zip(
-            first[candidate[coplanar]].tolist(), face1[coplanar].tolist(),
-            second[candidate[coplanar]].tolist(), face2[coplanar].tolist(),
+            first[candidate].tolist(), face1.tolist(),
+            second[candidate].tolist(), face2.tolist(),
         ))
 
     surface_candidates.sort(key=lambda item: (item[0], item[2], item[1], item[3]))
@@ -2635,71 +3015,58 @@ def _create_interface_springs(
         law_cache=flex_law_cache,
     )
 
-    intf.trasv_1 = []
-    append_transverse = intf.trasv_1.append
-    for index in range(cell_count):
-        k1, area1, length1 = map(float, props1[index])
-        k2, area2, length2 = map(float, props2[index])
-        if not restrained:
-            try:
-                spring = _configure_combined_hysteretic(
-                    k1, area1, length1, law1,
-                    k2, area2, length2, law2,
+    if not restrained:
+        intf.trasv_1 = _configure_combined_hysteretic_batch(
+            props1, law1, props2, law2, interface_key=intf.key
+        )
+    else:
+        intf.trasv_1 = []
+        append_transverse = intf.trasv_1.append
+        for index in range(cell_count):
+            k1, area1, length1 = map(float, props1[index])
+            k2, area2, length2 = map(float, props2[index])
+
+            if k1 == -1.0:
+                sp1 = _new_hysteretic_spring()
+                sp1.k, sp1.area = -1.0, area1
+            else:
+                try:
+                    sp1 = _configure_hysteretic(k1, area1, length1, law1)
+                except ModelPreparationError as exc:
+                    raise ModelPreparationError(
+                        f"Interface {intf.key}, transverse cell {index}, parent 1 "
+                        f"({intf.parent_type_element1} {intf.parent_element_key1}, "
+                        f"face {intf.face1}): {exc}"
+                    ) from exc
+            if k2 == -1.0:
+                sp2 = _new_hysteretic_spring()
+                sp2.k, sp2.area = -1.0, area2
+            else:
+                try:
+                    sp2 = _configure_hysteretic(k2, area2, length2, law2)
+                except ModelPreparationError as exc:
+                    raise ModelPreparationError(
+                        f"Interface {intf.key}, transverse cell {index}, parent 2 "
+                        f"({intf.parent_type_element2} {intf.parent_element_key2}, "
+                        f"face {intf.face2}): {exc}"
+                    ) from exc
+            if custom_material is not None and restrained:
+                # C# Interface.SetSpring: for a custom material on a restraint/Quad
+                # interface, clone the non-restraint spring rather than combining
+                # it with the rigid restraint-side placeholder.
+                spring = _copy_hysteretic_spring(
+                    sp2 if intf.parent_type_element1 == "Restraint" else sp1
                 )
-            except ModelPreparationError as exc:
-                raise ModelPreparationError(
-                    f"Interface {intf.key}, transverse cell {index}: {exc}"
-                ) from exc
+            else:
+                spring = _combine_hysteretic(
+                    sp1, sp2, restrained, law1, law2
+                )
             spring.key = index
             spring.parent_key = intf.key
             spring.parent_type = "Interface"
             spring.spring_purpose = "Transversal1"
             spring.length = 0.0
             append_transverse(spring)
-            continue
-
-        if k1 == -1.0:
-            sp1 = _new_hysteretic_spring()
-            sp1.k, sp1.area = -1.0, area1
-        else:
-            try:
-                sp1 = _configure_hysteretic(k1, area1, length1, law1)
-            except ModelPreparationError as exc:
-                raise ModelPreparationError(
-                    f"Interface {intf.key}, transverse cell {index}, parent 1 "
-                    f"({intf.parent_type_element1} {intf.parent_element_key1}, "
-                    f"face {intf.face1}): {exc}"
-                ) from exc
-        if k2 == -1.0:
-            sp2 = _new_hysteretic_spring()
-            sp2.k, sp2.area = -1.0, area2
-        else:
-            try:
-                sp2 = _configure_hysteretic(k2, area2, length2, law2)
-            except ModelPreparationError as exc:
-                raise ModelPreparationError(
-                    f"Interface {intf.key}, transverse cell {index}, parent 2 "
-                    f"({intf.parent_type_element2} {intf.parent_element_key2}, "
-                    f"face {intf.face2}): {exc}"
-                ) from exc
-        if custom_material is not None and restrained:
-            # C# Interface.SetSpring: for a custom material on a restraint/Quad
-            # interface, clone the non-restraint spring rather than combining
-            # it with the rigid restraint-side placeholder.
-            spring = _copy_hysteretic_spring(
-                sp2 if intf.parent_type_element1 == "Restraint" else sp1
-            )
-        else:
-            spring = _combine_hysteretic(
-                sp1, sp2, restrained, law1, law2
-            )
-        spring.key = index
-        spring.parent_key = intf.key
-        spring.parent_type = "Interface"
-        spring.spring_purpose = "Transversal1"
-        spring.length = 0.0
-        append_transverse(spring)
-
     area = intf.area()
     material1 = _interface_parent_material(
         model,
