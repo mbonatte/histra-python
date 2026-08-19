@@ -5,20 +5,41 @@ from typing import Any
 
 import numpy as np
 
+try:
+    from numba import njit
+except Exception:  # pragma: no cover - optional acceleration
+    njit = None
+
 from histra.model.model import Model
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo, _new_line_search
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
-def _csharp_dot(left: np.ndarray, right: np.ndarray) -> float:
-    """C# MatrixManager.Vector ``^`` reduction order."""
-    if left.shape != right.shape:
-        raise ValueError(f"dot shape mismatch: {left.shape} vs {right.shape}")
+def _csharp_dot_python(left: np.ndarray, right: np.ndarray) -> float:
+    """Scalar C# reduction used as the authoritative fallback/reference."""
     value = 0.0
     for index in range(left.size):
         value += float(left[index]) * float(right[index])
     return value
+
+
+if njit is not None:
+    _csharp_dot_impl = njit(cache=True, nogil=True)(_csharp_dot_python)
+else:  # pragma: no cover
+    _csharp_dot_impl = _csharp_dot_python
+
+
+def _csharp_dot(left: np.ndarray, right: np.ndarray) -> float:
+    """C# MatrixManager.Vector ``^`` reduction order, compiled when possible.
+
+    Fast-math is deliberately disabled.  The loop remains scalar and
+    left-associated, so this changes execution location only, not the
+    floating-point reduction order used for C# parity.
+    """
+    if left.shape != right.shape:
+        raise ValueError(f"dot shape mismatch: {left.shape} vs {right.shape}")
+    return float(_csharp_dot_impl(left, right))
 
 
 def _updates_tangent_each_iteration(an: Any) -> bool:

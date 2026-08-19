@@ -27,7 +27,7 @@ from histra.springs.hysteretic import SpringHysteretic
 from histra.types.phase_enum import PhaseEnum
 
 try:  # optional acceleration dependency
-    from numba import njit
+    from numba import njit, prange
 except Exception:  # pragma: no cover - exercised when numba is unavailable
     njit = None
 
@@ -322,10 +322,10 @@ if njit is not None:
             return -np.inf
         return result
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _evaluate_linear_batch(params, committed, trial, targets, enabled):
         n = targets.size
-        for i in range(n):
+        for i in prange(n):
             if not enabled[i]:
                 continue
             previous_tload = int(trial[i, 5])
@@ -555,7 +555,7 @@ if njit is not None:
             trial[i, 8] = tphase
             trial[i, 9] = ktang
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _evaluate_simple_linear_batch(params, committed, trial, targets, enabled):
         """Specialized C# Hysteretic path for generated masonry fibers.
 
@@ -575,7 +575,7 @@ if njit is not None:
             if compact else TENSILE_CURVE_TYPE_PARAM
         )
 
-        for i in range(targets.size):
+        for i in prange(targets.size):
             if not enabled[i]:
                 continue
             previous_tload = int(trial[i, 5])
@@ -789,13 +789,30 @@ if njit is not None:
             trial[i, 8] = tphase
             trial[i, 9] = ktang
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
+    def _advance_transverse_targets(
+        trial, record_index, num, num2, di, dj, lengths, delta_flex, ecc, targets,
+    ):
+        """Update transverse trial strains with one independent row per fibre.
+
+        Each output row depends only on immutable geometry and its owning
+        interface kinematics, so parallel execution cannot change reduction
+        order or constitutive history.
+        """
+        for i in prange(targets.size):
+            ri = record_index[i]
+            targets[i] = trial[i, 7] + (
+                (num[ri] * dj[i] + num2[ri] * di[i]) / lengths[ri]
+                - delta_flex[ri] * ecc[i]
+            )
+
+    @njit(cache=True, nogil=True, parallel=True)
     def _finish_transverse_batch(
         trial, committed, di, dj, ecc, lengths,
         starts, stops, constrained, local_forces,
         normal_increments, committed_forces, max_displacements,
     ):
-        for record_index in range(starts.size):
+        for record_index in prange(starts.size):
             start = starts[record_index]
             stop = stops[record_index]
             for local_dof in range(6):
@@ -1808,6 +1825,7 @@ else:
     _pos_tangent_typed = None
     _pos_rotlim_typed = None
     _evaluate_linear_batch = None
+    _advance_transverse_targets = None
     _evaluate_simple_linear_batch = None
     _finish_transverse_batch = None
     _map_global_to_local = None
@@ -2961,33 +2979,85 @@ class HystereticBatchRuntime:
             interface.status.max_spring_displacement = float(self._max_displacements[record_index])
 
     def update_domain(self, x: np.ndarray, state: Any) -> None:
-        """Evaluate all managed interfaces and Quads in one compiled call."""
-        _update_domain_batch(
-            x,
-            self._aff_offsets, self._aff_gdls, self._aff_coefficients,
+        """Evaluate all managed interfaces and Quads.
+
+        The constitutive work is split into compiled kernels rather than
+        wrapped in one outer Numba dispatcher.  That allows Numba's parallel
+        scheduler to execute the independent transverse-fibre and per-interface
+        loops concurrently.  The call sequence and every within-spring /
+        within-interface accumulation order remain identical to the original
+        fused implementation.
+        """
+        _map_global_to_local(
+            x, self._aff_offsets, self._aff_gdls, self._aff_coefficients,
+            self._local_du,
+        )
+        _prepare_interface_kinematics(
             self._local_du, self._local_u, self._lengths, self._constrained,
             self._d0s, self._d1s, self._num, self._num2, self._delta_flex,
-            self._pending_values, self._record_index, self._di, self._dj,
-            self._ecc, self._inv_length, self.targets, self._params,
-            self.committed, self.trial, self.enabled, self._simple_hysteretic,
-            self._starts,
-            self._stops, self._local_forces, self._normal_increments,
+            self._pending_values,
+        )
+        _advance_transverse_targets(
+            self.trial, self._record_index, self._num, self._num2, self._di,
+            self._dj, self._lengths, self._delta_flex, self._ecc, self.targets,
+        )
+        evaluator = (
+            _evaluate_simple_linear_batch
+            if self._simple_hysteretic
+            else _evaluate_linear_batch
+        )
+        evaluator(
+            self._params, self.committed, self.trial, self.targets, self.enabled
+        )
+        _finish_transverse_batch(
+            self.trial, self.committed, self._di, self._dj, self._ecc,
+            self._lengths, self._starts, self._stops, self._constrained,
+            self._local_forces, self._normal_increments,
             self._committed_forces, self._max_displacements,
-            self._dist_for, self._slid_index, self._oop0_index,
-            self._oop1_index, self.coulomb_targets, self.coulomb_dns,
-            self.coulomb_params, self.coulomb_state, self.coulomb_enabled,
-            self._dist, self._local_full_forces,
-            self._quad_aff_offsets, self._quad_aff_gdls,
-            self._quad_aff_coefficients, self._quad_local_du,
-            self._quad_local_u, self._quad_edge_offsets,
-            self._quad_edge_records, self._quad_edge_areas,
-            self._quad_d_alfa, self._quad_volumes,
-            int(getattr(state, "step", 0)),
-            self._quad_sigma_initial, self._quad_strains, self._quad_dns,
-            self.quad_params, self.quad_state, self._quad_forces,
+        )
+        if self.coulomb_targets.size:
+            _advance_interface_coulomb_targets(
+                self._pending_values, self._dist_for, self._normal_increments,
+                self._slid_index, self._oop0_index, self._oop1_index,
+                self.coulomb_targets, self.coulomb_dns,
+            )
+            _evaluate_initial_coulomb_batch(
+                self.coulomb_params, self.coulomb_state, self.coulomb_targets,
+                self.coulomb_dns, self.coulomb_enabled,
+            )
+        _assemble_full_interface_forces(
+            self._local_forces, self.coulomb_state, self._slid_index,
+            self._oop0_index, self._oop1_index, self._dist,
+            self._local_full_forces, self._max_displacements,
+            self.coulomb_targets,
+        )
+
+        if self._quad_local_du.shape[0]:
+            _map_global_to_local(
+                x, self._quad_aff_offsets, self._quad_aff_gdls,
+                self._quad_aff_coefficients, self._quad_local_du,
+            )
+            _prepare_quad_kinematics(
+                self._quad_local_du, self._quad_local_u,
+                self._quad_edge_offsets, self._quad_edge_records,
+                self._quad_edge_areas, self._normal_increments,
+                self._committed_forces, self._quad_d_alfa,
+                int(getattr(state, "step", 0)), self._quad_sigma_initial,
+                self._quad_strains, self._quad_dns,
+            )
+            _evaluate_quad_takeda_batch(
+                self.quad_params, self.quad_state, self._quad_strains,
+                self._quad_dns, self._quad_volumes, self._quad_sigma_initial,
+            )
+        _refresh_global_resisting_force(
+            self._quad_d_alfa, self.quad_state, self._quad_forces,
             self._quad_force_offsets, self._quad_force_gdls,
-            self._quad_force_coefficients, self._global_resisting_force,
-            self._max_u_cache,
+            self._quad_force_coefficients, self._local_full_forces,
+            self._aff_offsets, self._aff_gdls, self._aff_coefficients,
+            self._global_resisting_force,
+        )
+        _refresh_max_u_cache(
+            self._quad_local_u, self._max_displacements, self._max_u_cache
         )
         self._objects_trial_synced = False
 
