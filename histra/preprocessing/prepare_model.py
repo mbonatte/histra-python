@@ -2522,10 +2522,10 @@ def _inverse_bilinear_f32_bisection_reference(
     return u, v
 
 
-def _inverse_bilinear_f32(
+def _inverse_bilinear_f32_python(
     vertices: Sequence[np.ndarray], point: np.ndarray
 ) -> tuple[np.float32, np.float32]:
-    """Stable float32 inverse used by the afference compatibility path.
+    """Scalar reference for the float32 afference inverse.
 
     The desktop bisection is retained above as a literal reference, but its
     one-unit geometric edge tolerance depends on mutable application globals.
@@ -2584,6 +2584,154 @@ def _inverse_bilinear_f32(
         if max(abs(float(step_u)), abs(float(step_v))) <= 1.0e-6:
             break
     return u, v
+
+
+if njit is not None:
+    @njit(cache=True, inline="always")
+    def _bilinear_component_f32_nb(vertices, u, v, component):
+        """One component of ``_bilinear_f32`` with identical reductions."""
+        one = np.float32(1.0)
+        four = np.float32(4.0)
+        weights = np.empty(4, dtype=np.float32)
+        weights[0] = np.float32(
+            np.float32(np.float32(one - u) * np.float32(one - v)) / four
+        )
+        weights[1] = np.float32(
+            np.float32(np.float32(one + u) * np.float32(one - v)) / four
+        )
+        weights[2] = np.float32(
+            np.float32(np.float32(one + u) * np.float32(one + v)) / four
+        )
+        weights[3] = np.float32(
+            np.float32(np.float32(one - u) * np.float32(one + v)) / four
+        )
+        value = np.float32(0.0)
+        for index in range(4):
+            value = np.float32(
+                value + np.float32(vertices[index, component] * weights[index])
+            )
+        return value
+
+    @njit(cache=True, nogil=True)
+    def _inverse_bilinear_f32_nb(vertices, point):
+        """Compiled equivalent of ``_inverse_bilinear_f32_python``."""
+        edge10 = np.empty(3, dtype=np.float32)
+        edge30 = np.empty(3, dtype=np.float32)
+        for index in range(3):
+            edge10[index] = np.float32(vertices[1, index] - vertices[0, index])
+            edge30[index] = np.float32(vertices[3, index] - vertices[0, index])
+        normal = np.empty(3, dtype=np.float32)
+        normal[0] = np.float32(
+            np.float32(edge10[1] * edge30[2])
+            - np.float32(edge10[2] * edge30[1])
+        )
+        normal[1] = np.float32(
+            np.float32(edge10[2] * edge30[0])
+            - np.float32(edge10[0] * edge30[2])
+        )
+        normal[2] = np.float32(
+            np.float32(edge10[0] * edge30[1])
+            - np.float32(edge10[1] * edge30[0])
+        )
+        drop = 0
+        if abs(normal[1]) > abs(normal[drop]):
+            drop = 1
+        if abs(normal[2]) > abs(normal[drop]):
+            drop = 2
+        if drop == 0:
+            keep0, keep1 = 1, 2
+        elif drop == 1:
+            keep0, keep1 = 0, 2
+        else:
+            keep0, keep1 = 0, 1
+
+        target0 = point[keep0]
+        target1 = point[keep1]
+        u = np.float32(0.0)
+        v = np.float32(0.0)
+        one = np.float32(1.0)
+        four = np.float32(4.0)
+        for _ in range(20):
+            mapped0 = _bilinear_component_f32_nb(vertices, u, v, keep0)
+            mapped1 = _bilinear_component_f32_nb(vertices, u, v, keep1)
+            one_minus_v = np.float32(one - v)
+            one_plus_v = np.float32(one + v)
+            one_minus_u = np.float32(one - u)
+            one_plus_u = np.float32(one + u)
+
+            du0 = np.float32(
+                np.float32(
+                    np.float32(-vertices[0, keep0] * one_minus_v)
+                    + np.float32(vertices[1, keep0] * one_minus_v)
+                )
+                + np.float32(
+                    np.float32(vertices[2, keep0] * one_plus_v)
+                    - np.float32(vertices[3, keep0] * one_plus_v)
+                )
+            ) / four
+            du1 = np.float32(
+                np.float32(
+                    np.float32(-vertices[0, keep1] * one_minus_v)
+                    + np.float32(vertices[1, keep1] * one_minus_v)
+                )
+                + np.float32(
+                    np.float32(vertices[2, keep1] * one_plus_v)
+                    - np.float32(vertices[3, keep1] * one_plus_v)
+                )
+            ) / four
+            dv0 = np.float32(
+                np.float32(
+                    np.float32(-vertices[0, keep0] * one_minus_u)
+                    - np.float32(vertices[1, keep0] * one_plus_u)
+                )
+                + np.float32(
+                    np.float32(vertices[2, keep0] * one_plus_u)
+                    + np.float32(vertices[3, keep0] * one_minus_u)
+                )
+            ) / four
+            dv1 = np.float32(
+                np.float32(
+                    np.float32(-vertices[0, keep1] * one_minus_u)
+                    - np.float32(vertices[1, keep1] * one_plus_u)
+                )
+                + np.float32(
+                    np.float32(vertices[2, keep1] * one_plus_u)
+                    + np.float32(vertices[3, keep1] * one_minus_u)
+                )
+            ) / four
+
+            r0 = np.float32(target0 - mapped0)
+            r1 = np.float32(target1 - mapped1)
+            det = np.float32(
+                np.float32(du0 * dv1) - np.float32(dv0 * du1)
+            )
+            if abs(det) <= 1.0e-20:
+                break
+            step_u = np.float32(
+                np.float32(np.float32(r0 * dv1) - np.float32(dv0 * r1)) / det
+            )
+            step_v = np.float32(
+                np.float32(np.float32(du0 * r1) - np.float32(r0 * du1)) / det
+            )
+            u = np.float32(u + step_u)
+            v = np.float32(v + step_v)
+            if max(abs(float(step_u)), abs(float(step_v))) <= 1.0e-6:
+                break
+        return u, v
+else:  # pragma: no cover - exercised when Numba is unavailable
+    _inverse_bilinear_f32_nb = None
+
+
+def _inverse_bilinear_f32(
+    vertices: Sequence[np.ndarray], point: np.ndarray
+) -> tuple[np.float32, np.float32]:
+    """Stable float32 inverse used by the afference compatibility path."""
+    vertices_f = np.asarray(vertices, dtype=np.float32)
+    point_f = np.asarray(point, dtype=np.float32)
+    if _inverse_bilinear_f32_nb is None:
+        return _inverse_bilinear_f32_python(vertices_f, point_f)
+    u, v = _inverse_bilinear_f32_nb(vertices_f, point_f)
+    return np.float32(u), np.float32(v)
 
 
 def _inverse_bilinear(vertices: Sequence[np.ndarray], point: np.ndarray) -> tuple[float, float]:
@@ -3601,6 +3749,11 @@ def rebuild_interface_springs(
         flex_law_cache=flex_law_cache,
         sliding_law_cache=sliding_law_cache,
     )
+    dirty = getattr(model, "_perf_initial_stiffness_dirty_interfaces", None)
+    if dirty is None:
+        dirty = set()
+        model._perf_initial_stiffness_dirty_interfaces = dirty
+    dirty.add(int(intf.key))
     return intf
 
 
@@ -3627,6 +3780,13 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
             sliding_springs=sum(len(i.slid) for i in c.interfaces.values()),
             out_of_plane_springs=sum(len(i.slid_out_plan) for i in c.interfaces.values()),
         )
+    for cache_name in (
+        "_perf_element_stiffness_topology_signature",
+        "_perf_element_stiffness_alfa",
+        "_perf_initial_stiffness_dirty_interfaces",
+    ):
+        if hasattr(model, cache_name):
+            delattr(model, cache_name)
     c = model.collections
     if not c.quads:
         raise ModelPreparationError("PrepareModel currently requires at least one Quad.")

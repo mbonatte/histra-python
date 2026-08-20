@@ -1069,21 +1069,45 @@ if njit is not None:
             # array reads for every transverse spring.
             length = lengths[record_index]
             is_constrained = constrained[record_index]
-            for spring_index in range(start, stop):
-                force = trial[spring_index, 6]
-                committed_value = committed[spring_index, 6]
-                normal_increment -= force - committed_value
-                committed_force += committed_value
-                displacement = abs(trial[spring_index, 7])
-                if displacement > max_displacement:
-                    max_displacement = displacement
+            if not is_constrained:
+                # Quad/Quad components 0/1/5 are exact antisymmetric
+                # counterparts of 3/2/4. Accumulate each ordered reduction
+                # once, then mirror it without changing spring order.
+                force_3 = 0.0
+                force_2 = 0.0
+                force_4 = 0.0
+                for spring_index in range(start, stop):
+                    force = trial[spring_index, 6]
+                    committed_value = committed[spring_index, 6]
+                    normal_increment -= force - committed_value
+                    committed_force += committed_value
+                    displacement = abs(trial[spring_index, 7])
+                    if displacement > max_displacement:
+                        max_displacement = displacement
 
-                if not is_constrained:
-                    local_forces[record_index, 3] += force * dj[spring_index] / length
-                    local_forces[record_index, 2] += force * di[spring_index] / length
-                    local_forces[record_index, 0] += (0.0 - force) * dj[spring_index] / length
-                    local_forces[record_index, 1] += (0.0 - force) * di[spring_index] / length
-                else:
+                    force_3 += force * dj[spring_index] / length
+                    force_2 += force * di[spring_index] / length
+                    force_4 += force * ecc[spring_index]
+
+                local_forces[record_index, 3] = force_3
+                local_forces[record_index, 2] = force_2
+                local_forces[record_index, 4] = force_4
+                # The original accumulators start at positive zero.
+                local_forces[record_index, 0] = 0.0 if force_3 == 0.0 else -force_3
+                local_forces[record_index, 1] = 0.0 if force_2 == 0.0 else -force_2
+                local_forces[record_index, 5] = 0.0 if force_4 == 0.0 else -force_4
+            else:
+                # Restraint interfaces use a different transformation; keep
+                # their original C#-ordered arithmetic verbatim.
+                for spring_index in range(start, stop):
+                    force = trial[spring_index, 6]
+                    committed_value = committed[spring_index, 6]
+                    normal_increment -= force - committed_value
+                    committed_force += committed_value
+                    displacement = abs(trial[spring_index, 7])
+                    if displacement > max_displacement:
+                        max_displacement = displacement
+
                     local_forces[record_index, 3] += force * dj[spring_index] / length
                     local_forces[record_index, 2] += force * di[spring_index] / length
                     local_forces[record_index, 0] += (
@@ -1094,8 +1118,8 @@ if njit is not None:
                         force * dj[spring_index] / length
                         - force * di[spring_index] / length
                     )
-                local_forces[record_index, 4] += force * ecc[spring_index]
-                local_forces[record_index, 5] += (0.0 - force) * ecc[spring_index]
+                    local_forces[record_index, 4] += force * ecc[spring_index]
+                    local_forces[record_index, 5] += (0.0 - force) * ecc[spring_index]
             normal_increments[record_index] = normal_increment
             committed_forces[record_index] = committed_force
             max_displacements[record_index] = max_displacement

@@ -202,10 +202,46 @@ class ModelManager:
 
     @classmethod
     def compute_k(cls, model: Model, alfa: float = 1.0) -> None:
+        topology_signature = (
+            id(model.collections.quads),
+            len(model.collections.quads),
+            id(model.collections.interfaces),
+            len(model.collections.interfaces),
+        )
+        cached_signature = getattr(
+            model, "_perf_element_stiffness_topology_signature", None
+        )
+        cached_alfa = getattr(model, "_perf_element_stiffness_alfa", None)
+        dirty_interfaces = getattr(
+            model, "_perf_initial_stiffness_dirty_interfaces", None
+        )
+
+        # Every static analysis starts from alfa=0.  If no non-initial tangent
+        # has overwritten the element blocks since the previous analysis, the
+        # Quad blocks and all untouched interface blocks are already the exact
+        # matrices that C# would recompute. Material replacement records the
+        # handful of rebuilt interfaces explicitly, so only those blocks need
+        # refreshing before the same ordered global scatter is performed.
+        if (
+            alfa == 0.0
+            and cached_alfa == 0.0
+            and cached_signature == topology_signature
+        ):
+            if dirty_interfaces:
+                for key, intf in model.collections.interfaces.items():
+                    if int(key) in dirty_interfaces:
+                        intf.compute_k(alfa)
+                dirty_interfaces.clear()
+            return
+
         for quad in model.collections.quads.values():
             quad.compute_k(alfa)
         for intf in model.collections.interfaces.values():
             intf.compute_k(alfa)
+        model._perf_element_stiffness_topology_signature = topology_signature
+        model._perf_element_stiffness_alfa = float(alfa)
+        if dirty_interfaces is not None:
+            dirty_interfaces.clear()
 
     @classmethod
     def form_unbalance(cls, model: Model, ls: LinearSystem, an: Any) -> None:

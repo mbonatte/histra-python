@@ -296,6 +296,7 @@ def test_interface_reduction_hoisted_invariants_match_previous_loop_exactly() ->
     trial = np.zeros((count, 10), dtype=np.float64)
     committed = np.zeros((count, 9), dtype=np.float64)
     trial[:, 6] = rng.normal(size=count)
+    trial[::17, 6] = 0.0
     trial[:, 7] = rng.normal(scale=1.0e-4, size=count)
     committed[:, 6] = rng.normal(size=count)
     di = rng.random(count)
@@ -330,4 +331,7 @@ def test_interface_reduction_hoisted_invariants_match_previous_loop_exactly() ->
     )
 
     for actual_array, expected_array in zip(actual, expected):
-        np.testing.assert_array_equal(actual_array, expected_array)
+        np.testing.assert_array_equal(
+            actual_array.view(np.uint64),
+            expected_array.view(np.uint64),
+        )
