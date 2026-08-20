@@ -568,7 +568,7 @@ if njit is not None:
         # direct/unit callers can still pass the historical 33-column layout.
         # Only the storage indices differ.  The constitutive arithmetic below
         # is intentionally unchanged.
-        compact = params.shape[1] == SIMPLE_TRANSVERSE_PARAM_SIZE
+        compact = params.shape[1] <= SIMPLE_TRANSVERSE_PARAM_SIZE
         parameter_offset = 0 if compact else 10
         tensile_curve_column = (
             SIMPLE_TENSILE_CURVE_TYPE_PARAM
@@ -804,7 +804,7 @@ if njit is not None:
         # direct/unit callers can still pass the historical 33-column layout.
         # Only the storage indices differ.  The constitutive arithmetic below
         # is intentionally unchanged.
-        compact = params.shape[1] == SIMPLE_TRANSVERSE_PARAM_SIZE
+        compact = params.shape[1] <= SIMPLE_TRANSVERSE_PARAM_SIZE
         parameter_offset = 0 if compact else 10
         tensile_curve_column = (
             SIMPLE_TENSILE_CURVE_TYPE_PARAM
@@ -1033,6 +1033,293 @@ if njit is not None:
             trial[i, 8] = tphase
             trial[i, 9] = ktang
 
+
+    @njit(cache=True, nogil=True, parallel=True)
+    def _advance_evaluate_and_finish_simple_linear_batch(
+        params, committed, trial, targets, enabled,
+        record_index, kin_num, kin_num2, di, dj, lengths, delta_flex, ecc,
+        starts, stops, constrained, local_forces,
+        normal_increments, committed_forces, max_displacements,
+    ):
+        """Fuse the linear-tensile simple update and ordered reduction.
+
+        Rows remain independent during constitutive evaluation, while every
+        interface reduction retains the original increasing spring order.
+        """
+        compact = params.shape[1] <= SIMPLE_TRANSVERSE_PARAM_SIZE
+        parameter_offset = 0 if compact else 10
+
+        for reduction_index in prange(starts.size):
+            start = starts[reduction_index]
+            stop = stops[reduction_index]
+            for local_dof in range(6):
+                local_forces[reduction_index, local_dof] = 0.0
+            normal_increment = 0.0
+            committed_force = 0.0
+            max_displacement = 0.0
+            length = lengths[reduction_index]
+            kin_num_value = kin_num[reduction_index]
+            kin_num2_value = kin_num2[reduction_index]
+            delta_flex_value = delta_flex[reduction_index]
+            is_constrained = constrained[reduction_index]
+            force_3 = 0.0
+            force_2 = 0.0
+            force_4 = 0.0
+
+            for i in range(start, stop):
+                strain = trial[i, 7] + (
+                    (kin_num_value * dj[i] + kin_num2_value * di[i]) / length
+                    - delta_flex_value * ecc[i]
+                )
+                targets[i] = strain
+                if enabled[i]:
+                    previous_tload = int(trial[i, 5])
+                    if not (previous_tload == 0 and strain == 0.0):
+                        rot1p, mom1p, rot2p, mom2p = (
+                            params[i, parameter_offset],
+                            params[i, parameter_offset + 1],
+                            params[i, parameter_offset + 2],
+                            params[i, parameter_offset + 3],
+                        )
+                        rot3p, mom3p = (
+                            params[i, parameter_offset + 4],
+                            params[i, parameter_offset + 5],
+                        )
+                        mom1n, rot1n, rot2n, mom2n = (
+                            params[i, parameter_offset + 6],
+                            params[i, parameter_offset + 7],
+                            params[i, parameter_offset + 8],
+                            params[i, parameter_offset + 9],
+                        )
+                        rot3n, mom3n = (
+                            params[i, parameter_offset + 10],
+                            params[i, parameter_offset + 11],
+                        )
+                        e1n, e1p, e2n, e2p = (
+                            params[i, parameter_offset + 12],
+                            params[i, parameter_offset + 13],
+                            params[i, parameter_offset + 14],
+                            params[i, parameter_offset + 15],
+                        )
+                        e3n, e3p, eun, eup = (
+                            params[i, parameter_offset + 16],
+                            params[i, parameter_offset + 17],
+                            params[i, parameter_offset + 18],
+                            params[i, parameter_offset + 19],
+                        )
+                        umax_p, umax_n = committed[i, 0], committed[i, 1]
+                        trot_pu, trot_nu = committed[i, 2], committed[i, 3]
+                        cenergy = committed[i, 4]
+                        tload = int(committed[i, 5])
+                        cstress, cstrain = committed[i, 6], committed[i, 7]
+                        phase = int(committed[i, 8])
+
+                        trot_max, trot_min = umax_p, umax_n
+                        tstress, tstrain, tphase = cstress, strain, phase
+                        ktang = trial[i, 9]
+                        dstrain = tstrain - cstrain
+                        if tload == 0:
+                            tload = 1 if dstrain >= 0.0 else 2
+
+                        if phase == RUPTURE or phase == RUPTURE_C or phase == RUPTURE_T:
+                            tstress = 0.0
+                            ktang = 0.0
+                            if tstrain >= umax_p:
+                                trot_max = tstrain
+                            elif tstrain <= umax_n:
+                                trot_min = tstrain
+
+                        if tstrain >= umax_p:
+                            trot_max = tstrain
+                            tstress = _pos_stress(
+                                tstrain, rot1p, mom1p, rot2p,
+                                mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                            )
+                            ktang, tphase = _pos_tangent(
+                                tstrain, rot1p, rot2p, rot3p, e1p, e2p, e3p,
+                            )
+                            tload = 1
+                        elif tstrain <= umax_n:
+                            trot_min = tstrain
+                            tstress = _neg_stress(
+                                tstrain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
+                                e1n, e2n, e3n,
+                            )
+                            ktang, tphase = _neg_tangent(
+                                tstrain, rot1n, rot2n, rot3n, e1n, e2n, e3n,
+                            )
+                            tload = 2
+                        elif dstrain < 0.0:
+                            tphase = UNLOAD_T if tstress > 0.0 else RELOAD_C
+                            num = 1.0
+                            num2 = (umax_p / rot1p) ** 1.0 if rot1p != 0.0 else 0.0
+                            if num2 <= 1.0:
+                                num2 = 1.0
+                            else:
+                                env = _pos_stress(
+                                    umax_p, rot1p, mom1p, rot2p,
+                                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                                )
+                                num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
+                            if tload == 1:
+                                tload = 2
+                                if cstress >= 0.0:
+                                    denom = eup * num2
+                                    trot_pu = cstrain - cstress / denom if denom != 0.0 else 0.0
+                                    if _pos_stress(
+                                        umax_p, rot1p, mom1p, rot2p,
+                                        mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                                    ) == 0.0:
+                                        trot_pu = 0.0
+                                    trot_min = umax_n
+                            tload = 2
+                            if trot_min > rot1n:
+                                trot_min = rot1n
+                            num5 = _neg_stress(
+                                trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
+                                e1n, e2n, e3n,
+                            )
+                            num6 = _pos_rotlim(
+                                umax_p, rot1p, mom1p, rot2p, mom2p,
+                                e2p, e3p, rot3p, mom3p, e1p,
+                            )
+                            num7 = num6 if num6 < trot_pu else trot_pu
+                            if tstrain >= trot_pu:
+                                ktang = eup * num2
+                                tstress = cstress + ktang * dstrain
+                                if tstress <= 0.0:
+                                    tstress = 0.0
+                            elif tstrain > num7:
+                                tstress = 0.0
+                            else:
+                                denom9 = trot_min - num7
+                                ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                                num10 = cstress + eun * num * dstrain
+                                num11 = (tstrain - num7) * ktang
+                                if num10 > num11:
+                                    tstress = num10
+                                    ktang = eun * num
+                                else:
+                                    tstress = num11
+                                if cstrain > trot_pu and tstrain < trot_pu:
+                                    ktang = eup * num2
+                                    tstress = cstress + ktang * (trot_pu - cstrain)
+                                    ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                                    tstress += ktang * (tstrain - trot_pu)
+                        elif dstrain > 0.0:
+                            tphase = RELOAD_T if tstress > 0.0 else UNLOAD_C
+                            num = 1.0
+                            num2 = (umax_p / rot1p) ** 1.0 if rot1p != 0.0 else 0.0
+                            if num2 <= 1.0:
+                                num2 = 1.0
+                            else:
+                                env = _pos_stress(
+                                    umax_p, rot1p, mom1p, rot2p,
+                                    mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                                )
+                                num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
+                            if tload == 2:
+                                tload = 1
+                                if cstress <= 0.0:
+                                    denom = eun * num
+                                    trot_nu = cstrain - cstress / denom if denom != 0.0 else 0.0
+                                    if _neg_stress(
+                                        umax_n, mom1n, rot1n, rot2n, mom2n,
+                                        rot3n, mom3n, e1n, e2n, e3n,
+                                    ) == 0.0:
+                                        trot_nu = 0.0
+                                    trot_max = umax_p
+                            tload = 1
+                            if trot_max < rot1p:
+                                trot_max = rot1p
+                            num5 = _pos_stress(
+                                trot_max, rot1p, mom1p, rot2p,
+                                mom2p, rot3p, mom3p, e1p, e2p, e3p,
+                            )
+                            num6 = _neg_rotlim(
+                                umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n,
+                                rot3n, mom3n, e1n,
+                            )
+                            num7 = num6 if num6 > trot_nu else trot_nu
+                            if tstrain <= trot_nu:
+                                ktang = eun * num
+                                tstress = cstress + ktang * dstrain
+                                if tstress >= 0.0:
+                                    tstress = 0.0
+                            elif tstrain < num7:
+                                tstress = 0.0
+                            else:
+                                denom9 = trot_max - num7
+                                ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                                num10 = cstress + eup * num2 * dstrain
+                                num11 = (tstrain - num7) * ktang
+                                if num10 < num11:
+                                    tstress = num10
+                                    ktang = eup * num2
+                                else:
+                                    tstress = num11
+                                if cstrain < trot_nu and tstrain > trot_nu:
+                                    ktang = eun * num
+                                    tstress = cstress + ktang * (trot_nu - cstrain)
+                                    ktang = num5 / denom9 if denom9 != 0.0 else 0.0
+                                    tstress += ktang * (tstrain - trot_nu)
+
+                        tenergy = cenergy + 0.5 * (cstress + tstress) * dstrain
+                        trial[i, 0] = trot_max
+                        trial[i, 1] = trot_min
+                        trial[i, 2] = trot_pu
+                        trial[i, 3] = trot_nu
+                        trial[i, 4] = tenergy
+                        trial[i, 5] = tload
+                        trial[i, 6] = tstress
+                        trial[i, 7] = tstrain
+                        trial[i, 8] = tphase
+                        trial[i, 9] = ktang
+
+                force = trial[i, 6]
+                committed_value = committed[i, 6]
+                normal_increment -= force - committed_value
+                committed_force += committed_value
+                displacement = abs(trial[i, 7])
+                if displacement > max_displacement:
+                    max_displacement = displacement
+
+                if not is_constrained:
+                    force_3 += force * dj[i] / length
+                    force_2 += force * di[i] / length
+                    force_4 += force * ecc[i]
+                else:
+                    local_forces[reduction_index, 3] += force * dj[i] / length
+                    local_forces[reduction_index, 2] += force * di[i] / length
+                    local_forces[reduction_index, 0] += (
+                        (0.0 - force) * di[i] / length
+                        - force * dj[i] / length
+                    )
+                    local_forces[reduction_index, 1] += 0.5 * length * (
+                        force * dj[i] / length
+                        - force * di[i] / length
+                    )
+                    local_forces[reduction_index, 4] += force * ecc[i]
+                    local_forces[reduction_index, 5] += (0.0 - force) * ecc[i]
+
+            if not is_constrained:
+                local_forces[reduction_index, 3] = force_3
+                local_forces[reduction_index, 2] = force_2
+                local_forces[reduction_index, 4] = force_4
+                local_forces[reduction_index, 0] = (
+                    0.0 if force_3 == 0.0 else -force_3
+                )
+                local_forces[reduction_index, 1] = (
+                    0.0 if force_2 == 0.0 else -force_2
+                )
+                local_forces[reduction_index, 5] = (
+                    0.0 if force_4 == 0.0 else -force_4
+                )
+            normal_increments[reduction_index] = normal_increment
+            committed_forces[reduction_index] = committed_force
+            max_displacements[reduction_index] = max_displacement
+
+
     @njit(cache=True, nogil=True, parallel=True)
     def _advance_transverse_targets(
         trial, record_index, num, num2, di, dj, lengths, delta_flex, ecc, targets,
@@ -1166,6 +1453,36 @@ if njit is not None:
             global_force,
         )
 
+    @njit(cache=True, nogil=True, parallel=True)
+    def _refresh_global_resisting_force_by_dof(
+        quad_d_alfa, quad_state, quad_forces, interface_forces,
+        global_offsets, force_indices, force_coefficients,
+        interface_force_size, global_force,
+    ):
+        """Assemble independent global DOFs with C#-ordered afferences.
+
+        ``force_indices`` is prepared once in the same Interface-then-Quad,
+        local-DOF, afference order used by ``_scatter_local_forces``.  Each
+        global DOF can therefore be reduced independently without changing
+        the order of any floating-point additions.
+        """
+        for i in range(quad_forces.shape[0]):
+            quad_forces[i, 0] = quad_d_alfa[i] * quad_state[i, QTSTRESS]
+
+        interface_flat = interface_forces.reshape(interface_forces.size)
+        quad_flat = quad_forces.reshape(quad_forces.size)
+        for gdl in prange(global_force.size):
+            total = 0.0
+            for position in range(global_offsets[gdl], global_offsets[gdl + 1]):
+                force_index = force_indices[position]
+                if force_index < interface_force_size:
+                    force = interface_flat[force_index]
+                else:
+                    force = quad_flat[force_index - interface_force_size]
+                if force != 0.0:
+                    total -= force * force_coefficients[position]
+            global_force[gdl] = total
+
     @njit(cache=True, nogil=True)
     def _refresh_max_u_cache(quad_local_u, interface_max_u, cache):
         value = 0.0
@@ -1210,6 +1527,49 @@ if njit is not None:
             pending[i, 1] = local_du[i, d0 + d1] - local_du[i, d0 + d1 + 2]
             pending[i, 2] = local_du[i, d0 + d1 + 1] - local_du[i, d0 + d1 + 3]
 
+    @njit(cache=True, nogil=True, parallel=True)
+    def _map_and_prepare_interface_kinematics(
+        x, offsets, gdls, coefficients, local_du, local_u, lengths,
+        constrained, d0s, d1s, nums, nums2, delta_flex, pending,
+    ):
+        """Fuse exact afference mapping with per-interface kinematics."""
+        local_width = local_du.shape[1]
+        for i in prange(local_du.shape[0]):
+            flat_base = i * local_width
+            for j in range(local_width):
+                local_index = flat_base + j
+                total = 0.0
+                for pair_index in range(
+                    offsets[local_index], offsets[local_index + 1]
+                ):
+                    gdl = gdls[pair_index]
+                    if 0 <= gdl < x.size:
+                        total += x[gdl] * coefficients[pair_index]
+                local_du[i, j] = total
+                local_u[i, j] += total
+
+            if not constrained[i]:
+                nums[i] = local_du[i, 3] - local_du[i, 0]
+                nums2[i] = local_du[i, 2] - local_du[i, 1]
+            else:
+                half_length = 0.5 * lengths[i]
+                nums[i] = local_du[i, 3] - (
+                    local_du[i, 0] - local_du[i, 1] * half_length
+                )
+                nums2[i] = local_du[i, 2] - (
+                    local_du[i, 0] + local_du[i, 1] * half_length
+                )
+            delta_flex[i] = local_du[i, 5] - local_du[i, 4]
+            d0 = d0s[i]
+            d1 = d1s[i]
+            pending[i, 0] = local_du[i, d0] - local_du[i, d0 + 1]
+            pending[i, 1] = (
+                local_du[i, d0 + d1] - local_du[i, d0 + d1 + 2]
+            )
+            pending[i, 2] = (
+                local_du[i, d0 + d1 + 1] - local_du[i, d0 + d1 + 3]
+            )
+
     @njit(cache=True, nogil=True)
     def _advance_interface_coulomb_targets(
         pending, dist_for, normal_increments, slid_index, oop0_index, oop1_index,
@@ -1233,14 +1593,14 @@ if njit is not None:
                 dns[a] = dn
                 dns[b] = dn
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _evaluate_initial_coulomb_batch(params, state, targets, dns, enabled):
         """Exact C# ``setTrialStrainInitial`` for interface Coulomb springs.
 
         The accelerated path is deliberately limited to the model's supported
         no-contact-area Coulomb law.  Other variants stay on the scalar path.
         """
-        for i in range(targets.size):
+        for i in prange(targets.size):
             if not enabled[i]:
                 continue
             k = params[i, 0]
@@ -1365,14 +1725,16 @@ if njit is not None:
             state[i, CF] = tstress
             state[i, CDN] = dns[i]
 
-    @njit(cache=True, nogil=True)
+    @njit(cache=True, nogil=True, parallel=True)
     def _assemble_full_interface_forces(
         transverse_forces, coulomb_state, slid_index, oop0_index, oop1_index,
         dist, local_full_forces, max_displacements, coulomb_targets,
     ):
-        local_full_forces[:, :] = 0.0
-        local_full_forces[:, :6] = transverse_forces
-        for i in range(local_full_forces.shape[0]):
+        for i in prange(local_full_forces.shape[0]):
+            for local_dof in range(6):
+                local_full_forces[i, local_dof] = transverse_forces[i, local_dof]
+            for local_dof in range(6, 12):
+                local_full_forces[i, local_dof] = 0.0
             max_u = max_displacements[i]
             s = slid_index[i]
             if s >= 0:
@@ -2100,12 +2462,15 @@ else:
     _advance_transverse_targets = None
     _evaluate_simple_linear_batch = None
     _advance_and_evaluate_simple_linear_batch = None
+    _advance_evaluate_and_finish_simple_linear_batch = None
     _finish_transverse_batch = None
     _map_global_to_local = None
     _scatter_local_forces = None
     _refresh_global_resisting_force = None
+    _refresh_global_resisting_force_by_dof = None
     _refresh_max_u_cache = None
     _prepare_interface_kinematics = None
+    _map_and_prepare_interface_kinematics = None
     _advance_interface_coulomb_targets = None
     _evaluate_initial_coulomb_batch = None
     _assemble_full_interface_forces = None
@@ -2145,6 +2510,7 @@ _PARAM_GETTER = attrgetter(*_PARAM_NAMES)
 # and for the diagnostic force-general switch.
 SIMPLE_PARAM_NAMES = _PARAM_NAMES[10:30]
 SIMPLE_TENSILE_CURVE_TYPE_PARAM = len(SIMPLE_PARAM_NAMES)
+LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE = len(SIMPLE_PARAM_NAMES)
 SIMPLE_TRANSVERSE_PARAM_SIZE = SIMPLE_TENSILE_CURVE_TYPE_PARAM + 1
 _SIMPLE_PARAM_GETTER = attrgetter(*SIMPLE_PARAM_NAMES)
 
@@ -2248,9 +2614,12 @@ class _TransverseParameterView:
         result[..., 10:30] = compact[..., :len(SIMPLE_PARAM_NAMES)]
         result[..., 30] = self._selected_energy_a(rows)
         result[..., 31] = runtime._transverse_k[rows]
-        result[..., TENSILE_CURVE_TYPE_PARAM] = (
-            compact[..., SIMPLE_TENSILE_CURVE_TYPE_PARAM]
-        )
+        if runtime._compact_linear_params:
+            result[..., TENSILE_CURVE_TYPE_PARAM] = TENSILE_LINEAR
+        else:
+            result[..., TENSILE_CURVE_TYPE_PARAM] = (
+                compact[..., SIMPLE_TENSILE_CURVE_TYPE_PARAM]
+            )
         return result
 
     def __getitem__(self, key: Any) -> Any:
@@ -2278,6 +2647,13 @@ class _TransverseParameterView:
                     return self._selected_energy_a(rows)
                 if column == 31:
                     return runtime._transverse_k[rows]
+                if runtime._compact_linear_params:
+                    selected = runtime._transverse_k[rows]
+                    if np.ndim(selected) == 0:
+                        return float(TENSILE_LINEAR)
+                    return np.full_like(
+                        selected, TENSILE_LINEAR, dtype=np.float64
+                    )
                 return runtime._params[rows, SIMPLE_TENSILE_CURVE_TYPE_PARAM]
             return self._materialize_rows(rows)[..., columns]
 
@@ -2314,6 +2690,62 @@ class _InterfaceSlice:
     interface: Any
     start: int
     stop: int
+
+
+def _build_force_by_dof_topology(
+    global_size: int,
+    interface_offsets: np.ndarray,
+    interface_gdls: np.ndarray,
+    interface_coefficients: np.ndarray,
+    quad_offsets: np.ndarray,
+    quad_gdls: np.ndarray,
+    quad_coefficients: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Invert immutable local-force afferences without reordering a DOF."""
+    interface_force_size = int(interface_offsets.size - 1)
+    counts = np.zeros(global_size, dtype=np.int32)
+
+    for gdls in (interface_gdls, quad_gdls):
+        for value in gdls:
+            gdl = int(value)
+            if 0 <= gdl < global_size:
+                counts[gdl] += 1
+
+    global_offsets = np.empty(global_size + 1, dtype=np.int32)
+    global_offsets[0] = 0
+    np.cumsum(counts, out=global_offsets[1:])
+    force_indices = np.empty(int(global_offsets[-1]), dtype=np.int32)
+    force_coefficients = np.empty(int(global_offsets[-1]), dtype=np.float64)
+    cursors = global_offsets[:-1].copy()
+
+    def append_topology(
+        offsets: np.ndarray,
+        gdls: np.ndarray,
+        coefficients: np.ndarray,
+        source_offset: int,
+    ) -> None:
+        for local_index in range(offsets.size - 1):
+            for pair_index in range(int(offsets[local_index]), int(offsets[local_index + 1])):
+                gdl = int(gdls[pair_index])
+                if not 0 <= gdl < global_size:
+                    continue
+                destination = int(cursors[gdl])
+                force_indices[destination] = source_offset + local_index
+                force_coefficients[destination] = coefficients[pair_index]
+                cursors[gdl] += 1
+
+    append_topology(
+        interface_offsets, interface_gdls, interface_coefficients, 0
+    )
+    append_topology(
+        quad_offsets, quad_gdls, quad_coefficients, interface_force_size
+    )
+    return (
+        global_offsets,
+        force_indices,
+        force_coefficients,
+        interface_force_size,
+    )
 
 
 class HystereticBatchRuntime:
@@ -2356,8 +2788,14 @@ class HystereticBatchRuntime:
             and not _force_general_hysteretic_batch()
             and all(_uses_simple_hysteretic_parameters(spring) for spring in springs)
         )
+        self._compact_linear_params = bool(
+            self._compact_simple_params
+            and all(spring.tensile_curve_type != "Exponential" for spring in springs)
+        )
         parameter_count = (
-            SIMPLE_TRANSVERSE_PARAM_SIZE
+            LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE
+            if self._compact_linear_params
+            else SIMPLE_TRANSVERSE_PARAM_SIZE
             if self._compact_simple_params else TRANSVERSE_PARAM_SIZE
         )
         self._params = np.empty((n, parameter_count), dtype=np.float64)
@@ -2709,6 +3147,20 @@ class HystereticBatchRuntime:
             quad_force_coefficients, dtype=np.float64
         )
         self._global_resisting_force = np.zeros(int(model.gdl), dtype=np.float64)
+        (
+            self._global_force_offsets,
+            self._global_force_indices,
+            self._global_force_coefficients,
+            self._interface_force_size,
+        ) = _build_force_by_dof_topology(
+            int(model.gdl),
+            self._aff_offsets,
+            self._aff_gdls,
+            self._aff_coefficients,
+            self._quad_force_offsets,
+            self._quad_force_gdls,
+            self._quad_force_coefficients,
+        )
         self._max_u_cache = np.zeros(3, dtype=np.float64)
         self._refresh_transverse_cache()
         self._refresh_full_force_cache()
@@ -2966,16 +3418,17 @@ class HystereticBatchRuntime:
             self._params[start:stop, :fixed_parameter_count] = np.asarray(
                 [getter(spring) for spring in group], dtype=np.float64
             )
-            self._params[start:stop, curve_column] = np.fromiter(
-                (
-                    TENSILE_EXPONENTIAL
-                    if spring.tensile_curve_type == "Exponential"
-                    else TENSILE_LINEAR
-                    for spring in group
-                ),
-                dtype=np.float64,
-                count=group_count,
-            )
+            if not self._compact_linear_params:
+                self._params[start:stop, curve_column] = np.fromiter(
+                    (
+                        TENSILE_EXPONENTIAL
+                        if spring.tensile_curve_type == "Exponential"
+                        else TENSILE_LINEAR
+                        for spring in group
+                    ),
+                    dtype=np.float64,
+                    count=group_count,
+                )
             self._transverse_k[start:stop] = np.fromiter(
                 (spring.k for spring in group),
                 dtype=np.float64,
@@ -3024,11 +3477,12 @@ class HystereticBatchRuntime:
         # 32 Python float objects and a temporary list for every spring.
         if self._compact_simple_params:
             self._params[index, :len(SIMPLE_PARAM_NAMES)] = _SIMPLE_PARAM_GETTER(spring)
-            self._params[index, SIMPLE_TENSILE_CURVE_TYPE_PARAM] = (
-                TENSILE_EXPONENTIAL
-                if spring.tensile_curve_type == "Exponential"
-                else TENSILE_LINEAR
-            )
+            if not self._compact_linear_params:
+                self._params[index, SIMPLE_TENSILE_CURVE_TYPE_PARAM] = (
+                    TENSILE_EXPONENTIAL
+                    if spring.tensile_curve_type == "Exponential"
+                    else TENSILE_LINEAR
+                )
         else:
             self._params[index, :len(_PARAM_NAMES)] = _PARAM_GETTER(spring)
             self._params[index, TENSILE_CURVE_TYPE_PARAM] = (
@@ -3058,6 +3512,7 @@ class HystereticBatchRuntime:
         full = self.params._materialize_rows(slice(None))
         self._params = full
         self._compact_simple_params = False
+        self._compact_linear_params = False
 
     def _refresh_simple_hysteretic_flag(self) -> None:
         n = len(self.springs)
@@ -3079,6 +3534,20 @@ class HystereticBatchRuntime:
         # compiled kernel while investigating any full-analysis divergence.
         if _force_general_hysteretic_batch() and not self._compact_simple_params:
             self._simple_hysteretic = False
+        if self._compact_linear_params:
+            self._simple_linear_hysteretic = bool(self._simple_hysteretic and n)
+        else:
+            tensile_curve_column = (
+                SIMPLE_TENSILE_CURVE_TYPE_PARAM
+                if self._compact_simple_params else TENSILE_CURVE_TYPE_PARAM
+            )
+            self._simple_linear_hysteretic = bool(
+                self._simple_hysteretic
+                and n
+                and np.all(
+                    self._params[:, tensile_curve_column] == TENSILE_LINEAR
+                )
+            )
 
     @property
     def active(self) -> bool:
@@ -3122,7 +3591,12 @@ class HystereticBatchRuntime:
             if any(self._transverse_rejection_reason(spring) for spring in group):
                 return False
             if self._compact_simple_params and any(
-                not _uses_simple_hysteretic_parameters(spring) for spring in group
+                not _uses_simple_hysteretic_parameters(spring)
+                or (
+                    self._compact_linear_params
+                    and spring.tensile_curve_type == "Exponential"
+                )
+                for spring in group
             ):
                 # The compact matrix omits pinching/damage/beta columns, but a
                 # material-only mutation does not change runtime topology.  Do
@@ -3498,14 +3972,11 @@ class HystereticBatchRuntime:
 
     def prepare(self, x: np.ndarray) -> None:
         """Map one global Newton increment to all batched spring strains."""
-        _map_global_to_local(
+        _map_and_prepare_interface_kinematics(
             x, self._aff_offsets, self._aff_gdls, self._aff_coefficients,
-            self._local_du,
-        )
-        _prepare_interface_kinematics(
-            self._local_du, self._local_u, self._lengths, self._constrained,
-            self._d0s, self._d1s, self._num, self._num2, self._delta_flex,
-            self._pending_values,
+            self._local_du, self._local_u, self._lengths,
+            self._constrained, self._d0s, self._d1s, self._num,
+            self._num2, self._delta_flex, self._pending_values,
         )
 
         indices = self._record_index
@@ -3559,42 +4030,51 @@ class HystereticBatchRuntime:
     def update_domain(self, x: np.ndarray, state: Any) -> None:
         """Evaluate all managed interfaces and Quads.
 
-        The constitutive work is split into compiled kernels rather than
-        wrapped in one outer Numba dispatcher.  That allows Numba's parallel
-        scheduler to execute the independent transverse-fibre and per-interface
-        loops concurrently.  The call sequence and every within-spring /
-        within-interface accumulation order remain identical to the original
-        fused implementation.
+        The common simple-hysteretic path evaluates transverse springs and
+        performs each interface's ordered force reduction in one compiled
+        pass.  The general hysteretic path remains split into its existing
+        kernels.  Every within-spring and within-interface arithmetic order is
+        retained for nonlinear-path compatibility.
         """
-        _map_global_to_local(
+        _map_and_prepare_interface_kinematics(
             x, self._aff_offsets, self._aff_gdls, self._aff_coefficients,
-            self._local_du,
+            self._local_du, self._local_u, self._lengths,
+            self._constrained, self._d0s, self._d1s, self._num,
+            self._num2, self._delta_flex, self._pending_values,
         )
-        _prepare_interface_kinematics(
-            self._local_du, self._local_u, self._lengths, self._constrained,
-            self._d0s, self._d1s, self._num, self._num2, self._delta_flex,
-            self._pending_values,
-        )
-        if self._simple_hysteretic:
-            _advance_and_evaluate_simple_linear_batch(
+        if self._simple_linear_hysteretic:
+            _advance_evaluate_and_finish_simple_linear_batch(
                 self._params, self.committed, self.trial, self.targets, self.enabled,
                 self._record_index, self._num, self._num2, self._di, self._dj,
                 self._lengths, self._delta_flex, self._ecc,
+                self._starts, self._stops, self._constrained,
+                self._local_forces, self._normal_increments,
+                self._committed_forces, self._max_displacements,
             )
         else:
-            _advance_transverse_targets(
-                self.trial, self._record_index, self._num, self._num2, self._di,
-                self._dj, self._lengths, self._delta_flex, self._ecc, self.targets,
+            if self._simple_hysteretic:
+                _advance_and_evaluate_simple_linear_batch(
+                    self._params, self.committed, self.trial, self.targets,
+                    self.enabled, self._record_index, self._num, self._num2,
+                    self._di, self._dj, self._lengths, self._delta_flex,
+                    self._ecc,
+                )
+            else:
+                _advance_transverse_targets(
+                    self.trial, self._record_index, self._num, self._num2,
+                    self._di, self._dj, self._lengths, self._delta_flex,
+                    self._ecc, self.targets,
+                )
+                _evaluate_linear_batch(
+                    self._params, self.committed, self.trial, self.targets,
+                    self.enabled,
+                )
+            _finish_transverse_batch(
+                self.trial, self.committed, self._di, self._dj, self._ecc,
+                self._lengths, self._starts, self._stops, self._constrained,
+                self._local_forces, self._normal_increments,
+                self._committed_forces, self._max_displacements,
             )
-            _evaluate_linear_batch(
-                self._params, self.committed, self.trial, self.targets, self.enabled
-            )
-        _finish_transverse_batch(
-            self.trial, self.committed, self._di, self._dj, self._ecc,
-            self._lengths, self._starts, self._stops, self._constrained,
-            self._local_forces, self._normal_increments,
-            self._committed_forces, self._max_displacements,
-        )
         if self.coulomb_targets.size:
             _advance_interface_coulomb_targets(
                 self._pending_values, self._dist_for, self._normal_increments,
@@ -3629,12 +4109,11 @@ class HystereticBatchRuntime:
                 self.quad_params, self.quad_state, self._quad_strains,
                 self._quad_dns, self._quad_volumes, self._quad_sigma_initial,
             )
-        _refresh_global_resisting_force(
+        _refresh_global_resisting_force_by_dof(
             self._quad_d_alfa, self.quad_state, self._quad_forces,
-            self._quad_force_offsets, self._quad_force_gdls,
-            self._quad_force_coefficients, self._local_full_forces,
-            self._aff_offsets, self._aff_gdls, self._aff_coefficients,
-            self._global_resisting_force,
+            self._local_full_forces, self._global_force_offsets,
+            self._global_force_indices, self._global_force_coefficients,
+            self._interface_force_size, self._global_resisting_force,
         )
         _refresh_max_u_cache(
             self._quad_local_u, self._max_displacements, self._max_u_cache
@@ -3681,12 +4160,11 @@ class HystereticBatchRuntime:
         )
 
     def _refresh_global_resisting_force_cache(self) -> None:
-        _refresh_global_resisting_force(
+        _refresh_global_resisting_force_by_dof(
             self._quad_d_alfa, self.quad_state, self._quad_forces,
-            self._quad_force_offsets, self._quad_force_gdls,
-            self._quad_force_coefficients, self._local_full_forces,
-            self._aff_offsets, self._aff_gdls, self._aff_coefficients,
-            self._global_resisting_force,
+            self._local_full_forces, self._global_force_offsets,
+            self._global_force_indices, self._global_force_coefficients,
+            self._interface_force_size, self._global_resisting_force,
         )
 
     def _refresh_max_u_cache(self) -> None:

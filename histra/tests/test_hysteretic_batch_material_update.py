@@ -170,7 +170,12 @@ def test_incremental_material_update_matches_fresh_full_runtime_exactly() -> Non
     full_model = deepcopy(incremental_model)
     incremental = batch.HystereticBatchRuntime(incremental_model)
     assert incremental._compact_simple_params is True
-    assert incremental._params.shape[1] == batch.SIMPLE_TRANSVERSE_PARAM_SIZE
+    assert incremental._compact_linear_params is True
+    assert incremental._params.shape[1] == batch.LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE
+    assert (
+        incremental.params[0, batch.TENSILE_CURVE_TYPE_PARAM]
+        == batch.TENSILE_LINEAR
+    )
 
     persistent_arrays = {
         name: id(getattr(incremental, name))
@@ -279,7 +284,8 @@ def test_compact_parameter_runtime_promotes_once_for_non_simple_material_update(
     rebuilt_model = deepcopy(model)
     runtime = batch.HystereticBatchRuntime(model)
     assert runtime._compact_simple_params is True
-    assert runtime._params.shape[1] == batch.SIMPLE_TRANSVERSE_PARAM_SIZE
+    assert runtime._compact_linear_params is True
+    assert runtime._params.shape[1] == batch.LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE
 
     persistent_ids = {
         name: id(getattr(runtime, name))
@@ -454,11 +460,14 @@ def test_compact_simple_parameter_layout_is_bit_exact_with_full_layout() -> None
     compact = np.empty((1, batch.SIMPLE_TRANSVERSE_PARAM_SIZE), dtype=np.float64)
     compact[0, : len(batch.SIMPLE_PARAM_NAMES)] = full[0, 10:30]
     compact[0, batch.SIMPLE_TENSILE_CURVE_TYPE_PARAM] = batch.TENSILE_LINEAR
+    linear_compact = compact[:, :batch.LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE].copy()
 
     committed_full = np.zeros((1, 9), dtype=np.float64)
     trial_full = np.zeros((1, 10), dtype=np.float64)
     committed_compact = committed_full.copy()
+    committed_linear_compact = committed_full.copy()
     trial_compact = trial_full.copy()
+    trial_linear_compact = trial_full.copy()
     targets_full = np.zeros(1, dtype=np.float64)
     targets_compact = np.zeros(1, dtype=np.float64)
     enabled = np.ones(1, dtype=np.bool_)
@@ -472,11 +481,20 @@ def test_compact_simple_parameter_layout_is_bit_exact_with_full_layout() -> None
         batch._evaluate_simple_linear_batch(
             compact, committed_compact, trial_compact, targets_compact, enabled
         )
+        batch._evaluate_simple_linear_batch(
+            linear_compact,
+            committed_linear_compact,
+            trial_linear_compact,
+            targets_compact,
+            enabled,
+        )
         np.testing.assert_array_equal(trial_compact, trial_full)
+        np.testing.assert_array_equal(trial_linear_compact, trial_full)
 
         # Commit exactly the dense fields copied by HystereticBatchRuntime.
         committed_full[0, :] = trial_full[0, :9]
         committed_compact[0, :] = trial_compact[0, :9]
+        committed_linear_compact[0, :] = trial_linear_compact[0, :9]
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
 def test_incremental_material_update_rebuilds_only_coulomb_storage_when_oop_alias_splits() -> None:

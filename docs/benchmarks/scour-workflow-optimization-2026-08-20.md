@@ -29,6 +29,7 @@ After the retained changes and their new regression tests:
 ```text
 334 passed, 4 skipped in 64.64 s
 334 passed, 4 skipped in 24.75 s (final warmed verification)
+339 passed, 4 skipped in 83.16 s (follow-up Vert optimization pass)
 ```
 
 The first elapsed pytest time includes Numba compilation/cache effects. Test
@@ -241,7 +242,7 @@ The largest dense runtime arrays are:
 
 | Array | Size |
 |---|---:|
-| Compact transverse parameters `(549666, 21)` | 88.07 MB |
+| Compact transverse parameters `(549666, 20)` | 83.87 MB |
 | Trial state `(549666, 10)` | 41.94 MB |
 | Committed state `(549666, 9)` | 37.74 MB |
 | Coulomb state `(20358, 32)` | 4.97 MB |
@@ -258,6 +259,103 @@ observable object semantics and was not attempted.
 The approximately 330–350 MB peak increase during each scour solve coincides
 with sparse numeric factorization/native solver temporaries. The retained
 changes do not materially alter peak RAM.
+
+## Follow-up Vert optimization pass
+
+A later Windows timing run with 14 Numba threads measured `Vert` at 30.197 s.
+Its cProfile predecessor attributed 16.993 s across 2,441 calls to
+`HystereticBatchRuntime.update_domain`, so the follow-up pass targeted only
+the measured dense-domain kernels. No nonlinear iteration, line-search trial,
+constitutive equation, tolerance, or reduction order was changed.
+
+The retained changes are:
+
+1. The linear/simple transverse target calculation, spring state update and
+   per-interface force reduction now execute in one per-interface Numba pass.
+   Kinematic values that are constant for an interface are loaded once. Each
+   spring is still evaluated in increasing index order and every interface
+   force component retains its former accumulation order.
+2. Linear tensile batches omit the all-zero tensile-law discriminator column.
+   This changes physical parameter storage from 21 to 20 float64 columns,
+   saves 4.4 MB for this model and aligns each row to 160 bytes. Exponential
+   batches retain the discriminator and use the existing typed kernel.
+3. Independent initial-Coulomb rows and per-interface full-force rows execute
+   in parallel. Shared Soil restraint spring identity remains encoded in the
+   dense indices; no shared state is duplicated.
+4. Immutable local-force afferences are inverted once into a per-global-DOF
+   topology. Each DOF is reduced independently, but its contribution list is
+   constructed in the exact former Interface-then-Quad encounter order.
+5. Interface global-to-local mapping and kinematic preparation are fused so
+   each interface's 12 local increments remain cache-local. The afference sum
+   within each local DOF is unchanged.
+
+Model-scale isolated measurements were:
+
+| Kernel | Before | After | Improvement |
+|---|---:|---:|---:|
+| Transverse update plus force reduction | 9.182 ms | 5.656 ms | 38.4% |
+| Initial Coulomb constitutive update | 0.175 ms | 0.040 ms | 4.3x |
+| Full interface force assembly | 0.170 ms | 0.017 ms | 10.2x |
+| Ordered global resisting-force scatter | 0.551 ms | 0.038 ms | 14.5x |
+| Interface mapping plus kinematics | 0.531 ms | 0.067 ms | 8.0x synthetic |
+
+The final deep profile measured 549,666 transverse springs, 6,786 interfaces,
+20,358 Coulomb springs and 2,520 Quads. Steady Vert `update_domain` time was:
+
+```text
+before follow-up: 8.545 ms/call
+after follow-up:  6.886 ms/call
+reduction:         19.4%
+```
+
+The final uninstrumented 14-thread WSL run measured:
+
+```text
+Vert before follow-up: 9.636 s
+Vert after follow-up:  8.503 s
+improvement:           1.133 s (11.8%)
+total staged time:    34.199 s -> 31.213 s (8.7%)
+```
+
+An 8-thread run measured 8.752 s for Vert while using 20.85 CPU-seconds,
+versus 30.84 CPU-seconds with 14 threads. On this host, 14 threads remains the
+minimum-wall-time setting; 8 threads is the more CPU-efficient setting.
+
+Every new path has a uint64/uint32 bit-pattern oracle covering spring trial
+state, local forces, global forces, normal increments, committed forces,
+maximum displacements, invalid DOFs, disabled/ruptured springs, constrained
+interfaces, and exponential fallback. The complete suite reports `339 passed,
+4 skipped`.
+
+The native Windows acceptance was subsequently run twice with 14 Numba
+threads, one BLAS thread, NumPy 2.5.2, SciPy 1.18.0 and Numba 0.67.0. The
+second run is used as the warm comparison:
+
+| Stage | Previous Windows 14-thread | Updated first run | Updated warm run | Warm change |
+|---|---:|---:|---:|---:|
+| Prepare model | 17.291 s | 15.583 s | 13.283 s | -23.2% |
+| Vert | 30.197 s | 25.680 s | 21.888 s | -27.5% |
+| Change materials 0.2 | 0.755 s | 1.067 s | 0.755 s | -0.1% |
+| Scour 1 | 3.124 s | 4.337 s | 3.155 s | +1.0% |
+| Change materials 0.4 | 0.100 s | 0.195 s | 0.104 s | +4.5% |
+| Scour 2 | 3.169 s | 4.029 s | 3.164 s | -0.2% |
+| All measured stages | 54.805 s | 51.058 s | 42.528 s | -22.4% |
+
+For Vert, process CPU time fell from 342.75 to 237.05 CPU-seconds (-30.8%)
+and peak RSS fell from 2139.0 to 2080.6 MiB (-58.3 MiB). The maximum peak
+over the entire warm workflow was 2401.1 MiB during `scour_1`, 46.3 MiB above
+the previous 2354.8 MiB maximum. That small workflow-peak increase occurs in
+native sparse-factorization temporaries, not in the optimized Vert batch
+arrays, and varies between runs: the two updated scour peaks were 2401.1 and
+2392.9 MiB.
+
+The native result validates a substantial speedup but does not yet meet the
+sub-20-second Vert target: the best Windows measurement is 21.888 s. The
+3.79-second difference between the two updated Windows Vert runs also shows
+that a single timing is insufficient for small follow-up decisions. Any next
+optimization should start with a fresh detailed Windows profile of the updated
+code and repeated timing runs; the pre-change cProfile proportions are now
+obsolete.
 
 ## Remaining measured opportunities
 

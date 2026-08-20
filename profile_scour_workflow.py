@@ -193,7 +193,9 @@ class UpdateDomainProfiler:
     KERNEL_NAMES = (
         "_map_global_to_local",
         "_prepare_interface_kinematics",
+        "_map_and_prepare_interface_kinematics",
         "_advance_and_evaluate_simple_linear_batch",
+        "_advance_evaluate_and_finish_simple_linear_batch",
         "_advance_transverse_targets",
         "_evaluate_simple_linear_batch",
         "_evaluate_linear_batch",
@@ -204,13 +206,20 @@ class UpdateDomainProfiler:
         "_prepare_quad_kinematics",
         "_evaluate_quad_takeda_batch",
         "_refresh_global_resisting_force",
+        "_refresh_global_resisting_force_by_dof",
         "_refresh_max_u_cache",
     )
 
     STATIC_PHASE_NAMES = {
         "_prepare_interface_kinematics": "02_interface_kinematics",
+        "_map_and_prepare_interface_kinematics": (
+            "01_02_interface_mapping_and_kinematics"
+        ),
         "_advance_and_evaluate_simple_linear_batch": (
             "04_transverse_targets_and_constitutive_simple"
+        ),
+        "_advance_evaluate_and_finish_simple_linear_batch": (
+            "04_05_transverse_update_and_force_reduction_simple"
         ),
         "_advance_transverse_targets": "03_transverse_targets",
         "_evaluate_simple_linear_batch": "04_transverse_constitutive_simple",
@@ -222,6 +231,7 @@ class UpdateDomainProfiler:
         "_prepare_quad_kinematics": "10_quad_kinematics",
         "_evaluate_quad_takeda_batch": "11_quad_constitutive",
         "_refresh_global_resisting_force": "12_global_resisting_force",
+        "_refresh_global_resisting_force_by_dof": "12_global_resisting_force",
         "_refresh_max_u_cache": "13_max_u_cache",
     }
 
