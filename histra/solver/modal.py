@@ -15,7 +15,11 @@ from scipy.sparse.linalg import splu
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.model.model import Model
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
-from histra.solver.assembler import assemble_global_k
+from histra.solver.assembler import (
+    assemble_global_k,
+    generate_line_loads,
+    generate_self_weight_loads,
+)
 from histra.solver.cancellation import (
     CancelCheck,
     exclusive_solver_access,
@@ -380,6 +384,20 @@ def _solve_modal_analysis_impl(
         )
 
     raise_if_cancelled(should_cancel)
+    # C# PrepareModelForAnalysis regenerates the element loads before the
+    # modal execution: GenerateLoadsForceAnalysis zeroes every Quad P and
+    # rebuilds only the modal analysis's own combination.  GetCombCoeffGravity
+    # returns a zero gravity coefficient for modal analyses, so self-weight
+    # never re-enters P and only direct line loads can survive.  Without this,
+    # a modal analysis chained to a static predecessor would inherit its
+    # applied loads as spurious point masses in AssembleM.
+    for quad in model.collections.quads.values():
+        for index in range(7):
+            quad.status.p[index] = 0.0
+    analysis_key = int(getattr(analysis, "key", 0))
+    generate_self_weight_loads(model, analysis_key, combination)
+    generate_line_loads(model, analysis_key, combination)
+
     log("Assembling current tangent stiffness matrix (alfa=1).")
     stiffness = assemble_global_k(model, alfa=1.0).tocsc()
     stiffness.sum_duplicates()

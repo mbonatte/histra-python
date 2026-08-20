@@ -960,6 +960,12 @@ def _get_comb_coeff_gravity(model: Model, analysis_key: int, combination: int) -
     if an is None:
         raise KeyError(f"Analysis {analysis_key} is not present in the model")
 
+    # CheckAnalysisDynamic=true in GenerateLoadsForceAnalysis: modal and
+    # dynamic nonlinear analyses always receive a zero gravity coefficient,
+    # so self-weight is never regenerated for them.
+    if int(getattr(an, "analysis_type", 0)) == 5:
+        return 0.0
+
     lc = model.collections.load_combinations.get(an.load_combination_key)
     if lc is None:
         raise KeyError(
