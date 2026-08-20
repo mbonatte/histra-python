@@ -108,12 +108,19 @@ class UmfpackFactorization:
         # Exact override in MatrixManager.SparseMatrix.InitializeControl().
         self.control[_UMFPACK_STRATEGY] = _UMFPACK_STRATEGY_SYMMETRIC
 
+        # SolverRuntime.ModelManager.PrepareMatrices() maps the sparse pattern
+        # and performs UMFPACK's symbolic factorization before PrepareK() has
+        # assembled any stiffness coefficients.  Its Ax array is therefore
+        # entirely zero during this call; the populated values are used only
+        # by the subsequent numeric factorization.  Preserve that sequence
+        # here because UMFPACK may use Ax while selecting a symmetric ordering.
+        symbolic_ax = np.zeros_like(self.ax)
         status = self._lib.umfpack_di_symbolic(
             self.n,
             self.n,
             self._int_ptr(self.ap),
             self._int_ptr(self.ai),
-            self._double_ptr(self.ax),
+            self._double_ptr(symbolic_ax),
             ctypes.byref(self._symbolic),
             self._double_ptr(self.control),
             self._double_ptr(self.info),

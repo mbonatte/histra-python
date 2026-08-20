@@ -253,6 +253,18 @@ def _solve_static_nonlinear_impl(
     else:
         with diagnostic_writer.timed("tangent_assembly"):
             integrator.update_k(p, model, 0.0)
+
+    # C# ModelManager.PrepareK() does not stop after assembling and
+    # factorizing the initial tangent.  It clears the load vector, sets
+    # B[0] = 1, and calls Solve() once as a lability check before assembling
+    # the physical analysis load.  Besides detecting a singular system at the
+    # same point, this establishes the native UMFPACK numeric/solve state in
+    # the same call order as the reference solver.
+    stiffness_check_rhs = np.zeros(n, dtype=np.float64)
+    if n:
+        stiffness_check_rhs[0] = 1.0
+        ls.solve(stiffness_check_rhs)
+        ls.set_zero_displacement()
     integrator.domain_changed(p, model, n)
     p.current_load_factor = integrator.mult
     dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
