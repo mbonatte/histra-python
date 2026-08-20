@@ -2720,7 +2720,9 @@ class HystereticBatchRuntime:
             return "contact_area_check"
         return ""
 
-    def _rebuild_interface_coulomb_storage(self) -> None:
+    def _rebuild_interface_coulomb_storage(
+        self, *, changed_record_indices: frozenset[int] | None = None
+    ) -> None:
         """Rebuild only interface-Coulomb dense rows after topology changes.
 
         Foundation material replacement can split an aliased fixed-restraint
@@ -2730,17 +2732,38 @@ class HystereticBatchRuntime:
         hysteretic objects and all Quad metadata.
 
         Recreate the same Coulomb coverage/order used by ``__init__`` while
-        retaining transverse, geometry and Quad dense arrays unchanged.
+        retaining transverse, geometry and Quad dense arrays unchanged.  When
+        the caller identifies the records that changed, rows whose spring
+        identity occurs only in untouched records are copied from the previous
+        synchronized dense storage instead of re-reading dozens of Python
+        attributes from every Coulomb object. ``coulomb_dns`` deliberately is
+        *not* copied: a topology rebuild historically resets that array to zero.
         """
         from histra.springs.coulomb03 import SpringCoulomb03
 
-        for spring in self.coulomb_springs:
+        old_springs = self.coulomb_springs
+        old_params = self.coulomb_params
+        old_state = self.coulomb_state
+        old_targets = self.coulomb_targets
+        old_enabled = self.coulomb_enabled
+        old_slid_index = self._slid_index
+        old_oop0_index = self._oop0_index
+        old_oop1_index = self._oop1_index
+        known_changes = changed_record_indices is not None
+        changed_records = changed_record_indices or frozenset()
+
+        for spring in old_springs:
             if hasattr(spring, "_histra_batch_managed"):
                 delattr(spring, "_histra_batch_managed")
 
         rejection_reasons: Counter[str] = Counter()
         springs: list[SpringCoulomb03] = []
         index_by_id: dict[int, int] = {}
+        # At most three interface Coulomb rows can occur per record. Keep the
+        # reuse metadata compact instead of allocating Python int/bool lists.
+        max_coulomb_rows = 3 * len(self.records)
+        old_row_for_new = np.full(max_coulomb_rows, -1, dtype=np.int32)
+        row_touched = np.empty(max_coulomb_rows, dtype=np.bool_)
         slid_index = np.full(len(self.records), -1, dtype=np.int32)
         oop0_index = np.full(len(self.records), -1, dtype=np.int32)
         oop1_index = np.full(len(self.records), -1, dtype=np.int32)
@@ -2770,7 +2793,27 @@ class HystereticBatchRuntime:
                     dense_index = len(springs)
                     index_by_id[spring_id] = dense_index
                     springs.append(spring)
+                    if kind == "slid":
+                        previous_index = int(old_slid_index[record_index])
+                    elif kind == "oop0":
+                        previous_index = int(old_oop0_index[record_index])
+                    else:
+                        previous_index = int(old_oop1_index[record_index])
+                    if (
+                        0 <= previous_index < len(old_springs)
+                        and old_springs[previous_index] is spring
+                    ):
+                        old_row_for_new[dense_index] = previous_index
+                    row_touched[dense_index] = (
+                        (not known_changes) or record_index in changed_records
+                    )
                     spring._histra_batch_managed = True
+                elif record_index in changed_records:
+                    # An object may be shared by multiple interfaces. If even
+                    # one occurrence belongs to a changed record, re-import it
+                    # rather than assuming an in-place material mutation did
+                    # not alter the shared object.
+                    row_touched[dense_index] = True
 
                 if kind == "slid":
                     slid_index[record_index] = dense_index
@@ -2780,6 +2823,8 @@ class HystereticBatchRuntime:
                     oop1_index[record_index] = dense_index
 
         count = len(springs)
+        old_row_for_new = old_row_for_new[:count]
+        row_touched = row_touched[:count]
         params = np.empty((count, 7), dtype=np.float64)
         state = np.empty((count, COULOMB_STATE_SIZE), dtype=np.float64)
         targets = np.empty(count, dtype=np.float64)
@@ -2799,7 +2844,46 @@ class HystereticBatchRuntime:
         self._oop1_index = oop1_index
         self.interface_coulomb_rejection_reasons = rejection_reasons
 
+        # Unchanged identities retain scan order, so material topology edits
+        # normally leave a handful of contiguous old->new index runs. Copy
+        # those runs as slices. This avoids the full-sized temporary arrays
+        # created by NumPy advanced indexing while still doing each bulk copy
+        # in C. The scalar fallback is only the number of topology boundaries,
+        # not the number of unchanged Coulomb rows.
+        run_new = -1
+        run_old = -1
+        previous_old = -2
+
+        def copy_run(start_new: int, start_old: int, stop_new: int) -> None:
+            if start_new < 0:
+                return
+            length = stop_new - start_new
+            old_stop = start_old + length
+            params[start_new:stop_new, :] = old_params[start_old:old_stop, :]
+            state[start_new:stop_new, :] = old_state[start_old:old_stop, :]
+            targets[start_new:stop_new] = old_targets[start_old:old_stop]
+            enabled[start_new:stop_new] = old_enabled[start_old:old_stop]
+
+        for index, (old_index, touched) in enumerate(
+            zip(old_row_for_new, row_touched, strict=True)
+        ):
+            reusable = old_index >= 0 and not touched
+            if reusable and run_new >= 0 and old_index == previous_old + 1:
+                previous_old = old_index
+                continue
+            if run_new >= 0:
+                copy_run(run_new, run_old, index)
+                run_new = -1
+            if reusable:
+                run_new = index
+                run_old = old_index
+                previous_old = old_index
+        if run_new >= 0:
+            copy_run(run_new, run_old, count)
+
         for index, spring in enumerate(springs):
+            if old_row_for_new[index] >= 0 and not row_touched[index]:
+                continue
             params[index, :] = (
                 float(spring.k),
                 float(spring.h),
@@ -3134,7 +3218,11 @@ class HystereticBatchRuntime:
             self._local_u[record_index, :] = interface.status.u[:12]
 
         if requires_coulomb_rebuild:
-            self._rebuild_interface_coulomb_storage()
+            self._rebuild_interface_coulomb_storage(
+                changed_record_indices=frozenset(
+                    record_index for record_index, _, _, _ in validated
+                )
+            )
 
         self._refresh_simple_hysteretic_flag()
         self._pending_values.fill(0.0)

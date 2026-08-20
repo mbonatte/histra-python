@@ -185,9 +185,11 @@ def _unit(value: Sequence[float], *, label: str) -> np.ndarray:
     return out / norm
 
 
-def _f32(value: float) -> np.float32:
-    """Evaluate one scalar as the ``System.Single`` used by XNA ``Vector3``."""
-    return np.float32(value)
+# ``np.float32`` already performs the exact System.Single conversion required
+# by the XNA-compatibility path. Bind it directly so the millions of scalar
+# conversions performed while creating large interface models do not pay an
+# extra Python function-frame call for a one-operation wrapper.
+_f32 = np.float32
 
 
 def _cross3_f32(first: Sequence[float], second: Sequence[float]) -> np.ndarray:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import fields
+import importlib
 import struct
 
 import numpy as np
 import pytest
 
+pm = importlib.import_module("histra.preprocessing.prepare_model")
 from histra.preprocessing.prepare_model import (
     _HystereticLaw,
     _configure_combined_hysteretic,
@@ -95,3 +97,22 @@ def test_numeric_combined_hysteretic_batch_matches_scalar_bit_exactly(law1, law2
         scalar.spring_purpose = "Transversal1"
         scalar.length = 0.0
         _assert_spring_exact(batch[index], scalar)
+
+
+def test_f32_direct_binding_preserves_system_single_bits_exactly():
+    values = (
+        0.0,
+        -0.0,
+        1.0,
+        -1.0,
+        1.0 / 3.0,
+        np.nextafter(1.0, 2.0),
+        np.nextafter(1.0, 0.0),
+        np.finfo(np.float32).tiny,
+        np.finfo(np.float32).max,
+    )
+    for value in values:
+        actual = pm._f32(value)
+        expected = np.float32(value)
+        assert isinstance(actual, np.float32)
+        assert actual.view(np.uint32) == expected.view(np.uint32)

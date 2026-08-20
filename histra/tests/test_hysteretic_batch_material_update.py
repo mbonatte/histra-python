@@ -535,6 +535,32 @@ def test_incremental_material_update_rebuilds_only_coulomb_storage_when_oop_alia
     np.testing.assert_array_equal(runtime.committed[4:8], transverse_before["committed"][4:8])
     np.testing.assert_array_equal(runtime.trial[4:8], transverse_before["trial"][4:8])
 
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_coulomb_topology_rebuild_reimports_only_changed_record_objects(monkeypatch) -> None:
+    model = _model()
+    changed = model.collections.interfaces[1]
+    changed.slid_out_plan[1] = changed.slid_out_plan[0]
+    runtime = batch.HystereticBatchRuntime(model)
+
+    # Force a topology split using fresh compatible objects, matching the
+    # fixed-restraint -> soil transition used by scour material replacement.
+    _replace_definition(changed, 1.7)
+    calls: list[int] = []
+    original = runtime._read_coulomb_object
+
+    def counted(index: int, spring: SpringCoulomb03) -> None:
+        calls.append(id(spring))
+        original(index, spring)
+
+    monkeypatch.setattr(runtime, "_read_coulomb_object", counted)
+    assert runtime.try_update_material_interfaces([changed]) is True
+
+    # All three Coulomb objects on the changed record are authoritative and
+    # re-imported. The three untouched objects on interface 2 are copied from
+    # synchronized dense storage rather than traversed through Python again.
+    assert calls == [id(changed.slid[0]), *(id(s) for s in changed.slid_out_plan)]
+
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
 def test_bulk_initial_transverse_import_matches_scalar_rows_exactly() -> None:
     model = _model()
