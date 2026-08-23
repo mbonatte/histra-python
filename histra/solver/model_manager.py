@@ -333,7 +333,10 @@ class ModelManager:
                     ).astype(np.float32)
                     pq_quad[3:] += np.cross(delta_u, force).astype(np.float32)
 
-            for face_intf_keys in quad.interface_keys:
+            # C# ModelLoadOperations.ComputePDeltaLoads explicitly visits
+            # Interfaces1..Interfaces4.  Quads expose six interface lists, but
+            # faces 5 and 6 do not participate in this geometric-load term.
+            for face_intf_keys in quad.interface_keys[:4]:
                 for intf_key in face_intf_keys:
                     intf = collections.interfaces.get(intf_key)
                     if intf is None:

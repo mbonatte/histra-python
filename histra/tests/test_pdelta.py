@@ -104,6 +104,57 @@ def test_pdelta_includes_assigned_line_load_moment():
     np.testing.assert_allclose(pq, [-10.0])
 
 
+def test_pdelta_interface_moments_use_only_first_four_quad_faces():
+    """Match C# ComputePDeltaLoads, which visits Interfaces1..Interfaces4."""
+
+    def interface(key: int, node_key: int, force: float):
+        spring = SimpleNamespace(get_force=lambda: force)
+        return SimpleNamespace(
+            key=key,
+            parent_element_key1=7,
+            parent_type_element1="Quad",
+            reference_e1=(1.0, 0.0, 0.0),
+            reference_e2=(0.0, 1.0, 0.0),
+            reference_e3=(0.0, 0.0, 1.0),
+            node_keys=[node_key],
+            vint3d=[],
+            trasv_1=[],
+            trasv_2=[],
+            slid=[],
+            slid_out_plan=[spring],
+        )
+
+    quad = SimpleNamespace(
+        key=7,
+        status=SimpleNamespace(u=[0.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
+        g=Point(0.0, 0.0, 0.0),
+        # Interface 12 is deliberately placed on C# Interfaces5.
+        interface_keys=[[11], [], [], [], [12], []],
+        aff=[[], [], [], [AfferenceEntry(1, 1.0)], [], []],
+    )
+    model = Model(
+        gdl=1,
+        collections=Collections(
+            nodes={
+                21: SimpleNamespace(point=Point(1.0, 0.0, 0.0)),
+                22: SimpleNamespace(point=Point(1.0, 0.0, 0.0)),
+            },
+            quads={7: quad},
+            interfaces={
+                11: interface(11, 21, 2.0),
+                12: interface(12, 22, 3.0),
+            },
+        ),
+    )
+
+    ModelManager.clear_hysteretic_batch()
+    pq = ModelManager.compute_and_assemble_pdelta_load(model)
+
+    # phi_z x r_x = +Y; local force is -Z, hence -X moment.
+    # The face-5 force would change this to -5 if it were incorrectly included.
+    np.testing.assert_allclose(pq, [-2.0])
+
+
 @pytest.mark.skipif(not BENCHMARK_PDELTA.exists(), reason="benchmark.hrx not available")
 def test_pdelta_computation_on_benchmark():
     """Test that compute_and_assemble_pdelta_load generates non-zero Pq moments."""
