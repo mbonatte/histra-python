@@ -131,6 +131,22 @@ def test_convergence_criteria_and_max_u():
     assert test.get_error() == 0.2
 
 
+def test_find_max_u_excludes_interface_displacements_like_csharp():
+    quad = SimpleNamespace(key=11, max_u=lambda: 2.5)
+    interface = SimpleNamespace(key=22, max_u=lambda: 9.0)
+    model = SimpleNamespace(
+        collections=SimpleNamespace(quads={11: quad}, interfaces={22: interface})
+    )
+    p = Program()
+
+    ModelManager.clear_hysteretic_batch()
+    ModelManager.find_max_u(model, p)
+
+    assert p.max_u == 2.5
+    assert p.elem_max_u_key == 11
+    assert p.elem_max_u_type == "Quad"
+
+
 def test_loader_attaches_csharp_load_function_items(tmp_path):
     path = tmp_path / "minimal.hrx"
     path.write_text(

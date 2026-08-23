@@ -5,7 +5,11 @@ from typing import Any, Callable
 import numpy as np
 
 from histra.model.model import Model
-from histra.solver.assembler import assemble_global_k, assemble_load_vector
+from histra.solver.assembler import (
+    _get_load_template_coefficient,
+    assemble_global_k,
+    assemble_load_vector,
+)
 from histra.solver.program import Program
 from histra.types.integrator_state import IntegratorState
 from histra.types.linear_system import LinearSystem
@@ -244,11 +248,17 @@ class ModelManager:
             dirty_interfaces.clear()
 
     @classmethod
-    def compute_and_assemble_pdelta_load(cls, model: Model, ls: LinearSystem | None = None) -> np.ndarray:
+    def compute_and_assemble_pdelta_load(
+        cls,
+        model: Model,
+        ls: LinearSystem | None = None,
+        analysis: Any | None = None,
+        combination: int = 1,
+    ) -> np.ndarray:
         r"""Compute and assemble discrete macro-element P-Delta loads (Pq).
 
         Port of C# ModelLoadOperations.ComputePDeltaLoads and ModelManager.AssemblePdeltaLoad.
-        Moments on each Quad Q are produced by interface forces:
+        Moments on each Quad Q are produced by applied line loads and interface forces:
             M_{P\Delta} = (\boldsymbol{\Phi}_G \times (G_{intf} - G_{quad})) \times \mathbf{F}_{intf, global}
         assembled into rotational DOFs (aff[3..5]).
         """
@@ -257,14 +267,71 @@ class ModelManager:
         pq_global = np.zeros(gdl, dtype=np.float64)
         runtime = cls.hysteretic_batch_for(model)
 
+        managed_quad_indices = (
+            {id(quad): index for index, quad in enumerate(runtime.quad_records)}
+            if runtime is not None
+            else {}
+        )
+        line_loads_by_quad: dict[int, list[Any]] = {}
+        if analysis is not None:
+            for load in collections.line_loads.values():
+                if load.element_type == "Quad":
+                    line_loads_by_quad.setdefault(int(load.element_key), []).append(load)
+
         for quad in collections.quads.values():
-            if len(quad.status.u) < 6:
+            managed_index = managed_quad_indices.get(id(quad))
+            local_u = (
+                runtime._quad_local_u[managed_index]
+                if managed_index is not None
+                else np.asarray(quad.status.u, dtype=np.float64)
+            )
+            if len(local_u) < 6:
                 continue
-            phi_g = np.array([quad.status.u[3], quad.status.u[4], quad.status.u[5]], dtype=np.float64)
+            # System.Numerics.Vector3 is single precision in the C# path.
+            phi_g = np.asarray(local_u[3:6], dtype=np.float32)
             if phi_g[0] == 0.0 and phi_g[1] == 0.0 and phi_g[2] == 0.0:
                 continue
-            g_quad = np.array([quad.g.x, quad.g.y, quad.g.z], dtype=np.float64)
+            g_quad = np.asarray([quad.g.x, quad.g.y, quad.g.z], dtype=np.float32)
             pq_quad = np.zeros(6, dtype=np.float64)
+
+            # C# ComputePDeltaLoads includes the force resultant of every line
+            # load assigned to this Quad. DisplacementsCurrent is called with
+            # a one-point array, so only rigid translation/rotation contributes;
+            # the translation cancels in the difference below.
+            for load in line_loads_by_quad.get(int(quad.key), ()):
+                template = collections.load_templates.get(load.load_template_key)
+                if template is None:
+                    continue
+                point1 = np.asarray(load.point1, dtype=np.float32)
+                point2 = np.asarray(load.point2, dtype=np.float32)
+                midpoint = np.float32(0.5) * (point1 + point2)
+                length = np.float32(np.linalg.norm(point1 - point2))
+                delta_u = np.cross(phi_g, midpoint - g_quad).astype(np.float32)
+                for item in template.items:
+                    coefficient = np.float32(
+                        _get_load_template_coefficient(
+                            model,
+                            int(analysis.key),
+                            combination,
+                            int(item.load_condition_id),
+                            item,
+                        )
+                    )
+                    direction = (
+                        np.asarray(
+                            (analysis.dir_x, analysis.dir_y, analysis.dir_z),
+                            dtype=np.float32,
+                        )
+                        if bool(getattr(analysis, "is_seismic", False))
+                        else np.asarray(item.direction, dtype=np.float32)
+                    )
+                    force = (
+                        np.float32(item.load_value)
+                        * length
+                        * coefficient
+                        * direction
+                    ).astype(np.float32)
+                    pq_quad[3:] += np.cross(delta_u, force).astype(np.float32)
 
             for face_intf_keys in quad.interface_keys:
                 for intf_key in face_intf_keys:
@@ -273,17 +340,24 @@ class ModelManager:
                         continue
                     sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
                     if runtime is not None and id(intf) in runtime._record_by_id:
-                        rec_idx = runtime._record_by_id[id(intf)]
-                        f_local = runtime._local_forces[rec_idx, :3]
-                    elif hasattr(intf.status, "forces"):
-                        f_local = np.array(intf.status.forces[:3], dtype=np.float64)
+                        f_local = runtime.resultant_force_for(intf)
                     else:
-                        continue
+                        # Status.Forces is populated as part of C# result
+                        # output, whereas the scalar Python path keeps the
+                        # spring forces authoritative. Reconstruct the same
+                        # physical resultant directly instead of consuming a
+                        # potentially stale status tuple.
+                        from histra.postprocessing import _interface_local_resultant
+
+                        f_local = _interface_local_resultant(intf)
 
                     e1 = np.array(intf.reference_e1, dtype=np.float64)
                     e2 = np.array(intf.reference_e2, dtype=np.float64)
                     e3 = np.array(intf.reference_e3, dtype=np.float64)
-                    f_global = sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3)
+                    f_global = np.asarray(
+                        sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3),
+                        dtype=np.float32,
+                    )
 
                     intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
                     if intf_nodes:
@@ -293,8 +367,8 @@ class ModelManager:
                     else:
                         continue
 
-                    r = g_intf - g_quad
-                    delta_u = np.cross(phi_g, r)
+                    r = np.asarray(g_intf, dtype=np.float32) - g_quad
+                    delta_u = np.cross(phi_g, r).astype(np.float32)
                     moment = np.cross(delta_u, f_global)
                     pq_quad[3:] += moment
 
@@ -389,33 +463,28 @@ class ModelManager:
     @classmethod
     def find_max_u(cls, model: Model, p: Program) -> None:
         runtime = cls.hysteretic_batch_for(model)
+        max_u = 0.0
+        max_key = 0
+        max_type = ""
         if runtime is not None:
-            max_u, max_key, max_type = runtime.cached_max_u()
-            collections = (
-                ("Quad", runtime.unmanaged_quads),
-                ("Interface", runtime.unmanaged_interfaces),
-            )
-            for kind, elements in collections:
-                for element in elements:
-                    value = abs(float(element.max_u()))
-                    if value > max_u:
-                        max_u = value
-                        max_key = int(getattr(element, "key", 0))
-                        max_type = kind
+            for index, quad in enumerate(runtime.quad_records):
+                value = float(np.max(np.abs(runtime._quad_local_u[index])))
+                if value > max_u:
+                    max_u = value
+                    max_key = int(quad.key)
+                    max_type = "Quad"
+            quads = runtime.unmanaged_quads
         else:
-            max_u = 0.0
-            max_key = 0
-            max_type = ""
-            for kind, collection in (
-                ("Quad", model.collections.quads.values()),
-                ("Interface", model.collections.interfaces.values()),
-            ):
-                for element in collection:
-                    value = abs(float(element.max_u()))
-                    if value > max_u:
-                        max_u = value
-                        max_key = int(getattr(element, "key", 0))
-                        max_type = kind
+            quads = model.collections.quads.values()
+        # C# FindMaxU scans NodeC and MacroElements. Interfaces are explicitly
+        # excluded, so their often much larger spring displacement must not
+        # terminate an ArcLength analysis at Analysis.MaxU.
+        for quad in quads:
+            value = abs(float(quad.max_u()))
+            if value > max_u:
+                max_u = value
+                max_key = int(getattr(quad, "key", 0))
+                max_type = "Quad"
         p.max_u = max_u
         p.elem_max_u_key = max_key
         p.elem_max_u_type = max_type

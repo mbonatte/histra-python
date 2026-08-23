@@ -337,6 +337,9 @@ class ArcLength(StaticIntegrator):
         if self.u is not None:
             self.u += self._delta_u
         ModelManager.update_domain(model, ls, self.state)
+        self.update_ptarget(
+            p, model, an, int(self.state.combination), self.iteration
+        )
         self.apply_load_domain(model, delta_lambda)
         return 0
 

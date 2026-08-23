@@ -91,13 +91,15 @@ class IncrementalIntegrator(ABC):
         """
         pdelta = str(getattr(an, "pdelta_effect", "") or "").strip().lower()
         need_pdelta = (pdelta in ("eachiteration", "2")) or (pdelta in ("eachstep", "1") and iteration == 0)
-        if need_pdelta:
-            ModelManager.compute_and_assemble_pdelta_load(model, p.ls)
-
         if getattr(an, "key", None) is not None:
             ModelManager.assemble_load(
                 model, p.ls, an.key, combination, reuse_current=True
             )
+        if need_pdelta:
+            ModelManager.compute_and_assemble_pdelta_load(
+                model, p.ls, an, combination
+            )
+        if getattr(an, "key", None) is not None:
             return True
         return need_pdelta
 

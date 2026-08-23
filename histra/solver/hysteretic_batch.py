@@ -4289,6 +4289,46 @@ class HystereticBatchRuntime:
     def transverse_force_for(self, interface: Any) -> np.ndarray:
         return self._local_forces[self._record_by_id[id(interface)]]
 
+    def resultant_force_for(self, interface: Any) -> np.ndarray:
+        """Return C# ``Interface.Status.Forces`` from authoritative dense state.
+
+        This is the physical local X/Y/Z resultant used by
+        ``ComputePDeltaLoads``. It is not the six-component generalized
+        resisting-force vector stored in ``_local_forces``.
+        """
+        record_index = self._record_by_id[id(interface)]
+        start = int(self._starts[record_index])
+        stop = int(self._stops[record_index])
+        f32 = np.float32
+        force_y = f32(0.0)
+        for spring_index in range(start, stop):
+            force_y = f32(force_y + f32(self.trial[spring_index, 6]))
+        # Trasv_2 is outside the supported dense path (and is empty in the
+        # bridge benchmark), but retain the scalar C# accumulation fallback.
+        for spring in interface.trasv_2:
+            force_y = f32(force_y + f32(spring.get_force()))
+
+        force_x = f32(0.0)
+        slid_index = int(self._slid_index[record_index])
+        if slid_index >= 0:
+            force_x = f32(force_x - f32(self.coulomb_state[slid_index, CF]))
+        else:
+            for spring in interface.slid:
+                force_x = f32(force_x - f32(spring.get_force()))
+
+        force_z = f32(0.0)
+        for dense_index, spring in zip(
+            (int(self._oop0_index[record_index]), int(self._oop1_index[record_index])),
+            interface.slid_out_plan,
+        ):
+            value = (
+                self.coulomb_state[dense_index, CF]
+                if dense_index >= 0
+                else spring.get_force()
+            )
+            force_z = f32(force_z - f32(value))
+        return np.asarray((force_x, force_y, force_z), dtype=np.float32)
+
     def trial_stresses_for(self, interface: Any) -> np.ndarray:
         start, stop = interface._perf_hysteretic_slice
         return self.trial[start:stop, 6]
