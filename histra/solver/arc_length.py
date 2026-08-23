@@ -225,8 +225,9 @@ class ArcLength(StaticIntegrator):
         self._arc_length2 = abs(float(getattr(an, "dr2", self._arc_length2)))
         radius2 = self._arc_length2
         procedure = str(getattr(an, "arc_length_procedure", "")).lower()
+        dof_count = max(1, len(self._dofs))
         if "controlpoint" in procedure:
-            radius2 *= max(1, len(self._dofs))
+            radius2 *= dof_count
 
         delta_lambda = float(np.sqrt(radius2 / denominator))
         if bool(getattr(an, "is_max_arc_length_ray", False)):

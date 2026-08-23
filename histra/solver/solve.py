@@ -123,11 +123,6 @@ def _solve_static_nonlinear_impl(
             )
     require_solver_ready(model)
     raise_if_cancelled(should_cancel)
-    if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
-        raise NotImplementedError(
-            "P-Delta is implemented in the original C# code but the required "
-            "frame/load-generation subsystem is absent from this Python port."
-        )
     n = int(model.gdl)
     diagnostic_writer = create_diagnostics(diagnostics, model)
     p = Program(

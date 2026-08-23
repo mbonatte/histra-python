@@ -24,3 +24,4 @@ profiles/
 profiling.py
 C#_Original.zip
 histra-python-performance-pass2.patch
+.venv_pkgs/

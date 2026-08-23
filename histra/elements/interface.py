@@ -270,10 +270,7 @@ class Interface:
         self._perf_custom_force_access = tuple(
             False
             if getattr(spring, "_histra_batch_managed", False)
-            else (
-                "get_incr_force" in spring.__dict__
-                or "get_force" in spring.__dict__
-            )
+            else not hasattr(spring, "_tstress")
             for spring in self.trasv_1[:count]
         )
         self._perf_has_custom_force_access = any(self._perf_custom_force_access)
@@ -616,9 +613,9 @@ class Interface:
                 new_u = spring.u + increment
                 spring.u = new_u
                 spring.set_trial_strain(new_u)
-                trial = float(spring._tstress)
-                committed = float(spring._cstress)
-                normal_increment -= trial - committed
+                trial = float(spring._tstress) if hasattr(spring, "_tstress") else float(spring.get_force())
+                committed = float(spring._cstress) if hasattr(spring, "_cstress") else float(spring.get_committed_force())
+                normal_increment -= float(spring.get_incr_force()) if hasattr(spring, "get_incr_force") else (trial - committed)
                 committed_normal_force += committed
                 abs_u = abs(new_u)
                 if abs_u > max_displacement:

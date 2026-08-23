@@ -155,7 +155,8 @@ def _copy_object_state(obj: Any) -> dict[str, Any]:
     copied: dict[str, Any] = {}
     if is_dataclass(obj):
         for key in _dataclass_state_fields(type(obj)):
-            copied[key] = _copy_array(getattr(obj, key))
+            if hasattr(obj, key):
+                copied[key] = _copy_array(getattr(obj, key))
 
     dynamic = getattr(obj, "__dict__", None)
     if dynamic:

@@ -244,6 +244,71 @@ class ModelManager:
             dirty_interfaces.clear()
 
     @classmethod
+    def compute_and_assemble_pdelta_load(cls, model: Model, ls: LinearSystem | None = None) -> np.ndarray:
+        r"""Compute and assemble discrete macro-element P-Delta loads (Pq).
+
+        Port of C# ModelLoadOperations.ComputePDeltaLoads and ModelManager.AssemblePdeltaLoad.
+        Moments on each Quad Q are produced by interface forces:
+            M_{P\Delta} = (\boldsymbol{\Phi}_G \times (G_{intf} - G_{quad})) \times \mathbf{F}_{intf, global}
+        assembled into rotational DOFs (aff[3..5]).
+        """
+        collections = model.collections
+        gdl = int(model.gdl)
+        pq_global = np.zeros(gdl, dtype=np.float64)
+        runtime = cls.hysteretic_batch_for(model)
+
+        for quad in collections.quads.values():
+            if len(quad.status.u) < 6:
+                continue
+            phi_g = np.array([quad.status.u[3], quad.status.u[4], quad.status.u[5]], dtype=np.float64)
+            if phi_g[0] == 0.0 and phi_g[1] == 0.0 and phi_g[2] == 0.0:
+                continue
+            g_quad = np.array([quad.g.x, quad.g.y, quad.g.z], dtype=np.float64)
+            pq_quad = np.zeros(6, dtype=np.float64)
+
+            for face_intf_keys in quad.interface_keys:
+                for intf_key in face_intf_keys:
+                    intf = collections.interfaces.get(intf_key)
+                    if intf is None:
+                        continue
+                    sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
+                    if runtime is not None and id(intf) in runtime._record_by_id:
+                        rec_idx = runtime._record_by_id[id(intf)]
+                        f_local = runtime._local_forces[rec_idx, :3]
+                    elif hasattr(intf.status, "forces"):
+                        f_local = np.array(intf.status.forces[:3], dtype=np.float64)
+                    else:
+                        continue
+
+                    e1 = np.array(intf.reference_e1, dtype=np.float64)
+                    e2 = np.array(intf.reference_e2, dtype=np.float64)
+                    e3 = np.array(intf.reference_e3, dtype=np.float64)
+                    f_global = sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3)
+
+                    intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
+                    if intf_nodes:
+                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf_nodes], axis=0)
+                    elif getattr(intf, "vint3d", None):
+                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf.vint3d], axis=0)
+                    else:
+                        continue
+
+                    r = g_intf - g_quad
+                    delta_u = np.cross(phi_g, r)
+                    moment = np.cross(delta_u, f_global)
+                    pq_quad[3:] += moment
+
+            for i in range(3, 6):
+                if i < len(quad.aff):
+                    for entry in quad.aff[i]:
+                        dof = entry.gdl - 1
+                        if 0 <= dof < gdl:
+                            pq_global[dof] += pq_quad[i] * entry.alfa
+
+        cls._pq = pq_global
+        return pq_global
+
+    @classmethod
     def form_unbalance(cls, model: Model, ls: LinearSystem, an: Any) -> None:
         cls.get_resisting_force(model, ls)
         fext = cls._fext if cls._fext is not None else np.zeros(ls.n)

@@ -1048,6 +1048,10 @@ if njit is not None:
         """
         compact = params.shape[1] <= SIMPLE_TRANSVERSE_PARAM_SIZE
         parameter_offset = 0 if compact else 10
+        tensile_curve_column = (
+            SIMPLE_TENSILE_CURVE_TYPE_PARAM
+            if compact else TENSILE_CURVE_TYPE_PARAM
+        )
 
         for reduction_index in prange(starts.size):
             start = starts[reduction_index]
@@ -1107,6 +1111,10 @@ if njit is not None:
                             params[i, parameter_offset + 18],
                             params[i, parameter_offset + 19],
                         )
+                        tensile_curve_type = TENSILE_LINEAR
+                        if params.shape[1] > tensile_curve_column:
+                            tensile_curve_type = int(params[i, tensile_curve_column])
+
                         umax_p, umax_n = committed[i, 0], committed[i, 1]
                         trot_pu, trot_nu = committed[i, 2], committed[i, 3]
                         cenergy = committed[i, 4]
@@ -1131,12 +1139,13 @@ if njit is not None:
 
                         if tstrain >= umax_p:
                             trot_max = tstrain
-                            tstress = _pos_stress(
-                                tstrain, rot1p, mom1p, rot2p,
+                            tstress = _pos_stress_typed(
+                                tensile_curve_type, tstrain, rot1p, mom1p, rot2p,
                                 mom2p, rot3p, mom3p, e1p, e2p, e3p,
                             )
-                            ktang, tphase = _pos_tangent(
-                                tstrain, rot1p, rot2p, rot3p, e1p, e2p, e3p,
+                            ktang, tphase = _pos_tangent_typed(
+                                tensile_curve_type, tstrain, rot1p, rot2p, rot3p,
+                                e1p, e2p, e3p, tstress, cstress, cstrain,
                             )
                             tload = 1
                         elif tstrain <= umax_n:
@@ -1156,8 +1165,8 @@ if njit is not None:
                             if num2 <= 1.0:
                                 num2 = 1.0
                             else:
-                                env = _pos_stress(
-                                    umax_p, rot1p, mom1p, rot2p,
+                                env = _pos_stress_typed(
+                                    tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
                                     mom2p, rot3p, mom3p, e1p, e2p, e3p,
                                 )
                                 num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
@@ -1166,8 +1175,8 @@ if njit is not None:
                                 if cstress >= 0.0:
                                     denom = eup * num2
                                     trot_pu = cstrain - cstress / denom if denom != 0.0 else 0.0
-                                    if _pos_stress(
-                                        umax_p, rot1p, mom1p, rot2p,
+                                    if _pos_stress_typed(
+                                        tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
                                         mom2p, rot3p, mom3p, e1p, e2p, e3p,
                                     ) == 0.0:
                                         trot_pu = 0.0
@@ -1179,8 +1188,8 @@ if njit is not None:
                                 trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
                                 e1n, e2n, e3n,
                             )
-                            num6 = _pos_rotlim(
-                                umax_p, rot1p, mom1p, rot2p, mom2p,
+                            num6 = _pos_rotlim_typed(
+                                tensile_curve_type, umax_p, rot1p, mom1p, rot2p, mom2p,
                                 e2p, e3p, rot3p, mom3p, e1p,
                             )
                             num7 = num6 if num6 < trot_pu else trot_pu
@@ -1213,8 +1222,8 @@ if njit is not None:
                             if num2 <= 1.0:
                                 num2 = 1.0
                             else:
-                                env = _pos_stress(
-                                    umax_p, rot1p, mom1p, rot2p,
+                                env = _pos_stress_typed(
+                                    tensile_curve_type, umax_p, rot1p, mom1p, rot2p,
                                     mom2p, rot3p, mom3p, e1p, e2p, e3p,
                                 )
                                 num2 = env / mom1p / num2 if num2 != 0.0 else 1.0
@@ -1232,8 +1241,8 @@ if njit is not None:
                             tload = 1
                             if trot_max < rot1p:
                                 trot_max = rot1p
-                            num5 = _pos_stress(
-                                trot_max, rot1p, mom1p, rot2p,
+                            num5 = _pos_stress_typed(
+                                tensile_curve_type, trot_max, rot1p, mom1p, rot2p,
                                 mom2p, rot3p, mom3p, e1p, e2p, e3p,
                             )
                             num6 = _neg_rotlim(
@@ -2521,8 +2530,10 @@ def _force_general_hysteretic_batch() -> bool:
     ).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _uses_simple_hysteretic_parameters(spring: SpringHysteretic) -> bool:
+def _uses_simple_hysteretic_parameters(spring: Any) -> bool:
     """Return the exact predicate used by the specialized dense kernel."""
+    if not isinstance(spring, SpringHysteretic):
+        return True
     return (
         spring.pinch_xp == 0.0
         and spring.pinch_yp == 0.0
@@ -2532,7 +2543,7 @@ def _uses_simple_hysteretic_parameters(spring: SpringHysteretic) -> bool:
         and spring.damfc2p == 0.0
         and spring.damfc1n == 0.0
         and spring.damfc2n == 0.0
-        and spring.betap == 1.0
+        and (spring.betap == 1.0 or spring.betap == 0.0)
         and spring.betan == 0.0
     )
 
@@ -2748,6 +2759,65 @@ def _build_force_by_dof_topology(
     )
 
 
+def _extract_spring_params(spring: Any, is_compact: bool) -> tuple:
+    if isinstance(spring, SpringHysteretic):
+        getter = _SIMPLE_PARAM_GETTER if is_compact else _PARAM_GETTER
+        return getter(spring)
+    else:
+        k = float(spring.k)
+        huge = 1e27
+        if is_compact:
+            return (
+                huge, huge * k, huge, 0.0, 0.0, 0.0,
+                -huge * k, -huge, 0.0, 0.0, 0.0, 0.0,
+                k, k, 0.0, 0.0, 0.0, 0.0, k, k
+            )
+        else:
+            return (
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                huge, huge * k, huge, 0.0, 0.0, 0.0,
+                -huge * k, -huge, 0.0, 0.0, 0.0, 0.0,
+                k, k, 0.0, 0.0, 0.0, 0.0, k, k,
+                0.0, k
+            )
+
+def _extract_spring_committed(spring: Any) -> tuple:
+    if isinstance(spring, SpringHysteretic):
+        return (
+            float(spring.umax[0]), float(spring.umax[1]), float(spring._crot_pu),
+            float(spring._crot_nu), float(spring.cenergy_d),
+            int(spring._cload_indicator), float(spring._cstress),
+            float(spring._cstrain), int(spring.phase),
+        )
+    else:
+        k = float(spring.k)
+        u = float(spring.u)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, k * u, u, int(PhaseEnum.Elastic))
+
+def _extract_spring_trial(spring: Any) -> tuple:
+    if isinstance(spring, SpringHysteretic):
+        return (
+            float(spring._trot_max), float(spring._trot_min), float(spring._trot_pu),
+            float(spring._trot_nu), float(spring._tenergy_d),
+            int(spring._tload_indicator), float(spring._tstress),
+            float(spring._tstrain), int(spring.t_phase), float(spring.k_tang),
+        )
+    else:
+        k = float(spring.k)
+        u = float(spring.u)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, k * u, u, int(PhaseEnum.Elastic), k)
+
+def _extract_spring_target(spring: Any) -> float:
+    if isinstance(spring, SpringHysteretic):
+        return float(spring._tstrain)
+    return float(spring.u)
+
+def _extract_spring_curve_type(spring: Any) -> float:
+    if isinstance(spring, SpringHysteretic) and spring.tensile_curve_type == "Exponential":
+        return float(TENSILE_EXPONENTIAL)
+    return float(TENSILE_LINEAR)
+
+
 class HystereticBatchRuntime:
     """Dense committed/trial state for compatible transverse springs."""
 
@@ -2757,7 +2827,7 @@ class HystereticBatchRuntime:
         self.model = model
         self.records: list[_InterfaceSlice] = []
         self.interface_rejection_reasons: Counter[str] = Counter()
-        springs: list[SpringHysteretic] = []
+        springs: list[Any] = []
         for interface in model.collections.interfaces.values():
             group = list(interface.trasv_1)
             if not group:
@@ -2790,7 +2860,7 @@ class HystereticBatchRuntime:
         )
         self._compact_linear_params = bool(
             self._compact_simple_params
-            and all(spring.tensile_curve_type != "Exponential" for spring in springs)
+            and all(getattr(spring, "tensile_curve_type", "") != "Exponential" for spring in springs)
         )
         parameter_count = (
             LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE
@@ -3170,14 +3240,17 @@ class HystereticBatchRuntime:
 
     @staticmethod
     def _transverse_rejection_reason(spring: Any) -> str:
+        from histra.springs.base import Spring
+        if isinstance(spring, Spring) and not isinstance(spring, SpringHysteretic):
+            return ""
         if not isinstance(spring, SpringHysteretic):
             return "unsupported_transverse_spring_type"
         if spring.tensile_curve_type not in {
-            "LinearHardening", "LinearSoftening", "Exponential"
+            "LinearHardening", "LinearSoftening", "Exponential", "Elastic"
         }:
             return "unsupported_tensile_curve_type"
         if spring.compressive_curve_type not in {
-            "LinearHardening", "LinearSoftening"
+            "LinearHardening", "LinearSoftening", "Elastic"
         }:
             return "unsupported_compressive_curve_type"
         return ""
@@ -3401,14 +3474,23 @@ class HystereticBatchRuntime:
         if chunk_size <= 0:
             raise ValueError(f"chunk_size must be positive, got {chunk_size}")
 
-        if self._compact_simple_params:
-            getter = _SIMPLE_PARAM_GETTER
-            fixed_parameter_count = len(SIMPLE_PARAM_NAMES)
-            curve_column = SIMPLE_TENSILE_CURVE_TYPE_PARAM
-        else:
-            getter = _PARAM_GETTER
-            fixed_parameter_count = len(_PARAM_NAMES)
-            curve_column = TENSILE_CURVE_TYPE_PARAM
+    def _read_transverse_objects_bulk(
+        self, springs: list[Any], *, chunk_size: int = 16384
+    ) -> None:
+        count = len(springs)
+        if count == 0:
+            return
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+
+        fixed_parameter_count = (
+            len(SIMPLE_PARAM_NAMES) if self._compact_simple_params else len(_PARAM_NAMES)
+        )
+        curve_column = (
+            SIMPLE_TENSILE_CURVE_TYPE_PARAM
+            if self._compact_simple_params
+            else TENSILE_CURVE_TYPE_PARAM
+        )
 
         for start in range(0, count, chunk_size):
             stop = min(start + chunk_size, count)
@@ -3416,16 +3498,12 @@ class HystereticBatchRuntime:
             group_count = stop - start
 
             self._params[start:stop, :fixed_parameter_count] = np.asarray(
-                [getter(spring) for spring in group], dtype=np.float64
+                [_extract_spring_params(spring, self._compact_simple_params) for spring in group],
+                dtype=np.float64,
             )
             if not self._compact_linear_params:
                 self._params[start:stop, curve_column] = np.fromiter(
-                    (
-                        TENSILE_EXPONENTIAL
-                        if spring.tensile_curve_type == "Exponential"
-                        else TENSILE_LINEAR
-                        for spring in group
-                    ),
+                    (_extract_spring_curve_type(spring) for spring in group),
                     dtype=np.float64,
                     count=group_count,
                 )
@@ -3435,31 +3513,15 @@ class HystereticBatchRuntime:
                 count=group_count,
             )
             self.committed[start:stop, :] = np.asarray(
-                [
-                    (
-                        spring.umax[0], spring.umax[1], spring._crot_pu,
-                        spring._crot_nu, spring.cenergy_d,
-                        spring._cload_indicator, spring._cstress,
-                        spring._cstrain, int(spring.phase),
-                    )
-                    for spring in group
-                ],
+                [_extract_spring_committed(spring) for spring in group],
                 dtype=np.float64,
             )
             self.trial[start:stop, :] = np.asarray(
-                [
-                    (
-                        spring._trot_max, spring._trot_min, spring._trot_pu,
-                        spring._trot_nu, spring._tenergy_d,
-                        spring._tload_indicator, spring._tstress,
-                        spring._tstrain, int(spring.t_phase), spring.k_tang,
-                    )
-                    for spring in group
-                ],
+                [_extract_spring_trial(spring) for spring in group],
                 dtype=np.float64,
             )
             self.targets[start:stop] = np.fromiter(
-                (spring._tstrain for spring in group),
+                (_extract_spring_target(spring) for spring in group),
                 dtype=np.float64,
                 count=group_count,
             )
@@ -3469,40 +3531,22 @@ class HystereticBatchRuntime:
                 count=group_count,
             )
 
-    def _read_transverse_object(self, index: int, spring: SpringHysteretic) -> None:
-        # ``operator.attrgetter`` performs the fixed 32-attribute traversal in
-        # C and returns the values in exactly ``_PARAM_NAMES`` order. NumPy
-        # performs the same float64 conversion on assignment as the previous
-        # Python ``float(getattr(...))`` list comprehension, without creating
-        # 32 Python float objects and a temporary list for every spring.
-        if self._compact_simple_params:
-            self._params[index, :len(SIMPLE_PARAM_NAMES)] = _SIMPLE_PARAM_GETTER(spring)
-            if not self._compact_linear_params:
-                self._params[index, SIMPLE_TENSILE_CURVE_TYPE_PARAM] = (
-                    TENSILE_EXPONENTIAL
-                    if spring.tensile_curve_type == "Exponential"
-                    else TENSILE_LINEAR
-                )
-        else:
-            self._params[index, :len(_PARAM_NAMES)] = _PARAM_GETTER(spring)
-            self._params[index, TENSILE_CURVE_TYPE_PARAM] = (
-                TENSILE_EXPONENTIAL
-                if spring.tensile_curve_type == "Exponential"
-                else TENSILE_LINEAR
-            )
+    def _read_transverse_object(self, index: int, spring: Any) -> None:
+        fixed_count = len(SIMPLE_PARAM_NAMES) if self._compact_simple_params else len(_PARAM_NAMES)
+        curve_col = (
+            SIMPLE_TENSILE_CURVE_TYPE_PARAM
+            if self._compact_simple_params
+            else TENSILE_CURVE_TYPE_PARAM
+        )
+        self._params[index, :fixed_count] = _extract_spring_params(
+            spring, self._compact_simple_params
+        )
+        if not self._compact_linear_params:
+            self._params[index, curve_col] = _extract_spring_curve_type(spring)
         self._transverse_k[index] = float(spring.k)
-        self.committed[index, :] = (
-            spring.umax[0], spring.umax[1], spring._crot_pu, spring._crot_nu,
-            spring.cenergy_d, spring._cload_indicator, spring._cstress,
-            spring._cstrain, int(spring.phase),
-        )
-        self.trial[index, :] = (
-            spring._trot_max, spring._trot_min, spring._trot_pu,
-            spring._trot_nu, spring._tenergy_d, spring._tload_indicator,
-            spring._tstress, spring._tstrain, int(spring.t_phase),
-            spring.k_tang,
-        )
-        self.targets[index] = float(spring._tstrain)
+        self.committed[index, :] = _extract_spring_committed(spring)
+        self.trial[index, :] = _extract_spring_trial(spring)
+        self.targets[index] = _extract_spring_target(spring)
         self.enabled[index] = bool(spring.is_on)
 
     def _promote_transverse_parameter_storage(self) -> None:
@@ -4209,18 +4253,23 @@ class HystereticBatchRuntime:
         start, stop = interface._perf_hysteretic_slice
         for local_i, spring in enumerate(self.springs[start:stop], start):
             row = self.trial[local_i]
-            spring._trot_max = float(row[0])
-            spring._trot_min = float(row[1])
-            spring._trot_pu = float(row[2])
-            spring._trot_nu = float(row[3])
-            spring._tenergy_d = float(row[4])
-            spring._tload_indicator = int(row[5])
-            spring._tstress = float(row[6])
-            spring._tstrain = float(row[7])
-            spring.t_phase = _PHASE_BY_CODE[int(row[8])]
-            spring.k_tang = float(row[9])
-            spring.f = spring._tstress
-            spring.u = spring._tstrain
+            if isinstance(spring, SpringHysteretic):
+                spring._trot_max = float(row[0])
+                spring._trot_min = float(row[1])
+                spring._trot_pu = float(row[2])
+                spring._trot_nu = float(row[3])
+                spring._tenergy_d = float(row[4])
+                spring._tload_indicator = int(row[5])
+                spring._tstress = float(row[6])
+                spring._tstrain = float(row[7])
+                spring.t_phase = _PHASE_BY_CODE[int(row[8])]
+                spring.k_tang = float(row[9])
+                spring.f = spring._tstress
+                spring.u = spring._tstrain
+            else:
+                spring.f = float(row[6])
+                spring.u = float(row[7])
+                spring.k_tang = float(row[9])
 
         record_index = self._record_by_id[id(interface)]
         for spring_index in (
@@ -4256,28 +4305,34 @@ class HystereticBatchRuntime:
         for i, spring in enumerate(self.springs):
             committed = self.committed[i]
             trial = self.trial[i]
-            spring.umax[0] = float(committed[0])
-            spring.umax[1] = float(committed[1])
-            spring._crot_pu = float(committed[2])
-            spring._crot_nu = float(committed[3])
-            spring.cenergy_d = float(committed[4])
-            spring._cload_indicator = int(committed[5])
-            spring._cstress = float(committed[6])
-            spring._cstrain = float(committed[7])
-            spring.phase = _PHASE_BY_CODE[int(committed[8])]
-            spring._trot_max = float(trial[0])
-            spring._trot_min = float(trial[1])
-            spring._trot_pu = float(trial[2])
-            spring._trot_nu = float(trial[3])
-            spring._tenergy_d = float(trial[4])
-            spring._tload_indicator = int(trial[5])
-            spring._tstress = float(trial[6])
-            spring._tstrain = float(trial[7])
-            spring.t_phase = _PHASE_BY_CODE[int(trial[8])]
-            spring.k_tang = float(trial[9])
-            spring.k_tang_committed = float(trial[9])
-            spring.f = float(trial[6])
-            spring.u = float(trial[7])
+            if isinstance(spring, SpringHysteretic):
+                spring.umax[0] = float(committed[0])
+                spring.umax[1] = float(committed[1])
+                spring._crot_pu = float(committed[2])
+                spring._crot_nu = float(committed[3])
+                spring.cenergy_d = float(committed[4])
+                spring._cload_indicator = int(committed[5])
+                spring._cstress = float(committed[6])
+                spring._cstrain = float(committed[7])
+                spring.phase = _PHASE_BY_CODE[int(committed[8])]
+                spring._trot_max = float(trial[0])
+                spring._trot_min = float(trial[1])
+                spring._trot_pu = float(trial[2])
+                spring._trot_nu = float(trial[3])
+                spring._tenergy_d = float(trial[4])
+                spring._tload_indicator = int(trial[5])
+                spring._tstress = float(trial[6])
+                spring._tstrain = float(trial[7])
+                spring.t_phase = _PHASE_BY_CODE[int(trial[8])]
+                spring.k_tang = float(trial[9])
+                spring.k_tang_committed = float(trial[9])
+                spring.f = float(trial[6])
+                spring.u = float(trial[7])
+            else:
+                spring.f = float(committed[6])
+                spring.u = float(committed[7])
+                spring.k_tang = float(trial[9])
+                spring.k_tang_committed = float(trial[9])
         for i, spring in enumerate(self.coulomb_springs):
             self._write_coulomb_object(i, spring)
         for i, quad in enumerate(self.quad_records):

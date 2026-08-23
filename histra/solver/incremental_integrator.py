@@ -85,27 +85,21 @@ class IncrementalIntegrator(ABC):
         combination: int,
         iteration: int,
     ) -> bool:
-        """Refresh load vectors when supported by this translation.
+        """Refresh load vectors and second-order P-Delta loads.
 
-        The C# application recomputes frame, pushover and P-Delta loads here.
-        Those subsystems are not present in this Python snapshot.  Enabled
-        P-Delta is rejected by the public solver instead of being silently
-        approximated.
+        Port of C# IncrementalIntegrator.UpdatePtarget.
         """
-        del iteration
-        if pdelta_enabled(getattr(an, "pdelta_effect", None)):
-            raise NotImplementedError(
-                "P-Delta load generation is implemented in the original C# "
-                "solver but is not available in this Python translation."
-            )
-        # Reassemble only when a valid analysis key is available.  This also
-        # mirrors the C# nonlinear-load refresh for supported self-weight loads.
+        pdelta = str(getattr(an, "pdelta_effect", "") or "").strip().lower()
+        need_pdelta = (pdelta in ("eachiteration", "2")) or (pdelta in ("eachstep", "1") and iteration == 0)
+        if need_pdelta:
+            ModelManager.compute_and_assemble_pdelta_load(model, p.ls)
+
         if getattr(an, "key", None) is not None:
             ModelManager.assemble_load(
                 model, p.ls, an.key, combination, reuse_current=True
             )
             return True
-        return False
+        return need_pdelta
 
     def revert_to_last_commit(self, model: Any, ls: LinearSystem) -> None:
         """Undo trial displacements and restore committed element states."""
