@@ -23,13 +23,18 @@ from histra.model.shear_law import (
     fracture_energy_shear,
     masonry_shear_law_code,
 )
+from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
 from histra.types.phase_enum import PhaseEnum
 
 try:  # optional acceleration dependency
-    from numba import njit, prange
+    from numba import config as numba_config
+    from numba import get_num_threads, njit, prange, set_num_threads
 except Exception:  # pragma: no cover - exercised when numba is unavailable
+    numba_config = None
+    get_num_threads = None
     njit = None
+    set_num_threads = None
 
 
 ELASTIC = int(PhaseEnum.Elastic)
@@ -137,6 +142,7 @@ def _phase_from_code(value: float | int) -> PhaseEnum:
 
 QUAD_SUBLAW_COULOMB = 0
 QUAD_SUBLAW_CACOVIC = 1
+QUAD_SUBLAW_ELASTIC = 2
 QUAD_FRACTURE_NONE = 0
 QUAD_FRACTURE_FIXED = ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED
 QUAD_FRACTURE_INTERPOLATED = ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
@@ -1494,16 +1500,18 @@ if njit is not None:
 
     @njit(cache=True, nogil=True)
     def _refresh_max_u_cache(quad_local_u, interface_max_u, cache):
-        value = 0.0
-        index = -1
+        quad_value = 0.0
+        quad_index = -1
         kind = 0
         for i in range(quad_local_u.shape[0]):
             for j in range(quad_local_u.shape[1]):
                 candidate = abs(quad_local_u[i, j])
-                if candidate > value:
-                    value = candidate
-                    index = i
+                if candidate > quad_value:
+                    quad_value = candidate
+                    quad_index = i
                     kind = 1
+        value = quad_value
+        index = quad_index
         for i in range(interface_max_u.size):
             candidate = abs(interface_max_u[i])
             if candidate > value:
@@ -1513,6 +1521,8 @@ if njit is not None:
         cache[0] = value
         cache[1] = index
         cache[2] = kind
+        cache[3] = quad_value
+        cache[4] = quad_index
 
     @njit(cache=True, nogil=True)
     def _prepare_interface_kinematics(
@@ -1778,11 +1788,15 @@ if njit is not None:
     def _prepare_quad_kinematics(
         local_du, local_u, edge_offsets, edge_records, edge_areas,
         interface_normal_increments, interface_committed_forces,
-        d_alfa, step, sigma_initial, strains, dns,
+        d_alfa, step, sigma_initial, strains, dns, quad_params,
     ):
         for q in range(local_du.shape[0]):
             for j in range(local_du.shape[1]):
                 local_u[q, j] += local_du[q, j]
+            if int(quad_params[q, QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
+                dns[q] = 0.0
+                strains[q] = d_alfa[q] * local_u[q, 6]
+                continue
             normal0 = 0.0
             normal1 = 0.0
             normal2 = 0.0
@@ -2106,6 +2120,13 @@ if njit is not None:
             if par[QPENABLED] == 0.0:
                 continue
             strain = strains[i]
+            if int(par[QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
+                row[QDN] = 0.0
+                row[QTSTRAIN] = strain
+                row[QTSTRESS] = par[QPK] * strain
+                row[QKTANG] = par[QPK]
+                row[QTPHASE] = ELASTIC
+                continue
             dn = dns[i]
             row[QDN] = dn
             if int(row[QTLOAD]) == 0 and strain == 0.0:
@@ -2447,7 +2468,7 @@ if njit is not None:
                 quad_local_du, quad_local_u, quad_edge_offsets,
                 quad_edge_records, quad_edge_areas, normal_increments,
                 committed_forces, quad_d_alfa, step, quad_sigma_initial,
-                quad_strains, quad_dns,
+                quad_strains, quad_dns, quad_params,
             )
             _evaluate_quad_takeda_batch(
                 quad_params, quad_state, quad_strains, quad_dns,
@@ -2522,6 +2543,66 @@ SIMPLE_TENSILE_CURVE_TYPE_PARAM = len(SIMPLE_PARAM_NAMES)
 LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE = len(SIMPLE_PARAM_NAMES)
 SIMPLE_TRANSVERSE_PARAM_SIZE = SIMPLE_TENSILE_CURVE_TYPE_PARAM + 1
 _SIMPLE_PARAM_GETTER = attrgetter(*SIMPLE_PARAM_NAMES)
+
+
+def recommended_numba_threads(
+    interface_count: int,
+    spring_count: int,
+    available_threads: int,
+    *,
+    environ: dict[str, str] | os._Environ[str] | None = None,
+) -> int:
+    """Choose a useful worker count for the compiled nonlinear kernels.
+
+    Each domain update enters several independent Numba parallel regions.  A
+    machine-wide default (20 workers in the benchmark environment) is much
+    slower for ordinary wall/bridge models than a small worker team because
+    synchronization dominates the few hundred interface records.  Scale the
+    team conservatively with model size while retaining explicit user control.
+    """
+    available = max(1, int(available_threads))
+    environment = os.environ if environ is None else environ
+
+    override = str(environment.get("HISTRA_NUMBA_THREADS", "")).strip().lower()
+    if override and override != "auto":
+        try:
+            return max(1, min(int(override), available))
+        except ValueError:
+            pass
+
+    # NUMBA_NUM_THREADS is Numba's standard explicit process-level setting.
+    # Respect it instead of silently applying HiStrA's automatic policy.
+    if str(environment.get("NUMBA_NUM_THREADS", "")).strip():
+        return available
+
+    # Most generated interfaces contain roughly 80 transverse fibres.  Use
+    # both counts so unusual discretizations still select a sensible tier.
+    work_records = max(
+        max(0, int(interface_count)),
+        (max(0, int(spring_count)) + 95) // 96,
+    )
+    if work_records < 256:
+        requested = 1
+    elif work_records < 2048:
+        requested = 2
+    elif work_records < 8192:
+        requested = 4
+    else:
+        requested = 8
+    return min(requested, available)
+
+
+def current_numba_threads() -> int | None:
+    """Return the active Numba worker count when acceleration is available."""
+    if get_num_threads is None:
+        return None
+    return int(get_num_threads())
+
+
+def restore_numba_threads(count: int | None) -> None:
+    """Restore a caller's Numba worker setting after a nonlinear solve."""
+    if count is not None and set_num_threads is not None:
+        set_num_threads(int(count))
 
 
 def _force_general_hysteretic_batch() -> bool:
@@ -2825,6 +2906,7 @@ class HystereticBatchRuntime:
         if _evaluate_linear_batch is None:
             raise RuntimeError("Numba is unavailable")
         self.model = model
+        self.numba_threads: int | None = None
         self.records: list[_InterfaceSlice] = []
         self.interface_rejection_reasons: Counter[str] = Counter()
         springs: list[Any] = []
@@ -3054,24 +3136,28 @@ class HystereticBatchRuntime:
                 self.quad_rejection_reasons["disabled_by_environment"] += 1
                 continue
             spring = getattr(quad, "spring", None)
-            if not isinstance(spring, SpringCoulomb03):
+            is_elastic = isinstance(spring, SpringElastic)
+            if not is_elastic and not isinstance(spring, SpringCoulomb03):
                 self.quad_rejection_reasons["unsupported_spring_type"] += 1
                 continue
-            if spring.hysteretic_type != "Takeda":
+            if not is_elastic and spring.hysteretic_type != "Takeda":
                 self.quad_rejection_reasons["unsupported_hysteretic_type"] += 1
                 continue
-            sub_law_name = str(spring.sub_law).strip().lower()
-            if sub_law_name == "coulomb":
-                sub_law = QUAD_SUBLAW_COULOMB
-            elif sub_law_name == "cacovic":
-                if float(spring.cohesion) == 0.0 or float(spring.bcacovic) == 0.0:
-                    self.quad_rejection_reasons["invalid_cacovic_parameters"] += 1
-                    continue
-                sub_law = QUAD_SUBLAW_CACOVIC
+            if is_elastic:
+                sub_law = QUAD_SUBLAW_ELASTIC
             else:
-                self.quad_rejection_reasons["unsupported_shear_sublaw"] += 1
-                continue
-            if spring.check_contact_area:
+                sub_law_name = str(spring.sub_law).strip().lower()
+                if sub_law_name == "coulomb":
+                    sub_law = QUAD_SUBLAW_COULOMB
+                elif sub_law_name == "cacovic":
+                    if float(spring.cohesion) == 0.0 or float(spring.bcacovic) == 0.0:
+                        self.quad_rejection_reasons["invalid_cacovic_parameters"] += 1
+                        continue
+                    sub_law = QUAD_SUBLAW_CACOVIC
+                else:
+                    self.quad_rejection_reasons["unsupported_shear_sublaw"] += 1
+                    continue
+            if not is_elastic and spring.check_contact_area:
                 self.quad_rejection_reasons["contact_area_check"] += 1
                 continue
             if _evaluate_quad_takeda_batch is None:
@@ -3079,7 +3165,10 @@ class HystereticBatchRuntime:
                 continue
 
             material = model.collections.materials.get(quad.material_key)
-            fracture_mode = masonry_shear_law_code(material)
+            fracture_mode = (
+                QUAD_FRACTURE_NONE if is_elastic
+                else masonry_shear_law_code(material)
+            )
             if fracture_mode not in (
                 ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
                 ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION,
@@ -3089,34 +3178,36 @@ class HystereticBatchRuntime:
             quad._ensure_dn_cache(model.collections)
             assert quad._perf_dn_edges is not None
             assert quad._perf_dn_areas is not None
-            compatible = True
-            rejection_reason = ""
             local_edge_records: list[int] = []
-            local_edge_counts: list[int] = []
-            for refs in quad._perf_dn_edges:
-                count = 0
-                for interface, custom_springs in refs:
-                    if custom_springs:
-                        compatible = False
-                        rejection_reason = "custom_edge_springs"
+            local_edge_counts: list[int] = [0, 0, 0, 0]
+            if not is_elastic:
+                compatible = True
+                rejection_reason = ""
+                local_edge_counts.clear()
+                for refs in quad._perf_dn_edges:
+                    count = 0
+                    for interface, custom_springs in refs:
+                        if custom_springs:
+                            compatible = False
+                            rejection_reason = "custom_edge_springs"
+                            break
+                        if "compute_dn" in interface.__dict__:
+                            compatible = False
+                            rejection_reason = "custom_interface_compute_dn"
+                            break
+                        record_index = self._record_by_id.get(id(interface))
+                        if record_index is None:
+                            compatible = False
+                            rejection_reason = "edge_interface_not_batched"
+                            break
+                        local_edge_records.append(record_index)
+                        count += 1
+                    if not compatible:
                         break
-                    if "compute_dn" in interface.__dict__:
-                        compatible = False
-                        rejection_reason = "custom_interface_compute_dn"
-                        break
-                    record_index = self._record_by_id.get(id(interface))
-                    if record_index is None:
-                        compatible = False
-                        rejection_reason = "edge_interface_not_batched"
-                        break
-                    local_edge_records.append(record_index)
-                    count += 1
+                    local_edge_counts.append(count)
                 if not compatible:
-                    break
-                local_edge_counts.append(count)
-            if not compatible:
-                self.quad_rejection_reasons[rejection_reason] += 1
-                continue
+                    self.quad_rejection_reasons[rejection_reason] += 1
+                    continue
 
             self.quad_records.append(quad)
             if quad._perf_aff_pairs is None:
@@ -3188,17 +3279,23 @@ class HystereticBatchRuntime:
             spring._histra_batch_managed = True
             spring._histra_quad_batch = self
             spring._histra_quad_batch_index = index
-            self.quad_params[index, :] = (
-                float(spring.cohesion), float(spring.mu),
-                float(spring.e1p), float(spring.e2p), float(spring.e3p),
-                float(spring.e1n), float(spring.e2n), float(spring.e3n),
-                float(spring.eup), float(spring.eun),
-                float(spring.plastic_strain_ratio), float(bool(spring.is_on)),
-                float(spring.k), float(quad_sublaws[index]),
-                float(spring.bcacovic), float(quad_fracture_modes[index]),
-                float(quad_fracture_energies[index]),
-            )
-            self._read_quad_object(index, spring)
+            if isinstance(spring, SpringElastic):
+                self.quad_params[index, QPENABLED] = float(bool(spring.is_on))
+                self.quad_params[index, QPK] = float(spring.k)
+                self.quad_params[index, QPSUBLAW] = QUAD_SUBLAW_ELASTIC
+                self._read_elastic_quad_object(index, spring)
+            else:
+                self.quad_params[index, :] = (
+                    float(spring.cohesion), float(spring.mu),
+                    float(spring.e1p), float(spring.e2p), float(spring.e3p),
+                    float(spring.e1n), float(spring.e2n), float(spring.e3n),
+                    float(spring.eup), float(spring.eun),
+                    float(spring.plastic_strain_ratio), float(bool(spring.is_on)),
+                    float(spring.k), float(quad_sublaws[index]),
+                    float(spring.bcacovic), float(quad_fracture_modes[index]),
+                    float(quad_fracture_energies[index]),
+                )
+                self._read_quad_object(index, spring)
             self._quad_k[index] = float(spring.k)
         self.managed_springs.extend(quad.spring for quad in self.quad_records)
         self._quad_forces = np.zeros((len(self.quad_records), 1), dtype=np.float64)
@@ -3231,7 +3328,9 @@ class HystereticBatchRuntime:
             self._quad_force_gdls,
             self._quad_force_coefficients,
         )
-        self._max_u_cache = np.zeros(3, dtype=np.float64)
+        # [overall value, record, kind, quad-only value, quad-only record].
+        # C# convergence limits exclude interface spring displacements.
+        self._max_u_cache = np.zeros(5, dtype=np.float64)
         self._refresh_transverse_cache()
         self._refresh_full_force_cache()
         self._refresh_global_resisting_force_cache()
@@ -3781,7 +3880,14 @@ class HystereticBatchRuntime:
             1 for row in self.quad_params
             if int(row[QPSUBLAW]) == QUAD_SUBLAW_COULOMB
         )
-        managed_quad_cacovic = len(self.quad_records) - managed_quad_coulomb
+        managed_quad_cacovic = sum(
+            1 for row in self.quad_params
+            if int(row[QPSUBLAW]) == QUAD_SUBLAW_CACOVIC
+        )
+        managed_quad_elastic = sum(
+            1 for row in self.quad_params
+            if int(row[QPSUBLAW]) == QUAD_SUBLAW_ELASTIC
+        )
         return {
             "managed_transverse_springs": len(self.springs),
             "transverse_parameter_columns": TRANSVERSE_PARAM_SIZE,
@@ -3790,6 +3896,7 @@ class HystereticBatchRuntime:
             "managed_interface_coulomb_springs": len(self.coulomb_springs),
             "managed_quad_coulomb_springs": managed_quad_coulomb,
             "managed_quad_cacovic_springs": managed_quad_cacovic,
+            "managed_quad_elastic_springs": managed_quad_elastic,
             "managed_coulomb_springs": len(self.coulomb_springs) + managed_quad_coulomb,
             "managed_quad_records": len(self.quad_records),
             "unmanaged_interfaces": len(self.unmanaged_interfaces),
@@ -3802,6 +3909,27 @@ class HystereticBatchRuntime:
             ),
             "quad_rejection_reasons": dict(sorted(self.quad_rejection_reasons.items())),
         }
+
+    def _read_elastic_quad_object(self, index: int, spring: SpringElastic) -> None:
+        row = self.quad_state[index]
+        strain = float(spring.u)
+        force = float(spring.k) * strain
+        row[QCSTRESS] = force
+        row[QCSTRAIN] = strain
+        row[QPHASE] = int(spring.phase)
+        row[QTSTRESS] = force
+        row[QTSTRAIN] = strain
+        row[QTPHASE] = int(spring.t_phase)
+        row[QKTANG] = float(spring.k)
+        row[QKTANG_COMMITTED] = float(spring.k)
+
+    def _write_elastic_quad_object(self, index: int, spring: SpringElastic) -> None:
+        row = self.quad_state[index]
+        spring.u = float(row[QTSTRAIN])
+        spring.f = float(row[QTSTRESS])
+        spring.k_tang = float(row[QKTANG])
+        spring.phase = _PHASE_BY_CODE[int(row[QPHASE])]
+        spring.t_phase = _PHASE_BY_CODE[int(row[QTPHASE])]
 
     def _read_quad_object(self, index: int, spring: Any) -> None:
         row = self.quad_state[index]
@@ -3870,6 +3998,9 @@ class HystereticBatchRuntime:
         row[QDN] = float(spring.dn)
 
     def _write_quad_object(self, index: int, spring: Any) -> None:
+        if isinstance(spring, SpringElastic):
+            self._write_elastic_quad_object(index, spring)
+            return
         row = self.quad_state[index]
         spring.fy[:] = [float(row[QFY0]), float(row[QFY1])]
         spring.umax[:] = [float(row[QUMAX0]), float(row[QUMAX1])]
@@ -4041,6 +4172,20 @@ class HystereticBatchRuntime:
         )
         self._objects_trial_synced = False
 
+    def configure_numba_threads(self) -> int | None:
+        """Activate the workload-sized worker team for this runtime."""
+        if set_num_threads is None or numba_config is None:
+            self.numba_threads = None
+            return None
+        available = max(1, int(numba_config.NUMBA_NUM_THREADS))
+        selected = recommended_numba_threads(
+            len(self.records), len(self.springs), available
+        )
+        if get_num_threads is None or int(get_num_threads()) != selected:
+            set_num_threads(selected)
+        self.numba_threads = selected
+        return selected
+
     def _refresh_transverse_cache(self) -> None:
         _finish_transverse_batch(
             self.trial, self.committed, self._di, self._dj, self._ecc,
@@ -4147,7 +4292,7 @@ class HystereticBatchRuntime:
                 self._quad_edge_areas, self._normal_increments,
                 self._committed_forces, self._quad_d_alfa,
                 int(getattr(state, "step", 0)), self._quad_sigma_initial,
-                self._quad_strains, self._quad_dns,
+                self._quad_strains, self._quad_dns, self.quad_params,
             )
             _evaluate_quad_takeda_batch(
                 self.quad_params, self.quad_state, self._quad_strains,
@@ -4177,7 +4322,7 @@ class HystereticBatchRuntime:
             self._quad_edge_areas, self._normal_increments,
             self._committed_forces, self._quad_d_alfa,
             int(getattr(state, "step", 0)), self._quad_sigma_initial,
-            self._quad_strains, self._quad_dns,
+            self._quad_strains, self._quad_dns, self.quad_params,
         )
         _evaluate_quad_takeda_batch(
             self.quad_params, self.quad_state,
@@ -4245,6 +4390,13 @@ class HystereticBatchRuntime:
         if kind == 2 and 0 <= index < len(self.records):
             return value, int(self.records[index].interface.key), "Interface"
         return value, 0, ""
+
+    def cached_quad_max_u(self) -> tuple[float, int]:
+        value = float(self._max_u_cache[3])
+        index = int(self._max_u_cache[4])
+        if 0 <= index < len(self.quad_records):
+            return value, int(self.quad_records[index].key)
+        return value, 0
 
     def manages(self, interface: Any) -> bool:
         return id(interface) in self.interface_ids

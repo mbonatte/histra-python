@@ -52,7 +52,11 @@ def solve_static_nonlinear(
     each prior snapshot.  Suspend cyclic collection only for the synchronous
     solve and restore the caller's GC setting on every exit.
     """
+    numba_threads_before: int | None = None
     try:
+        from histra.solver.hysteretic_batch import current_numba_threads
+
+        numba_threads_before = current_numba_threads()
         with exclusive_solver_access(should_cancel):
             gc_was_enabled = gc.isenabled()
             if gc_was_enabled:
@@ -70,14 +74,19 @@ def solve_static_nonlinear(
                     linear_solver_backend=linear_solver_backend,
                 )
             finally:
-                runtime = ModelManager.hysteretic_batch_for(model)
-                if runtime is not None:
-                    # Dense Numba state is authoritative during the solve. Publish it
-                    # once for callers, chained analyses, and post-processing instead
-                    # of rewriting >10k Python spring objects at every committed step.
-                    runtime.sync_all_to_objects()
-                if gc_was_enabled:
-                    gc.enable()
+                try:
+                    runtime = ModelManager.hysteretic_batch_for(model)
+                    if runtime is not None:
+                        # Dense Numba state is authoritative during the solve. Publish it
+                        # once for callers, chained analyses, and post-processing instead
+                        # of rewriting >10k Python spring objects at every committed step.
+                        runtime.sync_all_to_objects()
+                finally:
+                    from histra.solver.hysteretic_batch import restore_numba_threads
+
+                    restore_numba_threads(numba_threads_before)
+                    if gc_was_enabled:
+                        gc.enable()
     except SolverCancelled:
         if on_log is not None:
             on_log("Analysis cancelled before a load-step checkpoint was available.")
@@ -212,6 +221,15 @@ def _solve_static_nonlinear_impl(
             f"Restored chained baseline load from committed resisting forces: "
             f"norm={np.linalg.norm(initial_external_load):.6g}"
         )
+    runtime = ModelManager.hysteretic_batch_for(model)
+    if runtime is not None:
+        selected_threads = runtime.configure_numba_threads()
+        if selected_threads is not None:
+            p.log(
+                "Compiled nonlinear kernels: "
+                f"{selected_threads} Numba worker(s) for "
+                f"{len(runtime.records)} interfaces and {len(runtime.springs)} springs"
+            )
     ModelManager._ptarget = np.zeros(n)
     ModelManager._fext = initial_external_load.copy()
     ModelManager._pq = np.zeros(n)

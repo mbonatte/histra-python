@@ -12,8 +12,13 @@ from histra.solver.hysteretic_batch import (
     _evaluate_linear_batch,
     build_hysteretic_batch,
 )
+from histra.solver.model_manager import ModelManager
 
 MODEL = Path(__file__).resolve().parents[1] / "model-live" / "model.hrx"
+ELASTIC_QUAD_MODEL = (
+    Path(__file__).resolve().parents[2]
+    / "my_model" / "benchmark_3_Pdelta" / "benchmark_virgin.hrx"
+)
 
 
 @pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
@@ -128,6 +133,49 @@ def test_compiled_hysteretic_batch_can_disable_quad_batch(monkeypatch):
         np.zeros(int(model.gdl), dtype=np.float64),
         type("State", (), {"step": 1})(),
     )
+
+
+@pytest.mark.skipif(
+    _evaluate_linear_batch is None or not ELASTIC_QUAD_MODEL.exists(),
+    reason="Numba or Benchmark 3 is unavailable",
+)
+def test_compiled_elastic_quads_match_scalar_force_exactly(monkeypatch):
+    monkeypatch.delenv("HISTRA_DISABLE_COMPILED_SPRINGS", raising=False)
+    monkeypatch.delenv("HISTRA_DISABLE_COMPILED_QUADS", raising=False)
+    model = load_model(ELASTIC_QUAD_MODEL)
+    ModelManager.prepare_model(model)
+    runtime = build_hysteretic_batch(model)
+    assert runtime is not None
+    assert len(runtime.quad_records) == len(model.collections.quads) == 260
+    assert runtime.unmanaged_quads == ()
+
+    x = np.linspace(-1.0e-7, 1.0e-7, int(model.gdl), dtype=np.float64)
+    initial_u = runtime._quad_local_u.copy()
+    runtime.update_domain(x, type("State", (), {"step": 2})())
+
+    quad_max_value, quad_max_key = runtime.cached_quad_max_u()
+    expected_quad_index = int(np.argmax(np.abs(runtime._quad_local_u)) // 7)
+    assert quad_max_value == np.max(np.abs(runtime._quad_local_u))
+    assert quad_max_key == runtime.quad_records[expected_quad_index].key
+
+    for index, quad in enumerate(runtime.quad_records):
+        local_increment = np.asarray(
+            [
+                sum(x[entry.gdl - 1] * entry.alfa for entry in entries)
+                for entries in quad.aff[:7]
+            ],
+            dtype=np.float64,
+        )
+        np.testing.assert_array_equal(
+            runtime._quad_local_u[index], initial_u[index] + local_increment
+        )
+        expected_strain = (
+            quad.d_alfa_2d_diag() * runtime._quad_local_u[index, 6]
+        )
+        assert runtime.quad_state[index, batch.QTSTRAIN] == expected_strain
+        assert runtime.quad_state[index, batch.QTSTRESS] == (
+            quad.spring.k * expected_strain
+        )
 
 def test_compiled_hysteretic_batch_can_be_disabled(monkeypatch):
     monkeypatch.setenv("HISTRA_DISABLE_COMPILED_SPRINGS", "1")

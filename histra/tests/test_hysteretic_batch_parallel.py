@@ -34,6 +34,35 @@ def _simple_params(count: int) -> np.ndarray:
     return params
 
 
+@pytest.mark.parametrize(
+    ("interfaces", "springs", "expected"),
+    [
+        (100, 8_000, 1),
+        (682, 55_242, 2),
+        (3_000, 240_000, 4),
+        (10_000, 800_000, 8),
+    ],
+)
+def test_numba_thread_policy_scales_with_nonlinear_workload(
+    interfaces: int, springs: int, expected: int
+) -> None:
+    assert hb.recommended_numba_threads(
+        interfaces, springs, 20, environ={}
+    ) == expected
+
+
+def test_numba_thread_policy_honours_overrides() -> None:
+    assert hb.recommended_numba_threads(
+        682, 55_242, 20, environ={"HISTRA_NUMBA_THREADS": "6"}
+    ) == 6
+    assert hb.recommended_numba_threads(
+        682, 55_242, 4, environ={"HISTRA_NUMBA_THREADS": "20"}
+    ) == 4
+    assert hb.recommended_numba_threads(
+        682, 55_242, 20, environ={"NUMBA_NUM_THREADS": "12"}
+    ) == 20
+
+
 def test_parallel_simple_hysteretic_matches_scalar_loop_exactly() -> None:
     count = 257
     rng = np.random.default_rng(734)

@@ -470,12 +470,9 @@ class ModelManager:
         max_key = 0
         max_type = ""
         if runtime is not None:
-            for index, quad in enumerate(runtime.quad_records):
-                value = float(np.max(np.abs(runtime._quad_local_u[index])))
-                if value > max_u:
-                    max_u = value
-                    max_key = int(quad.key)
-                    max_type = "Quad"
+            max_u, max_key = runtime.cached_quad_max_u()
+            if max_key:
+                max_type = "Quad"
             quads = runtime.unmanaged_quads
         else:
             quads = model.collections.quads.values()
