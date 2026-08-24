@@ -21,11 +21,11 @@ def test_superlu_backend_solves_known_system() -> None:
     assert system.backend == "superlu"
     assert system.x == pytest.approx([1.0 / 11.0, 7.0 / 11.0])
 
-
-
-def test_default_backend_preserves_existing_superlu_behavior(monkeypatch) -> None:
+def test_default_backend_resolves_to_auto(monkeypatch) -> None:
     monkeypatch.delenv("HISTRA_LINEAR_SOLVER", raising=False)
-    assert LinearSystem(1).backend == "superlu"
+    expected = "umfpack" if find_umfpack_library() is not None else "superlu"
+    assert LinearSystem(1).backend == expected
+
 
 def test_linear_solver_backend_validation() -> None:
     with pytest.raises(ValueError, match="auto, umfpack, superlu"):

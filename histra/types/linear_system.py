@@ -30,8 +30,14 @@ class LinearSystem:
 
     def __init__(self, n: int, *, backend: str | None = None):
         self.n = int(n)
-        requested = (backend or os.environ.get("HISTRA_LINEAR_SOLVER", "superlu")).strip().lower()
-        aliases = {"suite_sparse": "umfpack", "suitesparse": "umfpack", "super_lu": "superlu"}
+        requested = (
+            backend or os.environ.get("HISTRA_LINEAR_SOLVER", "auto")
+        ).strip().lower()
+        aliases = {
+            "suite_sparse": "umfpack",
+            "suitesparse": "umfpack",
+            "super_lu": "superlu",
+        }
         requested = aliases.get(requested, requested)
         if requested not in {"auto", "umfpack", "superlu"}:
             raise ValueError(
