@@ -27,6 +27,16 @@ class TestSpringElastic(unittest.TestCase):
         self.assertAlmostEqual(self.s.u, 0.02)
         self.assertAlmostEqual(self.s.f, 40.0)
 
+    def test_trial_increment_and_revert_match_csharp(self):
+        self.s.set_trial_strain(0.02)
+        self.s.commit()
+        self.s.set_trial_strain(0.025)
+        self.assertAlmostEqual(self.s.get_force(), 50.0)
+        self.assertAlmostEqual(self.s.get_incr_force(), 10.0)
+        self.s.revert_to_last_commit()
+        self.assertAlmostEqual(self.s.get_force(), 40.0)
+        self.assertAlmostEqual(self.s.get_displacement(), 0.02)
+
     def test_stiffness(self):
         self.assertEqual(self.s.k, 2000.0)
 

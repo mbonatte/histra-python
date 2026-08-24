@@ -17,6 +17,10 @@ assert isinstance(s, SpringElastic), f'Expected SpringElastic, got {type(s).__na
 assert s.k == 1000.0, f'K should be 1000, got {s.k}'
 print('[OK] SpringElastic loads correctly')
 
+xml_linear = '<Spring TypeOf="HiStrA.Objects.SpringLinearElastic" K="1000" Key="2"/>'
+spring_linear = Spring.from_xml(ET.fromstring(xml_linear))
+assert isinstance(spring_linear, SpringElastic), type(spring_linear).__name__
+
 # Test Coulomb03 still works
 xml2 = '<Spring TypeOf="HiStrA.Objects.SpringCoulomb03" K="2000" Mu="0.5" C="10" Kt="500" Kn="2000"/>'
 elem2 = ET.fromstring(xml2)

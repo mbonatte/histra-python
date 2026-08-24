@@ -120,6 +120,11 @@ class _CoulombLaw:
     is_ductility_fixed: bool = True
     check_contact_area: bool = False
     bcacovic: float = 0.0
+    # C# emits a ConstitutiveLawElastic for a sliding direction when the
+    # corresponding MasonryMaterial ``scorr*`` switch is disabled.  The
+    # stiffness definition remains the same, but the resulting interface
+    # spring must be SpringLinearElastic rather than SpringCoulomb03.
+    is_elastic: bool = False
 
 
 
@@ -400,6 +405,11 @@ def _sliding_law(
         energy_name = "GsDir3"
         # C# uses the vertical maximum-tension ratio for direction 3.
         max_tensile_name = "SlidingMaxTensileRatioVer"
+    enabled_name = {
+        "hor": "scorrhor",
+        "vert": "scorrvert",
+        "dir3": "scorrDir3",
+    }[normalized]
     return _CoulombLaw(
         E=E,
         cohesion=_float(material, f"CohesionSliding{suffix}"),
@@ -413,6 +423,7 @@ def _sliding_law(
         ductility=100000.0,
         is_ductility_fixed=True,
         check_contact_area=_bool(material, "CheckContactArea", False),
+        is_elastic=not _bool(material, enabled_name, False),
     )
 
 
@@ -497,6 +508,9 @@ def _blend_coulomb_laws(
         is_ductility_fixed=primary.is_ductility_fixed,
         check_contact_area=primary.check_contact_area,
         bcacovic=primary.bcacovic,
+        # PropOrthotropyParameter changes values on the primary C# law; it
+        # does not change its runtime constitutive-law type.
+        is_elastic=primary.is_elastic,
     )
 
 
@@ -1334,6 +1348,60 @@ def _combine_coulomb(
                              cohesion_force=cohesion, mu=mu, ur=ur,
                              hysteretic_type=sp1.hysteretic_type)
     return out
+
+
+def _combine_sliding(
+    sp1: SpringCoulomb03 | SpringElastic,
+    sp2: SpringCoulomb03 | SpringElastic,
+    restrained: bool,
+    *,
+    preserve_single_side_identity: bool = False,
+) -> SpringCoulomb03 | SpringElastic:
+    """Dispatch the C# sliding-spring overloads without changing spring type."""
+    if isinstance(sp1, SpringElastic) and isinstance(sp2, SpringElastic):
+        k = _series(sp1.k, sp2.k, restrained)
+        return SpringElastic(
+            type_of="HiStrA.Objects.SpringLinearElastic",
+            k=k,
+            k_tang=k,
+            area=sp1.area,
+        )
+
+    if isinstance(sp1, SpringElastic) or isinstance(sp2, SpringElastic):
+        elastic = sp1 if isinstance(sp1, SpringElastic) else sp2
+        coulomb = sp2 if isinstance(sp1, SpringElastic) else sp1
+        assert isinstance(coulomb, SpringCoulomb03)
+        k = _series(elastic.k, coulomb.k, restrained)
+        h = coulomb.h
+        ktan = -k * h / (k - h) if k != h else 0.0
+        law = _CoulombLaw(
+            E=0.0,
+            cohesion=0.0,
+            mu=coulomb.mu,
+            plastic_stiffness_ratio=ktan / k if k else 0.0,
+            max_tensile_ratio=coulomb.max_tensile_ratio,
+            sub_law=coulomb.sub_law,
+            hysteretic_type=coulomb.hysteretic_type,
+            ductility=coulomb.ur[0],
+            is_ductility_fixed=True,
+        )
+        return _configure_coulomb(
+            k=k,
+            area=coulomb.area,
+            length=elastic.length + coulomb.length,
+            law=law,
+            cohesion_force=coulomb.cohesion,
+            mu=coulomb.mu,
+            ur=coulomb.ur[0],
+            hysteretic_type=coulomb.hysteretic_type,
+        )
+
+    return _combine_coulomb(
+        sp1,
+        sp2,
+        restrained,
+        preserve_single_side_identity=preserve_single_side_identity,
+    )
 
 
 def _quad_lateral_face_vertices(model: Model, quad: Quad, face: int) -> list[np.ndarray]:
@@ -2774,7 +2842,10 @@ def _cell_vertices(intf: Interface, index: int) -> list[np.ndarray]:
     if vertices is None:
         vertices = np.asarray([_v(p) for p in intf.vint3d], dtype=float)
         intf._prep_vertices = vertices
-    return [_bilinear(vertices, u, v) for u,v in intrinsic]
+    return [
+        np.asarray(_bilinear(vertices, u, v), dtype=np.float32)
+        for u, v in intrinsic
+    ]
 
 
 def _polygon_area_3d(points: Sequence[np.ndarray]) -> float:
@@ -2830,8 +2901,11 @@ if njit is not None:
 
     @njit(cache=True, nogil=True)
     def _interface_cells_nb(vertices, nrow, ncol):
-        cells = np.empty((nrow * ncol, 4, 3), dtype=np.float64)
-        point = np.empty(3, dtype=np.float64)
+        # Interface polygons are Microsoft.Xna.Framework.Vector3 values in
+        # C#.  Retain their single-precision construction before the fibre
+        # routine promotes selected results to double.
+        cells = np.empty((nrow * ncol, 4, 3), dtype=np.float32)
+        point = np.empty(3, dtype=np.float32)
         index = 0
         for row in range(nrow):
             v0 = row * 2.0 / nrow - 1.0
@@ -2877,9 +2951,9 @@ if njit is not None:
 
     @njit(cache=True, inline="always")
     def _inverse_bilinear_nb(vertices, point):
-        a = np.empty(3, dtype=np.float64)
-        b = np.empty(3, dtype=np.float64)
-        normal = np.empty(3, dtype=np.float64)
+        a = np.empty(3, dtype=np.float32)
+        b = np.empty(3, dtype=np.float32)
+        normal = np.empty(3, dtype=np.float32)
         for j in range(3):
             a[j] = vertices[1,j] - vertices[0,j]
             b[j] = vertices[3,j] - vertices[0,j]
@@ -2897,9 +2971,9 @@ if njit is not None:
             k0, k1 = 0, 1
         u = 0.0
         v = 0.0
-        mapped = np.empty(3, dtype=np.float64)
-        du = np.empty(3, dtype=np.float64)
-        dv = np.empty(3, dtype=np.float64)
+        mapped = np.empty(3, dtype=np.float32)
+        du = np.empty(3, dtype=np.float32)
+        dv = np.empty(3, dtype=np.float32)
         for _ in range(20):
             _bilinear_nb(vertices, u, v, mapped)
             for j in range(3):
@@ -2922,18 +2996,18 @@ if njit is not None:
 
     @njit(cache=True, nogil=True)
     def _fiber_stiffness_batch_nb(near_face, far_face, cells, E, reference_e2, output, errors):
-        face_a = np.empty(3, dtype=np.float64)
-        face_b = np.empty(3, dtype=np.float64)
-        face_cross = np.empty(3, dtype=np.float64)
+        face_a = np.empty(3, dtype=np.float32)
+        face_b = np.empty(3, dtype=np.float32)
+        face_cross = np.empty(3, dtype=np.float32)
         for j in range(3):
             face_a[j] = near_face[1,j] - near_face[0,j]
             face_b[j] = near_face[3,j] - near_face[0,j]
         _cross3_nb(face_a, face_b, face_cross)
         for idx in range(cells.shape[0]):
             points = cells[idx].copy()
-            ca = np.empty(3, dtype=np.float64)
-            cb = np.empty(3, dtype=np.float64)
-            ccross = np.empty(3, dtype=np.float64)
+            ca = np.empty(3, dtype=np.float32)
+            cb = np.empty(3, dtype=np.float32)
+            ccross = np.empty(3, dtype=np.float32)
             for j in range(3):
                 ca[j] = points[1,j] - points[0,j]
                 cb[j] = points[3,j] - points[0,j]
@@ -2944,7 +3018,7 @@ if njit is not None:
                 points[3] = tmp
             best_shift = 0
             best_score = 1.0e300
-            diff = np.empty(3, dtype=np.float64)
+            diff = np.empty(3, dtype=np.float32)
             for shift in range(4):
                 score = 0.0
                 for k in range(4):
@@ -2955,12 +3029,12 @@ if njit is not None:
                 if score < best_score:
                     best_score = score
                     best_shift = shift
-            ordered = np.empty((4,3), dtype=np.float64)
+            ordered = np.empty((4,3), dtype=np.float32)
             for i in range(4):
                 for j in range(3):
                     ordered[i,j] = points[(best_shift+i)%4,j]
-            uv = np.empty((4,2), dtype=np.float64)
-            far_points = np.empty((4,3), dtype=np.float64)
+            uv = np.empty((4,2), dtype=np.float32)
+            far_points = np.empty((4,3), dtype=np.float32)
             error = 0
             for i in range(4):
                 u, v, err = _inverse_bilinear_nb(near_face, ordered[i])
@@ -2973,11 +3047,11 @@ if njit is not None:
                 continue
             uc = (uv[0,0]+uv[1,0]+uv[2,0]+uv[3,0])/4.0
             vc = (uv[0,1]+uv[1,1]+uv[2,1]+uv[3,1])/4.0
-            center_near = np.empty(3, dtype=np.float64)
-            center_far = np.empty(3, dtype=np.float64)
+            center_near = np.empty(3, dtype=np.float32)
+            center_far = np.empty(3, dtype=np.float32)
             _bilinear_nb(near_face, uc, vc, center_near)
             _bilinear_nb(far_face, uc, vc, center_far)
-            cvec = np.empty(3, dtype=np.float64)
+            cvec = np.empty(3, dtype=np.float32)
             for j in range(3):
                 cvec[j] = center_far[j] - center_near[j]
             lp = _norm3_nb(cvec)
@@ -2986,11 +3060,11 @@ if njit is not None:
                 continue
             for j in range(3):
                 cvec[j] /= lp
-            p0rel = np.empty(3, dtype=np.float64)
+            p0rel = np.empty(3, dtype=np.float32)
             for j in range(3):
                 p0rel[j] = ordered[0,j] - center_near[j]
             axial = _dot3_nb(p0rel, cvec)
-            vector3 = np.empty(3, dtype=np.float64)
+            vector3 = np.empty(3, dtype=np.float32)
             for j in range(3):
                 vector3[j] = p0rel[j] - axial*cvec[j]
             nvec = _norm3_nb(vector3)
@@ -2999,13 +3073,13 @@ if njit is not None:
                 continue
             for j in range(3):
                 vector3[j] /= nvec
-            value = np.empty(3, dtype=np.float64)
+            value = np.empty(3, dtype=np.float32)
             _cross3_nb(vector3, cvec, value)
-            a5 = np.empty((4,3), dtype=np.float64)
-            a7 = np.empty((4,3), dtype=np.float64)
+            a5 = np.empty((4,3), dtype=np.float32)
+            a7 = np.empty((4,3), dtype=np.float32)
             for i in range(4):
-                relp = np.empty(3, dtype=np.float64)
-                relf = np.empty(3, dtype=np.float64)
+                relp = np.empty(3, dtype=np.float32)
+                relf = np.empty(3, dtype=np.float32)
                 for j in range(3):
                     relp[j] = ordered[i,j] - center_near[j]
                     relf[j] = far_points[i,j] - center_near[j]
@@ -3080,12 +3154,12 @@ def _interface_cells(intf: Interface) -> np.ndarray:
     if vertices is None:
         vertices = np.asarray([_v(point) for point in intf.vint3d], dtype=float)
         intf._prep_vertices = vertices
-    vertices = np.asarray(vertices, dtype=np.float64)
+    vertices = np.asarray(vertices, dtype=np.float32)
     if njit is not None:
         return _interface_cells_nb(vertices, nrow, ncol)
     return np.asarray(
         [_cell_vertices(intf, index) for index in range(nrow * ncol)],
-        dtype=np.float64,
+        dtype=np.float32,
     )
 
 
@@ -3112,10 +3186,10 @@ def _fiber_stiffness_batch(model: Model, quad: Quad, intf: Interface,
     output = np.zeros((len(cells),3), dtype=np.float64)
     errors = np.zeros(len(cells), dtype=np.int32)
     _fiber_stiffness_batch_nb(
-        np.asarray(vints[face], dtype=np.float64),
-        np.asarray(far_face, dtype=np.float64),
-        np.asarray(cells, dtype=np.float64), float(E),
-        np.asarray(intf.reference_e2, dtype=np.float64), output, errors,
+        np.asarray(vints[face], dtype=np.float32),
+        np.asarray(far_face, dtype=np.float32),
+        np.asarray(cells, dtype=np.float32), float(E),
+        np.asarray(intf.reference_e2, dtype=np.float32), output, errors,
     )
     if np.any(errors):
         index = int(np.flatnonzero(errors)[0])
@@ -3375,10 +3449,15 @@ def _side_sliding_spring(
     material_override: MasonryMaterial | None = None,
     law: _CoulombLaw | None = None,
     distance: float | None = None,
-) -> SpringCoulomb03:
+) -> SpringCoulomb03 | SpringElastic:
     assert model.collections is not None
     if parent_type == "Restraint":
-        spring = SpringCoulomb03(type_of="HiStrA.Objects.SpringCoulomb03")
+        if law is not None and law.is_elastic:
+            spring = SpringElastic(
+                type_of="HiStrA.Objects.SpringLinearElastic", k_tang=-1.0
+            )
+        else:
+            spring = SpringCoulomb03(type_of="HiStrA.Objects.SpringCoulomb03")
         spring.k = -1.0
         spring.area = area
         return spring
@@ -3403,6 +3482,14 @@ def _side_sliding_spring(
     # Interface.Area()/2, so no second division is applied here.
     effective_area = area
     k = law.E * effective_area / distance
+    if law.is_elastic:
+        return SpringElastic(
+            type_of="HiStrA.Objects.SpringLinearElastic",
+            k=k,
+            k_tang=k,
+            area=area,
+            length=intf.length,
+        )
     spring = _configure_coulomb(
         k=k,
         area=area,
@@ -3651,9 +3738,10 @@ def _create_interface_springs(
         law=in_law2,
         distance=distance2,
     )
-    slid = _combine_coulomb(s1, s2, restrained)
+    slid = _combine_sliding(s1, s2, restrained)
     # C# invokes SetUltimateDisplacement after combining both sides.
-    _set_coulomb_ultimate(slid, in_law1, in_law2)
+    if isinstance(slid, SpringCoulomb03):
+        _set_coulomb_ultimate(slid, in_law1, in_law2)
     slid.key = 0
     slid.parent_key = intf.key
     slid.parent_type = "Interface"
@@ -3698,13 +3786,14 @@ def _create_interface_springs(
         distance=distance2,
     )
     for index in range(2):
-        out = _combine_coulomb(
+        out = _combine_sliding(
             o1,
             o2,
             restrained,
             preserve_single_side_identity=(custom_material is not None and restrained),
         )
-        _set_coulomb_ultimate(out, out_law1, out_law2)
+        if isinstance(out, SpringCoulomb03):
+            _set_coulomb_ultimate(out, out_law1, out_law2)
         out.key = index
         out.parent_key = intf.key
         out.parent_type = "Interface"

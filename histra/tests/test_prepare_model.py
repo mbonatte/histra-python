@@ -238,6 +238,65 @@ def test_coulomb_combination_uses_actual_hardening_modulus_not_serialized_defaul
     assert combined.mom2p == pytest.approx(combined.mom1p)
 
 
+def test_disabled_masonry_sliding_builds_linear_elastic_springs():
+    """C# uses the scorr* switches, not only SlidingYieldingDomain."""
+    from histra.model.masonry_material import MasonryMaterial
+    from histra.preprocessing.prepare_model import (
+        _combine_sliding,
+        _sliding_law,
+    )
+    from histra.springs.elastic import SpringElastic
+
+    material = MasonryMaterial(
+        key=146,
+        properties={
+            "Gd": "20.8",
+            "AlfaShearUser": "0.9",
+            "scorrhor": "false",
+            "SlidingYieldingDomainHor": "Coulomb",
+        },
+    )
+    law = _sliding_law(material, out_of_plane=False, direction="hor")
+    assert law.is_elastic is True
+
+    rigid = SpringElastic(k=-1.0, k_tang=-1.0, area=12.0)
+    active = SpringElastic(k=345.0, k_tang=345.0, area=12.0)
+    combined = _combine_sliding(rigid, active, restrained=True)
+    assert isinstance(combined, SpringElastic)
+    assert combined.type_of == "HiStrA.Objects.SpringLinearElastic"
+    assert combined.k == 345.0
+
+
+def test_elastic_to_coulomb_material_stage_transfers_common_committed_state():
+    """C# restores a generic SpringStateDB row after changing spring law."""
+    from histra.preprocessing.prepare_model import _CoulombLaw, _configure_coulomb
+    from histra.solver.restart import transfer_committed_spring_state
+    from histra.springs.elastic import SpringElastic
+
+    source = SpringElastic(k=100.0, k_tang=100.0)
+    source.set_trial_strain(0.025)
+    source.commit()
+    target = _configure_coulomb(
+        k=80.0,
+        area=2.0,
+        length=3.0,
+        law=_CoulombLaw(
+            E=40.0,
+            cohesion=0.01,
+            mu=0.1,
+            plastic_stiffness_ratio=0.001,
+            max_tensile_ratio=0.8,
+        ),
+    )
+
+    transfer_committed_spring_state(source, target)
+
+    assert target._cstrain == source._cstrain
+    assert target._cstress == source._cstress
+    assert target.k == 80.0
+    assert target.umax == [0.0, 0.0]
+
+
 def test_partial_edge_quad_contacts_are_generated_and_afferenced():
     """C# GIQuadQuad creates two interfaces when one edge meets two half-edges."""
     from histra.model.node import Node

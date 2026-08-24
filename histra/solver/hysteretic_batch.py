@@ -4206,6 +4206,7 @@ class HystereticBatchRuntime:
                 self.coulomb_params, self.coulomb_state,
                 self.coulomb_targets, self.coulomb_dns, self.coulomb_enabled,
             )
+        self._advance_unmanaged_sliding_springs()
         self._refresh_full_force_cache()
         # Keep the compact status values visible to Quad.ComputeDN and the
         # convergence/max-displacement checks.  Full local U and spring object
@@ -4274,12 +4275,8 @@ class HystereticBatchRuntime:
                 self.coulomb_params, self.coulomb_state, self.coulomb_targets,
                 self.coulomb_dns, self.coulomb_enabled,
             )
-        _assemble_full_interface_forces(
-            self._local_forces, self.coulomb_state, self._slid_index,
-            self._oop0_index, self._oop1_index, self._dist,
-            self._local_full_forces, self._max_displacements,
-            self.coulomb_targets,
-        )
+        self._advance_unmanaged_sliding_springs()
+        self._refresh_full_force_cache()
 
         if self._quad_local_du.shape[0]:
             _map_global_to_local(
@@ -4347,6 +4344,60 @@ class HystereticBatchRuntime:
             self._dist, self._local_full_forces, self._max_displacements,
             self.coulomb_targets,
         )
+        self._add_unmanaged_sliding_forces()
+
+    def _advance_unmanaged_sliding_springs(self) -> None:
+        """Advance scalar sliding springs on otherwise managed interfaces."""
+        for record_index, record in enumerate(self.records):
+            interface = record.interface
+            if interface.slid and int(self._slid_index[record_index]) < 0:
+                spring = interface.slid[0]
+                spring.u += float(self._pending_values[record_index, 0])
+                spring.set_trial_strain(spring.u)
+
+            oop0 = int(self._oop0_index[record_index])
+            oop1 = int(self._oop1_index[record_index])
+            if len(interface.slid_out_plan) >= 2 and oop0 < 0 and oop1 < 0:
+                spring0, spring1 = interface.slid_out_plan[:2]
+                di, dj = self._dist_for[record_index]
+                du_a = float(self._pending_values[record_index, 1])
+                du_b = float(self._pending_values[record_index, 2])
+                spring0.u += du_a + (du_b - du_a) * di
+                spring0.set_trial_strain(spring0.u)
+                spring1.u += du_a + (du_b - du_a) * dj
+                spring1.set_trial_strain(spring1.u)
+
+    def _add_unmanaged_sliding_forces(self) -> None:
+        """Add linear/unsupported sliding forces omitted by the dense kernel."""
+        for record_index, record in enumerate(self.records):
+            interface = record.interface
+            max_u = float(self._max_displacements[record_index])
+            if interface.slid and int(self._slid_index[record_index]) < 0:
+                spring = interface.slid[0]
+                force = float(spring.get_force())
+                self._local_full_forces[record_index, 6] += force
+                self._local_full_forces[record_index, 7] -= force
+                max_u = max(max_u, abs(float(spring.get_displacement())))
+
+            oop0 = int(self._oop0_index[record_index])
+            oop1 = int(self._oop1_index[record_index])
+            if len(interface.slid_out_plan) >= 2 and oop0 < 0 and oop1 < 0:
+                spring0, spring1 = interface.slid_out_plan[:2]
+                force0 = float(spring0.get_force())
+                force1 = float(spring1.get_force())
+                di, dj = self._dist[record_index]
+                first = dj * force0 + di * force1
+                second = di * force0 + dj * force1
+                self._local_full_forces[record_index, 8] += first
+                self._local_full_forces[record_index, 9] += second
+                self._local_full_forces[record_index, 10] -= first
+                self._local_full_forces[record_index, 11] -= second
+                max_u = max(
+                    max_u,
+                    abs(float(spring0.get_displacement())),
+                    abs(float(spring1.get_displacement())),
+                )
+            self._max_displacements[record_index] = max_u
 
     def _refresh_global_resisting_force_cache(self) -> None:
         _refresh_global_resisting_force_by_dof(

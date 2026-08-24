@@ -14,6 +14,7 @@ from histra.io.results_reader import (
     read_spring_states,
 )
 from histra.springs.coulomb03 import SpringCoulomb03
+from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
 
 
@@ -120,6 +121,14 @@ def _restore_coulomb(spring: SpringCoulomb03, values: dict[str, Any]) -> None:
     spring.revert_to_last_commit()
 
 
+def _restore_elastic(spring: SpringElastic, values: dict[str, Any]) -> None:
+    """Restore the committed/trial pair persisted for C# linear springs."""
+    _restore_common_spring(spring, values)
+    spring._cstrain = spring._tstrain = spring.u
+    spring._cstress = spring._tstress = spring.f
+    spring.revert_to_last_commit()
+
+
 
 def capture_committed_spring_state(spring: Any) -> dict[str, Any]:
     """Capture the C# ``SpringStates`` fields from a live committed spring.
@@ -128,15 +137,17 @@ def capture_committed_spring_state(spring: Any) -> dict[str, Any]:
     definitions (``k``, envelope points, material coefficients) belong to the
     target spring and are not copied during an interface-material mutation.
     """
+    umax = getattr(spring, "umax", (0.0, 0.0))
+    fy = getattr(spring, "fy", (0.0, 0.0))
     common: dict[str, Any] = {
         "U": float(getattr(spring, "_cstrain", spring.u)),
         "F": float(getattr(spring, "_cstress", spring.f)),
         "K_tang": float(getattr(spring, "k_tang_committed", spring.k_tang)),
         "Phase": int(spring.phase),
-        "Umax1": float(spring.umax[0]),
-        "Umax2": float(spring.umax[1]),
-        "Fy1": float(spring.fy[0]),
-        "Fy2": float(spring.fy[1]),
+        "Umax1": float(umax[0]),
+        "Umax2": float(umax[1]),
+        "Fy1": float(fy[0]),
+        "Fy2": float(fy[1]),
         "Uu1": float(getattr(spring, "_crot_pu", 0.0)),
         "Uu2": float(getattr(spring, "_crot_nu", 0.0)),
         "LoadIndicator": int(getattr(spring, "_cload_indicator", 0)),
@@ -169,6 +180,8 @@ def capture_committed_spring_state(spring: Any) -> dict[str, Any]:
             "CplasticCompressionIndicator": bool(spring._cplastic_compression_indicator),
         })
         return common
+    if isinstance(spring, SpringElastic):
+        return common
     raise ResultsStateError(
         f"Unsupported spring state capture type {type(spring).__name__}"
     )
@@ -186,6 +199,19 @@ def transfer_committed_spring_state(source: Any, target: Any) -> None:
         return
     if isinstance(target, SpringCoulomb03) and isinstance(source, SpringCoulomb03):
         _restore_coulomb(target, values)
+        return
+    # C# SpringStateDBclass stores a generic row and dispatches restoration on
+    # the *new* spring type.  A material stage may consequently transition a
+    # sliding spring between LinearElastic and Coulomb03.  Fields absent from
+    # the source law are persisted as zero and the common U/F/K/Phase state is
+    # still transferred.
+    if isinstance(target, SpringCoulomb03) and isinstance(source, SpringElastic):
+        _restore_coulomb(target, values)
+        return
+    if isinstance(target, SpringElastic) and isinstance(
+        source, (SpringElastic, SpringCoulomb03)
+    ):
+        _restore_elastic(target, values)
         return
     raise ResultsStateError(
         "Cannot transfer committed spring state across different laws: "
@@ -270,6 +296,8 @@ def restore_committed_analysis_state(
             _restore_hysteretic(spring, values)
         elif isinstance(spring, SpringCoulomb03):
             _restore_coulomb(spring, values)
+        elif isinstance(spring, SpringElastic):
+            _restore_elastic(spring, values)
         else:
             raise ResultsStateError(
                 f"Unsupported restart spring type {type(spring).__name__} for {identity}"

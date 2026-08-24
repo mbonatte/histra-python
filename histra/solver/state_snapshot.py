@@ -361,7 +361,11 @@ class SolverStateSnapshot:
         springs = [
             (spring, _copy_object_state(spring))
             for spring in _iter_springs(
-                model, quads=quad_values, interfaces=interface_values
+                # Managed interfaces can still contain scalar sliding springs
+                # outside the dense transverse/Coulomb state.
+                model,
+                quads=model.collections.quads.values(),
+                interfaces=model.collections.interfaces.values(),
             )
         ]
         batch_state = runtime.snapshot() if runtime is not None else None

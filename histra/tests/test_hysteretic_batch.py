@@ -13,6 +13,7 @@ from histra.solver.hysteretic_batch import (
     build_hysteretic_batch,
 )
 from histra.solver.model_manager import ModelManager
+from histra.springs.elastic import SpringElastic
 
 MODEL = Path(__file__).resolve().parents[1] / "model-live" / "model.hrx"
 ELASTIC_QUAD_MODEL = (
@@ -111,6 +112,48 @@ def test_compiled_hysteretic_batch_can_force_general_kernel(monkeypatch):
     runtime = build_hysteretic_batch(model)
     assert runtime is not None
     assert runtime._simple_hysteretic is False
+
+
+@pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
+def test_managed_interface_keeps_linear_sliding_forces(monkeypatch):
+    """The transverse batch must retain scalar linear sliding components."""
+    monkeypatch.delenv("HISTRA_DISABLE_COMPILED_SPRINGS", raising=False)
+    model = load_model(MODEL)
+    interface = next(iter(model.collections.interfaces.values()))
+
+    def committed_elastic(stiffness: float, strain: float) -> SpringElastic:
+        spring = SpringElastic(k=stiffness, k_tang=stiffness)
+        spring.set_trial_strain(strain)
+        spring.commit()
+        return spring
+
+    interface.slid = [committed_elastic(17.0, 0.03)]
+    interface.slid_out_plan = [
+        committed_elastic(19.0, -0.02),
+        committed_elastic(23.0, 0.01),
+    ]
+    reference = deepcopy(interface)
+    runtime = build_hysteretic_batch(model)
+    assert runtime is not None
+    assert runtime.manages(interface)
+
+    # The restored/initial resisting force must already include all three
+    # scalar springs before any new displacement is applied.
+    reference.set_resisting_force()
+    np.testing.assert_array_equal(runtime.local_force_for(interface), reference.f)
+
+    increment = np.linspace(-2.0e-5, 3.0e-5, int(model.gdl))
+    state = type("State", (), {"step": 1})()
+    runtime.update_domain(increment, state)
+    reference.update_domain(increment, state)
+    reference.set_resisting_force()
+
+    np.testing.assert_allclose(
+        runtime.local_force_for(interface), reference.f, rtol=0.0, atol=2.0e-15
+    )
+    assert interface.slid[0].get_force() == reference.slid[0].get_force()
+    assert interface.slid_out_plan[0].get_force() == reference.slid_out_plan[0].get_force()
+    assert interface.slid_out_plan[1].get_force() == reference.slid_out_plan[1].get_force()
 
 
 @pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
