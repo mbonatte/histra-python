@@ -40,6 +40,8 @@ class ArcLength(StaticIntegrator):
         self._current_lambda = 0.0
         self._adapt_exponent = 0.5
         self._dofs: np.ndarray | None = None
+        self._projected_control_indices: np.ndarray | None = None
+        self._projected_control_weights: np.ndarray | None = None
         self._lf_items: list[tuple[float, float]] = []
         self._current_lf_item = 1
         self._initialized = False
@@ -134,9 +136,166 @@ class ArcLength(StaticIntegrator):
         return np.arange(n, dtype=int)
 
     def _selected(self, vector: np.ndarray) -> np.ndarray:
+        if self._projected_control_indices is not None:
+            return np.asarray(
+                [
+                    float(
+                        np.dot(
+                            vector[self._projected_control_indices],
+                            self._projected_control_weights,
+                        )
+                    )
+                ],
+                dtype=float,
+            )
         if self._dofs is None or len(self._dofs) == 0:
             return vector
         return vector[self._dofs]
+
+    @staticmethod
+    def _quad_point_projection_weights(
+        quad: Any,
+        point: Any,
+        node_index: int,
+        direction: np.ndarray,
+    ) -> np.ndarray:
+        """Map a Quad's seven local DOFs to one projected point displacement."""
+
+        offset = np.asarray(
+            (point.x - quad.g.x, point.y - quad.g.y, point.z - quad.g.z),
+            dtype=float,
+        )
+        local = np.zeros(7, dtype=float)
+        local[:3] = direction
+        axes = np.eye(3, dtype=float)
+        local[3:6] = [
+            float(np.dot(direction, np.cross(axis, offset))) for axis in axes
+        ]
+        if node_index == 2:
+            denominator = float(quad.sin[2])
+            if abs(denominator) > 1.0e-30:
+                coefficient = -float(quad.length[3]) * float(quad.sin[3]) / denominator
+                distortion_direction = (
+                    float(quad.sin[1]) * np.asarray(quad.reference_e1, dtype=float)
+                    + float(quad.cos[1]) * np.asarray(quad.reference_e2, dtype=float)
+                )
+                local[6] = coefficient * float(np.dot(direction, distortion_direction))
+        elif node_index == 3:
+            distortion_direction = (
+                -float(quad.sin[0]) * np.asarray(quad.reference_e1, dtype=float)
+                + float(quad.cos[0]) * np.asarray(quad.reference_e2, dtype=float)
+            )
+            local[6] = float(quad.length[3]) * float(
+                np.dot(direction, distortion_direction)
+            )
+        return local
+
+    def _build_projected_control(
+        self,
+        model: Model,
+        point: Any,
+        direction: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Precompute a compact sparse global projection outside the hot path."""
+
+        element_type = str(point.element_type).casefold().split(".")[-1]
+        projections: list[tuple[Any, Any, int]] = []
+        if element_type == "node":
+            node = model.collections.nodes[int(point.element_key)]
+            projections = [
+                (quad, node.point, node_index)
+                for quad in model.collections.quads.values()
+                for node_index, node_key in enumerate(quad.node_keys)
+                if int(node_key) == int(node.key)
+            ]
+        elif element_type == "quad":
+            quad = model.collections.quads[int(point.element_key)]
+            vertex = int(point.id_vertex)
+            if vertex == 0:
+                # Quad-centre output uses only its three translations.
+                local = np.zeros(7, dtype=float)
+                local[:3] = direction
+                projections = [(quad, None, -1)]
+            elif 1 <= vertex <= len(quad.node_keys):
+                node = model.collections.nodes[int(quad.node_keys[vertex - 1])]
+                projections = [(quad, node.point, vertex - 1)]
+            else:
+                raise ValueError(
+                    f"ProjectedControlPoint does not support IdVertex={vertex}."
+                )
+        else:
+            raise ValueError(
+                "ProjectedControlPoint currently supports Node and Quad model points; "
+                f"received {point.element_type!r}."
+            )
+        if not projections:
+            raise ValueError(
+                f"ProjectedControlPoint model point {point.key} has no connected Quad."
+            )
+
+        scale = 1.0 / len(projections)
+        global_weights: dict[int, float] = {}
+        for quad, node_point, node_index in projections:
+            if node_index == -1:
+                local_weights = local
+            else:
+                local_weights = self._quad_point_projection_weights(
+                    quad, node_point, node_index, direction
+                )
+            for local_dof, weight in enumerate(local_weights):
+                if weight == 0.0:
+                    continue
+                for entry in quad.aff[local_dof]:
+                    index = int(entry.gdl) - 1
+                    if index < 0:
+                        continue
+                    global_weights[index] = global_weights.get(index, 0.0) + (
+                        scale * weight * float(entry.alfa)
+                    )
+        indices = np.fromiter(sorted(global_weights), dtype=np.int64)
+        weights = np.fromiter(
+            (global_weights[int(index)] for index in indices), dtype=float
+        )
+        return indices, weights
+
+    def _configure_projected_control(self, model: Model, an: Any) -> None:
+        """Configure the opt-in physical ModelPoint arc-length coordinate.
+
+        C# ``OnlyControlPoint`` constrains the first translational generalized
+        DOF of every element connected to a Node ModelPoint.  That coordinate
+        is not the projected displacement reported for the ModelPoint once
+        element rotations become large.  ``ProjectedControlPoint`` leaves the
+        C# path untouched and instead uses the same linear ModelPoint
+        projection as graph/output processing as the scalar arc-length
+        coordinate.
+        """
+
+        procedure = str(getattr(an, "arc_length_procedure", "")).casefold()
+        if "projectedcontrolpoint" not in procedure:
+            self._projected_control_indices = None
+            self._projected_control_weights = None
+            return
+        master = int(getattr(an, "master_point", -10))
+        point = getattr(model.collections, "model_points", {}).get(master)
+        if point is None:
+            raise ValueError(
+                "ProjectedControlPoint requires a valid Analysis.MasterPoint; "
+                f"model point {master} was not found."
+            )
+        direction = np.asarray(
+            [
+                float(getattr(an, "dir_x", 0.0)),
+                float(getattr(an, "dir_y", 0.0)),
+                float(getattr(an, "dir_z", 0.0)),
+            ],
+            dtype=float,
+        )
+        if not np.any(direction):
+            raise ValueError("ProjectedControlPoint requires a nonzero analysis direction.")
+        (
+            self._projected_control_indices,
+            self._projected_control_weights,
+        ) = self._build_projected_control(model, point, direction)
 
     def _refresh_segment_load(self) -> None:
         if self._phat_ref is None:
@@ -148,6 +307,7 @@ class ArcLength(StaticIntegrator):
 
     def domain_changed(self, p: Program, model: Model, size: int) -> None:
         an = self.state.analysis
+        self._configure_projected_control(model, an)
         if not self._initialized:
             self._lf_items = self._load_items(an)
             self._current_lf_item = min(1, len(self._lf_items) - 1)
@@ -171,7 +331,11 @@ class ArcLength(StaticIntegrator):
 
         # Determine a stable automatic control DOF when no explicit point is
         # supplied.  A valid initial stiffness has already been assembled.
-        if int(getattr(an, "master_point", -10)) == -10 and size:
+        if self._projected_control_indices is not None:
+            # A scalar projection is used by _selected; the placeholder keeps
+            # the established OnlyControlPoint radius scaling at one DOF.
+            self._dofs = np.array([0], dtype=int)
+        elif int(getattr(an, "master_point", -10)) == -10 and size:
             try:
                 p.ls.solve(rhs=self._phat)
                 self._delta_u_hat[:] = p.ls.x
@@ -214,7 +378,11 @@ class ArcLength(StaticIntegrator):
         self._delta_u_hat_matrix_version = ls.matrix_version
         self._delta_u_hat_phat = self._phat.copy()
         self._delta_u_hat_phat_id = id(self._phat)
-        self._dofs = self._select_dofs(p, model, an, fallback_dof=dof)
+        self._dofs = (
+            np.array([0], dtype=int)
+            if self._projected_control_indices is not None
+            else self._select_dofs(p, model, an, fallback_dof=dof)
+        )
         selected_hat = self._selected(self._delta_u_hat)
         denominator = float(np.dot(selected_hat, selected_hat) + self._alpha2)
         if denominator <= 1e-30:
@@ -246,8 +414,13 @@ class ArcLength(StaticIntegrator):
                 self._arc_length2 = radius2
                 delta_lambda = float(np.sqrt(radius2 / denominator))
 
-        selected_load = self._selected(self._phat)
-        if delta_lambda * float(np.dot(selected_hat, selected_load)) < 0.0:
+        if self._projected_control_indices is None:
+            selected_load = self._selected(self._phat)
+            if delta_lambda * float(np.dot(selected_hat, selected_load)) < 0.0:
+                delta_lambda *= -1.0
+        elif float(selected_hat[0]) < 0.0:
+            # The projection already includes the analysis direction.  Choose
+            # the predictor that moves positively along that physical scalar.
             delta_lambda *= -1.0
 
         self._delta_lambda_step = delta_lambda

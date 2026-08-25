@@ -82,6 +82,39 @@ def test_hidden_initial_interpolated_base_search_preserves_arc_length_correction
     assert np.array_equal(ls.x, combined)
 
 
+def test_projected_control_point_uses_compact_reported_coordinate_weights():
+    model = load_model(HRX)
+    analysis = copy.deepcopy(model.collections.analyses[22])
+    analysis.arc_length_procedure = "ProjectedControlPoint"
+    analysis.master_point = 2
+    integrator = ArcLength()
+    integrator._configure_projected_control(model, analysis)
+    vector = np.linspace(-1.0e-3, 1.0e-3, model.gdl)
+    point = model.collections.model_points[2]
+    reported = model_point_displacement(model.collections, point, vector)
+    direction = np.asarray((analysis.dir_x, analysis.dir_y, analysis.dir_z))
+
+    assert integrator._selected(vector)[0] == pytest.approx(
+        float(np.dot(reported, direction)), abs=2.0e-9
+    )
+    assert integrator._projected_control_indices.ndim == 1
+    assert integrator._projected_control_weights.ndim == 1
+    assert integrator._projected_control_indices.size < 100
+    assert (
+        integrator._projected_control_indices.nbytes
+        + integrator._projected_control_weights.nbytes
+    ) < 2_000
+    assert all(value is not model.collections for value in integrator.__dict__.values())
+
+
+def test_csharp_control_point_selection_remains_dof_based():
+    integrator = ArcLength()
+    integrator._dofs = np.asarray((1, 3), dtype=int)
+    vector = np.asarray((10.0, 20.0, 30.0, 40.0))
+
+    assert np.array_equal(integrator._selected(vector), np.asarray((20.0, 40.0)))
+
+
 def test_linear_system_reuses_and_invalidates_sparse_factorization():
     ls = LinearSystem(2)
     ls.k = sp.csc_matrix(np.array([[4.0, 1.0], [1.0, 3.0]]))

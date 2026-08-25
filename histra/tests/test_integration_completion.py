@@ -30,6 +30,7 @@ from histra.solver.equilibrium import (
 from histra.solver.model_manager import ModelManager
 from histra.solver.program import Program
 from histra.solver.restart import restore_committed_analysis_state
+from histra.solver.session import AnalysisSession
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.solve import _als_loop, _set_initial_state, solve_static_nonlinear
 from histra.solver.state_snapshot import SolverStateSnapshot
@@ -382,6 +383,31 @@ def test_strict_equilibrium_policy_refuses_to_commit_work_only_state():
     assert steps[0]["exit_code"] == UNSAFE_EQUILIBRIUM_EXIT_CODE
     assert not steps[0]["equilibrium_ok"]
     assert "trial_u" in steps[0]
+
+
+def test_post_commit_callback_stops_completed_analysis_without_rollback():
+    model = load_model(HRX)
+    seen_steps = []
+    notified = []
+
+    def record_commit(row, analysis):
+        notified.append((int(row["step"]), analysis.name))
+
+    def stop_after_second_step(row):
+        seen_steps.append(int(row["step"]))
+        return int(row["step"]) == 2
+
+    with pytest.warns(UnsafeEquilibriumWarning):
+        execution = AnalysisSession(model).run(
+            model.collections.analyses[1],
+            should_stop_after_commit=stop_after_second_step,
+            on_step_committed=record_commit,
+        )
+
+    assert execution.completed
+    assert seen_steps == [1, 2]
+    assert notified == [(1, "Vert"), (2, "Vert")]
+    assert [step.step for step in execution.committed_steps] == [1, 2]
 
 
 @pytest.mark.skipif(

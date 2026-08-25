@@ -49,6 +49,8 @@ def solve_static_nonlinear(
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
+    should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
+    on_step_committed: Callable[[dict[str, Any], Any], None] | None = None,
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
@@ -58,6 +60,18 @@ def solve_static_nonlinear(
     equilibrium_residual_tolerance: float | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
+
+    ``should_stop_after_commit`` is an optional clean termination predicate. It
+    receives each fully committed step dictionary and, when it returns true,
+    stops the analysis with exit code zero while retaining that committed state.
+    It is intended for path-dependent terminal conditions such as a descending
+    ArcLength branch returning to zero load; it is never evaluated on trial or
+    failed states.
+
+    ``on_step_committed`` receives the same committed row plus the private
+    analysis definition used by the solve. It may adjust continuation controls
+    such as ``dr2`` for the next step without modifying an accepted state.
+
     Reversible Newton trials create thousands of short-lived state containers.
     CPython's cyclic collector can pause for minutes while scanning these fully
     reachable constitutive graphs even though reference counting already frees
@@ -81,6 +95,8 @@ def solve_static_nonlinear(
                     restart_from_current_state=restart_from_current_state,
                     auto_prepare=auto_prepare,
                     max_committed_steps=max_committed_steps,
+                    should_stop_after_commit=should_stop_after_commit,
+                    on_step_committed=on_step_committed,
                     should_cancel=should_cancel,
                     diagnostics=diagnostics,
                     linear_solver_backend=linear_solver_backend,
@@ -120,6 +136,8 @@ def _solve_static_nonlinear_impl(
     restart_from_current_state: bool = False,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
+    should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
+    on_step_committed: Callable[[dict[str, Any], Any], None] | None = None,
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
@@ -700,6 +718,11 @@ def _solve_static_nonlinear_impl(
             integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
         continue_steps = not stop
+        if on_step_committed is not None:
+            on_step_committed(step_data[-1], analysis)
+        if should_stop_after_commit is not None and should_stop_after_commit(step_data[-1]):
+            p.log(f"Requested post-commit stop condition reached at step {step}")
+            continue_steps = False
         if max_committed_steps is not None and step >= max_committed_steps:
             p.log(f"Requested committed-step limit reached at step {step}")
             continue_steps = False

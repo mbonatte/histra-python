@@ -127,6 +127,8 @@ class AnalysisSession:
         analysis: int | str | Any,
         *,
         max_committed_steps: int | None = None,
+        should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
+        on_step_committed: Callable[[dict[str, Any], Any], None] | None = None,
         should_cancel: CancelCheck | None = None,
     ) -> AnalysisExecution:
         self._require_usable()
@@ -182,6 +184,8 @@ class AnalysisSession:
                     on_log=self.on_log,
                     on_progress=self.on_progress,
                     max_committed_steps=max_committed_steps,
+                    should_stop_after_commit=should_stop_after_commit,
+                    on_step_committed=on_step_committed,
                     should_cancel=should_cancel,
                     equilibrium_policy=self.equilibrium_policy,
                     equilibrium_force_absolute_tolerance=(
