@@ -87,12 +87,15 @@ def test_projected_control_point_uses_compact_reported_coordinate_weights():
     analysis = copy.deepcopy(model.collections.analyses[22])
     analysis.arc_length_procedure = "ProjectedControlPoint"
     analysis.master_point = 2
+    analysis.arc_length_control_dir_x = 1.0
+    analysis.arc_length_control_dir_y = 0.0
+    analysis.arc_length_control_dir_z = 0.0
     integrator = ArcLength()
     integrator._configure_projected_control(model, analysis)
     vector = np.linspace(-1.0e-3, 1.0e-3, model.gdl)
     point = model.collections.model_points[2]
     reported = model_point_displacement(model.collections, point, vector)
-    direction = np.asarray((analysis.dir_x, analysis.dir_y, analysis.dir_z))
+    direction = np.asarray((1.0, 0.0, 0.0))
 
     assert integrator._selected(vector)[0] == pytest.approx(
         float(np.dot(reported, direction)), abs=2.0e-9
@@ -106,6 +109,30 @@ def test_projected_control_point_uses_compact_reported_coordinate_weights():
     ) < 2_000
     assert all(value is not model.collections for value in integrator.__dict__.values())
 
+    original_indices = integrator._projected_control_indices
+    original_weights = integrator._projected_control_weights
+    integrator._configure_projected_control(model, analysis)
+    assert integrator._projected_control_indices is original_indices
+    assert integrator._projected_control_weights is original_weights
+
+    analysis.arc_length_control_dir_x = 0.0
+    analysis.arc_length_control_dir_y = -1.0
+    integrator._configure_projected_control(model, analysis)
+    switched_direction = np.asarray((0.0, -1.0, 0.0))
+    assert integrator._selected(vector)[0] == pytest.approx(
+        float(np.dot(reported, switched_direction)), abs=2.0e-9
+    )
+    assert integrator._projected_control_weights is not original_weights
+
+    base_indices = integrator._projected_control_indices.copy()
+    base_weights = integrator._projected_control_weights.copy()
+    analysis.arc_length_control_reference_indices = base_indices
+    analysis.arc_length_control_reference_weights = 0.25 * base_weights
+    integrator._configure_projected_control(model, analysis)
+    assert integrator._selected(vector)[0] == pytest.approx(
+        0.75 * float(np.dot(reported, switched_direction)), abs=2.0e-9
+    )
+
 
 def test_csharp_control_point_selection_remains_dof_based():
     integrator = ArcLength()
@@ -113,6 +140,20 @@ def test_csharp_control_point_selection_remains_dof_based():
     vector = np.asarray((10.0, 20.0, 30.0, 40.0))
 
     assert np.array_equal(integrator._selected(vector), np.asarray((20.0, 40.0)))
+
+
+def test_arc_length_failed_step_cutback_is_opt_in_and_bounded():
+    analysis = type("Analysis", (), {})()
+    analysis.dr2 = 4.0
+    analysis.arc_length_cutback_factor = 0.5
+    analysis.arc_length_min_radius = 0.75
+
+    assert ArcLength.cutback_step(analysis)
+    assert analysis.dr2 == pytest.approx(1.0)
+    assert ArcLength.cutback_step(analysis)
+    assert analysis.dr2 == pytest.approx(0.75**2)
+    assert not ArcLength.cutback_step(analysis)
+    assert analysis.dr2 == pytest.approx(0.75**2)
 
 
 def test_linear_system_reuses_and_invalidates_sparse_factorization():

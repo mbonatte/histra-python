@@ -445,6 +445,49 @@ def _solve_static_nonlinear_impl(
                     p, ls, model, analysis, combination, step, alfa
                 )
                 p.check_cancelled()
+            max_cutbacks = max(
+                0, int(getattr(analysis, "arc_length_max_cutbacks", 0))
+            )
+            cutback = 0
+            while (
+                result in {-2, -3}
+                and isinstance(integrator, ArcLength)
+                and cutback < max_cutbacks
+                and integrator.cutback_step(analysis)
+            ):
+                cutback += 1
+                p.check_cancelled()
+                restore_started = time.perf_counter()
+                step_snapshot.restore()
+                if diagnostic_writer is not None:
+                    diagnostic_writer.add_timing(
+                        "restore", time.perf_counter() - restore_started
+                    )
+                    diagnostic_writer.emit(
+                        "restore",
+                        step=step,
+                        reason="arc_length_radius_cutback",
+                        cutback=cutback,
+                        radius=float(np.sqrt(abs(float(analysis.dr2)))),
+                    )
+                alfa = 0.0
+                integrator.update_k(p, model, alfa)
+                p.log(
+                    f"Step {step}: retrying after ArcLength cutback {cutback}/"
+                    f"{max_cutbacks}, dr={np.sqrt(abs(float(analysis.dr2))):.6g}"
+                )
+                try:
+                    integrator.new_step(
+                        p, model, ls, analysis, combination, step, dof
+                    )
+                    p.check_cancelled()
+                    result = algorithm.solve_current_step(
+                        p, ls, model, analysis, combination, step, alfa
+                    )
+                    p.check_cancelled()
+                except LinearSolveError as exc:
+                    p.log(f"Linear solve failed at step {step}: {exc}")
+                    result = -3
         except SolverCancelled:
             cancelled_load_factor = float(integrator.mult)
             cancelled_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0

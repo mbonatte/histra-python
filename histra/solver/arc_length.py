@@ -42,6 +42,7 @@ class ArcLength(StaticIntegrator):
         self._dofs: np.ndarray | None = None
         self._projected_control_indices: np.ndarray | None = None
         self._projected_control_weights: np.ndarray | None = None
+        self._projected_control_signature: tuple[Any, ...] | None = None
         self._lf_items: list[tuple[float, float]] = []
         self._current_lf_item = 1
         self._initialized = False
@@ -267,13 +268,17 @@ class ArcLength(StaticIntegrator):
         element rotations become large.  ``ProjectedControlPoint`` leaves the
         C# path untouched and instead uses the same linear ModelPoint
         projection as graph/output processing as the scalar arc-length
-        coordinate.
+        coordinate.  By default the projection follows the analysis load/
+        graph direction.  The optional ``arc_length_control_dir_[xyz]``
+        attributes allow continuation to use a different physical coordinate
+        without changing the applied load direction.
         """
 
         procedure = str(getattr(an, "arc_length_procedure", "")).casefold()
         if "projectedcontrolpoint" not in procedure:
             self._projected_control_indices = None
             self._projected_control_weights = None
+            self._projected_control_signature = None
             return
         master = int(getattr(an, "master_point", -10))
         point = getattr(model.collections, "model_points", {}).get(master)
@@ -284,18 +289,70 @@ class ArcLength(StaticIntegrator):
             )
         direction = np.asarray(
             [
-                float(getattr(an, "dir_x", 0.0)),
-                float(getattr(an, "dir_y", 0.0)),
-                float(getattr(an, "dir_z", 0.0)),
+                float(
+                    getattr(
+                        an,
+                        "arc_length_control_dir_x",
+                        getattr(an, "dir_x", 0.0),
+                    )
+                ),
+                float(
+                    getattr(
+                        an,
+                        "arc_length_control_dir_y",
+                        getattr(an, "dir_y", 0.0),
+                    )
+                ),
+                float(
+                    getattr(
+                        an,
+                        "arc_length_control_dir_z",
+                        getattr(an, "dir_z", 0.0),
+                    )
+                ),
             ],
             dtype=float,
         )
         if not np.any(direction):
             raise ValueError("ProjectedControlPoint requires a nonzero analysis direction.")
-        (
-            self._projected_control_indices,
-            self._projected_control_weights,
-        ) = self._build_projected_control(model, point, direction)
+        reference_indices = np.asarray(
+            getattr(an, "arc_length_control_reference_indices", ()), dtype=np.int64
+        )
+        reference_weights = np.asarray(
+            getattr(an, "arc_length_control_reference_weights", ()), dtype=float
+        )
+        if reference_indices.size != reference_weights.size:
+            raise ValueError(
+                "ProjectedControlPoint reference indices and weights must have "
+                "the same length."
+            )
+        signature = (
+            procedure,
+            master,
+            *map(float, direction),
+            tuple(map(int, reference_indices)),
+            tuple(map(float, reference_weights)),
+        )
+        if (
+            signature == self._projected_control_signature
+            and self._projected_control_indices is not None
+        ):
+            return
+        indices, weights = self._build_projected_control(model, point, direction)
+        if reference_indices.size:
+            combined = {
+                int(index): float(weight) for index, weight in zip(indices, weights)
+            }
+            for index, weight in zip(reference_indices, reference_weights):
+                key = int(index)
+                combined[key] = combined.get(key, 0.0) - float(weight)
+            indices = np.fromiter(sorted(combined), dtype=np.int64)
+            weights = np.fromiter(
+                (combined[int(index)] for index in indices), dtype=float
+            )
+        self._projected_control_indices = indices
+        self._projected_control_weights = weights
+        self._projected_control_signature = signature
 
     def _refresh_segment_load(self) -> None:
         if self._phat_ref is None:
@@ -358,6 +415,10 @@ class ArcLength(StaticIntegrator):
     ) -> None:
         self.step = step
         self.iteration = 0
+        # Normally this is a signature-only check. It rebuilds the compact
+        # projection once when a caller intentionally changes the continuation
+        # direction at a committed-step boundary.
+        self._configure_projected_control(model, an)
         self._step_snapshot = {
             "u": None if self.u is None else self.u.copy(),
             "fext": None if ModelManager._fext is None else ModelManager._fext.copy(),
@@ -529,6 +590,21 @@ class ArcLength(StaticIntegrator):
         if snapshot["delta_u_step"] is not None and self._delta_u_step is not None:
             self._delta_u_step[:] = snapshot["delta_u_step"]
         self.revert_to_last_commit(model, ls)
+
+    @staticmethod
+    def cutback_step(an: Any) -> bool:
+        """Reduce an opt-in failed-step radius while preserving all equations."""
+
+        factor = float(getattr(an, "arc_length_cutback_factor", 0.5))
+        radius = float(np.sqrt(abs(float(getattr(an, "dr2", 0.0)))))
+        minimum = max(0.0, float(getattr(an, "arc_length_min_radius", 0.0)))
+        if not 0.0 < factor < 1.0 or radius <= minimum or radius <= 0.0:
+            return False
+        reduced = max(minimum, factor * radius)
+        if reduced >= radius:
+            return False
+        an.dr2 = reduced * reduced
+        return True
 
     def commit(
         self,
