@@ -21,6 +21,7 @@ from histra.solver.outcomes import (
 )
 from histra.solver.modal import solve_modal_analysis
 from histra.solver.solve import solve_static_nonlinear
+from histra.solver.equilibrium import UNSAFE_EQUILIBRIUM_EXIT_CODE
 
 
 class AnalysisSessionError(RuntimeError):
@@ -42,6 +43,10 @@ class AnalysisSession:
         combination_row: int = 1,
         on_log: Callable[[str], None] | None = None,
         on_progress: Callable[[float], None] | None = None,
+        equilibrium_policy: str = "warn",
+        equilibrium_force_absolute_tolerance: float = 1.0e-3,
+        equilibrium_force_relative_tolerance: float = 1.0e-5,
+        equilibrium_residual_tolerance: float | None = None,
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
@@ -49,6 +54,14 @@ class AnalysisSession:
         self.combination_row = int(combination_row)
         self.on_log = on_log
         self.on_progress = on_progress
+        self.equilibrium_policy = equilibrium_policy
+        self.equilibrium_force_absolute_tolerance = float(
+            equilibrium_force_absolute_tolerance
+        )
+        self.equilibrium_force_relative_tolerance = float(
+            equilibrium_force_relative_tolerance
+        )
+        self.equilibrium_residual_tolerance = equilibrium_residual_tolerance
         self.current_analysis_key: int | None = None
         self.current_displacement: np.ndarray | None = None
         self.executions: list[AnalysisExecution] = []
@@ -170,6 +183,16 @@ class AnalysisSession:
                     on_progress=self.on_progress,
                     max_committed_steps=max_committed_steps,
                     should_cancel=should_cancel,
+                    equilibrium_policy=self.equilibrium_policy,
+                    equilibrium_force_absolute_tolerance=(
+                        self.equilibrium_force_absolute_tolerance
+                    ),
+                    equilibrium_force_relative_tolerance=(
+                        self.equilibrium_force_relative_tolerance
+                    ),
+                    equilibrium_residual_tolerance=(
+                        self.equilibrium_residual_tolerance
+                    ),
                     **kwargs,
                 )
         except Exception as exc:
@@ -185,7 +208,12 @@ class AnalysisSession:
             steps=steps,
             runtime_seconds=float(runtime),
             outcome=outcome,
-            message=_outcome_message(outcome),
+            message=(
+                "Analysis candidate failed the independent equilibrium safety "
+                "audit and was rolled back before commit."
+                if int(code) == UNSAFE_EQUILIBRIUM_EXIT_CODE
+                else _outcome_message(outcome)
+            ),
             initial_step=initial_step,
             modal_result=modal_result,
         )

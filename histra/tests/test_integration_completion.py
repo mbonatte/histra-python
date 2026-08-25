@@ -23,6 +23,10 @@ from histra.io.results_reader import (
 )
 from histra.model.load import LoadFunction, LoadFunctionItem
 from histra.solver.load_control import LoadControl
+from histra.solver.equilibrium import (
+    UNSAFE_EQUILIBRIUM_EXIT_CODE,
+    UnsafeEquilibriumWarning,
+)
 from histra.solver.model_manager import ModelManager
 from histra.solver.program import Program
 from histra.solver.restart import restore_committed_analysis_state
@@ -353,13 +357,31 @@ def _single_step_analysis(model):
 
 def test_first_csharp_reference_step_is_reproduced():
     model = load_model(HRX)
-    code, steps = solve_static_nonlinear(model, _single_step_analysis(model))
+    with pytest.warns(UnsafeEquilibriumWarning):
+        code, steps = solve_static_nonlinear(model, _single_step_analysis(model))
     reference = read_global_displacements(RESULTS, 1, 1, 1, model_or_hrx=model)
     error = steps[0]["u"] - reference
     assert code == 0
     assert steps[0]["load_factor"] == pytest.approx(0.2, abs=1e-12)
     assert np.linalg.norm(error) / np.linalg.norm(reference) <= 1.0e-4
     assert np.max(np.abs(error)) <= 1.0e-10
+    assert not steps[0]["equilibrium_ok"]
+    assert steps[0]["equilibrium_force_ok"]
+    assert not steps[0]["equilibrium_residual_ok"]
+
+
+def test_strict_equilibrium_policy_refuses_to_commit_work_only_state():
+    model = load_model(HRX)
+    code, steps = solve_static_nonlinear(
+        model, _single_step_analysis(model), equilibrium_policy="error"
+    )
+
+    assert code == UNSAFE_EQUILIBRIUM_EXIT_CODE
+    assert len(steps) == 1
+    assert steps[0]["status"] == "FAILED"
+    assert steps[0]["exit_code"] == UNSAFE_EQUILIBRIUM_EXIT_CODE
+    assert not steps[0]["equilibrium_ok"]
+    assert "trial_u" in steps[0]
 
 
 @pytest.mark.skipif(

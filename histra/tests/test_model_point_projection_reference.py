@@ -36,6 +36,7 @@ def test_vert_outputs_match_authoritative_csharp_results() -> None:
         root / "model.hrx",
         [PythonAnalysisRequest("Vert", Outputs(), 300.0)],
         timeout_seconds=300.0,
+        equilibrium_policy="warn",
     ).analyses["Vert"].outputs
 
     with sqlite3.connect(root / "model.Results") as connection:

@@ -75,6 +75,12 @@ Reaction projection uses the C# `ReactionSumStates` sign convention:
 Step, R1, R2, R3
 ```
 
+Static nonlinear solves independently audit global force balance and the full
+active-DOF residual before every commit. Warning mode preserves the C# path;
+strict mode rejects unsafe states. `run_python_solver_job` uses strict mode by
+default. See
+[nonlinear convergence and equilibrium safety](docs/nonlinear_convergence_safety.md).
+
 ## Batch modal C#/Python parity
 
 A directory or wildcard can be used to validate many models against C# in one

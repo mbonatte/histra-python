@@ -8,11 +8,14 @@ from histra.types.linear_system import LinearSystem
 class ConvergenceTest:
     """C#-aligned nonlinear convergence test.
 
-    The original solver selects one of three absolute criteria:
+    The original solver selects one of three absolute criteria. With HiStrA's
+    native kN/cm unit convention, their scalar values are:
 
-    * ``ForceMoment``: norm of the residual vector ``b``;
-    * ``DispRotation``: norm of the last displacement increment ``x``;
-    * ``Work``: ``0.5 * abs(x dot b)``.
+    * ``ForceMoment``: norm of ``b``, mixing force (kN) and moment (kN*cm)
+      generalized components in one unscaled vector;
+    * ``DispRotation``: norm of ``x``, mixing translations (cm), rotations
+      (radians), and DMEM internal generalized displacements;
+    * ``Work``: ``0.5 * abs(x dot b)``, in kN*cm (10 joules per unit).
 
     The Python translation previously used a relative residual by default and
     failed to initialize its reference norm in the line-search path.  That was
@@ -48,7 +51,17 @@ class ConvergenceTest:
             return "DispRotation"
         if text in {"work", "energy", "energyincrement"}:
             return "Work"
-        return "ForceMoment"
+        if text == "forcemoment":
+            return "ForceMoment"
+        if text == "relativework":
+            raise ValueError(
+                "RelativeWork is present in the C# enum but has no convergence-test "
+                "implementation in EquiSolnAlgo and is not a usable HiStrA criterion."
+            )
+        raise ValueError(
+            "Unsupported convergence criterion. Expected ForceMoment, "
+            f"DispRotation, or Work; received {value!r}."
+        )
 
     def set_tolerance(self, tol: float) -> None:
         self.tolerance = float(tol)

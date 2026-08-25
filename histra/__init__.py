@@ -14,6 +14,11 @@ from histra.solver.cancellation import (
     CancelCheck,
     SolverCancelled,
 )
+from histra.solver.equilibrium import (
+    UNSAFE_EQUILIBRIUM_EXIT_CODE,
+    EquilibriumAudit,
+    UnsafeEquilibriumWarning,
+)
 from histra.solver.capabilities import (
     SolverCapabilityIssue,
     SolverCapabilityReport,
@@ -55,6 +60,9 @@ __all__ = [
     "CANCELLED_EXIT_CODE",
     "CancelCheck",
     "SolverCancelled",
+    "UNSAFE_EQUILIBRIUM_EXIT_CODE",
+    "EquilibriumAudit",
+    "UnsafeEquilibriumWarning",
     "SolverCapabilityIssue",
     "SolverCapabilityReport",
     "UnsupportedSolverCapability",

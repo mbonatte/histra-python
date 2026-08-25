@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import gc
 import time
+import warnings
 from typing import Any, Callable
 
 import numpy as np
@@ -21,6 +22,13 @@ from histra.postprocessing import compute_total_reaction
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
 from histra.types.linear_system import LinearSolveError, LinearSystem
 from histra.solver.diagnostics import DiagnosticOptions, create_diagnostics
+from histra.solver.equilibrium import (
+    UNSAFE_EQUILIBRIUM_EXIT_CODE,
+    UnsafeEquilibriumWarning,
+    applied_force_resultant,
+    audit_static_equilibrium,
+    normalize_equilibrium_policy,
+)
 from histra.solver.cancellation import (
     CANCELLED_EXIT_CODE,
     CancelCheck,
@@ -44,6 +52,10 @@ def solve_static_nonlinear(
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
+    equilibrium_policy: str = "warn",
+    equilibrium_force_absolute_tolerance: float = 1.0e-3,
+    equilibrium_force_relative_tolerance: float = 1.0e-5,
+    equilibrium_residual_tolerance: float | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
     Reversible Newton trials create thousands of short-lived state containers.
@@ -72,6 +84,10 @@ def solve_static_nonlinear(
                     should_cancel=should_cancel,
                     diagnostics=diagnostics,
                     linear_solver_backend=linear_solver_backend,
+                    equilibrium_policy=equilibrium_policy,
+                    equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
+                    equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
+                    equilibrium_residual_tolerance=equilibrium_residual_tolerance,
                 )
             finally:
                 try:
@@ -107,11 +123,33 @@ def _solve_static_nonlinear_impl(
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
+    equilibrium_policy: str = "warn",
+    equilibrium_force_absolute_tolerance: float = 1.0e-3,
+    equilibrium_force_relative_tolerance: float = 1.0e-5,
+    equilibrium_residual_tolerance: float | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     raise_if_cancelled(should_cancel)
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
+    equilibrium_policy = normalize_equilibrium_policy(equilibrium_policy)
+    equilibrium_force_absolute_tolerance = float(
+        equilibrium_force_absolute_tolerance
+    )
+    equilibrium_force_relative_tolerance = float(
+        equilibrium_force_relative_tolerance
+    )
+    if equilibrium_force_absolute_tolerance < 0.0:
+        raise ValueError("equilibrium_force_absolute_tolerance must be non-negative")
+    if equilibrium_force_relative_tolerance < 0.0:
+        raise ValueError("equilibrium_force_relative_tolerance must be non-negative")
+    if equilibrium_residual_tolerance is None:
+        equilibrium_residual_tolerance = float(
+            getattr(analysis, "convergence_tolerance", 1.0e-6)
+        )
+    equilibrium_residual_tolerance = float(equilibrium_residual_tolerance)
+    if equilibrium_residual_tolerance < 0.0:
+        raise ValueError("equilibrium_residual_tolerance must be non-negative")
     readiness = inspect_solver_readiness(model)
     raise_if_cancelled(should_cancel)
     if not readiness.is_ready and auto_prepare:
@@ -280,6 +318,8 @@ def _solve_static_nonlinear_impl(
         ls.set_zero_displacement()
     integrator.domain_changed(p, model, n)
     p.current_load_factor = integrator.mult
+    equilibrium_reference_load_factor = float(integrator.mult)
+    equilibrium_target_force = applied_force_resultant(model)
     dof = ModelManager.get_dof_for_max_displacement(p, model, analysis)
     # C# StaticNonLinearAnalysis computes the step-0 ReactionSum before the
     # initial GetValueGraphAnalysis call, so the reference graph force is the
@@ -308,6 +348,11 @@ def _solve_static_nonlinear_impl(
             stiffness_frobenius_norm=float(np.linalg.norm(ls.k.data)),
             target_load_norm=float(np.linalg.norm(ModelManager._ptarget)),
             external_load_norm=float(np.linalg.norm(ModelManager._fext)),
+            equilibrium_policy=equilibrium_policy,
+            equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
+            equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
+            equilibrium_residual_tolerance=equilibrium_residual_tolerance,
+            equilibrium_target_force=equilibrium_target_force.tolist(),
             managed_transverse_springs=0 if runtime is None else len(runtime.springs),
             managed_coulomb_springs=0 if runtime is None else len(runtime.coulomb_springs),
             managed_quad_records=0 if runtime is None else len(runtime.quad_records),
@@ -315,6 +360,8 @@ def _solve_static_nonlinear_impl(
         )
 
     step_data: list[dict[str, Any]] = []
+    unsafe_equilibrium_steps = 0
+    warned_unsafe_equilibrium = False
     final_code = 0
     step = 0
     continue_steps = True
@@ -399,6 +446,8 @@ def _solve_static_nonlinear_impl(
                     "load_factor": cancelled_load_factor,
                     "displacement": cancelled_displacement,
                     "iterations": int(algorithm.the_test.current_iter),
+                    "convergence_criterion": str(algorithm.the_test.criterion),
+                    "convergence_tolerance": float(algorithm.the_test.tolerance),
                     "convergence_error": float(algorithm.the_test.get_error()),
                     "residual_norm": float(ls.get_b_norm()),
                     "increment_norm": float(ls.get_x_norm()),
@@ -466,6 +515,8 @@ def _solve_static_nonlinear_impl(
                     "load_factor": failure_load_factor,
                     "displacement": failure_displacement,
                     "iterations": failure_iterations,
+                    "convergence_criterion": str(algorithm.the_test.criterion),
+                    "convergence_tolerance": float(algorithm.the_test.tolerance),
                     "convergence_error": failure_error,
                     "residual_norm": failure_residual,
                     "increment_norm": failure_increment,
@@ -476,6 +527,92 @@ def _solve_static_nonlinear_impl(
             )
             p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
             break
+        reaction = compute_total_reaction(model)
+        equilibrium_fields: dict[str, Any] = {
+            "equilibrium_checked": equilibrium_policy != "off",
+        }
+        if equilibrium_policy != "off":
+            audit = audit_static_equilibrium(
+                reaction=reaction,
+                reference_reaction=initial_reaction,
+                target_force=equilibrium_target_force,
+                load_factor_increment=(
+                    float(integrator.mult) - equilibrium_reference_load_factor
+                ),
+                residual=ls.b,
+                force_absolute_tolerance=equilibrium_force_absolute_tolerance,
+                force_relative_tolerance=equilibrium_force_relative_tolerance,
+                residual_tolerance=equilibrium_residual_tolerance,
+            )
+            equilibrium_fields.update(audit.step_fields())
+            if not audit.safe:
+                unsafe_equilibrium_steps += 1
+                message = audit.warning_message(
+                    analysis_name=str(getattr(analysis, "name", "")),
+                    step=step,
+                    criterion=str(algorithm.the_test.criterion),
+                    criterion_error=float(algorithm.the_test.get_error()),
+                )
+                p.log(f"################# {message} #################")
+                if equilibrium_policy == "warn" and not warned_unsafe_equilibrium:
+                    warnings.warn(
+                        message + " Further unsafe steps are logged and marked in step data.",
+                        UnsafeEquilibriumWarning,
+                        stacklevel=2,
+                    )
+                    warned_unsafe_equilibrium = True
+                if equilibrium_policy == "error":
+                    failure_trial_u = p.u.copy()
+                    failure_load_factor = float(integrator.mult)
+                    failure_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
+                    failure_increment_norm = float(ls.get_x_norm())
+                    failure_max_u = float(p.max_u)
+                    failure_max_key = int(p.elem_max_u_key)
+                    failure_max_type = str(p.elem_max_u_type)
+                    restore_started = time.perf_counter()
+                    step_snapshot.restore()
+                    if diagnostic_writer is not None:
+                        diagnostic_writer.add_timing(
+                            "restore", time.perf_counter() - restore_started
+                        )
+                        diagnostic_writer.emit(
+                            "restore", step=step, reason="unsafe_equilibrium"
+                        )
+                    p.current_load_factor = integrator.mult
+                    final_code = UNSAFE_EQUILIBRIUM_EXIT_CODE
+                    step_data.append(
+                        {
+                            "step": step,
+                            "status": "FAILED",
+                            "exit_code": UNSAFE_EQUILIBRIUM_EXIT_CODE,
+                            "u": p.u.copy(),
+                            "trial_u": failure_trial_u,
+                            "load_factor": failure_load_factor,
+                            "displacement": failure_displacement,
+                            "iterations": int(algorithm.the_test.current_iter),
+                            "convergence_criterion": str(algorithm.the_test.criterion),
+                            "convergence_tolerance": float(algorithm.the_test.tolerance),
+                            "convergence_error": float(algorithm.the_test.get_error()),
+                            "residual_norm": audit.residual_norm,
+                            "increment_norm": failure_increment_norm,
+                            "max_element_displacement": failure_max_u,
+                            "max_element_key": failure_max_key,
+                            "max_element_type": failure_max_type,
+                            "reaction_x": reaction.x,
+                            "reaction_y": reaction.y,
+                            "reaction_z": reaction.z,
+                            "balancing_reaction_x": reaction.balancing_x,
+                            "balancing_reaction_y": reaction.balancing_y,
+                            "balancing_reaction_z": reaction.balancing_z,
+                            **equilibrium_fields,
+                        }
+                    )
+                    p.log(
+                        f"Analysis stopped before committing step {step}: "
+                        "independent equilibrium safety audit failed"
+                    )
+                    break
+
         de_el, de_pl = ModelManager.compute_energy(model)
         energy_elastic += de_el
         energy_dissipated += de_pl
@@ -484,7 +621,6 @@ def _solve_static_nonlinear_impl(
         if diagnostic_writer is not None:
             diagnostic_writer.add_timing("commit", time.perf_counter() - commit_started)
 
-        reaction = compute_total_reaction(model)
         p.current_load_factor = integrator.mult
         graph_displ: list[float] = []
         values = p.get_value_graph_analysis(
@@ -501,6 +637,8 @@ def _solve_static_nonlinear_impl(
                 "load_factor": p.current_load_factor,
                 "displacement": displacement,
                 "iterations": algorithm.the_test.current_iter,
+                "convergence_criterion": str(algorithm.the_test.criterion),
+                "convergence_tolerance": float(algorithm.the_test.tolerance),
                 "convergence_error": float(algorithm.the_test.get_error()),
                 "residual_norm": float(ls.get_b_norm()),
                 "increment_norm": float(ls.get_x_norm()),
@@ -515,6 +653,7 @@ def _solve_static_nonlinear_impl(
                 "balancing_reaction_x": reaction.balancing_x,
                 "balancing_reaction_y": reaction.balancing_y,
                 "balancing_reaction_z": reaction.balancing_z,
+                **equilibrium_fields,
             }
         )
         p.log(
@@ -549,6 +688,7 @@ def _solve_static_nonlinear_impl(
                 reaction_x=float(reaction.x),
                 reaction_y=float(reaction.y),
                 reaction_z=float(reaction.z),
+                **equilibrium_fields,
                 domain_changed=bool(changed[0]),
                 stop=bool(stop),
                 vector_snapshot=captured,
@@ -572,12 +712,19 @@ def _solve_static_nonlinear_impl(
         p.log("Analysis executed and completed" if step else "Analysis not executed")
     else:
         p.log("Analysis executed but not completed")
+    if unsafe_equilibrium_steps:
+        p.log(
+            f"EQUILIBRIUM SAFETY SUMMARY: {unsafe_equilibrium_steps} candidate "
+            f"step(s) failed the independent audit (policy={equilibrium_policy})."
+        )
     if diagnostic_writer is not None:
         diagnostic_writer.emit(
             "analysis_end",
             exit_code=final_code,
             committed_steps=sum(1 for row in step_data if row.get("status") == "OK"),
             attempted_steps=len(step_data),
+            unsafe_equilibrium_steps=unsafe_equilibrium_steps,
+            equilibrium_policy=equilibrium_policy,
         )
         diagnostic_writer.close()
     return final_code, step_data

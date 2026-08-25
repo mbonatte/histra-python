@@ -128,7 +128,16 @@ def _write_step_csv(path: Path, analysis, records: Iterable[dict[str, Any]]) -> 
         "convergence_result_code", "load_factor", "iterations",
         "monitored_displacement", "max_element_displacement",
         "max_element_type", "max_element_key",
-        "convergence_error", "residual_norm", "increment_norm",
+        "convergence_criterion", "convergence_tolerance", "convergence_error",
+        "residual_norm", "increment_norm",
+        "equilibrium_checked", "equilibrium_ok", "equilibrium_force_ok",
+        "equilibrium_residual_ok", "equilibrium_expected_reaction_x",
+        "equilibrium_expected_reaction_y", "equilibrium_expected_reaction_z",
+        "equilibrium_force_error_x", "equilibrium_force_error_y",
+        "equilibrium_force_error_z", "equilibrium_force_error_norm",
+        "equilibrium_force_error_max", "equilibrium_force_limit",
+        "equilibrium_force_relative_error", "equilibrium_residual_norm",
+        "equilibrium_residual_max", "equilibrium_residual_limit",
         "histra_reaction_sum_x", "histra_reaction_sum_y", "histra_reaction_sum_z",
         "histra_reaction_sum_magnitude",
         "total_support_reaction_x", "total_support_reaction_y",
@@ -190,9 +199,46 @@ def _write_step_csv(path: Path, analysis, records: Iterable[dict[str, Any]]) -> 
                     "max_element_displacement": row.get("max_element_displacement", 0.0),
                     "max_element_type": row.get("max_element_type", ""),
                     "max_element_key": row.get("max_element_key", 0),
+                    "convergence_criterion": row.get("convergence_criterion", ""),
+                    "convergence_tolerance": row.get("convergence_tolerance", ""),
                     "convergence_error": row.get("convergence_error", 0.0),
                     "residual_norm": row.get("residual_norm", 0.0),
                     "increment_norm": row.get("increment_norm", 0.0),
+                    "equilibrium_checked": row.get("equilibrium_checked", ""),
+                    "equilibrium_ok": row.get("equilibrium_ok", ""),
+                    "equilibrium_force_ok": row.get("equilibrium_force_ok", ""),
+                    "equilibrium_residual_ok": row.get("equilibrium_residual_ok", ""),
+                    "equilibrium_expected_reaction_x": row.get(
+                        "equilibrium_expected_reaction_x", ""
+                    ),
+                    "equilibrium_expected_reaction_y": row.get(
+                        "equilibrium_expected_reaction_y", ""
+                    ),
+                    "equilibrium_expected_reaction_z": row.get(
+                        "equilibrium_expected_reaction_z", ""
+                    ),
+                    "equilibrium_force_error_x": row.get("equilibrium_force_error_x", ""),
+                    "equilibrium_force_error_y": row.get("equilibrium_force_error_y", ""),
+                    "equilibrium_force_error_z": row.get("equilibrium_force_error_z", ""),
+                    "equilibrium_force_error_norm": row.get(
+                        "equilibrium_force_error_norm", ""
+                    ),
+                    "equilibrium_force_error_max": row.get(
+                        "equilibrium_force_error_max", ""
+                    ),
+                    "equilibrium_force_limit": row.get("equilibrium_force_limit", ""),
+                    "equilibrium_force_relative_error": row.get(
+                        "equilibrium_force_relative_error", ""
+                    ),
+                    "equilibrium_residual_norm": row.get(
+                        "equilibrium_residual_norm", ""
+                    ),
+                    "equilibrium_residual_max": row.get(
+                        "equilibrium_residual_max", ""
+                    ),
+                    "equilibrium_residual_limit": row.get(
+                        "equilibrium_residual_limit", ""
+                    ),
                     **reaction_values,
                 }
             )
@@ -280,6 +326,10 @@ STEPS
 - convergence_result_code is positive for a converged step and negative for a stopped/failed trial step; it is not the overall process exit code.
 - monitored_displacement is the analysis graph/control output.
 - max_element_displacement is the largest element displacement used by the model-wide maxU stop test.
+- equilibrium_ok requires both global X/Y/Z force balance and the independent
+  full active-DOF residual test. Force errors and limits are in kN.
+- Exit code -12 means the selected HRX criterion passed but strict equilibrium
+  safety rejected and rolled back the candidate before commit.
 - Step 0 is the initial state.
 - Vert step 0 is the virgin zero state.
 - Live Load step 0 is the final committed Vert state.
@@ -309,6 +359,7 @@ def run_vert_live(
     live_selector: str | None = None,
     combination: int = 1,
     echo_log: bool = True,
+    equilibrium_policy: str = "error",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     model = load_model(hrx)
@@ -334,7 +385,11 @@ def run_vert_live(
     log(f"Model: {hrx.resolve()}")
     log(f"Running Vert {vert.key}:{vert.name} from virgin HRX state")
     vert_code, vert_rows = solve_static_nonlinear(
-        model, vert, combination, on_log=lambda message: log(f"[Vert] {message}")
+        model,
+        vert,
+        combination,
+        on_log=lambda message: log(f"[Vert] {message}"),
+        equilibrium_policy=equilibrium_policy,
     )
     vert_committed = [row for row in vert_rows if row["status"] == "OK"]
     runtime = ModelManager.hysteretic_batch_for(model)
@@ -382,6 +437,7 @@ def run_vert_live(
         on_log=lambda message: log(f"[Live] {message}"),
         initial_displacement=np.asarray(vert_final["u"], dtype=float),
         restart_from_current_state=True,
+        equilibrium_policy=equilibrium_policy,
     )
     live_committed = [row for row in live_rows if row["status"] == "OK"]
     baseline_reaction = (
@@ -434,6 +490,7 @@ def run_vert_live(
             "fallback_error": ModelManager._hysteretic_batch_error,
             "disable_environment_variable": "HISTRA_DISABLE_COMPILED_SPRINGS=1",
         },
+        "equilibrium_policy": equilibrium_policy,
         "analyses": {
             "vert": {
                 "key": int(vert.key),
@@ -501,6 +558,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--vert-analysis", help="Vert analysis key or exact name")
     parser.add_argument("--live-analysis", help="Live Load analysis key or exact name")
     parser.add_argument("--combination", type=int, default=1)
+    parser.add_argument(
+        "--equilibrium-policy",
+        choices=("error", "warn", "off"),
+        default="error",
+        help=(
+            "error rejects unbalanced candidate steps (default); warn preserves "
+            "the C# path for diagnostics; off disables the safety audit"
+        ),
+    )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
@@ -512,6 +578,7 @@ def main(argv: list[str] | None = None) -> int:
             live_selector=args.live_analysis,
             combination=args.combination,
             echo_log=not args.quiet,
+            equilibrium_policy=args.equilibrium_policy,
         )
     except (KeyError, ValueError, RuntimeError, NotImplementedError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

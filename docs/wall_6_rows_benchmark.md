@@ -203,3 +203,25 @@ For engineering interpretation of this model:
    curve;
 4. retain the Soil no-tension contact unless a different physical support law
    is intentionally required.
+
+## Implemented solver safeguard
+
+The Python solver now audits global X/Y/Z force balance and the complete
+active-DOF residual independently of the selected `.HRX` convergence
+criterion, before every commit. Replaying the authoritative C# scour state
+through real `LiveLoad_1` step 1 produced:
+
+```text
+Work error                  0.004716472593  (passes 0.005)
+residual L2                32.078249043
+expected R3             -220.223160651 kN
+actual R3               -312.352360964 kN
+R3 balance error          -92.129200313 kN
+allowed force error         0.004123524 kN
+equilibrium_ok              false
+```
+
+Warning mode retains this C#-matching state only for comparison and marks it
+unsafe. Strict mode returns exit code `-12`, restores the complete pre-step
+state, and does not commit it. See
+[nonlinear convergence and equilibrium safety](nonlinear_convergence_safety.md).
