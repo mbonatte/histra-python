@@ -115,8 +115,8 @@ def test_compiled_hysteretic_batch_can_force_general_kernel(monkeypatch):
 
 
 @pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")
-def test_managed_interface_keeps_linear_sliding_forces(monkeypatch):
-    """The transverse batch must retain scalar linear sliding components."""
+def test_managed_interface_batches_elastic_sliding_exactly(monkeypatch):
+    """Dense elastic sliding must match scalar trial/commit/restore state."""
     monkeypatch.delenv("HISTRA_DISABLE_COMPILED_SPRINGS", raising=False)
     model = load_model(MODEL)
     interface = next(iter(model.collections.interfaces.values()))
@@ -136,6 +136,27 @@ def test_managed_interface_keeps_linear_sliding_forces(monkeypatch):
     runtime = build_hysteretic_batch(model)
     assert runtime is not None
     assert runtime.manages(interface)
+    record_index = runtime._record_by_id[id(interface)]
+    assert runtime._slid_index[record_index] >= 0
+    assert runtime._oop0_index[record_index] >= 0
+    assert runtime._oop1_index[record_index] >= 0
+    counts = runtime.performance_counts()
+    assert counts["managed_interface_elastic_springs"] == 3
+    assert runtime._unmanaged_sliding_record_indices.size == 0
+
+    def assert_sliding_state_equal(actual, expected) -> None:
+        actual_springs = [*actual.slid, *actual.slid_out_plan]
+        expected_springs = [*expected.slid, *expected.slid_out_plan]
+        for actual_spring, expected_spring in zip(
+            actual_springs, expected_springs, strict=True
+        ):
+            assert actual_spring._cstress == expected_spring._cstress
+            assert actual_spring._cstrain == expected_spring._cstrain
+            assert actual_spring._tstress == expected_spring._tstress
+            assert actual_spring._tstrain == expected_spring._tstrain
+            assert actual_spring.k_tang == expected_spring.k_tang
+            assert actual_spring.f == expected_spring.f
+            assert actual_spring.u == expected_spring.u
 
     # The restored/initial resisting force must already include all three
     # scalar springs before any new displacement is applied.
@@ -151,9 +172,33 @@ def test_managed_interface_keeps_linear_sliding_forces(monkeypatch):
     np.testing.assert_allclose(
         runtime.local_force_for(interface), reference.f, rtol=0.0, atol=2.0e-15
     )
-    assert interface.slid[0].get_force() == reference.slid[0].get_force()
-    assert interface.slid_out_plan[0].get_force() == reference.slid_out_plan[0].get_force()
-    assert interface.slid_out_plan[1].get_force() == reference.slid_out_plan[1].get_force()
+    runtime.sync_interface_trial_to_objects(interface)
+    assert_sliding_state_equal(interface, reference)
+
+    runtime.commit(sync_objects=True)
+    reference.commit()
+    assert_sliding_state_equal(interface, reference)
+
+    reversal = -2.5 * increment
+    runtime.update_domain(reversal, state)
+    reference.update_domain(reversal, state)
+    reference.set_resisting_force()
+    np.testing.assert_allclose(
+        runtime.local_force_for(interface), reference.f, rtol=0.0, atol=2.0e-15
+    )
+
+    snapshot = runtime.snapshot()
+    reference_snapshot = deepcopy(reference)
+    runtime.update_domain(0.75 * increment, state)
+    runtime.restore(snapshot)
+    reference_snapshot.set_resisting_force()
+    np.testing.assert_allclose(
+        runtime.local_force_for(interface),
+        reference_snapshot.f,
+        rtol=0.0,
+        atol=2.0e-15,
+    )
+    assert_sliding_state_equal(interface, reference_snapshot)
 
 
 @pytest.mark.skipif(_evaluate_linear_batch is None, reason="Numba is unavailable")

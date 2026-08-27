@@ -1749,6 +1749,20 @@ if njit is not None:
             state[i, CDN] = dns[i]
 
     @njit(cache=True, nogil=True, parallel=True)
+    def _evaluate_elastic_sliding_batch(state, targets, elastic_indices):
+        """Exact ``SpringElastic.set_trial_strain`` for dense sliding rows."""
+        for dense_position in prange(elastic_indices.size):
+            i = elastic_indices[dense_position]
+            row = state[i]
+            tstrain = targets[i]
+            ktang = row[CKTANG]
+            tstress = row[CCSTRESS] + ktang * (tstrain - row[CCSTRAIN])
+            row[CTSTRESS] = tstress
+            row[CTSTRAIN] = tstrain
+            row[CU] = tstrain
+            row[CF] = tstress
+
+    @njit(cache=True, nogil=True, parallel=True)
     def _assemble_full_interface_forces(
         transverse_forces, coulomb_state, slid_index, oop0_index, oop1_index,
         dist, local_full_forces, max_displacements, coulomb_targets,
@@ -2487,6 +2501,17 @@ if njit is not None:
             row[CDN] = 0.0
 
     @njit(cache=True, nogil=True)
+    def _commit_elastic_sliding_batch(state, elastic_indices):
+        """Exact ``SpringElastic.commit`` for dense sliding rows."""
+        for dense_position in range(elastic_indices.size):
+            i = elastic_indices[dense_position]
+            row = state[i]
+            row[CCSTRESS] = row[CTSTRESS]
+            row[CCSTRAIN] = row[CTSTRAIN]
+            row[CU] = row[CTSTRAIN]
+            row[CF] = row[CTSTRESS]
+
+    @njit(cache=True, nogil=True)
     def _managed_elastic_energy(transverse_k, transverse_trial, quad_k, quad_state):
         # Preserve the Python/C# element iteration order: Quads first, then
         # interface transverse springs. Interface Coulomb springs are not part
@@ -2610,11 +2635,13 @@ else:
     _map_and_prepare_interface_kinematics = None
     _advance_interface_coulomb_targets = None
     _evaluate_initial_coulomb_batch = None
+    _evaluate_elastic_sliding_batch = None
     _assemble_full_interface_forces = None
     _prepare_quad_kinematics = None
     _evaluate_quad_takeda_batch = None
     _commit_quad_takeda_batch = None
     _commit_initial_coulomb_batch = None
+    _commit_elastic_sliding_batch = None
     _managed_elastic_energy = None
     _update_domain_batch = None
 
@@ -3182,14 +3209,9 @@ class HystereticBatchRuntime:
         self.coulomb_dns = np.zeros(nc, dtype=np.float64)
         self.coulomb_enabled = np.empty(nc, dtype=np.bool_)
         for i, spring in enumerate(coulomb_springs):
-            self.coulomb_params[i, :] = (
-                float(spring.k), float(spring.h), float(spring.cohesion),
-                float(spring.mu), float(spring.area), float(spring.e1p),
-                float(spring.e2p),
-            )
-            self._read_coulomb_object(i, spring)
-            self.coulomb_targets[i] = float(spring.u)
-            self.coulomb_enabled[i] = bool(spring.is_on)
+            self._import_interface_sliding_object(i, spring)
+        self._refresh_elastic_sliding_indices()
+        self._refresh_unmanaged_sliding_record_indices()
         self.managed_springs = [*self.springs, *self.coulomb_springs]
         offsets = [0]
         gdls: list[int] = []
@@ -3476,6 +3498,8 @@ class HystereticBatchRuntime:
     def _coulomb_rejection_reason(spring: Any) -> str:
         from histra.springs.coulomb03 import SpringCoulomb03
 
+        if isinstance(spring, SpringElastic):
+            return ""
         if not isinstance(spring, SpringCoulomb03):
             return "unsupported_spring_type"
         if spring.hysteretic_type != "Initial":
@@ -3485,6 +3509,55 @@ class HystereticBatchRuntime:
         if spring.check_contact_area:
             return "contact_area_check"
         return ""
+
+    def _refresh_elastic_sliding_indices(self) -> None:
+        self._elastic_sliding_indices = np.fromiter(
+            (
+                index
+                for index, spring in enumerate(self.coulomb_springs)
+                if isinstance(spring, SpringElastic)
+            ),
+            dtype=np.int32,
+        )
+
+    def _refresh_unmanaged_sliding_record_indices(self) -> None:
+        """Cache the rare scalar fallbacks outside the Newton hot loop."""
+        self._unmanaged_sliding_record_indices = np.fromiter(
+            (
+                record_index
+                for record_index, record in enumerate(self.records)
+                if (
+                    record.interface.slid
+                    and int(self._slid_index[record_index]) < 0
+                )
+                or (
+                    len(record.interface.slid_out_plan) >= 2
+                    and int(self._oop0_index[record_index]) < 0
+                    and int(self._oop1_index[record_index]) < 0
+                )
+            ),
+            dtype=np.int32,
+        )
+
+    def _import_interface_sliding_object(self, index: int, spring: Any) -> None:
+        """Import one supported interface sliding spring into dense storage."""
+        if isinstance(spring, SpringElastic):
+            self.coulomb_params[index, :] = 0.0
+            self.coulomb_params[index, 0] = float(spring.k)
+            self._read_coulomb_object(index, spring)
+            self.coulomb_targets[index] = float(spring.u)
+            # The nonlinear Coulomb kernel must skip elastic rows; their exact
+            # state transition runs in _evaluate_elastic_sliding_batch.
+            self.coulomb_enabled[index] = False
+            return
+        self.coulomb_params[index, :] = (
+            float(spring.k), float(spring.h), float(spring.cohesion),
+            float(spring.mu), float(spring.area), float(spring.e1p),
+            float(spring.e2p),
+        )
+        self._read_coulomb_object(index, spring)
+        self.coulomb_targets[index] = float(spring.u)
+        self.coulomb_enabled[index] = bool(spring.is_on)
 
     def _rebuild_interface_coulomb_storage(
         self, *, changed_record_indices: frozenset[int] | None = None
@@ -3505,8 +3578,6 @@ class HystereticBatchRuntime:
         attributes from every Coulomb object. ``coulomb_dns`` deliberately is
         *not* copied: a topology rebuild historically resets that array to zero.
         """
-        from histra.springs.coulomb03 import SpringCoulomb03
-
         old_springs = self.coulomb_springs
         old_params = self.coulomb_params
         old_state = self.coulomb_state
@@ -3523,7 +3594,7 @@ class HystereticBatchRuntime:
                 delattr(spring, "_histra_batch_managed")
 
         rejection_reasons: Counter[str] = Counter()
-        springs: list[SpringCoulomb03] = []
+        springs: list[Any] = []
         index_by_id: dict[int, int] = {}
         # At most three interface Coulomb rows can occur per record. Keep the
         # reuse metadata compact instead of allocating Python int/bool lists.
@@ -3650,18 +3721,10 @@ class HystereticBatchRuntime:
         for index, spring in enumerate(springs):
             if old_row_for_new[index] >= 0 and not row_touched[index]:
                 continue
-            params[index, :] = (
-                float(spring.k),
-                float(spring.h),
-                float(spring.cohesion),
-                float(spring.mu),
-                float(spring.area),
-                float(spring.e1p),
-                float(spring.e2p),
-            )
-            self._read_coulomb_object(index, spring)
-            targets[index] = float(spring.u)
-            enabled[index] = bool(spring.is_on)
+            self._import_interface_sliding_object(index, spring)
+
+        self._refresh_elastic_sliding_indices()
+        self._refresh_unmanaged_sliding_record_indices()
 
         # Preserve the constructor's managed-spring ordering exactly:
         # transverse -> interface Coulomb -> Quad diagonal.
@@ -3959,15 +4022,8 @@ class HystereticBatchRuntime:
                     self.coulomb_springs[dense_index] = spring
                     self.managed_springs[coulomb_offset + dense_index] = spring
                     spring._histra_batch_managed = True
-                    self.coulomb_params[dense_index, :] = (
-                        float(spring.k), float(spring.h), float(spring.cohesion),
-                        float(spring.mu), float(spring.area), float(spring.e1p),
-                        float(spring.e2p),
-                    )
-                    self._read_coulomb_object(dense_index, spring)
-                    self.coulomb_targets[dense_index] = float(spring.u)
+                    self._import_interface_sliding_object(dense_index, spring)
                     self.coulomb_dns[dense_index] = 0.0
-                    self.coulomb_enabled[dense_index] = bool(spring.is_on)
 
             # The interface object itself is retained by material mutation, so
             # the existing dense slice and record mapping remain valid.
@@ -3982,6 +4038,9 @@ class HystereticBatchRuntime:
                     record_index for record_index, _, _, _ in validated
                 )
             )
+        else:
+            self._refresh_elastic_sliding_indices()
+            self._refresh_unmanaged_sliding_record_indices()
 
         self._refresh_simple_hysteretic_flag()
         self._pending_values.fill(0.0)
@@ -3994,6 +4053,10 @@ class HystereticBatchRuntime:
 
     def performance_counts(self) -> dict[str, Any]:
         """Return stable production-backend coverage and rejection counters."""
+        managed_interface_elastic = int(self._elastic_sliding_indices.size)
+        managed_interface_coulomb = (
+            len(self.coulomb_springs) - managed_interface_elastic
+        )
         managed_quad_coulomb = sum(
             1 for row in self.quad_params
             if int(row[QPSUBLAW]) == QUAD_SUBLAW_COULOMB
@@ -4011,11 +4074,14 @@ class HystereticBatchRuntime:
             "transverse_parameter_columns": TRANSVERSE_PARAM_SIZE,
             "transverse_parameter_storage_columns": int(self._params.shape[1]),
             "compact_simple_hysteretic_params": bool(self._compact_simple_params),
-            "managed_interface_coulomb_springs": len(self.coulomb_springs),
+            "managed_interface_coulomb_springs": managed_interface_coulomb,
+            "managed_interface_elastic_springs": managed_interface_elastic,
             "managed_quad_coulomb_springs": managed_quad_coulomb,
             "managed_quad_cacovic_springs": managed_quad_cacovic,
             "managed_quad_elastic_springs": managed_quad_elastic,
-            "managed_coulomb_springs": len(self.coulomb_springs) + managed_quad_coulomb,
+            "managed_coulomb_springs": (
+                managed_interface_coulomb + managed_quad_coulomb
+            ),
             "managed_quad_records": len(self.quad_records),
             "unmanaged_interfaces": len(self.unmanaged_interfaces),
             "unmanaged_quads": len(self.unmanaged_quads),
@@ -4188,6 +4254,20 @@ class HystereticBatchRuntime:
 
     def _read_coulomb_object(self, index: int, spring: Any) -> None:
         row = self.coulomb_state[index]
+        if isinstance(spring, SpringElastic):
+            row.fill(0.0)
+            ktang = float(spring.k_tang)
+            if ktang == 0.0:
+                ktang = float(spring.k)
+            row[CCSTRESS] = float(spring._cstress)
+            row[CCSTRAIN] = float(spring._cstrain)
+            row[CTSTRESS] = float(spring._tstress)
+            row[CTSTRAIN] = float(spring._tstrain)
+            row[CKTANG] = ktang
+            row[CKTANG_COMMITTED] = ktang
+            row[CU] = float(spring.u)
+            row[CF] = float(spring.f)
+            return
         row[CFY0] = float(spring.fy[0])
         row[CFY1] = float(spring.fy[1])
         row[CCUP] = float(spring._cup)
@@ -4223,6 +4303,15 @@ class HystereticBatchRuntime:
 
     def _write_coulomb_object(self, index: int, spring: Any) -> None:
         row = self.coulomb_state[index]
+        if isinstance(spring, SpringElastic):
+            spring._cstress = float(row[CCSTRESS])
+            spring._cstrain = float(row[CCSTRAIN])
+            spring._tstress = float(row[CTSTRESS])
+            spring._tstrain = float(row[CTSTRAIN])
+            spring.k_tang = float(row[CKTANG])
+            spring.u = float(row[CU])
+            spring.f = float(row[CF])
+            return
         spring.fy[0] = float(row[CFY0])
         spring.fy[1] = float(row[CFY1])
         spring._cup = float(row[CCUP])
@@ -4324,6 +4413,11 @@ class HystereticBatchRuntime:
                 self.coulomb_params, self.coulomb_state,
                 self.coulomb_targets, self.coulomb_dns, self.coulomb_enabled,
             )
+            _evaluate_elastic_sliding_batch(
+                self.coulomb_state,
+                self.coulomb_targets,
+                self._elastic_sliding_indices,
+            )
         self._advance_unmanaged_sliding_springs()
         self._refresh_full_force_cache()
         # Keep the compact status values visible to Quad.ComputeDN and the
@@ -4392,6 +4486,11 @@ class HystereticBatchRuntime:
             _evaluate_initial_coulomb_batch(
                 self.coulomb_params, self.coulomb_state, self.coulomb_targets,
                 self.coulomb_dns, self.coulomb_enabled,
+            )
+            _evaluate_elastic_sliding_batch(
+                self.coulomb_state,
+                self.coulomb_targets,
+                self._elastic_sliding_indices,
             )
         self._advance_unmanaged_sliding_springs()
         self._refresh_full_force_cache()
@@ -4466,7 +4565,10 @@ class HystereticBatchRuntime:
 
     def _advance_unmanaged_sliding_springs(self) -> None:
         """Advance scalar sliding springs on otherwise managed interfaces."""
-        for record_index, record in enumerate(self.records):
+        if self._unmanaged_sliding_record_indices.size == 0:
+            return
+        for record_index in self._unmanaged_sliding_record_indices:
+            record = self.records[int(record_index)]
             interface = record.interface
             if interface.slid and int(self._slid_index[record_index]) < 0:
                 spring = interface.slid[0]
@@ -4487,7 +4589,11 @@ class HystereticBatchRuntime:
 
     def _add_unmanaged_sliding_forces(self) -> None:
         """Add linear/unsupported sliding forces omitted by the dense kernel."""
-        for record_index, record in enumerate(self.records):
+        if self._unmanaged_sliding_record_indices.size == 0:
+            return
+        for record_index in self._unmanaged_sliding_record_indices:
+            record_index = int(record_index)
+            record = self.records[record_index]
             interface = record.interface
             max_u = float(self._max_displacements[record_index])
             if interface.slid and int(self._slid_index[record_index]) < 0:
@@ -4733,6 +4839,9 @@ class HystereticBatchRuntime:
         if self.coulomb_springs:
             _commit_initial_coulomb_batch(
                 self.coulomb_state, self.coulomb_enabled
+            )
+            _commit_elastic_sliding_batch(
+                self.coulomb_state, self._elastic_sliding_indices
             )
             self.coulomb_targets[:] = self.coulomb_state[:, CU]
         self._sync_interface_status_to_objects()
