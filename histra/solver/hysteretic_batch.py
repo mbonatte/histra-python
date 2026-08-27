@@ -124,7 +124,9 @@ QPSUBLAW = 13
 QPBCACOVIC = 14
 QPFRACTURE_MODE = 15
 QPFRACTURE_ENERGY = 16
-QUAD_PARAM_SIZE = 17
+QPHYSTERETIC_TYPE = 17
+QPH = 18
+QUAD_PARAM_SIZE = 19
 
 # ``PhaseEnum(code)`` goes through EnumMeta on every call.  Dense batch rows
 # contain only the canonical C# phase codes 0..10, so reuse the singleton
@@ -143,6 +145,8 @@ def _phase_from_code(value: float | int) -> PhaseEnum:
 QUAD_SUBLAW_COULOMB = 0
 QUAD_SUBLAW_CACOVIC = 1
 QUAD_SUBLAW_ELASTIC = 2
+QUAD_HYSTERETIC_TAKEDA = 0
+QUAD_HYSTERETIC_INITIAL = 1
 QUAD_FRACTURE_NONE = 0
 QUAD_FRACTURE_FIXED = ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED
 QUAD_FRACTURE_INTERPOLATED = ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
@@ -2134,6 +2138,97 @@ if njit is not None:
             _quad_revert_trial(row)
             row[QTSTRAIN] = strain
             dstrain = strain - row[QCSTRAIN]
+            if int(par[QPHYSTERETIC_TYPE]) == QUAD_HYSTERETIC_INITIAL:
+                phase = int(row[QPHASE])
+                tphase = phase
+                cstress = row[QCSTRESS]
+                tstress = cstress
+                ktang = row[QKTANG_COMMITTED]
+                h = par[QPH]
+                k = par[QPK]
+                cohesion = par[QPCOHESION]
+                mu = par[QPMU]
+                e1p = par[QPE1P]
+                e2p = par[QPE2P]
+                tstress_normal = row[QTSTRESS_NORMAL]
+
+                if phase == RUPTURE:
+                    row[QTSTRESS] = cstress
+                    row[QTSTRESS_NORMAL] += dn
+                    row[QTENERGY] = row[QCENERGY]
+                    row[QTPHASE] = tphase
+                    row[QKTANG] = ktang
+                    continue
+
+                mom1p = _quad_tau_limit(par, tstress_normal)
+                c_hard = cohesion + h * abs(row[QCUP])
+                fy0 = max(0.0, c_hard + mu * tstress_normal) if cohesion != 0.0 else 0.0
+                rot1p = mom1p / e1p if e1p != 0.0 else 0.0
+                if e2p < 0.0:
+                    mom2p = 0.0
+                    rot2p = rot1p - mom1p / e2p
+                else:
+                    rot2p = rot1p
+                    mom2p = mom1p
+                rot3p = rot2p * 1.0001
+                mom1n = -mom1p
+                rot1n = -rot1p
+                mom2n = -mom2p
+                rot2n = -rot2p
+                rot3n = -rot3p
+                if phase == RUPTURE and mom1p == 0.0:
+                    row[QTSTRESS] = 0.0
+                    row[QKTANG] = 0.0
+                    row[QTSTRESS_NORMAL] += dn
+                    row[QTENERGY] = row[QCENERGY]
+                    continue
+
+                num3 = cstress + k * dstrain
+                if abs(num3) - fy0 > 0.0:
+                    if num3 > 0.0:
+                        tphase = PLASTIC_T
+                        sign = 1.0
+                    else:
+                        tphase = PLASTIC_C
+                        sign = -1.0
+                    num5 = (abs(num3) - fy0) / k if k != 0.0 else 0.0
+                    num6 = k * num5 / (h + k) if (h + k) != 0.0 else 0.0
+                    fy0 += h * num6
+                    tstress = fy0 * sign
+                    if tphase == PLASTIC_T and tstress < 0.0:
+                        tphase = RUPTURE
+                        tstress = 0.0
+                        ktang = 0.0
+                    elif tphase == PLASTIC_C and tstress > 0.0:
+                        tphase = RUPTURE
+                        tstress = 0.0
+                        ktang = 0.0
+                    else:
+                        row[QTUP] += num6
+                        ktang = e2p
+                else:
+                    tstress = num3
+                    ktang = k
+                    tphase = ELASTIC
+
+                row[QTENERGY] = row[QCENERGY] + 0.5 * (cstress + tstress) * dstrain
+                row[QTSTRESS_NORMAL] += dn
+                row[QFY0] = fy0
+                row[QFY1] = -fy0
+                row[QTSTRESS] = tstress
+                row[QTPHASE] = tphase
+                row[QKTANG] = ktang
+                row[QMOM1P] = mom1p
+                row[QMOM1N] = mom1n
+                row[QROT1P] = rot1p
+                row[QROT1N] = rot1n
+                row[QMOM2P] = mom2p
+                row[QMOM2N] = mom2n
+                row[QROT2P] = rot2p
+                row[QROT2N] = rot2p
+                row[QROT3P] = rot3p
+                row[QROT3N] = rot3n
+                continue
             tau = _quad_tau_limit(par, row[QTSTRESS_NORMAL])
             rot1p = tau / par[QPE1P] if par[QPE1P] != 0.0 else 0.0
             if int(par[QPFRACTURE_MODE]) in (
@@ -2313,6 +2408,18 @@ if njit is not None:
             if params[i, QPENABLED] == 0.0:
                 continue
             row = state[i]
+            if int(params[i, QPHYSTERETIC_TYPE]) == QUAD_HYSTERETIC_INITIAL:
+                row[QFY1] = -row[QFY0]
+                row[QCUP] = row[QTUP]
+                row[QCENERGY] = row[QTENERGY]
+                row[QCSTRESS_NORMAL_PREV] = row[QCSTRESS_NORMAL]
+                row[QCSTRESS] = row[QTSTRESS]
+                row[QCSTRAIN] = row[QTSTRAIN]
+                row[QCSTRESS_NORMAL] = row[QTSTRESS_NORMAL]
+                row[QDN] = 0.0
+                row[QKTANG_COMMITTED] = row[QKTANG]
+                row[QPHASE] = row[QTPHASE]
+                continue
             row[QFY1] = -row[QFY0]
             row[QCUP] = row[QTUP]
             row[QUMAX0] = row[QTROT_MAX]
@@ -3140,7 +3247,8 @@ class HystereticBatchRuntime:
             if not is_elastic and not isinstance(spring, SpringCoulomb03):
                 self.quad_rejection_reasons["unsupported_spring_type"] += 1
                 continue
-            if not is_elastic and spring.hysteretic_type != "Takeda":
+            htype = str(getattr(spring, "hysteretic_type", "Takeda")).casefold()
+            if not is_elastic and htype not in ("takeda", "initial", "0"):
                 self.quad_rejection_reasons["unsupported_hysteretic_type"] += 1
                 continue
             if is_elastic:
@@ -3283,9 +3391,17 @@ class HystereticBatchRuntime:
                 self.quad_params[index, QPENABLED] = float(bool(spring.is_on))
                 self.quad_params[index, QPK] = float(spring.k)
                 self.quad_params[index, QPSUBLAW] = QUAD_SUBLAW_ELASTIC
+                self.quad_params[index, QPHYSTERETIC_TYPE] = QUAD_HYSTERETIC_TAKEDA
+                self.quad_params[index, QPH] = 0.0
                 self._read_elastic_quad_object(index, spring)
             else:
-                self.quad_params[index, :] = (
+                htype = str(getattr(spring, "hysteretic_type", "Takeda")).casefold()
+                quad_htype = (
+                    QUAD_HYSTERETIC_INITIAL
+                    if htype in ("initial", "0")
+                    else QUAD_HYSTERETIC_TAKEDA
+                )
+                self.quad_params[index, :17] = (
                     float(spring.cohesion), float(spring.mu),
                     float(spring.e1p), float(spring.e2p), float(spring.e3p),
                     float(spring.e1n), float(spring.e2n), float(spring.e3n),
@@ -3295,6 +3411,8 @@ class HystereticBatchRuntime:
                     float(spring.bcacovic), float(quad_fracture_modes[index]),
                     float(quad_fracture_energies[index]),
                 )
+                self.quad_params[index, QPHYSTERETIC_TYPE] = quad_htype
+                self.quad_params[index, QPH] = float(getattr(spring, "h", 0.0))
                 self._read_quad_object(index, spring)
             self._quad_k[index] = float(spring.k)
         self.managed_springs.extend(quad.spring for quad in self.quad_records)

@@ -84,6 +84,49 @@ class TestQuadCoulombInitialDispatch(unittest.TestCase):
 
         self.assertAlmostEqual(spring.get_force(), 50.0)
 
+    def test_quad_initial_compiled_numba_batch(self):
+        """Verify compiled Numba _evaluate_quad_takeda_batch evaluates Initial Quad springs at full speed."""
+        from histra.solver.hysteretic_batch import (
+            _evaluate_quad_takeda_batch,
+            QUAD_PARAM_SIZE,
+            QUAD_STATE_SIZE,
+            QUAD_HYSTERETIC_INITIAL,
+            QPHYSTERETIC_TYPE,
+            QPENABLED,
+            QPK,
+            QPCOHESION,
+            QPMU,
+            QPE1P,
+            QPE2P,
+            QPH,
+            QTSTRESS,
+            QKTANG,
+            QTPHASE,
+        )
+        params = np.zeros((1, QUAD_PARAM_SIZE), dtype=np.float64)
+        state = np.zeros((1, QUAD_STATE_SIZE), dtype=np.float64)
+
+        params[0, QPENABLED] = 1.0
+        params[0, QPK] = 2000.0
+        params[0, QPCOHESION] = 100.0
+        params[0, QPMU] = 0.5
+        params[0, QPE1P] = 2000.0
+        params[0, QPE2P] = 0.0
+        params[0, QPHYSTERETIC_TYPE] = QUAD_HYSTERETIC_INITIAL
+        params[0, QPH] = 0.0
+
+        strains = np.array([0.02], dtype=np.float64)
+        dns = np.array([10.0], dtype=np.float64)
+        volumes = np.array([100.0], dtype=np.float64)
+        sigma_initial = np.array([0.0], dtype=np.float64)
+
+        _evaluate_quad_takeda_batch(params, state, strains, dns, volumes, sigma_initial)
+
+        # Elastic prediction: k * 0.02 = 40.0 <= cohesion (100.0) -> Elastic, stress = 40.0
+        self.assertAlmostEqual(state[0, QTSTRESS], 40.0)
+        self.assertAlmostEqual(state[0, QKTANG], 2000.0)
+        self.assertEqual(int(state[0, QTPHASE]), int(PhaseEnum.Elastic))
+
 
 if __name__ == "__main__":
     unittest.main()
