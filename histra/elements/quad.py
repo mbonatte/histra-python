@@ -1080,13 +1080,18 @@ class Quad:
             if int(getattr(state, "step", 0)) == 1:
                 self.sigma_initial = sigma
             strain = self.d_alfa_2d_diag() * self.status.u[6]
-            self.spring.set_trial_strain_takeda_diagonal_quad(
-                strain,
-                dN,
-                masonry=collections.materials.get(self.material_key),
-                volume=self.compute_volume(),
-                sigma=self.sigma_initial,
-            )
+            htype = str(getattr(self.spring, "hysteretic_type", "Takeda")).casefold()
+            if htype in ("initial", "0"):
+                self.spring.dn = dN
+                self.spring.set_trial_strain_initial(strain)
+            else:
+                self.spring.set_trial_strain_takeda_diagonal_quad(
+                    strain,
+                    dN,
+                    masonry=collections.materials.get(self.material_key),
+                    volume=self.compute_volume(),
+                    sigma=self.sigma_initial,
+                )
         else:
             self.spring.set_trial_strain(self.d_alfa_2d_diag() * self.status.u[6])
 
