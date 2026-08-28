@@ -51,6 +51,16 @@ equal or stronger parity evidence.
    and the C# diagonal elasto-plastic asymmetry. The complete suite is 438
    passed, 5 skipped and the same 12 expected safety warnings in 74.54 seconds,
    2.4% faster than the preceding slice and 32.2% faster than baseline.
+4. Scalar and NumPy-batched spring construction is now owned by
+   `preprocessing/spring_factory.py`. The stable private names remain identity
+   aliases in `prepare_model.py`, whose size is reduced again from 3,715 to
+   2,884 lines. Existing bit-exact scalar/batch differentials and independent
+   mutable-state tests pass through the new owner, and a dedicated architecture
+   test locks every compatibility alias. The 126-DOF preparation benchmark
+   preserved its topology and numerical error signature while measuring 0.533
+   seconds versus 0.569 seconds immediately before extraction. The complete
+   suite is 439 passed, 5 skipped and the same 12 warnings in 74.88 seconds,
+   statistically flat versus the previous gate and 31.9% faster than baseline.
 
 ## Dependency rules
 
@@ -140,8 +150,8 @@ Every slice must pass all applicable gates:
 1. Separate load assembly and complete C# coefficient coverage. **Complete.**
 2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
-   boundaries. **Constitutive mapping complete; remaining boundaries in
-   progress.**
+   boundaries. **Constitutive mapping and spring factory complete; geometry and
+   afference remain in progress.**
 4. Split compiled hysteretic kernels and runtime state ownership.
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
 6. Split large element and spring classes only after their scalar/compiled

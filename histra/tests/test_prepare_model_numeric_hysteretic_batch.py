@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 pm = importlib.import_module("histra.preprocessing.prepare_model")
-from histra.preprocessing.prepare_model import (
-    _HystereticLaw,
+from histra.preprocessing.constitutive_laws import HystereticLaw as _HystereticLaw
+from histra.preprocessing.spring_factory import (
     _configure_combined_hysteretic,
     _configure_combined_hysteretic_batch,
 )
