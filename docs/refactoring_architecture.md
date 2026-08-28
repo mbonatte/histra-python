@@ -94,6 +94,19 @@ equal or stronger parity evidence.
    bit-identical to the preceding commit; preparation measured 0.526 seconds.
    The complete suite is 444 passed, 5 skipped and the same 12 warnings in
    74.66 seconds—flat against the preceding gate.
+8. Masonry material lookup and constitutive-law selection/blending are now
+   owned by `preprocessing/material_selection.py`, with no dependency on
+   spring construction. `prepare_model.py` is reduced from 906 to 756 lines,
+   80.7% below its original size, and keeps identity re-exports locked by a
+   dedicated architecture test. New owner-level tests cover cache keys and
+   one-parse-per-material/orientation behavior, broad faces 4/5 selecting the
+   direction-3 law, interface/quad e1 alignment weighting in the orthotropic
+   blend, restraint parents resolving the Quad side, the primary runtime law
+   type surviving `PropOrthotropyParameter`, and explicit failure on missing
+   material keys. The full preprocessing benchmark output is bit-identical to
+   the preceding commit; preparation measured 0.536 seconds. The complete
+   suite is 454 passed, 5 skipped and the same 12 warnings in 75.12
+   seconds—flat against the preceding gate.
 
 ## Dependency rules
 

@@ -27,6 +27,7 @@ from histra.io.hr_loader import load_model
 pm = importlib.import_module("histra.preprocessing.prepare_model")
 aff = importlib.import_module("histra.preprocessing.afference")
 fg = importlib.import_module("histra.preprocessing.fibre_geometry")
+ms = importlib.import_module("histra.preprocessing.material_selection")
 ROOT = Path(__file__).resolve().parents[1]
 LOCKED_HRX = ROOT / "model-output" / "model.hrx"
 
@@ -540,10 +541,12 @@ def test_prepare_model_parses_each_material_law_once_per_orientation(
     model = load_model(LOCKED_HRX)
     calls = {"flex": 0, "sliding": 0, "diagonal": 0, "shear": 0}
 
-    original_flex = pm._flex_law
-    original_sliding = pm._sliding_law
-    original_diagonal = pm._diagonal_flex_law
-    original_shear = pm._shear_law
+    # The cached-law helpers resolve the law functions inside the
+    # material_selection owner; patching the facade would not intercept.
+    original_flex = ms._flex_law
+    original_sliding = ms._sliding_law
+    original_diagonal = ms._diagonal_flex_law
+    original_shear = ms._shear_law
 
     def counted_flex(*args, **kwargs):
         calls["flex"] = 1
@@ -561,10 +564,10 @@ def test_prepare_model_parses_each_material_law_once_per_orientation(
         calls["shear"] = 1
         return original_shear(*args, **kwargs)
 
-    monkeypatch.setattr(pm, "_flex_law", counted_flex)
-    monkeypatch.setattr(pm, "_sliding_law", counted_sliding)
-    monkeypatch.setattr(pm, "_diagonal_flex_law", counted_diagonal)
-    monkeypatch.setattr(pm, "_shear_law", counted_shear)
+    monkeypatch.setattr(ms, "_flex_law", counted_flex)
+    monkeypatch.setattr(ms, "_sliding_law", counted_sliding)
+    monkeypatch.setattr(ms, "_diagonal_flex_law", counted_diagonal)
+    monkeypatch.setattr(ms, "_shear_law", counted_shear)
 
     pm.prepare_model(model, force=True)
 
