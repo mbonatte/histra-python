@@ -244,6 +244,41 @@ campaign itself (one change at a time with strict parity reruns per §8.1.7)
 remains the explicitly open work item, together with the full 16-minute
 double-chain re-profile.
 
+### Benchmark 3 optimization campaign, first pass (2026-08-28)
+
+Baseline for comparison: commit `241be23` in a clean worktree, same machine,
+same 3-step `LiveLoad_1` chain: best of 3 walls **21.25 s**.
+
+1. **`LinearSystem.get_x_per_b` (committed `06a07e9`).** The C#
+   ``operator ^`` energy reduction was a 1,820-element Python scalar loop
+   (685 µs × 2,043 calls ≈ 2.2 s per 3 steps). Replaced by
+   `np.multiply` + `np.add.accumulate` — a strictly sequential
+   left-associated C loop with identical product and addition rounding —
+   **bit-identical over 20,000 randomized adversarial-magnitude differentials**
+   and 33× faster on the function. Locked by
+   `test_get_x_per_b_bitexact.py` (reduction-order contract).
+2. **Spring-state restart reads (committed `a42c7da`).** 57,548 rows per
+   chained restart: tuple rows + one column binding instead of per-row
+   `sqlite3.Row` key lookups; record values verified identical. 1.33 s →
+   1.14 s (−14%); the remainder is native SQLite and irreducible without
+   crossing module responsibilities.
+3. **UMFPACK iterative refinement: investigated and closed.** The native
+   solve costs 4.1 ms/call vs 0.69 ms with `Control[UMFPACK_IRSTEP]=0`
+   (5.97×), but results shift at ~1e-14. C# authority
+   (`ModelLibrary.MacroKernel.MacroMath/Matrix.cs::InitializeControl`) calls
+   `umfpack_di_defaults` + `Control[5]=3.0` with **no IRSTEP override** and
+   solves via `UMFPACK_A` — the reference solver itself performs the two
+   refinement steps. The cost is C#-parity behavior; changing it is a
+   numerical deviation and stays out of the default path.
+
+Result: best-of-3 chain wall **21.25 s → 18.58 s (−12.6%)** with bit-identical
+numerics; complete suite 491 passed, 5 skipped, same 12 warnings, 74.5 s.
+Post-campaign profile: ~93% of remaining step-loop time is compiled/native
+code (UMFPACK solve 8.5 s parity-locked; fused `update_domain` kernel 5.4 s
+inside njit). Further gains require optimizing inside the compiled hysteretic
+kernel (accuracy-critical; dedicated session with the full differential
+matrix) or the full 16-minute double-chain re-profile.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
