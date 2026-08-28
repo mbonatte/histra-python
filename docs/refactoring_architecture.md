@@ -419,6 +419,50 @@ data and by direct HRX/DB comparison:
    produced? If not, the fair P-Delta comparison requires restoring Gd=20.08
    (or re-running C#) before judging the −2.5 % LiveLoad offset.
 
+### §13.1 spring-state diff — divergence localized (2026-08-28, third pass)
+
+`step_analysis.txt` (the user's C# run log) pins the exact sequence: Modal_-1
+(spring initialization), all foundation interfaces → 146, `Vert`, the **first
+three rows** of foundation interfaces → 147, `scour_1`, `LiveLoad_1` until
+manually stopped. `benchmark.hrx` (the "no virgin" model, Gd 2.08) is the
+actually-run P-Delta model; `benchmark_virgin_noPDelta.hrx` (Gd 20.08) the
+No-P-Delta one — two deliberately different soil scenarios, not an edit
+artifact.
+
+Full per-spring diff of Vert step 5 (57,548 springs, Python vs C#
+`SpringStatesTmp`, with the log's mutation sequence replicated):
+
+- **C#: every spring is in phase 0 (Elastic)** after self-weight.
+- **Python: 4,110+ soil-interface transverse springs (material 146,
+  Exponential tensile curve) are cracked/yielded** — 3,133 Plastic_t plus
+  unload/reload states — while wall-interface and Quad springs largely agree
+  in phase.
+- Example (interface 100, cell 0, material 146): Python U=+1.73e-5
+  (TENSION, cracked, phase Plastic_t) versus C# U=−2.5e-9 (≈0, Elastic).
+  The spring stiffnesses themselves match exactly (a wall-interface sliding
+  spring shows k=557,500 in both), so the difference is the **local
+  deformation field across the foundation joints**: Python's joint cells see
+  tension/opening where C# sees ≈0.
+- The earlier "spring-type dispatch" hypothesis was disproven: C# type 1
+  (LinearElastic) = wall interfaces, type 8 (Hysteretic) = soil interfaces,
+  consistent with `SetFlexionalConstitutiveLaw` (Elastic-curve materials →
+  `ConstitutiveLawElastic`); Python's `_configure_hysteretic` replicates the
+  Elastic-curve case via `fy = k·1e8`, and the no-P-Delta model's exact Vert
+  match confirms spring construction is not the driver.
+
+Consequence chain: cracked foundation joints (Python) → load redistribution
+→ the −3.54 kN Vert reaction gap → different scour end-state → the
+displacement-controlled LiveLoad amplification and the −2.5 % P-Delta offset.
+The remaining root-cause question is narrow: **why do Python's foundation
+joint cells see tension at self-weight** — candidates are (a) the joint cell
+deformation extraction (`_local_increment`/afference mapping) versus C#
+`GetDisplOfCell`, (b) the joint's initial pre-compression state after
+`change_interface_materials` (C# `ReSetInterfaces` stage semantics), or (c)
+the soil material's own weight application. Next session: dump the 81-cell
+U field of interface 100 at Vert step 1 (before any nonlinearity) in both
+implementations — a step-1 linear-stage diff isolates extraction/geometry
+from state evolution.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
