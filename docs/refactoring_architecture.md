@@ -419,6 +419,31 @@ data and by direct HRX/DB comparison:
    produced? If not, the fair P-Delta comparison requires restoring Gd=20.08
    (or re-running C#) before judging the −2.5 % LiveLoad offset.
 
+### Log-exact sequence run (2026-08-28, fourth pass) — trajectories now parallel
+
+Replicating `step_analysis.txt` exactly (foundation→146, `Vert`, **first
+three rows**→147 = 18 interfaces — earlier runs wrongly used four rows/24,
+`scour_1` tol 1e-6, `LiveLoad_1` capped at C#'s manual stop of 131 steps,
+per-step data in `my_model/benchmark_3_Pdelta/chain_python_log_sequence.json`):
+
+| Chain | Vert final | scour final | LiveLoad vs C# over 131 steps |
+|---|---|---|---|
+| No-P-Delta | −125.03 (C# −123.71) | −125.01 (C# −124.20) | **−2.13 kN mean, constant (−0.77…−0.88 %)** |
+| P-Delta | −127.25 (C# −123.71) | −127.41 (C# −124.18) | **−6.71 kN mean, constant (−2.5…−3.0 %)** |
+
+Both chains complete all 131 steps with exit code 0. The No-P-Delta offset
+improved from a 20× step-1 divergence (wrong model, four-row scour) to a
+**near-constant −2.1 kN baseline shift with ±0.03 kN variation** — the
+incremental LiveLoad behavior is parallel to C#; the residual is carried in
+from the Vert/scour end states, consistent with the foundation-joint tension
+finding above. The P-Delta offset (constant −6.7 kN) carries the same
+baseline shift amplified by the P-Delta geometric term.
+
+The open root cause is unchanged and narrow: **why Python's foundation joint
+cells see tension at self-weight** (Vert step-1 linear-stage 81-cell U-field
+diff on interface 100, Python vs C#). Fixing that baseline should collapse
+both constant offsets simultaneously.
+
 ### §13.1 spring-state diff — divergence localized (2026-08-28, third pass)
 
 `step_analysis.txt` (the user's C# run log) pins the exact sequence: Modal_-1
