@@ -155,6 +155,16 @@ equal or stronger parity evidence.
     2,718 lines with identity re-exports covered by the kernel-owners
     architecture test. The complete suite is 464 passed, 5 skipped and the
     same 12 warnings in 76.05 seconds—flat against the preceding gate.
+13. The compiled kinematics and force-scatter kernel families now live in
+    `hysteretic_kernels/kinematics.py` and `hysteretic_kernels/scatter.py`
+    (global/local afference mapping, interface/quad kinematics preparation,
+    fixed-topology force scatter, force-by-DOF refresh and the max-u cache),
+    importing the dense column constants from the element-family owners.
+    `hysteretic_batch.py` is reduced from 2,718 to 2,508 lines, retaining the
+    fused domain-update orchestrator kernel, the runtime and the constructor.
+    All moved code is byte-identical with identity re-exports locked by the
+    architecture test. The complete suite is 465 passed, 5 skipped and the
+    same 12 warnings in 75.18 seconds—flat against the preceding gate.
 
 ## Dependency rules
 

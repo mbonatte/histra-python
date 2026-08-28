@@ -93,6 +93,29 @@ def test_hysteretic_batch_facade_reexports_topology_layer():
         assert getattr(batch, name) is getattr(topology, name)
 
 
+def test_hysteretic_batch_facade_reexports_kinematics_and_scatter_kernels():
+    batch = importlib.import_module("histra.solver.hysteretic_batch")
+    kinematics = importlib.import_module("histra.solver.hysteretic_kernels.kinematics")
+    scatter = importlib.import_module("histra.solver.hysteretic_kernels.scatter")
+    kin_names = (
+        "_map_global_to_local",
+        "_prepare_interface_kinematics",
+        "_map_and_prepare_interface_kinematics",
+        "_prepare_quad_kinematics",
+    )
+    scatter_names = (
+        "_scatter_local_forces",
+        "_refresh_global_resisting_force",
+        "_refresh_global_resisting_force_by_dof",
+        "_refresh_max_u_cache",
+    )
+
+    for name in kin_names:
+        assert getattr(batch, name) is getattr(kinematics, name)
+    for name in scatter_names:
+        assert getattr(batch, name) is getattr(scatter, name)
+
+
 def test_kernel_owners_have_no_reverse_dependency_on_hysteretic_batch():
     for module in (interface_coulomb, quad_takeda):
         source = importlib.util.find_spec(module.__name__).origin

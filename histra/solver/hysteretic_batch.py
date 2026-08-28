@@ -226,6 +226,18 @@ from histra.solver.hysteretic_topology import (
     _extract_spring_target,
     _extract_spring_trial,
 )
+from histra.solver.hysteretic_kernels.kinematics import (
+    _map_and_prepare_interface_kinematics,
+    _map_global_to_local,
+    _prepare_interface_kinematics,
+    _prepare_quad_kinematics,
+)
+from histra.solver.hysteretic_kernels.scatter import (
+    _refresh_global_resisting_force,
+    _refresh_global_resisting_force_by_dof,
+    _refresh_max_u_cache,
+    _scatter_local_forces,
+)
 
 # ``PhaseEnum(code)`` goes through EnumMeta on every call.  Dense batch rows
 # contain only the canonical C# phase codes 0..10, so reuse the singleton
@@ -244,219 +256,6 @@ def _phase_from_code(value: float | int) -> PhaseEnum:
 
 
 if njit is not None:
-    @njit(cache=True, nogil=True)
-    def _map_global_to_local(x, offsets, gdls, coefficients, out):
-        flat = out.reshape(out.size)
-        for local_index in range(flat.size):
-            total = 0.0
-            for pair_index in range(offsets[local_index], offsets[local_index + 1]):
-                gdl = gdls[pair_index]
-                if 0 <= gdl < x.size:
-                    total += x[gdl] * coefficients[pair_index]
-            flat[local_index] = total
-
-    @njit(cache=True, nogil=True)
-    def _scatter_local_forces(local_forces, offsets, gdls, coefficients, global_force):
-        flat = local_forces.reshape(local_forces.size)
-        for local_index in range(flat.size):
-            force = flat[local_index]
-            if force == 0.0:
-                continue
-            for pair_index in range(offsets[local_index], offsets[local_index + 1]):
-                gdl = gdls[pair_index]
-                if 0 <= gdl < global_force.size:
-                    global_force[gdl] -= force * coefficients[pair_index]
-
-    @njit(cache=True, nogil=True)
-    def _refresh_global_resisting_force(
-        quad_d_alfa, quad_state, quad_forces,
-        quad_offsets, quad_gdls, quad_coefficients,
-        interface_forces, interface_offsets, interface_gdls,
-        interface_coefficients, global_force,
-    ):
-        global_force[:] = 0.0
-        for i in range(quad_forces.shape[0]):
-            quad_forces[i, 0] = quad_d_alfa[i] * quad_state[i, QTSTRESS]
-        _scatter_local_forces(
-            interface_forces, interface_offsets, interface_gdls,
-            interface_coefficients, global_force,
-        )
-        _scatter_local_forces(
-            quad_forces, quad_offsets, quad_gdls, quad_coefficients,
-            global_force,
-        )
-
-    @njit(cache=True, nogil=True, parallel=True)
-    def _refresh_global_resisting_force_by_dof(
-        quad_d_alfa, quad_state, quad_forces, interface_forces,
-        global_offsets, force_indices, force_coefficients,
-        interface_force_size, global_force,
-    ):
-        """Assemble independent global DOFs with C#-ordered afferences.
-
-        ``force_indices`` is prepared once in the same Interface-then-Quad,
-        local-DOF, afference order used by ``_scatter_local_forces``.  Each
-        global DOF can therefore be reduced independently without changing
-        the order of any floating-point additions.
-        """
-        for i in range(quad_forces.shape[0]):
-            quad_forces[i, 0] = quad_d_alfa[i] * quad_state[i, QTSTRESS]
-
-        interface_flat = interface_forces.reshape(interface_forces.size)
-        quad_flat = quad_forces.reshape(quad_forces.size)
-        for gdl in prange(global_force.size):
-            total = 0.0
-            for position in range(global_offsets[gdl], global_offsets[gdl + 1]):
-                force_index = force_indices[position]
-                if force_index < interface_force_size:
-                    force = interface_flat[force_index]
-                else:
-                    force = quad_flat[force_index - interface_force_size]
-                if force != 0.0:
-                    total -= force * force_coefficients[position]
-            global_force[gdl] = total
-
-    @njit(cache=True, nogil=True)
-    def _refresh_max_u_cache(quad_local_u, interface_max_u, cache):
-        quad_value = 0.0
-        quad_index = -1
-        kind = 0
-        for i in range(quad_local_u.shape[0]):
-            for j in range(quad_local_u.shape[1]):
-                candidate = abs(quad_local_u[i, j])
-                if candidate > quad_value:
-                    quad_value = candidate
-                    quad_index = i
-                    kind = 1
-        value = quad_value
-        index = quad_index
-        for i in range(interface_max_u.size):
-            candidate = abs(interface_max_u[i])
-            if candidate > value:
-                value = candidate
-                index = i
-                kind = 2
-        cache[0] = value
-        cache[1] = index
-        cache[2] = kind
-        cache[3] = quad_value
-        cache[4] = quad_index
-
-    @njit(cache=True, nogil=True)
-    def _prepare_interface_kinematics(
-        local_du, local_u, lengths, constrained, d0s, d1s,
-        nums, nums2, delta_flex, pending,
-    ):
-        for i in range(local_du.shape[0]):
-            for j in range(local_du.shape[1]):
-                local_u[i, j] += local_du[i, j]
-            if not constrained[i]:
-                nums[i] = local_du[i, 3] - local_du[i, 0]
-                nums2[i] = local_du[i, 2] - local_du[i, 1]
-            else:
-                half_length = 0.5 * lengths[i]
-                nums[i] = local_du[i, 3] - (local_du[i, 0] - local_du[i, 1] * half_length)
-                nums2[i] = local_du[i, 2] - (local_du[i, 0] + local_du[i, 1] * half_length)
-            delta_flex[i] = local_du[i, 5] - local_du[i, 4]
-            d0 = d0s[i]
-            d1 = d1s[i]
-            pending[i, 0] = local_du[i, d0] - local_du[i, d0 + 1]
-            pending[i, 1] = local_du[i, d0 + d1] - local_du[i, d0 + d1 + 2]
-            pending[i, 2] = local_du[i, d0 + d1 + 1] - local_du[i, d0 + d1 + 3]
-
-    @njit(cache=True, nogil=True, parallel=True)
-    def _map_and_prepare_interface_kinematics(
-        x, offsets, gdls, coefficients, local_du, local_u, lengths,
-        constrained, d0s, d1s, nums, nums2, delta_flex, pending,
-    ):
-        """Fuse exact afference mapping with per-interface kinematics."""
-        local_width = local_du.shape[1]
-        for i in prange(local_du.shape[0]):
-            flat_base = i * local_width
-            for j in range(local_width):
-                local_index = flat_base + j
-                total = 0.0
-                for pair_index in range(
-                    offsets[local_index], offsets[local_index + 1]
-                ):
-                    gdl = gdls[pair_index]
-                    if 0 <= gdl < x.size:
-                        total += x[gdl] * coefficients[pair_index]
-                local_du[i, j] = total
-                local_u[i, j] += total
-
-            if not constrained[i]:
-                nums[i] = local_du[i, 3] - local_du[i, 0]
-                nums2[i] = local_du[i, 2] - local_du[i, 1]
-            else:
-                half_length = 0.5 * lengths[i]
-                nums[i] = local_du[i, 3] - (
-                    local_du[i, 0] - local_du[i, 1] * half_length
-                )
-                nums2[i] = local_du[i, 2] - (
-                    local_du[i, 0] + local_du[i, 1] * half_length
-                )
-            delta_flex[i] = local_du[i, 5] - local_du[i, 4]
-            d0 = d0s[i]
-            d1 = d1s[i]
-            pending[i, 0] = local_du[i, d0] - local_du[i, d0 + 1]
-            pending[i, 1] = (
-                local_du[i, d0 + d1] - local_du[i, d0 + d1 + 2]
-            )
-            pending[i, 2] = (
-                local_du[i, d0 + d1 + 1] - local_du[i, d0 + d1 + 3]
-            )
-
-    @njit(cache=True, nogil=True)
-    def _prepare_quad_kinematics(
-        local_du, local_u, edge_offsets, edge_records, edge_areas,
-        interface_normal_increments, interface_committed_forces,
-        d_alfa, step, sigma_initial, strains, dns, quad_params,
-    ):
-        for q in range(local_du.shape[0]):
-            for j in range(local_du.shape[1]):
-                local_u[q, j] += local_du[q, j]
-            if int(quad_params[q, QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
-                dns[q] = 0.0
-                strains[q] = d_alfa[q] * local_u[q, 6]
-                continue
-            normal0 = 0.0
-            normal1 = 0.0
-            normal2 = 0.0
-            normal3 = 0.0
-            stress0 = 0.0
-            stress1 = 0.0
-            stress2 = 0.0
-            stress3 = 0.0
-            base = q * 4
-            for edge in range(4):
-                normal = 0.0
-                force = 0.0
-                edge_index = base + edge
-                for k in range(edge_offsets[edge_index], edge_offsets[edge_index + 1]):
-                    record_index = edge_records[k]
-                    normal += interface_normal_increments[record_index]
-                    force += interface_committed_forces[record_index]
-                area = edge_areas[q, edge]
-                stress = force / area if area > 0.0 else 0.0
-                if edge == 0:
-                    normal0 = normal
-                    stress0 = stress
-                elif edge == 1:
-                    normal1 = normal
-                    stress1 = stress
-                elif edge == 2:
-                    normal2 = normal
-                    stress2 = stress
-                else:
-                    normal3 = normal
-                    stress3 = stress
-            sigma = 0.5 * (stress0 + stress2) + 0.5 * (stress1 + stress3)
-            dn = 0.5 * (normal0 + normal2) + 0.5 * (normal1 + normal3)
-            if step == 1:
-                sigma_initial[q] = sigma
-            dns[q] = dn
-            strains[q] = d_alfa[q] * local_u[q, 6]
 
     @njit(cache=True, nogil=True)
     def _managed_elastic_energy(transverse_k, transverse_trial, quad_k, quad_state):
@@ -561,14 +360,6 @@ if njit is not None:
         _refresh_max_u_cache(quad_local_u, max_displacements, max_u_cache)
 
 else:
-    _map_global_to_local = None
-    _scatter_local_forces = None
-    _refresh_global_resisting_force = None
-    _refresh_global_resisting_force_by_dof = None
-    _refresh_max_u_cache = None
-    _prepare_interface_kinematics = None
-    _map_and_prepare_interface_kinematics = None
-    _prepare_quad_kinematics = None
     _managed_elastic_energy = None
     _update_domain_batch = None
 
