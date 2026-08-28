@@ -202,8 +202,9 @@ def compute_total_reaction(model: Model) -> ReactionResult:
         if not interface.interfaccia_vincolata_computed():
             continue
         if runtime is not None and runtime.manages(interface):
-            runtime.sync_interface_trial_to_objects(interface)
-        local = _interface_local_resultant(interface)
+            local = runtime.resultant_force_for(interface)
+        else:
+            local = _interface_local_resultant(interface)
         e1 = np.asarray(interface.reference_e1, dtype=np.float32)
         e2 = np.asarray(interface.reference_e2, dtype=np.float32)
         e3 = np.asarray(interface.reference_e3, dtype=np.float32)
