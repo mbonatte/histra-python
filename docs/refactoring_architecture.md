@@ -362,6 +362,63 @@ diff `SpringStatesTmp` phase codes for scour_1 step 5 (C# DB vs Python end
 state) to name the springs whose phases differ, and study the C#
 material-mutation + P-Delta assembly semantics for those two paths.
 
+### §13.1 deep dive into the C# semantics (2026-08-28, second pass)
+
+Additional hard evidence, obtained by rerunning the chains under controlled
+data and by direct HRX/DB comparison:
+
+1. **The No-P-Delta "20× divergence" was a model-selection artifact.** The
+   first reprofile ran the chain on `benchmark_virgin.hrx`, which has **0
+   interfaces** (a degenerate variant with `target=2.0`). The correct model is
+   `benchmark_virgin_noPDelta.hrx` (682 interfaces, authored `target=20`),
+   whose `.Results` holds the 131-step C# chain. The LiveLoad machinery is
+   exact: from the C# scour restart state, Python reproduces C# step 1
+   bit-near-exactly (`test_pdelta`).
+2. **The two HRX models differ in one material property**: soil material 146
+   has `Gd=20.08` in `benchmark_virgin_noPDelta.hrx` and `Gd=2.08` in
+   `benchmark.hrx` (10× softer soil). All other materials, loads,
+   combinations, templates and counts are identical.
+3. **C# produced nearly identical trajectories for both models** (Vert both
+   −123.71122; scour_1 step 1 −75.7334 vs −75.7481; LiveLoad_1 step 1
+   −241.6481 vs −241.6598) — i.e. at C# run time the effective data was
+   essentially identical, and the small residual differences are consistent
+   with the Gd difference. This strongly suggests **the HRX was edited
+   (Gd 20.08→2.08) after the C# runs**, so current-HRX Python vs stored C#
+   comparisons are confounded for the P-Delta model.
+4. **Python Vert on the P-Delta model**: −127.25 (with the harness's
+   foundation→146 pre-mutation), −124.99 (no pre-mutation), −124.61 (pre-
+   mutation **and** Gd patched to 20.08) — versus C# −123.71122. Gd explains
+   the largest share; the residual ≈0.9 kN tracks the **pre-mutation scope**
+   (the harness mutates all 61 foundation interfaces to 146, while the HRX
+   pre-marks only 36) — i.e. the mutation scope/timing semantics, not the
+   P-Delta algorithm (Vert has `pdelta_effect='None'` in both models, so the
+   P-Delta term is inactive there).
+5. **The C# scour_1 dip-and-recover pattern** (−75.7 → −125.8 → −124.2:
+   full soil-weight change at step 1, overshoot, relaxation) is the signature
+   of C#'s staged `ReSetInterfaces(Collections, Analysis, Stage)` +
+   `StageDefinition.OperationEnum.ChangeMaterial` flow combined with the
+   LoadControl re-ramp of combination 6 — Python's session applies the
+   mutation before the analysis and keeps the self-equilibrated baseline, so
+   the transient never appears. `ModelLoadOperations.ComputePDeltaLoads`
+   itself (line/point loads + interface `Status.Forces` moments about the
+   displaced centroid, `UMFPACK_A`-style assembly) is faithfully mirrored by
+   `compute_and_assemble_pdelta_load`.
+
+**Remaining C#-code questions for the next session** (precise, answerable):
+
+1. When exactly does C# apply a stage's `ChangeMaterial` relative to the
+   analysis steps — before step 1 (full weight change in one step, matching
+   the −47.98 kN dip) or ramped by the load function?
+2. What is the exact C# `LoadControl` re-ramp semantics for a chained
+   analysis: `SetFextEqualToFint` baseline plus function-scaled combination
+   loads, or full re-application from zero?
+3. Which interfaces does C#'s Vert stage mutate (all foundation contacts vs
+   the HRX-pre-marked 36), and does `preserve_committed_state` have a C#
+   equivalent for `Vert` (a virgin analysis)?
+4. Was `benchmark.hrx`'s `Gd=2.08` present when the stored C# results were
+   produced? If not, the fair P-Delta comparison requires restoring Gd=20.08
+   (or re-running C#) before judging the −2.5 % LiveLoad offset.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
