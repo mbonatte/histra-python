@@ -68,78 +68,154 @@ from histra.solver.hysteretic_kernels.transverse import (
     _pos_tangent_typed,
 )
 
-# Dense state columns for interface SpringCoulomb03 objects using the C#
-# ``Initial`` law.  Keeping the state in one contiguous array avoids hundreds
-# of thousands of Python attribute reads/writes per Newton correction.
-CFY0 = 0
-CFY1 = 1
-CCUP = 2
-CCSTRESS = 3
-CCSTRAIN = 4
-CCSTRESS_NORMAL = 5
-CCSTRESS_NORMAL_PREV = 6
-CCCONTACT_AREA = 7
-CCENERGY = 8
-CCPHASE = 9
-CTUP = 10
-CTSTRESS = 11
-CTSTRAIN = 12
-CTSTRESS_NORMAL = 13
-CTCONTACT_AREA = 14
-CTENERGY = 15
-CTPHASE = 16
-CKTANG = 17
-CMOM1P = 18
-CROT1P = 19
-CMOM2P = 20
-CROT2P = 21
-CMOM1N = 22
-CROT1N = 23
-CMOM2N = 24
-CROT2N = 25
-CROT3N = 26
-CROT3P = 27
-CU = 28
-CF = 29
-CKTANG_COMMITTED = 30
-CDN = 31
-COULOMB_STATE_SIZE = 32
+from histra.solver.hysteretic_kernels.interface_coulomb import (
+    CCCONTACT_AREA,
+    CCENERGY,
+    CCPHASE,
+    CCSTRAIN,
+    CCSTRESS,
+    CCSTRESS_NORMAL,
+    CCSTRESS_NORMAL_PREV,
+    CCUP,
+    CDN,
+    CF,
+    CFY0,
+    CFY1,
+    CKTANG,
+    CKTANG_COMMITTED,
+    CMOM1N,
+    CMOM1P,
+    CMOM2N,
+    CMOM2P,
+    CROT1N,
+    CROT1P,
+    CROT2N,
+    CROT2P,
+    CROT3N,
+    CROT3P,
+    COULOMB_STATE_SIZE,
+    CTCONTACT_AREA,
+    CTENERGY,
+    CTPHASE,
+    CTSTRAIN,
+    CTSTRESS,
+    CTSTRESS_NORMAL,
+    CTUP,
+    CU,
+    _advance_interface_coulomb_targets,
+    _assemble_full_interface_forces,
+    _commit_elastic_sliding_batch,
+    _commit_initial_coulomb_batch,
+    _evaluate_elastic_sliding_batch,
+    _evaluate_initial_coulomb_batch,
+)
 
-# Dense state for Quad diagonal SpringCoulomb03 (Takeda, Coulomb law, no
-# fracture-energy material callback).  The layout deliberately contains both
-# committed and trial values because rejected Newton/ArcLength trials must be
-# reversible without touching thousands of Python attributes.
-QFY0, QFY1 = 0, 1
-QUMAX0, QUMAX1 = 2, 3
-QCROT_PU, QCROT_NU, QCROT_LIM_PU, QCROT_LIM_NU = 4, 5, 6, 7
-QCROT_YP, QCROT_YN, QCMOM_MAX, QCMOM_MIN = 8, 9, 10, 11
-QCLOAD, QCPLAST_T, QCPLAST_C, QCUNLOAD_T, QCUNLOAD_C = 12, 13, 14, 15, 16
-QCUP, QCENERGY, QCSTRESS, QCSTRAIN = 17, 18, 19, 20
-QCSTRESS_NORMAL, QCSTRESS_NORMAL_PREV, QCCONTACT = 21, 22, 23
-QPHASE, QTANG_RELOAD_T, QTANG_RELOAD_C, QKTANG_COMMITTED = 24, 25, 26, 27
-QTROT_MAX, QTROT_MIN, QTROT_PU, QTROT_NU = 28, 29, 30, 31
-QTROT_LIM_PU, QTROT_LIM_NU, QTROT_YP, QTROT_YN = 32, 33, 34, 35
-QTMOM_MAX, QTMOM_MIN, QTLOAD = 36, 37, 38
-QTPLAST_T, QTPLAST_C, QTUNLOAD_T, QTUNLOAD_C = 39, 40, 41, 42
-QTENERGY, QTUP, QTSTRESS, QTSTRAIN = 43, 44, 45, 46
-QTSTRESS_NORMAL, QTCONTACT, QTPHASE, QKTANG = 47, 48, 49, 50
-QMOM1P, QROT1P, QMOM2P, QROT2P, QMOM3P, QROT3P = 51, 52, 53, 54, 55, 56
-QMOM1N, QROT1N, QMOM2N, QROT2N, QMOM3N, QROT3N = 57, 58, 59, 60, 61, 62
-QUR0, QUR1, QDN = 63, 64, 65
-QUAD_STATE_SIZE = 66
-
-QPCOHESION, QPMU = 0, 1
-QPE1P, QPE2P, QPE3P = 2, 3, 4
-QPE1N, QPE2N, QPE3N = 5, 6, 7
-QPEUP, QPEUN, QPPLASTIC_STRAIN, QPENABLED = 8, 9, 10, 11
-QPK = 12
-QPSUBLAW = 13
-QPBCACOVIC = 14
-QPFRACTURE_MODE = 15
-QPFRACTURE_ENERGY = 16
-QPHYSTERETIC_TYPE = 17
-QPH = 18
-QUAD_PARAM_SIZE = 19
+from histra.solver.hysteretic_kernels.quad_takeda import (
+    QCCONTACT,
+    QCENERGY,
+    QCLOAD,
+    QCMOM_MAX,
+    QCMOM_MIN,
+    QCPLAST_C,
+    QCPLAST_T,
+    QCROT_LIM_NU,
+    QCROT_LIM_PU,
+    QCROT_NU,
+    QCROT_PU,
+    QCROT_YP,
+    QCROT_YN,
+    QCSTRAIN,
+    QCSTRESS,
+    QCSTRESS_NORMAL,
+    QCSTRESS_NORMAL_PREV,
+    QCUNLOAD_C,
+    QCUNLOAD_T,
+    QCUP,
+    QDN,
+    QFY0,
+    QFY1,
+    QKTANG,
+    QKTANG_COMMITTED,
+    QMOM1N,
+    QMOM1P,
+    QMOM2N,
+    QMOM2P,
+    QMOM3N,
+    QMOM3P,
+    QPBCACOVIC,
+    QPCOHESION,
+    QPENABLED,
+    QPE1N,
+    QPE1P,
+    QPE2N,
+    QPE2P,
+    QPE3N,
+    QPE3P,
+    QPEUP,
+    QPEUN,
+    QPFRACTURE_ENERGY,
+    QPFRACTURE_MODE,
+    QPH,
+    QPHASE,
+    QPHYSTERETIC_TYPE,
+    QPK,
+    QPPLASTIC_STRAIN,
+    QPMU,
+    QPSUBLAW,
+    QROT1N,
+    QROT1P,
+    QROT2N,
+    QROT2P,
+    QROT3N,
+    QROT3P,
+    QTANG_RELOAD_C,
+    QTANG_RELOAD_T,
+    QTCONTACT,
+    QTENERGY,
+    QTLOAD,
+    QTMOM_MAX,
+    QTMOM_MIN,
+    QTPHASE,
+    QTPLAST_C,
+    QTPLAST_T,
+    QTROT_LIM_NU,
+    QTROT_LIM_PU,
+    QTROT_MAX,
+    QTROT_MIN,
+    QTROT_NU,
+    QTROT_PU,
+    QTROT_YP,
+    QTROT_YN,
+    QTSTRAIN,
+    QTSTRESS,
+    QTSTRESS_NORMAL,
+    QTUNLOAD_C,
+    QTUNLOAD_T,
+    QTUP,
+    QUAD_FRACTURE_FIXED,
+    QUAD_FRACTURE_INTERPOLATED,
+    QUAD_FRACTURE_NONE,
+    QUAD_HYSTERETIC_INITIAL,
+    QUAD_HYSTERETIC_TAKEDA,
+    QUAD_PARAM_SIZE,
+    QUAD_SUBLAW_CACOVIC,
+    QUAD_SUBLAW_COULOMB,
+    QUAD_SUBLAW_ELASTIC,
+    QUAD_STATE_SIZE,
+    QUMAX0,
+    QUMAX1,
+    QUR0,
+    QUR1,
+    _commit_quad_takeda_batch,
+    _evaluate_quad_takeda_batch,
+    _quad_interpolated_shear_energy,
+    _quad_shear_ultimate_strain,
+    _quad_tau_limit,
+    _quad_tangent_reload_c,
+    _quad_tangent_reload_t,
+    _quad_yield_compression,
+    _quad_yield_tension,
+)
 
 # ``PhaseEnum(code)`` goes through EnumMeta on every call.  Dense batch rows
 # contain only the canonical C# phase codes 0..10, so reuse the singleton
@@ -155,56 +231,9 @@ def _phase_from_code(value: float | int) -> PhaseEnum:
     return PhaseEnum(code)
 
 
-QUAD_SUBLAW_COULOMB = 0
-QUAD_SUBLAW_CACOVIC = 1
-QUAD_SUBLAW_ELASTIC = 2
-QUAD_HYSTERETIC_TAKEDA = 0
-QUAD_HYSTERETIC_INITIAL = 1
-QUAD_FRACTURE_NONE = 0
-QUAD_FRACTURE_FIXED = ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED
-QUAD_FRACTURE_INTERPOLATED = ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
 
 
 if njit is not None:
-    @njit(cache=True, inline="always")
-    def _quad_tau_limit(par, normal_stress):
-        cohesion = par[QPCOHESION]
-        if int(par[QPSUBLAW]) == QUAD_SUBLAW_CACOVIC:
-            value = 1.0 + normal_stress / (1.5 * cohesion)
-            if value < 0.0:
-                return 0.0
-            return 1.5 / par[QPBCACOVIC] * cohesion * np.sqrt(value)
-        value = cohesion + par[QPMU] * normal_stress
-        return value if value > 0.0 else 0.0
-
-    @njit(cache=True, inline="always")
-    def _quad_interpolated_shear_energy(sigma):
-        # C# MasonryMaterial.GetShearUltimateStrain interpolates at -sigma.
-        x = -sigma
-        if x <= 0.05:
-            return 0.0012385
-        if x >= 0.07:
-            return 0.0001699
-        if x <= 0.055:
-            return 0.0012385 + (0.0007775 - 0.0012385) * (x - 0.05) / 0.005
-        if x <= 0.06:
-            return 0.0007775 + (0.0004402 - 0.0007775) * (x - 0.055) / 0.005
-        return 0.0004402 + (0.0001699 - 0.0004402) * (x - 0.06) / 0.01
-
-    @njit(cache=True, inline="always")
-    def _quad_shear_ultimate_strain(par, f_limit, yield_strain, volume, sigma):
-        mode = int(par[QPFRACTURE_MODE])
-        if mode == QUAD_FRACTURE_INTERPOLATED:
-            energy = _quad_interpolated_shear_energy(sigma)
-        else:
-            energy = par[QPFRACTURE_ENERGY]
-        if f_limit == 0.0:
-            numerator = energy * volume
-            if numerator == 0.0:
-                return np.nan
-            return np.inf if numerator > 0.0 else -np.inf
-        return energy * volume / f_limit + 0.5 * yield_strain
-
     @njit(cache=True, nogil=True)
     def _map_global_to_local(x, offsets, gdls, coefficients, out):
         flat = out.reshape(out.size)
@@ -369,215 +398,6 @@ if njit is not None:
             )
 
     @njit(cache=True, nogil=True)
-    def _advance_interface_coulomb_targets(
-        pending, dist_for, normal_increments, slid_index, oop0_index, oop1_index,
-        targets, dns,
-    ):
-        for i in range(pending.shape[0]):
-            s = slid_index[i]
-            if s >= 0:
-                targets[s] += pending[i, 0]
-                dns[s] = normal_increments[i]
-            a = oop0_index[i]
-            b = oop1_index[i]
-            if a >= 0 and b >= 0:
-                di = dist_for[i, 0]
-                dj = dist_for[i, 1]
-                dua = pending[i, 1]
-                dub = pending[i, 2]
-                targets[a] += dua + (dub - dua) * di
-                targets[b] += dua + (dub - dua) * dj
-                dn = 0.5 * normal_increments[i]
-                dns[a] = dn
-                dns[b] = dn
-
-    @njit(cache=True, nogil=True, parallel=True)
-    def _evaluate_initial_coulomb_batch(params, state, targets, dns, enabled):
-        """Exact C# ``setTrialStrainInitial`` for interface Coulomb springs.
-
-        The accelerated path is deliberately limited to the model's supported
-        no-contact-area Coulomb law.  Other variants stay on the scalar path.
-        """
-        for i in prange(targets.size):
-            if not enabled[i]:
-                continue
-            k = params[i, 0]
-            h = params[i, 1]
-            cohesion = params[i, 2]
-            mu = params[i, 3]
-            area = params[i, 4]
-            e1p = params[i, 5]
-            e2p = params[i, 6]
-
-            # C# RevertToLastCommit subset used by the Initial law.
-            fy0 = -state[i, CFY1]
-            tup = state[i, CCUP]
-            cstress = state[i, CCSTRESS]
-            cstrain = state[i, CCSTRAIN]
-            tstress_normal = state[i, CCSTRESS_NORMAL]
-            tcontact_area = state[i, CCCONTACT_AREA]
-            tenergy = state[i, CCENERGY]
-            phase = int(state[i, CCPHASE])
-            tphase = phase
-            tstress = cstress
-            tstrain = targets[i]
-            ktang = state[i, CKTANG]
-            dstrain = tstrain - cstrain
-
-            if phase == RUPTURE:
-                tstress = cstress
-                tstress_normal += dns[i]
-                state[i, CFY0] = fy0
-                state[i, CTUP] = tup
-                state[i, CTSTRESS] = tstress
-                state[i, CTSTRAIN] = tstrain
-                state[i, CTSTRESS_NORMAL] = tstress_normal
-                state[i, CTCONTACT_AREA] = tcontact_area
-                state[i, CTENERGY] = tenergy
-                state[i, CTPHASE] = tphase
-                state[i, CKTANG] = ktang
-                state[i, CU] = tstrain
-                state[i, CF] = tstress
-                state[i, CDN] = dns[i]
-                continue
-
-            tcontact_area = area
-            mom1p = cohesion + mu * tstress_normal
-            if mom1p < 0.0:
-                mom1p = 0.0
-            c_hard = cohesion + h * abs(state[i, CCUP])
-            if cohesion != 0.0:
-                fy0 = c_hard + mu * tstress_normal
-            else:
-                fy0 = 0.0
-            if fy0 < 0.0:
-                fy0 = 0.0
-
-            rot1p = mom1p / e1p if e1p != 0.0 else 0.0
-            rot2p = state[i, CROT2P]
-            rot3p = state[i, CROT3P]
-            if e2p < 0.0:
-                mom2p = 0.0
-                rot2p = rot1p - mom1p / e2p
-            else:
-                if rot2p < rot1p:
-                    rot2p = rot1p
-                    rot3p = rot2p * 1.0001
-                mom2p = mom1p + e2p * (rot2p - rot1p)
-            mom1n = -mom1p
-            rot1n = -rot1p
-            mom2n = -mom2p
-            rot2n = -rot2p
-            rot3n = -rot3p
-
-            num3 = cstress + k * dstrain
-            if abs(num3) - fy0 > 0.0:
-                if num3 > 0.0:
-                    tphase = PLASTIC_T
-                    sign = 1.0
-                else:
-                    tphase = PLASTIC_C
-                    sign = -1.0
-                num5 = (abs(num3) - fy0) / k
-                num6 = k * num5 / (h + k)
-                fy0 += h * num6
-                tstress = fy0 * sign
-                if tphase == PLASTIC_T and tstress < 0.0:
-                    tphase = RUPTURE
-                    tstress = 0.0
-                    ktang = 0.0
-                elif tphase == PLASTIC_C and tstress > 0.0:
-                    tphase = RUPTURE
-                    tstress = 0.0
-                    ktang = 0.0
-                else:
-                    tup += num6
-                    ktang = e2p
-            else:
-                tstress = num3
-                ktang = k
-                tphase = ELASTIC
-
-            tenergy = state[i, CCENERGY] + 0.5 * (cstress + tstress) * dstrain
-            tstress_normal += dns[i]
-            state[i, CFY0] = fy0
-            state[i, CTUP] = tup
-            state[i, CTSTRESS] = tstress
-            state[i, CTSTRAIN] = tstrain
-            state[i, CTSTRESS_NORMAL] = tstress_normal
-            state[i, CTCONTACT_AREA] = tcontact_area
-            state[i, CTENERGY] = tenergy
-            state[i, CTPHASE] = tphase
-            state[i, CKTANG] = ktang
-            state[i, CMOM1P] = mom1p
-            state[i, CROT1P] = rot1p
-            state[i, CMOM2P] = mom2p
-            state[i, CROT2P] = rot2p
-            state[i, CMOM1N] = mom1n
-            state[i, CROT1N] = rot1n
-            state[i, CMOM2N] = mom2n
-            state[i, CROT2N] = rot2n
-            state[i, CROT3N] = rot3n
-            state[i, CROT3P] = rot3p
-            state[i, CU] = tstrain
-            state[i, CF] = tstress
-            state[i, CDN] = dns[i]
-
-    @njit(cache=True, nogil=True, parallel=True)
-    def _evaluate_elastic_sliding_batch(state, targets, elastic_indices):
-        """Exact ``SpringElastic.set_trial_strain`` for dense sliding rows."""
-        for dense_position in prange(elastic_indices.size):
-            i = elastic_indices[dense_position]
-            row = state[i]
-            tstrain = targets[i]
-            ktang = row[CKTANG]
-            tstress = row[CCSTRESS] + ktang * (tstrain - row[CCSTRAIN])
-            row[CTSTRESS] = tstress
-            row[CTSTRAIN] = tstrain
-            row[CU] = tstrain
-            row[CF] = tstress
-
-    @njit(cache=True, nogil=True, parallel=True)
-    def _assemble_full_interface_forces(
-        transverse_forces, coulomb_state, slid_index, oop0_index, oop1_index,
-        dist, local_full_forces, max_displacements, coulomb_targets,
-    ):
-        for i in prange(local_full_forces.shape[0]):
-            for local_dof in range(6):
-                local_full_forces[i, local_dof] = transverse_forces[i, local_dof]
-            for local_dof in range(6, 12):
-                local_full_forces[i, local_dof] = 0.0
-            max_u = max_displacements[i]
-            s = slid_index[i]
-            if s >= 0:
-                force = coulomb_state[s, CTSTRESS]
-                local_full_forces[i, 6] += force
-                local_full_forces[i, 7] -= force
-                value = abs(coulomb_targets[s])
-                if value > max_u:
-                    max_u = value
-            a = oop0_index[i]
-            b = oop1_index[i]
-            if a >= 0 and b >= 0:
-                di = dist[i, 0]
-                dj = dist[i, 1]
-                force0 = coulomb_state[a, CTSTRESS]
-                force1 = coulomb_state[b, CTSTRESS]
-                first = dj * force0 + di * force1
-                second = di * force0 + dj * force1
-                local_full_forces[i, 8] += first
-                local_full_forces[i, 9] += second
-                local_full_forces[i, 10] -= first
-                local_full_forces[i, 11] -= second
-                value = abs(coulomb_targets[a])
-                if value > max_u:
-                    max_u = value
-                value = abs(coulomb_targets[b])
-                if value > max_u:
-                    max_u = value
-            max_displacements[i] = max_u
-
-    @njit(cache=True, nogil=True)
     def _prepare_quad_kinematics(
         local_du, local_u, edge_offsets, edge_records, edge_areas,
         interface_normal_increments, interface_committed_forces,
@@ -627,664 +447,6 @@ if njit is not None:
                 sigma_initial[q] = sigma
             dns[q] = dn
             strains[q] = d_alfa[q] * local_u[q, 6]
-    @njit(cache=True, inline="always")
-    def _quad_revert_trial(row):
-        row[QFY0] = -row[QFY1]
-        row[QTROT_MAX] = row[QUMAX0]
-        row[QTROT_MIN] = row[QUMAX1]
-        row[QTROT_PU] = row[QCROT_PU]
-        row[QTROT_NU] = row[QCROT_NU]
-        row[QTENERGY] = row[QCENERGY]
-        row[QTLOAD] = row[QCLOAD]
-        row[QTSTRESS] = row[QCSTRESS]
-        row[QTSTRAIN] = row[QCSTRAIN]
-        row[QTSTRESS_NORMAL] = row[QCSTRESS_NORMAL]
-        row[QTCONTACT] = row[QCCONTACT]
-        row[QTUP] = row[QCUP]
-        row[QTPHASE] = row[QPHASE]
-        row[QTMOM_MAX] = row[QCMOM_MAX]
-        row[QTMOM_MIN] = row[QCMOM_MIN]
-        row[QTROT_LIM_PU] = row[QCROT_LIM_PU]
-        row[QTROT_LIM_NU] = row[QCROT_LIM_NU]
-        row[QTROT_YP] = row[QCROT_YP]
-        row[QTROT_YN] = row[QCROT_YN]
-        row[QTPLAST_T] = row[QCPLAST_T]
-        row[QTPLAST_C] = row[QCPLAST_C]
-        row[QTUNLOAD_T] = row[QCUNLOAD_T]
-        row[QTUNLOAD_C] = row[QCUNLOAD_C]
-
-    @njit(cache=True, inline="always")
-    def _quad_tangent_reload_t(row, par):
-        """C# SpringCoulomb03.TangentReload_t getter semantics."""
-        minimum = 1.0e-4 * par[QPK]
-        stored = row[QTANG_RELOAD_T]
-        return minimum if stored < minimum else stored
-
-    @njit(cache=True, inline="always")
-    def _quad_tangent_reload_c(row, par):
-        """C# SpringCoulomb03.TangentReload_c getter semantics."""
-        minimum = 1.0e-4 * par[QPK]
-        stored = row[QTANG_RELOAD_C]
-        return minimum if stored < minimum else stored
-
-    @njit(cache=True, inline="always")
-    def _quad_yield_tension(row, par, phase_unload, dstrain):
-        if row[QTPLAST_T] == 0.0:
-            num2 = row[QMOM1P]
-            num3 = row[QROT1P]
-        else:
-            num2 = row[QCMOM_MAX]
-            num3 = row[QUMAX0]
-        if dstrain < 0.0:
-            return num3
-        phase = int(row[QTPHASE])
-        if phase == 10:
-            return row[QTROT_MAX]
-        if phase == ELASTIC or phase == PLASTIC_T:
-            return row[QUMAX0]
-        if phase == PLASTIC_C:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_T or phase_unload == RELOAD_T:
-                num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
-                return row[QMOM1P] / num5 + num4
-        if phase == UNLOAD_T:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_T:
-                return row[QTROT_PU] + row[QMOM1P] / par[QPE1P]
-            if phase_unload == RELOAD_T:
-                if row[QTSTRAIN] < row[QTROT_LIM_PU]:
-                    return row[QTROT_PU] + row[QMOM1P] / par[QPE1P]
-                return row[QTROT_NU] + row[QMOM1P] / _quad_tangent_reload_t(row, par)
-        if phase == UNLOAD_C:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_T or phase_unload == RELOAD_T:
-                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - row[QTROT_NU])
-                return row[QTROT_NU] + row[QMOM1P] / num5
-        if phase == RELOAD_T:
-            if phase_unload == ELASTIC or phase_unload == RELOAD_T:
-                num5 = _quad_tangent_reload_t(row, par)
-                num = row[QTROT_NU] + row[QMOM1P] / num5
-                if par[QPE3P] < 0.0:
-                    val = (row[QTROT_NU] * num5 - row[QROT3P] * par[QPE3P]) / (num5 - par[QPE3P])
-                    if val < num:
-                        num = val
-                return num
-        if phase == RELOAD_C:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_T:
-                num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
-                return num4 + row[QMOM1P] / num5
-            if phase_unload == RELOAD_T:
-                if int(row[QTUNLOAD_C]) == RELOAD_C:
-                    num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1N]
-                    num5 = _quad_tangent_reload_t(row, par) if num2 <= 0.0 else num2 / (num3 - num4)
-                    return row[QTROT_NU] + row[QMOM1P] / num5
-                return row[QTROT_NU] + row[QMOM1P] / _quad_tangent_reload_t(row, par)
-        return num3
-
-    @njit(cache=True, inline="always")
-    def _quad_yield_compression(row, par, phase_unload, dstrain):
-        if row[QTPLAST_C] == 0.0:
-            num2 = row[QMOM1N]
-            num3 = row[QROT1N]
-        else:
-            num2 = row[QCMOM_MIN]
-            num3 = row[QUMAX1]
-        if dstrain > 0.0:
-            return num3
-        phase = int(row[QTPHASE])
-        if phase == 10:
-            return row[QTROT_MIN]
-        if phase == ELASTIC or phase == PLASTIC_C:
-            return row[QUMAX1]
-        if phase == PLASTIC_T:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_C or phase_unload == RELOAD_C:
-                num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
-                return row[QMOM1N] / tc + num4
-        if phase == UNLOAD_T:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_C or phase_unload == RELOAD_C:
-                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - row[QTROT_PU])
-                return row[QTROT_PU] + row[QMOM1N] / tc
-        if phase == UNLOAD_C:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_C:
-                return row[QTROT_NU] + row[QMOM1N] / par[QPE1N]
-            if phase_unload == RELOAD_C:
-                if row[QTSTRAIN] > row[QTROT_LIM_NU]:
-                    return row[QTROT_NU] + row[QMOM1N] / par[QPE1N]
-                return row[QTROT_PU] + row[QMOM1N] / _quad_tangent_reload_c(row, par)
-        if phase == RELOAD_T:
-            if phase_unload == ELASTIC:
-                return num3
-            if phase_unload == PLASTIC_C:
-                num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
-                return num4 + row[QMOM1N] / tc
-            if phase_unload == RELOAD_C:
-                if int(row[QTUNLOAD_T]) == RELOAD_T:
-                    num4 = row[QCSTRAIN] - row[QCSTRESS] / par[QPE1P]
-                    tc = _quad_tangent_reload_c(row, par) if num2 == 0.0 else num2 / (num3 - num4)
-                    return num4 + row[QMOM1N] / tc
-                return row[QTROT_PU] + row[QMOM1N] / _quad_tangent_reload_c(row, par)
-        if phase == RELOAD_C:
-            if phase_unload == ELASTIC or phase_unload == RELOAD_C:
-                tc = _quad_tangent_reload_c(row, par)
-                num = row[QTROT_PU] + row[QMOM1N] / tc
-                if par[QPE3N] < 0.0:
-                    val = (row[QTROT_PU] * tc - row[QROT3N] * par[QPE3N]) / (tc - par[QPE3N])
-                    if val > num:
-                        num = val
-                return num
-        return num3
-
-    @njit(cache=True, inline="always")
-    def _quad_positive_increment(row, par, dstrain):
-        if int(row[QTLOAD]) == 2:
-            if (int(row[QTUNLOAD_C]) == RELOAD_C
-                    and row[QTMOM_MIN] > row[QCSTRESS] and row[QCSTRESS] < 0.0):
-                row[QTMOM_MIN] = row[QCSTRESS]
-                row[QTROT_MIN] = row[QCSTRAIN]
-                row[QTROT_NU] = row[QCSTRAIN] - row[QCSTRESS] / par[QPEUN]
-            if int(row[QTUNLOAD_C]) == RELOAD_C and int(row[QTPHASE]) == RELOAD_C:
-                row[QTROT_LIM_NU] = row[QCSTRAIN]
-            row[QTLOAD] = 1.0
-            if row[QCSTRESS] <= 0.0:
-                row[QTROT_NU] = row[QCSTRAIN] - row[QCSTRESS] / par[QPEUN]
-                row[QTROT_MAX] = row[QUMAX0]
-        row[QTLOAD] = 1.0
-        if row[QTPLAST_T] == 0.0:
-            row[QTROT_MAX] = row[QROT1P]
-            row[QTMOM_MAX] = row[QMOM1P]
-        tmom_max = row[QTMOM_MAX]
-        trot_nu = row[QTROT_NU]
-        if row[QTSTRAIN] < trot_nu:
-            row[QKTANG] = par[QPE1N]
-            row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            if row[QTSTRESS] < row[QMOM1N]:
-                row[QTSTRESS] = row[QMOM1N]
-            if row[QTSTRESS] >= 0.0:
-                row[QTSTRESS] = 0.0
-                row[QKTANG] = par[QPEUN] * 1e-9
-            return
-        phase = int(row[QTPHASE])
-        if phase == PLASTIC_C:
-            row[QKTANG] = tmom_max / (row[QTROT_MAX] - trot_nu)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
-        elif phase == ELASTIC or phase == UNLOAD_C:
-            if int(row[QTUNLOAD_C]) == ELASTIC:
-                row[QKTANG] = tmom_max / (row[QTROT_MAX] - trot_nu)
-                row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            elif int(row[QTUNLOAD_C]) == PLASTIC_C or int(row[QTUNLOAD_C]) == RELOAD_C:
-                row[QKTANG] = tmom_max / (row[QTROT_MAX] - trot_nu)
-                row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
-        elif phase == UNLOAD_T:
-            if int(row[QTUNLOAD_T]) == ELASTIC or int(row[QTUNLOAD_T]) == PLASTIC_T:
-                row[QKTANG] = par[QPE1P]
-                row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            elif int(row[QTUNLOAD_T]) == RELOAD_T:
-                if row[QTSTRAIN] < row[QTROT_LIM_PU]:
-                    row[QKTANG] = par[QPE1P]
-                    row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-                else:
-                    row[QKTANG] = _quad_tangent_reload_t(row, par)
-                    row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
-        elif phase == RELOAD_C:
-            row[QKTANG] = tmom_max / (row[QTROT_MAX] - trot_nu)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
-        elif phase == RELOAD_T:
-            row[QKTANG] = _quad_tangent_reload_t(row, par)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_nu)
-
-    @njit(cache=True, inline="always")
-    def _quad_negative_increment(row, par, dstrain):
-        if int(row[QTLOAD]) == 1:
-            if (int(row[QTUNLOAD_T]) == RELOAD_T
-                    and row[QTMOM_MAX] < row[QCSTRESS] and row[QCSTRESS] > 0.0):
-                row[QTMOM_MAX] = row[QCSTRESS]
-                row[QTROT_MAX] = row[QCSTRAIN]
-                row[QTROT_PU] = row[QCSTRAIN] - row[QCSTRESS] / par[QPEUP]
-            if int(row[QTUNLOAD_T]) == RELOAD_T and int(row[QTPHASE]) == RELOAD_T:
-                row[QTROT_LIM_PU] = row[QCSTRAIN]
-            row[QTLOAD] = 2.0
-            if row[QCSTRESS] >= 0.0:
-                row[QTROT_PU] = row[QCSTRAIN] - row[QCSTRESS] / par[QPEUP]
-                row[QTROT_MIN] = row[QUMAX1]
-        row[QTLOAD] = 2.0
-        if row[QTPLAST_C] == 0.0:
-            row[QTROT_MIN] = row[QROT1N]
-            row[QTMOM_MIN] = row[QMOM1N]
-        tmom_min = row[QTMOM_MIN]
-        trot_pu = row[QTROT_PU]
-        if row[QTSTRAIN] > trot_pu:
-            row[QKTANG] = par[QPE1P]
-            row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            if row[QTSTRESS] > row[QMOM1P]:
-                row[QTSTRESS] = row[QMOM1P]
-            if row[QTSTRESS] <= 0.0:
-                row[QTSTRESS] = 0.0
-                row[QKTANG] = par[QPEUP] * 1e-9
-            return
-        phase = int(row[QTPHASE])
-        if phase == PLASTIC_T:
-            row[QKTANG] = tmom_min / (row[QTROT_MIN] - trot_pu)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
-        elif phase == ELASTIC or phase == UNLOAD_T:
-            if int(row[QTUNLOAD_T]) == ELASTIC:
-                row[QKTANG] = tmom_min / (row[QTROT_MIN] - trot_pu)
-                row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            elif int(row[QTUNLOAD_T]) == PLASTIC_T or int(row[QTUNLOAD_T]) == RELOAD_T:
-                row[QKTANG] = tmom_min / (row[QTROT_MIN] - trot_pu)
-                row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
-        elif phase == UNLOAD_C:
-            if int(row[QTUNLOAD_C]) == ELASTIC or int(row[QTUNLOAD_C]) == PLASTIC_C:
-                row[QKTANG] = par[QPE1N]
-                row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-            elif int(row[QTUNLOAD_C]) == RELOAD_C:
-                if row[QTSTRAIN] > row[QTROT_LIM_NU]:
-                    row[QKTANG] = par[QPE1N]
-                    row[QTSTRESS] = row[QCSTRESS] + row[QKTANG] * dstrain
-                else:
-                    row[QKTANG] = _quad_tangent_reload_c(row, par)
-                    row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
-        elif phase == RELOAD_T:
-            row[QKTANG] = tmom_min / (row[QTROT_MIN] - trot_pu)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
-        elif phase == RELOAD_C:
-            row[QKTANG] = _quad_tangent_reload_c(row, par)
-            row[QTSTRESS] = row[QKTANG] * (row[QTSTRAIN] - trot_pu)
-
-    @njit(cache=True, nogil=True)
-    def _evaluate_quad_takeda_batch(params, state, strains, dns, volumes, sigma_initial):
-        for i in range(state.shape[0]):
-            row = state[i]
-            par = params[i]
-            if par[QPENABLED] == 0.0:
-                continue
-            strain = strains[i]
-            if int(par[QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
-                row[QDN] = 0.0
-                row[QTSTRAIN] = strain
-                row[QTSTRESS] = par[QPK] * strain
-                row[QKTANG] = par[QPK]
-                row[QTPHASE] = ELASTIC
-                continue
-            dn = dns[i]
-            row[QDN] = dn
-            if int(row[QTLOAD]) == 0 and strain == 0.0:
-                continue
-            _quad_revert_trial(row)
-            row[QTSTRAIN] = strain
-            dstrain = strain - row[QCSTRAIN]
-            if int(par[QPHYSTERETIC_TYPE]) == QUAD_HYSTERETIC_INITIAL:
-                phase = int(row[QPHASE])
-                tphase = phase
-                cstress = row[QCSTRESS]
-                tstress = cstress
-                ktang = row[QKTANG_COMMITTED]
-                h = par[QPH]
-                k = par[QPK]
-                cohesion = par[QPCOHESION]
-                mu = par[QPMU]
-                e1p = par[QPE1P]
-                e2p = par[QPE2P]
-                tstress_normal = row[QTSTRESS_NORMAL]
-
-                if phase == RUPTURE:
-                    row[QTSTRESS] = cstress
-                    row[QTSTRESS_NORMAL] += dn
-                    row[QTENERGY] = row[QCENERGY]
-                    row[QTPHASE] = tphase
-                    row[QKTANG] = ktang
-                    continue
-
-                mom1p = _quad_tau_limit(par, tstress_normal)
-                c_hard = cohesion + h * abs(row[QCUP])
-                fy0 = max(0.0, c_hard + mu * tstress_normal) if cohesion != 0.0 else 0.0
-                rot1p = mom1p / e1p if e1p != 0.0 else 0.0
-                if e2p < 0.0:
-                    mom2p = 0.0
-                    rot2p = rot1p - mom1p / e2p
-                else:
-                    rot2p = rot1p
-                    mom2p = mom1p
-                rot3p = rot2p * 1.0001
-                mom1n = -mom1p
-                rot1n = -rot1p
-                mom2n = -mom2p
-                rot2n = -rot2p
-                rot3n = -rot3p
-                if phase == RUPTURE and mom1p == 0.0:
-                    row[QTSTRESS] = 0.0
-                    row[QKTANG] = 0.0
-                    row[QTSTRESS_NORMAL] += dn
-                    row[QTENERGY] = row[QCENERGY]
-                    continue
-
-                num3 = cstress + k * dstrain
-                if abs(num3) - fy0 > 0.0:
-                    if num3 > 0.0:
-                        tphase = PLASTIC_T
-                        sign = 1.0
-                    else:
-                        tphase = PLASTIC_C
-                        sign = -1.0
-                    num5 = (abs(num3) - fy0) / k if k != 0.0 else 0.0
-                    num6 = k * num5 / (h + k) if (h + k) != 0.0 else 0.0
-                    fy0 += h * num6
-                    tstress = fy0 * sign
-                    if tphase == PLASTIC_T and tstress < 0.0:
-                        tphase = RUPTURE
-                        tstress = 0.0
-                        ktang = 0.0
-                    elif tphase == PLASTIC_C and tstress > 0.0:
-                        tphase = RUPTURE
-                        tstress = 0.0
-                        ktang = 0.0
-                    else:
-                        row[QTUP] += num6
-                        ktang = e2p
-                else:
-                    tstress = num3
-                    ktang = k
-                    tphase = ELASTIC
-
-                row[QTENERGY] = row[QCENERGY] + 0.5 * (cstress + tstress) * dstrain
-                row[QTSTRESS_NORMAL] += dn
-                row[QFY0] = fy0
-                row[QFY1] = -fy0
-                row[QTSTRESS] = tstress
-                row[QTPHASE] = tphase
-                row[QKTANG] = ktang
-                row[QMOM1P] = mom1p
-                row[QMOM1N] = mom1n
-                row[QROT1P] = rot1p
-                row[QROT1N] = rot1n
-                row[QMOM2P] = mom2p
-                row[QMOM2N] = mom2n
-                row[QROT2P] = rot2p
-                row[QROT2N] = rot2p
-                row[QROT3P] = rot3p
-                row[QROT3N] = rot3n
-                continue
-            tau = _quad_tau_limit(par, row[QTSTRESS_NORMAL])
-            rot1p = tau / par[QPE1P] if par[QPE1P] != 0.0 else 0.0
-            if int(par[QPFRACTURE_MODE]) in (
-                QUAD_FRACTURE_FIXED, QUAD_FRACTURE_INTERPOLATED
-            ):
-                ultimate = _quad_shear_ultimate_strain(
-                    par, tau, rot1p, volumes[i], sigma_initial[i]
-                )
-                row[QUR0] = ultimate
-                row[QUR1] = -ultimate
-                row[QMOM1P] = tau
-                row[QMOM2P] = tau
-                row[QROT1P] = rot1p
-                row[QROT2P] = max(ultimate, rot1p * 1.0001)
-                row[QROT3P] = max(ultimate, row[QROT2P] * 1.0001)
-            else:
-                row[QMOM1P] = tau
-                row[QROT1P] = rot1p
-                if par[QPE3P] < 0.0:
-                    rot2p = par[QPPLASTIC_STRAIN]
-                    candidate = rot1p * 1.0001
-                    if candidate > rot2p:
-                        rot2p = candidate
-                    row[QROT2P] = rot2p
-                    row[QROT3P] = rot2p - row[QMOM2P] / par[QPE3P]
-                if row[QROT2P] < rot1p:
-                    row[QROT2P] = rot1p * 1.0001
-                if row[QROT3P] < row[QROT2P]:
-                    row[QROT3P] = row[QROT2P] * 1.0001
-                row[QMOM2P] = tau + par[QPE2P] * (row[QROT2P] - rot1p)
-            row[QMOM1N] = -row[QMOM1P]
-            row[QROT1N] = -row[QROT1P]
-            row[QMOM2N] = -row[QMOM2P]
-            row[QROT2N] = -row[QROT2P]
-            row[QROT3N] = -row[QROT3P]
-            row[QFY0] = row[QMOM1P]
-            row[QFY1] = row[QMOM1N]
-            if row[QMOM1P] == 0.0:
-                row[QTPHASE] = 10.0
-                row[QTSTRESS] = 0.0
-                row[QKTANG] = 0.0
-                row[QTENERGY] = row[QCENERGY] + 0.5 * (row[QCSTRESS] + row[QTSTRESS]) * dstrain
-                row[QTSTRESS_NORMAL] += dn
-                continue
-            if int(row[QPHASE]) == 10:
-                row[QTLOAD] = 0.0
-                row[QTPHASE] = ELASTIC
-                row[QTPLAST_T] = 1.0
-                row[QTPLAST_C] = 1.0
-                row[QTROT_NU] = row[QCSTRAIN]
-                row[QTROT_PU] = row[QCSTRAIN]
-                row[QKTANG] = par[QPE2P]
-                row[QTANG_RELOAD_C] = row[QKTANG]
-                row[QTANG_RELOAD_T] = row[QKTANG]
-                row[QTSTRESS] = row[QKTANG] * dstrain
-                row[QTROT_MAX] = row[QCSTRAIN] + row[QROT1P]
-                row[QTMOM_MAX] = row[QKTANG] * row[QROT1P]
-                row[QTROT_MIN] = row[QCSTRAIN] + row[QROT1N]
-                row[QTMOM_MIN] = row[QKTANG] * row[QROT1N]
-                if dstrain > 0.0:
-                    row[QTLOAD] = 1.0
-                    row[QTPHASE] = RELOAD_T
-                else:
-                    row[QTPHASE] = RELOAD_C
-                    row[QTLOAD] = 2.0
-                if abs(row[QTSTRESS]) - row[QMOM1P] > 0.0:
-                    sign = 1.0 if row[QTSTRESS] > 0.0 else -1.0
-                    row[QTSTRESS] = row[QMOM1P] * sign
-                    if sign > 0.0:
-                        row[QTPHASE] = PLASTIC_T
-                        row[QTMOM_MAX] = row[QTSTRESS]
-                        row[QTROT_MAX] = row[QTSTRAIN]
-                    else:
-                        row[QTPHASE] = PLASTIC_C
-                        row[QTMOM_MIN] = row[QTSTRESS]
-                        row[QTROT_MIN] = row[QTSTRAIN]
-                row[QTENERGY] = row[QCENERGY] + 0.5 * (row[QCSTRESS] + row[QTSTRESS]) * dstrain
-                row[QTSTRESS_NORMAL] += dn
-                continue
-            if int(row[QPHASE]) == RUPTURE_T or int(row[QPHASE]) == RUPTURE_C:
-                row[QTSTRESS] = 0.0
-                row[QKTANG] = 0.0
-                row[QTENERGY] = row[QCENERGY] + 0.5 * row[QCSTRESS] * dstrain
-                row[QTSTRESS_NORMAL] += dn
-                continue
-            row[QTROT_YP] = _quad_yield_tension(row, par, int(row[QCUNLOAD_T]), dstrain)
-            row[QTROT_YN] = _quad_yield_compression(row, par, int(row[QCUNLOAD_C]), dstrain)
-            if int(row[QTLOAD]) == 0:
-                row[QTLOAD] = 1.0 if dstrain >= 0.0 else 2.0
-            if row[QTSTRAIN] >= row[QTROT_YP] and dstrain > 0.0:
-                row[QTROT_MAX] = row[QTSTRAIN]
-                yp = row[QTROT_YP] if row[QTPLAST_T] != 0.0 else row[QROT1P]
-                if row[QTSTRAIN] < yp:
-                    row[QTPHASE] = ELASTIC
-                    row[QKTANG] = par[QPE1P]
-                elif row[QTSTRAIN] <= row[QROT2P]:
-                    row[QTPHASE] = PLASTIC_T
-                    row[QKTANG] = par[QPE2P]
-                elif row[QTSTRAIN] <= row[QROT3P]:
-                    row[QTPHASE] = PLASTIC_T
-                    row[QKTANG] = par[QPE3P]
-                else:
-                    row[QTPHASE] = RUPTURE_T
-                    row[QKTANG] = par[QPE1P] * 1e-9
-                if row[QTSTRAIN] < yp:
-                    row[QTSTRESS] = par[QPE1P] * row[QTSTRAIN]
-                elif row[QTSTRAIN] <= row[QROT2P]:
-                    row[QTSTRESS] = row[QMOM1P] + par[QPE2P] * (row[QTSTRAIN] - yp)
-                elif row[QTSTRAIN] <= row[QROT3P]:
-                    row[QTSTRESS] = row[QMOM2P] + par[QPE3P] * (row[QTSTRAIN] - row[QROT2P])
-                else:
-                    row[QTSTRESS] = row[QMOM3P]
-                row[QTLOAD] = 1.0
-                num5 = (row[QTSTRESS] - row[QCSTRESS]) / par[QPE1P] if par[QPE1P] != 0.0 else 0.0
-                row[QTUP] += dstrain - num5
-                if int(row[QTPHASE]) == PLASTIC_T:
-                    row[QTPLAST_T] = 1.0
-                row[QTMOM_MAX] = row[QTSTRESS]
-            elif row[QTSTRAIN] <= row[QTROT_YN] and dstrain < 0.0:
-                row[QTROT_MIN] = row[QTSTRAIN]
-                yn = row[QTROT_YN] if int(row[QTUNLOAD_C]) != ELASTIC else row[QROT1N]
-                if row[QTSTRAIN] > row[QTROT_PU]:
-                    row[QKTANG] = par[QPE1N] * 1e-9
-                elif row[QTSTRAIN] > yn:
-                    row[QTPHASE] = ELASTIC
-                    row[QKTANG] = par[QPE1N]
-                elif row[QTSTRAIN] >= row[QROT2N]:
-                    row[QTPHASE] = PLASTIC_C
-                    row[QKTANG] = par[QPE2N]
-                elif row[QTSTRAIN] >= row[QROT3N]:
-                    row[QTPHASE] = PLASTIC_C
-                    row[QKTANG] = par[QPE3N]
-                else:
-                    row[QTPHASE] = RUPTURE_C
-                    row[QKTANG] = par[QPE1N] * 1e-9
-                yn2 = row[QTROT_YN] if row[QTPLAST_C] != 0.0 else row[QROT1N]
-                if row[QTSTRAIN] > yn2:
-                    row[QTSTRESS] = par[QPE1N] * row[QTSTRAIN]
-                elif row[QTSTRAIN] >= row[QROT2N]:
-                    row[QTSTRESS] = row[QMOM1N] + par[QPE2N] * (row[QTSTRAIN] - yn2)
-                elif row[QTSTRAIN] >= row[QROT3N]:
-                    row[QTSTRESS] = row[QMOM2N] + par[QPE3N] * (row[QTSTRAIN] - row[QROT2N])
-                else:
-                    row[QTSTRESS] = row[QMOM3N]
-                row[QTLOAD] = 2.0
-                num6 = (row[QTSTRESS] - row[QCSTRESS]) / par[QPE1N] if par[QPE1N] != 0.0 else 0.0
-                row[QTUP] += dstrain - num6
-                if int(row[QTPHASE]) == PLASTIC_C:
-                    row[QTPLAST_C] = 1.0
-                row[QTMOM_MIN] = row[QTSTRESS]
-            elif dstrain < 0.0:
-                _quad_negative_increment(row, par, dstrain)
-                if row[QTSTRESS] > 0.0:
-                    row[QTPHASE] = UNLOAD_T
-                elif int(row[QTPHASE]) == UNLOAD_C:
-                    row[QTPHASE] = UNLOAD_C
-                    if row[QTSTRAIN] <= row[QTROT_LIM_NU] and int(row[QCUNLOAD_C]) == RELOAD_C:
-                        row[QTPHASE] = RELOAD_C
-                else:
-                    row[QTPHASE] = RELOAD_C
-            elif dstrain > 0.0:
-                _quad_positive_increment(row, par, dstrain)
-                if row[QTSTRESS] < 0.0:
-                    row[QTPHASE] = UNLOAD_C
-                elif int(row[QTPHASE]) == UNLOAD_T:
-                    row[QTPHASE] = UNLOAD_T
-                    if row[QTSTRAIN] >= row[QTROT_LIM_PU] and int(row[QCUNLOAD_T]) == RELOAD_T:
-                        row[QTPHASE] = RELOAD_T
-                else:
-                    row[QTPHASE] = RELOAD_T
-            row[QTENERGY] = row[QCENERGY] + 0.5 * (row[QCSTRESS] + row[QTSTRESS]) * dstrain
-            row[QTSTRESS_NORMAL] += dn
-
-    @njit(cache=True, nogil=True)
-    def _commit_quad_takeda_batch(params, state):
-        for i in range(state.shape[0]):
-            if params[i, QPENABLED] == 0.0:
-                continue
-            row = state[i]
-            if int(params[i, QPHYSTERETIC_TYPE]) == QUAD_HYSTERETIC_INITIAL:
-                row[QFY1] = -row[QFY0]
-                row[QCUP] = row[QTUP]
-                row[QCENERGY] = row[QTENERGY]
-                row[QCSTRESS_NORMAL_PREV] = row[QCSTRESS_NORMAL]
-                row[QCSTRESS] = row[QTSTRESS]
-                row[QCSTRAIN] = row[QTSTRAIN]
-                row[QCSTRESS_NORMAL] = row[QTSTRESS_NORMAL]
-                row[QDN] = 0.0
-                row[QKTANG_COMMITTED] = row[QKTANG]
-                row[QPHASE] = row[QTPHASE]
-                continue
-            row[QFY1] = -row[QFY0]
-            row[QCUP] = row[QTUP]
-            row[QUMAX0] = row[QTROT_MAX]
-            row[QUMAX1] = row[QTROT_MIN]
-            row[QCROT_PU] = row[QTROT_PU]
-            row[QCROT_NU] = row[QTROT_NU]
-            row[QCENERGY] = row[QTENERGY]
-            row[QCLOAD] = row[QTLOAD]
-            row[QCSTRESS_NORMAL_PREV] = row[QCSTRESS_NORMAL]
-            row[QCSTRESS] = row[QTSTRESS]
-            row[QCSTRAIN] = row[QTSTRAIN]
-            row[QCSTRESS_NORMAL] = row[QTSTRESS_NORMAL]
-            row[QCCONTACT] = row[QTCONTACT]
-            row[QDN] = 0.0
-            row[QKTANG_COMMITTED] = row[QKTANG]
-            row[QPHASE] = row[QTPHASE]
-            row[QCMOM_MAX] = row[QTMOM_MAX]
-            row[QCMOM_MIN] = row[QTMOM_MIN]
-            row[QCROT_LIM_PU] = row[QTROT_LIM_PU]
-            row[QCROT_LIM_NU] = row[QTROT_LIM_NU]
-            row[QCROT_YP] = row[QTROT_YP]
-            row[QCROT_YN] = row[QTROT_YN]
-            phase = int(row[QPHASE])
-            if phase == PLASTIC_T:
-                row[QTUNLOAD_T] = phase
-            elif phase == PLASTIC_C:
-                row[QTUNLOAD_C] = phase
-            elif phase == RELOAD_T:
-                if row[QTPLAST_T] == 0.0 and row[QTPLAST_C] == 0.0:
-                    row[QTUNLOAD_T] = ELASTIC
-                else:
-                    row[QTUNLOAD_T] = phase
-                    row[QTPLAST_T] = 1.0
-                row[QTANG_RELOAD_T] = row[QKTANG]
-            elif phase == RELOAD_C:
-                if row[QTPLAST_T] == 0.0 and row[QTPLAST_C] == 0.0:
-                    row[QTUNLOAD_C] = ELASTIC
-                else:
-                    row[QTUNLOAD_C] = phase
-                    row[QTPLAST_C] = 1.0
-                row[QTANG_RELOAD_C] = row[QKTANG]
-            row[QCPLAST_C] = row[QTPLAST_C]
-            row[QCPLAST_T] = row[QTPLAST_T]
-            row[QCUNLOAD_T] = row[QTUNLOAD_T]
-            row[QCUNLOAD_C] = row[QTUNLOAD_C]
-
-    @njit(cache=True, nogil=True)
-    def _commit_initial_coulomb_batch(state, enabled):
-        for i in range(state.shape[0]):
-            if not enabled[i]:
-                continue
-            row = state[i]
-            row[CFY1] = -row[CFY0]
-            row[CCUP] = row[CTUP]
-            row[CCSTRESS_NORMAL_PREV] = row[CCSTRESS_NORMAL]
-            row[CCSTRESS] = row[CTSTRESS]
-            row[CCSTRAIN] = row[CTSTRAIN]
-            row[CCSTRESS_NORMAL] = row[CTSTRESS_NORMAL]
-            row[CCCONTACT_AREA] = row[CTCONTACT_AREA]
-            row[CCENERGY] = row[CTENERGY]
-            row[CCPHASE] = row[CTPHASE]
-            row[CKTANG_COMMITTED] = row[CKTANG]
-            row[CU] = row[CTSTRAIN]
-            row[CF] = row[CTSTRESS]
-            row[CDN] = 0.0
-
-    @njit(cache=True, nogil=True)
-    def _commit_elastic_sliding_batch(state, elastic_indices):
-        """Exact ``SpringElastic.commit`` for dense sliding rows."""
-        for dense_position in range(elastic_indices.size):
-            i = elastic_indices[dense_position]
-            row = state[i]
-            row[CCSTRESS] = row[CTSTRESS]
-            row[CCSTRAIN] = row[CTSTRAIN]
-            row[CU] = row[CTSTRAIN]
-            row[CF] = row[CTSTRESS]
 
     @njit(cache=True, nogil=True)
     def _managed_elastic_energy(transverse_k, transverse_trial, quad_k, quad_state):
@@ -1389,9 +551,6 @@ if njit is not None:
         _refresh_max_u_cache(quad_local_u, max_displacements, max_u_cache)
 
 else:
-    _quad_tau_limit = None
-    _quad_interpolated_shear_energy = None
-    _quad_shear_ultimate_strain = None
     _map_global_to_local = None
     _scatter_local_forces = None
     _refresh_global_resisting_force = None
@@ -1399,15 +558,7 @@ else:
     _refresh_max_u_cache = None
     _prepare_interface_kinematics = None
     _map_and_prepare_interface_kinematics = None
-    _advance_interface_coulomb_targets = None
-    _evaluate_initial_coulomb_batch = None
-    _evaluate_elastic_sliding_batch = None
-    _assemble_full_interface_forces = None
     _prepare_quad_kinematics = None
-    _evaluate_quad_takeda_batch = None
-    _commit_quad_takeda_batch = None
-    _commit_initial_coulomb_batch = None
-    _commit_elastic_sliding_batch = None
     _managed_elastic_energy = None
     _update_domain_batch = None
 

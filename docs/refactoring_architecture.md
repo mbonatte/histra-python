@@ -136,6 +136,17 @@ equal or stronger parity evidence.
     modification. The complete suite is 459 passed, 5 skipped and the same 12
     warnings in 75.20 seconds warm (one extra Numba cache rebuild occurred on
     the first run)—flat against the preceding gate.
+11. The compiled interface Coulomb and Quad Takeda kernel families now live in
+    `hysteretic_kernels/interface_coulomb.py` and
+    `hysteretic_kernels/quad_takeda.py`, each owning its dense state/parameter
+    column constants (``CFY0..COULOMB_STATE_SIZE``, ``QFY0..QUAD_PARAM_SIZE``,
+    ``QUAD_SUBLAW_*/HYSTERETIC_*/FRACTURE_*``); the shared C# phase codes stay
+    in the transverse owner and are imported by both, so every module derives
+    them from one object. `hysteretic_batch.py` is reduced from 3,682 to
+    2,831 lines, and all moved code is byte-identical, with identity
+    re-exports locked by a dedicated architecture test. The complete suite is
+    463 passed, 5 skipped and the same 12 warnings in 75.39 seconds—flat
+    against the preceding gate.
 
 ## Dependency rules
 
