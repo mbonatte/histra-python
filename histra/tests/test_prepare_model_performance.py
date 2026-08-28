@@ -26,6 +26,7 @@ from histra.io.hr_loader import load_model
 
 pm = importlib.import_module("histra.preprocessing.prepare_model")
 aff = importlib.import_module("histra.preprocessing.afference")
+fg = importlib.import_module("histra.preprocessing.fibre_geometry")
 ROOT = Path(__file__).resolve().parents[1]
 LOCKED_HRX = ROOT / "model-output" / "model.hrx"
 
@@ -390,10 +391,10 @@ def test_compiled_bilinear_preserves_scalar_evaluation_order():
     )
     u = 0.6484831921948226
     v = -0.572474073249809
-    expected = pm._bilinear(vertices, u, v)
+    expected = aff._bilinear(vertices, u, v)
     actual = np.empty(3, dtype=np.float64)
 
-    pm._bilinear_nb(vertices, u, v, actual)
+    fg._bilinear_nb(vertices, u, v, actual)
 
     np.testing.assert_array_equal(actual, expected)
 
@@ -403,15 +404,15 @@ def test_batched_interface_cells_match_scalar_reference_geometry():
     for intf in model.collections.interfaces.values():
         expected = np.asarray(
             [
-                pm._cell_vertices(intf, index)
+                fg._cell_vertices(intf, index)
                 for index in range(int(intf.nrow) * int(intf.ncol))
             ],
             dtype=np.float64,
         )
-        actual = pm._interface_cells(intf)
+        actual = fg._interface_cells(intf)
         np.testing.assert_allclose(actual, expected, rtol=2.0e-14, atol=2.0e-14)
         np.testing.assert_allclose(
-            pm._polygon_areas_3d(actual),
+            fg._polygon_areas_3d(actual),
             [pm._polygon_area_3d(cell) for cell in expected],
             rtol=2.0e-14,
             atol=2.0e-14,
@@ -525,11 +526,11 @@ def test_interface_sliding_plane_distance_is_computed_once_per_quad_side(
 def test_interface_cell_batch_has_scalar_fallback(monkeypatch):
     model = load_model(LOCKED_HRX)
     intf = next(iter(model.collections.interfaces.values()))
-    expected = pm._interface_cells(intf)
-    monkeypatch.setattr(pm, "njit", None)
+    expected = fg._interface_cells(intf)
+    monkeypatch.setattr(fg, "njit", None)
     if hasattr(intf, "_prep_vertices"):
         delattr(intf, "_prep_vertices")
-    actual = pm._interface_cells(intf)
+    actual = fg._interface_cells(intf)
     np.testing.assert_allclose(actual, expected, rtol=2.0e-14, atol=2.0e-14)
 
 

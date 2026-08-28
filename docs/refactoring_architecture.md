@@ -82,6 +82,18 @@ equal or stronger parity evidence.
    0.465 seconds. The complete suite is 442 passed, 5 skipped and the same 12
    warnings in 75.14 seconds warm (one extra Numba cache rebuild occurred on
    the first run after the module move)—flat against the preceding gate.
+7. Interface spring-cell geometry and the C# ``Quad.GetFiberProperties`` fibre
+   kernels are now owned by `preprocessing/fibre_geometry.py`: scalar
+   cell/area/fibre oracles plus the Numba batch family, importing the
+   bilinear maps from `preprocessing.afference`. `prepare_model.py` is reduced
+   from 1,366 to 906 lines, 76.9% below its original size, and keeps identity
+   re-exports locked by a dedicated architecture test. The compiled
+   bilinear/inverse-bilinear operation order, the scalar-fallback path (via
+   owner-module `njit` patching) and the batch-vs-scalar fibre differentials
+   are covered at the owner. The full preprocessing benchmark output is
+   bit-identical to the preceding commit; preparation measured 0.526 seconds.
+   The complete suite is 444 passed, 5 skipped and the same 12 warnings in
+   74.66 seconds—flat against the preceding gate.
 
 ## Dependency rules
 

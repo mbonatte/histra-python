@@ -537,12 +537,12 @@ def test_quad_quad_generation_detects_offset_lateral_surface_overlap():
 
 def test_broad_face_fibre_stiffness_reverses_opposite_face_like_csharp():
     """Faces 4/5 must map to the reversed opposite broad face."""
-    from histra.preprocessing.prepare_model import (
+    from histra.preprocessing.fibre_geometry import (
         _cell_vertices,
         _fiber_stiffness,
         _fiber_stiffness_batch,
-        _generate_interfaces,
     )
+    from histra.preprocessing.prepare_model import _generate_interfaces
 
     model = _surface_contact_model()
     model.interface_nrow = 2
