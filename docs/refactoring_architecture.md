@@ -30,6 +30,16 @@ equal or stronger parity evidence.
    now have exhaustive table-driven tests. The default suite after this slice
    is 407 passed, 5 skipped, 12 expected safety warnings in 81.77 seconds—a
    25.6% reduction from the measured baseline.
+2. Interface-local stiffness is owned only by `elements/interface.py`, matching
+   C# `Objects/Interface.cs`. The duplicate flexural, sliding and out-of-plane
+   implementations were removed from `solver/assembler.py`; standalone global
+   assembly delegates once to each element while the nonlinear path consumes
+   precomputed blocks through its fixed sparse topology. The assembler is now
+   747 lines, down from 1,263 at baseline. Strict delegation, bitwise scalar
+   parity and cached-scatter tests pass. The complete suite is 418 passed,
+   5 skipped and 12 expected safety warnings in 76.40 seconds—6.6% faster than
+   the preceding slice and 30.5% faster than the original baseline, despite 11
+   additional strict tests.
 
 ## Dependency rules
 
@@ -53,8 +63,8 @@ equal or stronger parity evidence.
 - `solver/load_assembly.py`: C# `LoadTemplateManager` coefficient resolution,
   static load generation and global load-vector assembly.
 - `solver/assembler.py`: sparse stiffness assembly and boundary conditions.
-- A later slice will separate interface-local stiffness formulas from sparse
-  topology/scatter planning.
+- `elements/interface.py`: C# interface-local flexural, sliding and
+  out-of-plane stiffness formulas and geometry caches.
 
 ### Model preparation
 
@@ -116,8 +126,8 @@ Every slice must pass all applicable gates:
 
 ## Refactor sequence
 
-1. Separate load assembly and complete C# coefficient coverage.
-2. Split stiffness formulas from sparse topology/scatter assembly.
+1. Separate load assembly and complete C# coefficient coverage. **Complete.**
+2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
    boundaries.
 4. Split compiled hysteretic kernels and runtime state ownership.

@@ -31,205 +31,6 @@ from histra.solver.load_assembly import (
 )
 
 
-# ── Interface stiffness helpers ──────────────────────────────────────────────
-
-def _intf_get_di(intf: Interface, row: int, index: int) -> float:
-    """Port of Interface.Getdi(row, index): bilinear interpolation of vInt2D.X.
-
-    `row` cycles over Nrow, `index` over Ncol.  In the .NET code, the local
-    coordinates (xi, eta) are:
-        xi = -1 + 2/Ncol * index + 1/Ncol      (in [-1, 1] across Ncol)
-        eta = -1 + 2/Nrow * row  + 1/Nrow        (in [-1, 1] across Nrow)
-    """
-    nrow = intf.nrow if intf.nrow > 0 else 1
-    ncol = intf.ncol if intf.ncol > 0 else 1
-    xi = -1.0 + 2.0 / ncol * index + 1.0 / ncol
-    eta = -1.0 + 2.0 / nrow * row + 1.0 / nrow
-    v = intf.vint2d  # [Point]×4
-    return (
-        v[0].x * (1.0 - xi) * (1.0 - eta) / 4.0
-        + v[1].x * (1.0 + xi) * (1.0 - eta) / 4.0
-        + v[2].x * (1.0 + xi) * (1.0 + eta) / 4.0
-        + v[3].x * (1.0 - xi) * (1.0 + eta) / 4.0
-    )
-
-
-def _intf_get_dj(intf: Interface, row: int, index: int) -> float:
-    """Port of Interface.Getdj(row, index) = Length - Getdi(row, index)."""
-    return intf.length - _intf_get_di(intf, row, index)
-
-
-def _intf_get_dm(intf: Interface, row: int, index: int) -> float:
-    """Port of Interface.Getdm(row, index) = 0.5*Length - Getdi(row, index)."""
-    return 0.5 * intf.length - _intf_get_di(intf, row, index)
-
-
-def _intf_ecc_spring(intf: Interface, row: int, index: int) -> float:
-    """Port of Interface.EccSpring(row, index): bilinear interpolation of vInt2D.Y."""
-    nrow = intf.nrow if intf.nrow > 0 else 1
-    ncol = intf.ncol if intf.ncol > 0 else 1
-    xi = -1.0 + 2.0 / ncol * index + 1.0 / ncol
-    eta = -1.0 + 2.0 / nrow * row + 1.0 / nrow
-    v = intf.vint2d  # [Point]×4
-    return (
-        v[0].y * (1.0 - xi) * (1.0 - eta) / 4.0
-        + v[1].y * (1.0 + xi) * (1.0 - eta) / 4.0
-        + v[2].y * (1.0 + xi) * (1.0 + eta) / 4.0
-        + v[3].y * (1.0 - xi) * (1.0 + eta) / 4.0
-    )
-
-
-def _compute_interface_kfless(intf: Interface, alfa: float = 0.0) -> List[List[float]]:
-    """Build the 6×6 flexural stiffness matrix (port of ComputeKflessNoInteract).
-
-    Uses bilinear shape-function interpolation over `_vInt2D` corner points
-    to obtain di, dj, dm (geometry) and eccentricity (EccSpring) for each
-    integration-point spring on the Nrow×Ncol grid.
-    """
-    k = [[0.0] * 6 for _ in range(6)]
-    nrow = intf.nrow if intf.nrow > 0 else 1
-    ncol = intf.ncol if intf.ncol > 0 else 1
-
-    def idx(i: int, j: int) -> int:
-        return i * ncol + j
-
-    num, num2, num3 = 0.0, 0.0, 0.0
-    for i in range(nrow):
-        for j in range(ncol):
-            if idx(i, j) >= len(intf.trasv_1):
-                continue
-            di = _intf_get_di(intf, i, j)
-            dj = _intf_get_dj(intf, i, j)
-            # dm is recomputed below via GeometrySpring. Reference dm = 0.5*Length - di.
-            ks = intf.trasv_1[idx(i, j)].get_k(alfa)
-            num += ks * di * di
-            num3 += ks * di * dj
-            num2 += ks * dj * dj
-
-    dm = intf.length * intf.length
-    if dm > 1e-30:
-        num /= dm
-        num3 /= dm
-        num2 /= dm
-
-    constrained = intf.interfaccia_vincolata_computed()
-
-    if constrained:
-        # InterfacciaVincolata() branch
-        num4, num5, num6 = 0.0, 0.0, 0.0
-        for i in range(ncol):
-            for j in range(nrow):
-                # GeometrySpring(j, i)
-                di = _intf_get_di(intf, j, i)
-                # dm
-                dmx = _intf_get_dm(intf, j, i)
-                ks = intf.trasv_1[idx(j, i)].get_k(alfa)
-                num4 += ks
-                num5 -= ks * dmx
-                num6 += ks * dmx * dmx
-        k[0][0] = num4
-        k[0][1] = num5
-        k[1][1] = num6
-        k[0][2] = -num - num3
-        k[0][3] = -num3 - num2
-        k[1][2] = num3 * intf.length / 2.0 - num * intf.length / 2.0
-        k[1][3] = num2 * intf.length / 2.0 - num3 * intf.length / 2.0
-        k[2][2] = num
-        k[2][3] = num3
-        k[3][3] = num2
-    else:
-        # Most common non-constrained interface
-        k[0][0] = num2
-        k[0][1] = num3
-        k[0][2] = -num3
-        k[0][3] = -num2
-        k[1][1] = num
-        k[1][2] = -num
-        k[1][3] = -num3
-        k[2][2] = num
-        k[2][3] = num3
-        k[3][3] = num2
-
-    # Symmetrize the 4×4 upper-left block
-    for i in range(4):
-        for j in range(i + 1, 4):
-            k[j][i] = k[i][j]
-
-    if intf.dim_aff[2] <= 0:
-        return k
-
-    # Residual DOFs 4,5 — match reference (ComputeKflessNoInteract tail)
-    num7 = 0.0
-    for i in range(ncol):
-        for j in range(nrow):
-            if idx(j, i) >= len(intf.trasv_1):
-                continue
-            ks = intf.trasv_1[idx(j, i)].get_k(alfa)
-            ecc = _intf_ecc_spring(intf, j, i)
-            num7 += ks * ecc * ecc
-    k[4][4] = num7
-    k[5][5] = num7
-    k[4][5] = -num7
-    k[5][4] = -num7
-
-    # coupling terms K[0..3,4] and K[0..3,5]
-    num7 = 0.0
-    num8 = 0.0
-    for i in range(ncol):
-        for j in range(nrow):
-            if idx(j, i) >= len(intf.trasv_1):
-                continue
-            ks = intf.trasv_1[idx(j, i)].get_k(alfa)
-            di = _intf_get_di(intf, j, i)
-            dj = _intf_get_dj(intf, j, i)
-            ecc = _intf_ecc_spring(intf, j, i)
-            num7 += ks * dj * ecc
-            num8 += ks * di * ecc
-    L = intf.length
-    if L > 1e-30:
-        num7 /= L
-        num8 /= L
-
-    if not constrained:
-        k[0][4] = -num7
-        k[1][4] = -num8
-        k[2][4] = num8
-        k[3][4] = num7
-        k[0][5] = num7
-        k[1][5] = num8
-        k[2][5] = -num8
-        k[3][5] = -num7
-    else:
-        k[0][4] = -num7 - num8
-        k[1][4] = (-num8 + num7) * L / 2.0
-        k[2][4] = num8
-        k[3][4] = num7
-        k[0][5] = num7 + num8
-        k[1][5] = (num8 - num7) * L / 2.0
-        k[2][5] = -num8
-        k[3][5] = -num7
-
-    # Symmetrize K[i,4..5] vs K[4..5,i]
-    for i in range(4):
-        k[4][i] = k[i][4]
-        k[5][i] = k[i][5]
-
-    return k
-
-
-def _compute_interface_kslid(intf: Interface, alfa: float = 0.0) -> List[List[float]]:
-    """2×2 sliding stiffness (port of ComputeKslid)."""
-    k_val = intf.slid[0].get_k(alfa) if intf.slid else 0.0
-    return [[k_val, -k_val], [-k_val, k_val]]
-
-
-def _compute_interface_kslid_op(intf: Interface, alfa: float = 0.0) -> List[List[float]]:
-    """Out-of-plane stiffness using the C# model's active ``TwoSprings`` branch."""
-    d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else 4
-    intf._compute_kslid_out_plan(alfa)
-    return [row[:] for row in intf.status.kslid_out_plan[:d2]]
-
-
 # ── Assembly helpers ────────────────────────────────────────────────────────
 
 def _assemble_afference(
@@ -313,13 +114,11 @@ def _assemble_global_k_legacy(
         d0 = intf.dim_aff[0] if len(intf.dim_aff) > 0 else dim0
         d1 = intf.dim_aff[1] if len(intf.dim_aff) > 1 else dim1
         d2 = intf.dim_aff[2] if len(intf.dim_aff) > 2 else dim2
+        if recompute_elements:
+            intf.compute_k(alfa)
 
         # Flexural block
-        k_flex = (
-            _compute_interface_kfless(intf, alfa)
-            if recompute_elements
-            else intf.status.k
-        )
+        k_flex = intf.status.k
         for i in range(d0):
             for j in range(d0):
                 k_ij = k_flex[i][j]
@@ -329,11 +128,7 @@ def _assemble_global_k_legacy(
 
         # Sliding block
         if intf.slid:
-            k_slid = (
-                _compute_interface_kslid(intf, alfa)
-                if recompute_elements
-                else intf.status.kslid
-            )
+            k_slid = intf.status.kslid
             for i in range(d1):
                 for j in range(d1):
                     ai = d0 + i
@@ -345,11 +140,7 @@ def _assemble_global_k_legacy(
 
         # Out-of-plane sliding block
         if len(intf.slid_out_plan) >= 2:
-            k_sop = (
-                _compute_interface_kslid_op(intf, alfa)
-                if recompute_elements
-                else intf.status.kslid_out_plan
-            )
+            k_sop = intf.status.kslid_out_plan
             for i in range(d2):
                 for j in range(d2):
                     ai = d0 + d1 + i
