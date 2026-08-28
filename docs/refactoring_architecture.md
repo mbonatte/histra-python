@@ -123,6 +123,19 @@ equal or stronger parity evidence.
    commit; preparation measured 0.532 seconds. The complete suite is 456
    passed, 5 skipped and the same 12 warnings in 75.37 seconds—flat against
    the preceding gate.
+10. The solver kernel split has started: `solver/hysteretic_kernels/` now owns
+    the compiled transverse hysteretic family
+    (`hysteretic_kernels/transverse.py`)—the float64 stress/tangent/rotation
+    envelopes, the generic evaluator, the zero-pinching/zero-damage
+    specialization with its fused advance/finish variants, the transverse
+    parameter-layout constants and the phase-code constants derived from
+    `PhaseEnum`. The kernels moved byte-identical; `hysteretic_batch.py` is
+    reduced from 4,938 to 3,682 lines and re-exports every moved symbol by
+    identity, keeping the scalar-vs-compiled differential tests, the
+    parallel-kernel gates and all constant-based contracts green without
+    modification. The complete suite is 459 passed, 5 skipped and the same 12
+    warnings in 75.20 seconds warm (one extra Numba cache rebuild occurred on
+    the first run)—flat against the preceding gate.
 
 ## Dependency rules
 
