@@ -279,6 +279,52 @@ inside njit). Further gains require optimizing inside the compiled hysteretic
 kernel (accuracy-critical; dedicated session with the full differential
 matrix) or the full 16-minute double-chain re-profile.
 
+### Element/spring class split completion (2026-08-28, §11)
+
+1. `springs/coulomb03.py` (1,118 lines) is split along the §11.2 boundaries
+   into `springs/coulomb03_envelope.py` (backbone envelope, TauLimite,
+   hardening modulus, Takeda envelope stress/tangent branches and
+   yielding-displacement helpers) and `springs/coulomb03_state.py` (Takeda and
+   Initial trial machines plus the commit/revert lifecycle) as mixins;
+   `coulomb03.py` keeps the fields, properties, XML adapter and registry
+   decoration (226 lines). Method bodies moved verbatim; the phase-transition
+   matrix, state-machine tests and batch differentials pass unchanged.
+2. `elements/quad.py` (1,059 lines) is split along the §11.1 boundaries into
+   `elements/quad_loads.py` (static/line/self-weight load integration) and
+   `elements/quad_geometry.py` (diagonal kinematics, `computeK`,
+   `GetDiagonalStiffness`) as mixins; `quad.py` keeps the fields, the
+   yield-search delegation, resisting-force/state machinery and the XML
+   adapter (400 lines). Bodies moved verbatim.
+3. Both splits are locked by architecture tests (`test_coulomb03_split_
+   architecture.py`, `test_quad_split_architecture.py`) asserting the mixin
+   method identity and that the owners have no reverse dependency on the
+   facades. Complete suite 495 passed, 5 skipped, same 12 warnings, 75.1 s.
+
+### Acceptance and history repair (2026-08-28)
+
+1. The gated 87-step live-load acceptance
+   (`test_complete_live_load_reference_path`, `HISTRA_RUN_LIVE_BENCHMARK=1`)
+   passes on the refactored code in 7.96 s.
+2. Full double-chain wall-time reprofile (§8.1, no profiler): No-P-Delta
+   chain (Vert 5.2 s + scour 0.6 s + 64 LiveLoad steps 3.3 s) = **9.3 s**;
+   P-Delta chain (Vert 1.3 s + scour 0.5 s + 131 LiveLoad steps 1130 s,
+   terminating at the model's max-displacement limit, code −3) = **1134.6 s**
+   (~8.6 s/step). Per-step load factor/reaction/displacement records are in
+   `my_model/benchmark_3_Pdelta/reprofile_benchmark_3.json`. The step-by-step
+   C# offset investigation (§13.1 sequence) remains open; the recorded
+   trajectories are the Python side of that diff. Note the No-P-Delta run
+   used the historical harness overrides (``target_displacement=20``,
+   ``max_u=30``, 64-step cap); its late-step reaction magnitudes diverge from
+   the C#-compared trajectory exactly as documented in §13.1.
+3. Commit-history repair: the mixed commit `2be2be7` was replaced by
+   `70377da` (the real postprocessing behavior fix) and `c9d5b9d` (pure EOL
+   normalization of the four untouched-behavior solver modules), and the
+   eighteen descendant commits were replayed onto it. Tree identity is proven:
+   ``git diff backup/pre-repair main`` is empty, and the complete suite
+   passes (495 passed, 5 skipped, 12 warnings). The old chain remains
+   reachable at `backup/pre-repair`; origin/main still carries the pre-repair
+   chain and needs a force-push decision by the repository owner.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
