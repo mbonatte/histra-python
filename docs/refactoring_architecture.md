@@ -325,6 +325,43 @@ matrix) or the full 16-minute double-chain re-profile.
    reachable at `backup/pre-repair`; origin/main still carries the pre-repair
    chain and needs a force-push decision by the repository owner.
 
+### §13.1 offset investigation — first divergence located (2026-08-28)
+
+Authored-settings double-chain run, every committed step diffed against the
+C# `ReactionSumStates` tables (per-step Python data in
+`my_model/benchmark_3_Pdelta/chain_python_authored.json`; raw wall-time
+reprofile in `reprofile_benchmark_3.json`):
+
+1. **Vert, No-P-Delta model: Python matches C# exactly** (0.000% at all five
+   steps). The core self-weight solver path is bit-faithful.
+2. **Vert, P-Delta model: diverges from step 1** (−7.9 % at step 1, −2.9 %
+   at step 5). The P-Delta contribution in Python's geometric-stiffness path
+   differs from C# from the very first increment (§13.1 step 4).
+3. **scour_1: C# reaction dips to −75.7 kN at step 1 and recovers to
+   −124.2 kN; Python stays flat at the pre-scour value** — the material
+   mutation + `preserve_committed_state` semantics produce a different load
+   path during scour (§13.1 step 2). End-state reactions differ by only
+   0.39 % (No-P-Delta) / 2.48 % (P-Delta).
+4. **LiveLoad_1 from the C# scour restart state matches C# exactly**
+   (`test_pdelta`, −241.648081). **LiveLoad_1 from Python's own scour state
+   diverges 20× at step 1** (−2404.9 vs −241.6, No-P-Delta authored settings).
+   A 0.4 % baseline reaction difference cannot explain this: the displacement-
+   controlled increment amplifies a difference in the *spring phase/tangent*
+   state left by Python's scour_1 (near-mechanism tangents), i.e. the
+   divergence is inherited from finding 3, not from the LiveLoad machinery.
+5. **P-Delta LiveLoad_1 (131 steps): the offset vs C# is near-constant**
+   (−6.2 to −7.2 kN, −2.5 ± 0.2 % across all 131 steps) — consistent with a
+   baseline/state carry-over from findings 2–3 rather than accumulating
+   trajectory drift.
+
+Conclusion: the §13.1 offsets are **not a LiveLoad solver defect**. They
+cascade from two earlier, now precisely located divergences: (a) the P-Delta
+contribution in `Vert` (geometric-stiffness assembly) and (b) the scour_1
+material-mutation load path / end-state spring phases. Concrete next steps:
+diff `SpringStatesTmp` phase codes for scour_1 step 5 (C# DB vs Python end
+state) to name the springs whose phases differ, and study the C#
+material-mutation + P-Delta assembly semantics for those two paths.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
