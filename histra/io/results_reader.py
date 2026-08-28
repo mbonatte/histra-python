@@ -276,10 +276,16 @@ def read_spring_states(
     try:
         last = read_last_committed_step(results_path, analysis_key, combination)
         step = last if step is None else int(step)
-        complete_rows = conn.execute(
+        # Plain tuple rows (no sqlite3.Row wrapper) for this large read; the
+        # column order comes from cursor.description, so the per-row value
+        # mapping is identical to the Row-keyed one.
+        cur = conn.execute(
             "SELECT * FROM SpringStates WHERE AnalysisKey=? AND Combination=? AND Step=?",
             (analysis_key, combination, step),
-        ).fetchall()
+        )
+        names = [d[0] for d in cur.description]
+        col = {name: idx for idx, name in enumerate(names)}
+        complete_rows = cur.fetchall()
         if complete_rows:
             table, rows, complete = "SpringStates", complete_rows, True
         else:
@@ -290,27 +296,41 @@ def read_spring_states(
                     "the C# database stores complete SpringStates only for the final step"
                 )
             table = "SpringStatesTmp"
-            rows = conn.execute(
+            cur = conn.execute(
                 "SELECT * FROM SpringStatesTmp WHERE AnalysisKey=? AND Combination=? AND Step=?",
                 (analysis_key, combination, step),
-            ).fetchall()
+            )
+            names = [d[0] for d in cur.description]
+            col = {name: idx for idx, name in enumerate(names)}
+            rows = cur.fetchall()
             complete = False
         if not rows:
             raise ResultsStateError(
                 f"No spring state in {table} for analysis {analysis_key}, combination {combination}, step {step}"
             )
+        # Large restart databases return tens of thousands of rows here.  Bind
+        # the column names once and build each per-row value mapping with
+        # zip instead of repeated sqlite3.Row key lookups; the produced
+        # mapping is identical (same keys, same values, same order).
+        columns = tuple(names)
         records: Dict[tuple[int, int, int, int], SpringStateRecord] = {}
+        pk, pt, sp, st, il, ak, cb, stp = (
+            col["ParentKey"], col["ParentType"], col["SpringPurpose"],
+            col["SpringType"], col["IdLocal"], col["AnalysisKey"],
+            col["Combination"], col["Step"],
+        )
         for row in rows:
-            values = {key: row[key] for key in row.keys() if key != "Id"}
+            values = dict(zip(columns, row))
+            del values["Id"]
             rec = SpringStateRecord(
-                parent_key=int(row["ParentKey"]),
-                parent_type=int(row["ParentType"]),
-                spring_purpose=int(row["SpringPurpose"]),
-                spring_type=int(row["SpringType"]),
-                id_local=int(row["IdLocal"]),
-                analysis_key=int(row["AnalysisKey"]),
-                combination=int(row["Combination"]),
-                step=int(row["Step"]),
+                parent_key=int(row[pk]),
+                parent_type=int(row[pt]),
+                spring_purpose=int(row[sp]),
+                spring_type=int(row[st]),
+                id_local=int(row[il]),
+                analysis_key=int(row[ak]),
+                combination=int(row[cb]),
+                step=int(row[stp]),
                 values=values,
                 complete=complete,
             )
