@@ -422,12 +422,13 @@ Every slice must pass all applicable gates:
    `equilibrium_audit.py`, `solve.py` facade; C# order preserved verbatim and
    gated by the C# checkpoint suites).
 6. Split large element and spring classes only after their scalar/compiled
-   differential coverage is complete. **Quad yield-search kernels extracted;
-   coulomb03 phase-transition matrices delivered.** The remaining
-   state-machine boundary work inside `coulomb03.py`/`quad.py` is deferred by
-   design: the plan's "pure kernels and helpers" scope for these classes is
-   delivered, and further method-signature conversion of the C#-parity state
-   machines is organizational rather than parity-relevant.
+   differential coverage is complete. **Complete:** Quad yield-search kernels
+   extracted and the class split into `elements/quad_loads.py` +
+   `elements/quad_geometry.py` (facade 400 lines); `coulomb03.py` split into
+   `springs/coulomb03_envelope.py` + `springs/coulomb03_state.py` (facade
+   226 lines) after the phase-transition matrices were delivered. The C#
+   state-machine bodies remain verbatim on the classes via mixins; no
+   method-signature conversion was needed or performed.
 7. Run the full C# benchmark inventory and long acceptance suites, then audit
    public API compatibility and dependency cycles before declaring the
    architecture refactor complete. **Flagged acceptance suites

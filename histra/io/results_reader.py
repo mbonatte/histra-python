@@ -276,9 +276,10 @@ def read_spring_states(
     try:
         last = read_last_committed_step(results_path, analysis_key, combination)
         step = last if step is None else int(step)
-        # Plain tuple rows (no sqlite3.Row wrapper) for this large read; the
-        # column order comes from cursor.description, so the per-row value
-        # mapping is identical to the Row-keyed one.
+        # Row objects are keyed by column name below, but sqlite3.Row key
+        # lookups are comparatively slow for tens of thousands of rows; the
+        # positional value mapping built here (columns from cursor.description)
+        # produces exactly the same per-row mapping, only faster.
         cur = conn.execute(
             "SELECT * FROM SpringStates WHERE AnalysisKey=? AND Combination=? AND Step=?",
             (analysis_key, combination, step),
