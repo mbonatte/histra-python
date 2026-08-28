@@ -619,6 +619,9 @@ def test_both_horizontal_interface_endpoints_use_parent_face_reference(monkeypat
     from types import SimpleNamespace
 
     prepare_model_module = importlib.import_module("histra.preprocessing.prepare_model")
+    contact_geometry = importlib.import_module(
+        "histra.preprocessing.contact_geometry"
+    )
 
     # Polygon ordering returned by the Python clipper for Ersino Quad
     # 1332 face 5 against Quad 1336 face 4.
@@ -631,7 +634,7 @@ def test_both_horizontal_interface_endpoints_use_parent_face_reference(monkeypat
     created: list[np.ndarray] = []
 
     monkeypatch.setattr(
-        prepare_model_module,
+        contact_geometry,
         "_quad_face_reference_edge",
         lambda model, quad, face: (
             np.array([0.0, 0.0, -80.0]),
@@ -644,7 +647,7 @@ def test_both_horizontal_interface_endpoints_use_parent_face_reference(monkeypat
         return len(created)
 
     monkeypatch.setattr(
-        prepare_model_module, "_find_or_create_geometric_node", remember_node
+        contact_geometry, "_find_or_create_geometric_node", remember_node
     )
     q1 = SimpleNamespace(reference_e3=(0.0, 1.0, 0.0))
     q2 = SimpleNamespace(reference_e3=(0.0, 1.0, 0.0))

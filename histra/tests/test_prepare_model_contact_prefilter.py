@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from histra.preprocessing.prepare_model import (
+from histra.preprocessing.contact_geometry import (
     _CONTACT_DISTANCE_TOLERANCE,
     _convex_quad_overlap_prefilter_batch,
     _coplanar_quad_intersection_prechecked,

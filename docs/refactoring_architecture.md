@@ -61,6 +61,16 @@ equal or stronger parity evidence.
    seconds versus 0.569 seconds immediately before extraction. The complete
    suite is 439 passed, 5 skipped and the same 12 warnings in 74.88 seconds,
    statistically flat versus the previous gate and 31.9% faster than baseline.
+5. Quad contact detection and interface topology generation are now owned by
+   `preprocessing/contact_geometry.py`, including the NumPy broad-phase
+   prefilter, exact clipping fallback, XNA float32 vector operations, geometric
+   node index and six-face Quad geometry cache. `prepare_model.py` is reduced
+   from 2,884 to 2,012 lines, 48.7% below its original size. Conservative
+   prefilter differentials, topology/afference reconstruction, offset-contact
+   cases and all compatibility identities pass. The numerical benchmark
+   signature remained unchanged at 0.538 seconds, and the complete suite is
+   440 passed, 5 skipped and the same 12 warnings in 75.24 seconds—flat against
+   the preceding gates and 31.5% faster than baseline.
 
 ## Dependency rules
 
@@ -150,8 +160,8 @@ Every slice must pass all applicable gates:
 1. Separate load assembly and complete C# coefficient coverage. **Complete.**
 2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
-   boundaries. **Constitutive mapping and spring factory complete; geometry and
-   afference remain in progress.**
+   boundaries. **Constitutive mapping, contact geometry and spring factory
+   complete; afference remains in progress.**
 4. Split compiled hysteretic kernels and runtime state ownership.
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
 6. Split large element and spring classes only after their scalar/compiled
