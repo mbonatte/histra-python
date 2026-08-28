@@ -203,6 +203,21 @@ equal or stronger parity evidence.
     sets ``final_code`` and breaks on the returned ``stop`` flag, preserving
     the C# execution order. The complete suite is 470 passed, 5 skipped and
     the same 12 warnings in 75.01 seconds—flat against the preceding gate.
+17. The large element and spring classes complete the §11 scope as pure-kernel
+    extractions with their public objects unchanged. The C# ``Quad``
+    yield-search family (compiled kernel, exact scalar oracle and dispatcher)
+    now lives in `elements/quad_kernels.py`; `Quad.set_non_linear_properties`
+    delegates to it and the compiled/scalar pair agrees to ~2e-10 relative
+    over a seeded geometry sweep. `springs/coulomb03.py` gained the complete
+    phase-transition matrices required by §11.2 (16 tests: first yield ±,
+    elastic unload tangents, reversal/reload sequences with exact traced
+    values, path updates on re-yield, Takeda rupture beyond ``rot3p``, Slip
+    on a closed envelope and its e2p recovery, Initial hardening increments,
+    normal-force envelope shifts through ``TauLimite``, absorbing Rupture,
+    energy identity and commit/revert round-trips) before any further split.
+    The complete suite is 489 passed, 5 skipped and the same 12 warnings in
+    76.31 seconds (+1.3 s from the new scalar-oracle sweep; everything else
+    flat).
 
 ## Dependency rules
 
