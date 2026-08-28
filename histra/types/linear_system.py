@@ -80,11 +80,16 @@ class LinearSystem:
 
     def get_x_per_b(self) -> float:
         # C# MatrixManager.Vector.operator ^ is a left-associated scalar loop.
-        # Keep this reduction order for energy convergence compatibility.
-        value = 0.0
-        for index in range(self.n):
-            value += float(self.x[index]) * float(self.b[index])
-        return value
+        # Keep this reduction order for energy convergence compatibility:
+        # np.add.accumulate is a strictly sequential left-associated C loop, so
+        # the accumulated products reproduce the scalar loop's rounding exactly
+        # (bit-identical over randomized adversarial-magnitude differentials);
+        # np.dot / np.sum / builtin sum would change the rounding (pairwise or
+        # Neumaier) and could flip marginal convergence decisions.
+        products = np.multiply(self.x, self.b)
+        if products.size == 0:
+            return 0.0
+        return float(np.add.accumulate(products)[-1])
 
     def set_x(self, i: int, v: float) -> None:
         self.x[i] = v
