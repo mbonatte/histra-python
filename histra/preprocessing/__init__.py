@@ -1,7 +1,7 @@
 """Model preparation and readiness validation."""
 
+from .errors import ModelPreparationError
 from .prepare_model import (
-    ModelPreparationError,
     PreparationReport,
     prepare_model,
     rebuild_interface_springs,

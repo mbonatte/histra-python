@@ -40,6 +40,17 @@ equal or stronger parity evidence.
    5 skipped and 12 expected safety warnings in 76.40 seconds—6.6% faster than
    the preceding slice and 30.5% faster than the original baseline, despite 11
    additional strict tests.
+3. Masonry material mapping is now owned by
+   `preprocessing/constitutive_laws.py`; `prepare_model.py` retains compatibility
+   aliases while shrinking from 3,921 to 3,715 lines. Direct comparison with
+   C# `ConstitutiveLawOperations.cs` and `MasonryMaterial.AlfaShear` exposed and
+   fixed three parity defects: shear-alpha boundary clamping, inversion of the
+   shear ductility flag into `IsDuctilityFixed`, and out-of-plane vertical
+   sliding's domain/energy selection. Exact tests cover every flexural and
+   shear constructor field, all six sliding slots, float32 material rounding,
+   and the C# diagonal elasto-plastic asymmetry. The complete suite is 438
+   passed, 5 skipped and the same 12 expected safety warnings in 74.54 seconds,
+   2.4% faster than the preceding slice and 32.2% faster than baseline.
 
 ## Dependency rules
 
@@ -129,7 +140,8 @@ Every slice must pass all applicable gates:
 1. Separate load assembly and complete C# coefficient coverage. **Complete.**
 2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
-   boundaries.
+   boundaries. **Constitutive mapping complete; remaining boundaries in
+   progress.**
 4. Split compiled hysteretic kernels and runtime state ownership.
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
 6. Split large element and spring classes only after their scalar/compiled

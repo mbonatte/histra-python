@@ -34,6 +34,17 @@ from histra.elements.quad_state import QuadState
 from histra.model.masonry_material import MasonryMaterial
 from histra.model.model import Model
 from histra.model.restraint import Restraint
+from histra.preprocessing.constitutive_laws import (
+    CoulombLaw as _CoulombLaw,
+    HystereticLaw as _HystereticLaw,
+    diagonal_flex_law as _diagonal_flex_law,
+    flex_law as _flex_law,
+    material_bool as _bool,
+    material_float as _float,
+    shear_law as _shear_law,
+    sliding_law as _sliding_law,
+)
+from histra.preprocessing.errors import ModelPreparationError
 from histra.springs.coulomb03 import SpringCoulomb03
 from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
@@ -64,10 +75,6 @@ def _interface_division_count(size: float, *, minimum: int, imax: float) -> int:
     )
 
 
-class ModelPreparationError(RuntimeError):
-    """Raised when an HRX uses a preprocessing feature not yet translated."""
-
-
 @dataclass(frozen=True)
 class PreparationReport:
     prepared: bool
@@ -80,53 +87,6 @@ class PreparationReport:
     transverse_springs: int
     sliding_springs: int
     out_of_plane_springs: int
-
-
-@dataclass(frozen=True)
-class _HystereticLaw:
-    E: float
-    fy_t: float
-    fy_c: float
-    tensile_curve: str
-    compressive_curve: str
-    ratio_et_t: float
-    ratio_et_c: float
-    alfa_r_t: float
-    alfa_r_c: float
-    alfa_u_t: float
-    alfa_u_c: float
-    G_t: float
-    G_c: float
-    eps_u_t: float
-    eps_u_c: float
-    law_type: str
-
-
-@dataclass(frozen=True)
-class _CoulombLaw:
-    E: float
-    cohesion: float
-    mu: float
-    plastic_stiffness_ratio: float
-    max_tensile_ratio: float
-    reload_stiffness_ratio: float = 1.0
-    plastic_stiffness_ratio2: float = 1.0
-    plastic_strain: float = 1.0
-    sub_law: str = "Coulomb"
-    hysteretic_type: str = "Initial"
-    fracture_energy: bool = False
-    G: float = 0.0
-    ductility: float = 100000.0
-    is_ductility_fixed: bool = True
-    check_contact_area: bool = False
-    bcacovic: float = 0.0
-    # C# emits a ConstitutiveLawElastic for a sliding direction when the
-    # corresponding MasonryMaterial ``scorr*`` switch is disabled.  The
-    # stiffness definition remains the same, but the resulting interface
-    # spring must be SpringLinearElastic rather than SpringCoulomb03.
-    is_elastic: bool = False
-
-
 
 
 def _new_hysteretic_spring() -> SpringHysteretic:
@@ -259,172 +219,6 @@ def _material(model: Model, key: int) -> MasonryMaterial:
         return model.collections.materials[key]
     except KeyError as exc:
         raise ModelPreparationError(f"Missing MasonryMaterial key {key}.") from exc
-
-
-def _bool(material: MasonryMaterial, name: str, default: bool = False) -> bool:
-    return bool(material.value(name, default))
-
-
-def _float(material: MasonryMaterial, name: str, default: float = 0.0) -> float:
-    """Read a C# ``MasonryMaterial`` numeric property as ``System.Single``.
-
-    The desktop material class stores these values in ``float`` fields.  The
-    rounded value is then promoted to ``double`` by constitutive constructors.
-    Keeping the XML decimal as a Python double changes near-zero Coulomb
-    capacities enough to select a different phase.
-    """
-    return float(np.float32(float(material.value(name, default))))
-
-
-def _flex_law(material: MasonryMaterial, *, vertical: bool = False) -> _HystereticLaw:
-    suffix = "Ver" if vertical else "Hor"
-    curve_suffix = "Vertical" if vertical else ""
-    E = _float(material, "Ever" if vertical else "Ehor")
-    fy_t = _float(material, f"Ftm{suffix}")
-    fy_c = _float(material, f"Fm{suffix}")
-    duct_t = _float(material, f"DuctTrazRocking{suffix}", 1.0)
-    duct_c = _float(material, f"DuctComprRocking{suffix}", 1.0)
-    # Exact ConstitutiveLawHysteretic constructor semantics.  Despite their
-    # names, IsDuct* == true makes the ultimate strain effectively unlimited;
-    # false converts the supplied ductility factor into a strain at yield.
-    eps_t = 1.0e20 if _bool(material, "IsDuctTraz", True) else duct_t * fy_t / E
-    eps_c = 1.0e20 if _bool(material, "IsDuctCompr", False) else duct_c * fy_c / E
-    return _HystereticLaw(
-        E=E,
-        fy_t=fy_t,
-        fy_c=fy_c,
-        tensile_curve=str(material.value(f"TensileCurveType{curve_suffix}", "LinearSoftening")),
-        compressive_curve=str(material.value(f"CompressiveCurveType{curve_suffix}", "LinearSoftening")),
-        ratio_et_t=_float(material, "RatioEtTraction"),
-        ratio_et_c=_float(material, "RatioEtCompression"),
-        # C# passes the BetaUnload values into Alfa_u and hard-codes Alfa_r=1.
-        alfa_r_t=1.0,
-        alfa_r_c=1.0,
-        alfa_u_t=_float(material, f"BetaUnloadTractionRocking{suffix}"),
-        alfa_u_c=_float(material, f"BetaUnloadCompressionRocking{suffix}"),
-        G_t=_float(material, "GtVer" if vertical else "Gt"),
-        G_c=_float(material, "GcVer" if vertical else "Gc"),
-        eps_u_t=eps_t,
-        eps_u_c=eps_c,
-        law_type=str(material.value("ConstitutiveLawFlex", "Hysteretic")),
-    )
-
-
-def _diagonal_flex_law(material: MasonryMaterial) -> _HystereticLaw:
-    """Apply C# ``PropOrthotropyParameter(sqrt(2)/2, sqrt(2)/2)``."""
-    vertical = _flex_law(material, vertical=True)
-    horizontal = _flex_law(material, vertical=False)
-    c = math.sqrt(2.0) / 2.0
-    w = c * c
-    elasto_plastic = vertical.law_type.startswith("ElastoPlastic")
-    return _HystereticLaw(
-        E=vertical.E * w + horizontal.E * w,
-        fy_t=vertical.fy_t * w + horizontal.fy_t * w,
-        fy_c=vertical.fy_c * w + horizontal.fy_c * w,
-        tensile_curve=horizontal.tensile_curve,
-        compressive_curve=horizontal.compressive_curve,
-        ratio_et_t=vertical.ratio_et_t * w + horizontal.ratio_et_t * w,
-        ratio_et_c=vertical.ratio_et_c * w + horizontal.ratio_et_c * w,
-        alfa_r_t=vertical.alfa_r_t,
-        alfa_r_c=vertical.alfa_r_c,
-        alfa_u_t=vertical.alfa_u_t,
-        alfa_u_c=vertical.alfa_u_c,
-        G_t=vertical.G_t * w + horizontal.G_t * w,
-        G_c=vertical.G_c * w + horizontal.G_c * w,
-        # C# ConstitutiveLawElastoPlastic contains a source-level asymmetry:
-        # tensile ultimate strain uses c rather than c².
-        eps_u_t=(vertical.eps_u_t * c + horizontal.eps_u_t * c)
-        if elasto_plastic
-        else (vertical.eps_u_t * w + horizontal.eps_u_t * w),
-        eps_u_c=vertical.eps_u_c * w + horizontal.eps_u_c * w,
-        law_type=vertical.law_type,
-    )
-
-
-def _shear_law(material: MasonryMaterial) -> _CoulombLaw:
-    alfa = _float(material, "AlfaShearUser", 1.0)
-    if alfa == 0.0:
-        raise ModelPreparationError(f"Material {material.key} has AlfaShearUser=0.")
-    return _CoulombLaw(
-        E=_float(material, "Gd") / alfa,
-        cohesion=_float(material, "fvk0d"),
-        mu=_float(material, "FrictionRatioShear"),
-        plastic_stiffness_ratio=_float(material, "ShearPlasticStiffnessRatio"),
-        max_tensile_ratio=_float(material, "ShearMaxTensileRatio", 0.5),
-        reload_stiffness_ratio=_float(material, "ShearReloadStiffnessRatio", 1.0),
-        plastic_stiffness_ratio2=_float(material, "ShearPlasticStiffnessRatio2", 1.0),
-        plastic_strain=_float(material, "ShearPlasticStrain", 100.0),
-        sub_law=str(material.value("CriterioSnervamento", "Coulomb")),
-        hysteretic_type=str(material.value("UnloadShear", "Initial")),
-        fracture_energy=(str(material.value("ConstitutiveLawMasonryShear", "")) == "ElastoPlasticFractureEnergyFixed"),
-        G=_float(material, "FractureEnergyShear"),
-        ductility=_float(material, "DuctilityShear", 100.0),
-        is_ductility_fixed=True,
-        check_contact_area=_bool(material, "CheckContactArea", False),
-        bcacovic=_float(material, "Bcacovic"),
-    )
-
-
-def _sliding_law(
-    material: MasonryMaterial,
-    *,
-    out_of_plane: bool,
-    direction: str,
-) -> _CoulombLaw:
-    """Return one of C#'s horizontal, vertical or direction-3 laws.
-
-    ``ConstitutiveLawOperations`` creates three in-plane laws and three
-    out-of-plane laws.  Direction 3 is materially different for in-plane
-    sliding: it uses ``Gd`` directly, while horizontal/vertical use
-    ``2*Gd/(1-AlfaShear)``.  This distinction is decisive on Quad faces 4/5.
-    """
-    normalized = direction.casefold()
-    if normalized not in {"hor", "vert", "dir3"}:
-        raise ValueError(f"Unsupported sliding-law direction {direction!r}.")
-    if out_of_plane or normalized == "dir3":
-        E = _float(material, "Gd")
-    else:
-        alpha = _float(material, "AlfaShearUser", 0.9)
-        if abs(1.0 - alpha) <= 1.0e-12:
-            raise ModelPreparationError(f"Material {material.key} has AlfaShearUser=1.")
-        E = 2.0 * _float(material, "Gd") / (1.0 - alpha)
-
-    if normalized == "hor":
-        suffix = "Hor"
-        fracture_name = "SlidingFractureEnergy"
-        energy_name = "Gs"
-        max_tensile_name = "SlidingMaxTensileRatioHor"
-    elif normalized == "vert":
-        suffix = "Vert"
-        fracture_name = "SlidingFractureEnergyVer"
-        energy_name = "GsVer"
-        max_tensile_name = "SlidingMaxTensileRatioVer"
-    else:
-        suffix = "Dir3"
-        fracture_name = "SlidingFractureEnergyDir3"
-        energy_name = "GsDir3"
-        # C# uses the vertical maximum-tension ratio for direction 3.
-        max_tensile_name = "SlidingMaxTensileRatioVer"
-    enabled_name = {
-        "hor": "scorrhor",
-        "vert": "scorrvert",
-        "dir3": "scorrDir3",
-    }[normalized]
-    return _CoulombLaw(
-        E=E,
-        cohesion=_float(material, f"CohesionSliding{suffix}"),
-        mu=_float(material, f"FrictionRatioSliding{suffix}"),
-        plastic_stiffness_ratio=_float(material, f"SlidingPlasticStiffnessRatio{suffix}"),
-        max_tensile_ratio=_float(material, max_tensile_name, 0.8),
-        sub_law=str(material.value(f"SlidingYieldingDomain{suffix}", "Coulomb")),
-        hysteretic_type="Initial",
-        fracture_energy=_bool(material, fracture_name, False),
-        G=_float(material, energy_name),
-        ductility=100000.0,
-        is_ductility_fixed=True,
-        check_contact_area=_bool(material, "CheckContactArea", False),
-        is_elastic=not _bool(material, enabled_name, False),
-    )
 
 
 def _cached_flex_law(
