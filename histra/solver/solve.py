@@ -10,7 +10,7 @@ import numpy as np
 from histra.model.model import Model
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.solver.arc_length import ArcLength
-from histra.solver.assembler import assemble_load_vector
+from histra.solver.load_assembly import assemble_load_vector
 from histra.solver.incremental_integrator import StaticIntegrator
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager, pdelta_enabled

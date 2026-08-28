@@ -15,16 +15,13 @@ from scipy.sparse.linalg import splu
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.model.model import Model
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
-from histra.solver.assembler import (
-    assemble_global_k,
-    generate_line_loads,
-    generate_self_weight_loads,
-)
+from histra.solver.assembler import assemble_global_k
 from histra.solver.cancellation import (
     CancelCheck,
     exclusive_solver_access,
     raise_if_cancelled,
 )
+from histra.solver.load_assembly import generate_line_loads, generate_self_weight_loads
 from histra.solver.mass_matrix import (
     MassMatrixAssembly,
     MassMatrixError,

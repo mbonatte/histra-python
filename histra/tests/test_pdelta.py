@@ -17,8 +17,10 @@ from histra.model.load import (
     LoadTemplateItem,
 )
 from histra.model.model import Collections, Model
+from histra.solver.equilibrium import UnsafeEquilibriumWarning
 from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.solver.session import AnalysisSession
+from histra.solver.solve import solve_static_nonlinear
 from histra.types import AfferenceEntry, Point
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -171,30 +173,43 @@ def test_pdelta_computation_on_benchmark():
     assert np.linalg.norm(pq) > 0.0
 
 
-@pytest.mark.skipif(
-    not BENCHMARK_NO_PDELTA.exists() or not BENCHMARK_PDELTA.exists(),
-    reason="benchmark_3_Pdelta assets not available",
+@pytest.mark.parametrize(
+    ("hrx_path", "expected_csharp_reaction_z"),
+    [
+        (BENCHMARK_NO_PDELTA, -241.64808105351403),
+        (BENCHMARK_PDELTA, -241.65975634241477),
+    ],
+    ids=["linear-geometry", "pdelta"],
 )
-def test_pdelta_vs_no_pdelta_reactions_differ():
-    """Test that P-Delta effects produce distinct reactions compared to linear geometry."""
-    m_no_pd = load_model(BENCHMARK_NO_PDELTA)
-    ModelManager.prepare_model(m_no_pd)
-    s_no_pd = AnalysisSession(m_no_pd)
-    s_no_pd.run("Vert")
-    s_no_pd.run("scour_1")
-    res_no_pd = s_no_pd.run("LiveLoad_1", max_committed_steps=3)
+def test_live_step_one_matches_csharp_reaction_checkpoint(
+    hrx_path: Path,
+    expected_csharp_reaction_z: float,
+) -> None:
+    """Restart from C# scour state and strictly verify each geometry path.
 
-    m_pd = load_model(BENCHMARK_PDELTA)
-    ModelManager.prepare_model(m_pd)
-    s_pd = AnalysisSession(m_pd)
-    s_pd.run("Vert")
-    s_pd.run("scour_1")
-    res_pd = s_pd.run("LiveLoad_1", max_committed_steps=3)
+    The previous test reran both complete predecessor chains and only asserted
+    that their third-step reactions differed.  The sibling ``.Results`` files
+    already contain authoritative scour checkpoints, so a one-step restart is
+    both faster and a materially stronger C# regression.
+    """
 
-    assert len(res_no_pd.committed_steps) == 3
-    assert len(res_pd.committed_steps) == 3
+    if not hrx_path.exists() or not hrx_path.with_suffix(".Results").exists():
+        pytest.skip(f"benchmark assets not available for {hrx_path.name}")
 
-    # Reactions under P-Delta include macro-element moment shifts
-    r3_no_pd = res_no_pd.committed_steps[-1]["reaction_z"]
-    r3_pd = res_pd.committed_steps[-1]["reaction_z"]
-    assert abs(r3_pd - r3_no_pd) > 0.5
+    model = load_model(hrx_path)
+    live = model.collections.analyses[22]
+    with pytest.warns(UnsafeEquilibriumWarning):
+        code, steps = solve_static_nonlinear(
+            model,
+            live,
+            results_path=hrx_path.with_suffix(".Results"),
+            max_committed_steps=1,
+        )
+
+    assert code == 0
+    assert len(steps) == 1
+    assert steps[0]["step"] == 1
+    assert steps[0]["status"] == "OK"
+    error = abs(steps[0]["reaction_z"] - expected_csharp_reaction_z)
+    assert error <= 1.0e-2
+    assert error / abs(expected_csharp_reaction_z) <= 5.0e-5

@@ -6,7 +6,8 @@ import scipy.sparse as sp
 
 from histra.model.model import Model
 from histra.types.linear_system import LinearSystem
-from .assembler import assemble_global_k, assemble_load_vector, extract_displacements
+from .assembler import assemble_global_k
+from .load_assembly import assemble_load_vector, extract_displacements
 
 
 def solve_linear(

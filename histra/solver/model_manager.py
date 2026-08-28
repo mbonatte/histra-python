@@ -5,9 +5,9 @@ from typing import Any, Callable
 import numpy as np
 
 from histra.model.model import Model
-from histra.solver.assembler import (
+from histra.solver.assembler import assemble_global_k
+from histra.solver.load_assembly import (
     _get_load_template_coefficient,
-    assemble_global_k,
     assemble_load_vector,
 )
 from histra.solver.program import Program
