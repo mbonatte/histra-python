@@ -71,6 +71,17 @@ equal or stronger parity evidence.
    signature remained unchanged at 0.538 seconds, and the complete suite is
    440 passed, 5 skipped and the same 12 warnings in 75.24 seconds—flat against
    the preceding gates and 31.5% faster than baseline.
+6. Quad/Interface afference mapping and the float32 bilinear/inverse-bilinear
+   interpolation are now owned by `preprocessing/afference.py`, including the
+   C# bisection reference, the scalar float32 Newton path and the bit-exact
+   Numba kernels. `prepare_model.py` is reduced from 2,012 to 1,366 lines,
+   65.6% below its original size, and keeps identity re-exports locked by a
+   dedicated architecture test. The full preprocessing benchmark output
+   (interface topology, afference sequence, spring and stiffness error
+   signatures) is bit-identical to the preceding commit; preparation measured
+   0.465 seconds. The complete suite is 442 passed, 5 skipped and the same 12
+   warnings in 75.14 seconds warm (one extra Numba cache rebuild occurred on
+   the first run after the module move)—flat against the preceding gate.
 
 ## Dependency rules
 
@@ -160,8 +171,8 @@ Every slice must pass all applicable gates:
 1. Separate load assembly and complete C# coefficient coverage. **Complete.**
 2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
-   boundaries. **Constitutive mapping, contact geometry and spring factory
-   complete; afference remains in progress.**
+   boundaries. **Constitutive mapping, contact geometry, spring factory and
+   afference complete.**
 4. Split compiled hysteretic kernels and runtime state ownership.
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
 6. Split large element and spring classes only after their scalar/compiled

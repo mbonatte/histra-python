@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 
 
-pm = importlib.import_module("histra.preprocessing.prepare_model")
+aff = importlib.import_module("histra.preprocessing.afference")
 
 
 def _float32_bits(values: tuple[np.float32, np.float32]) -> np.ndarray:
     return np.asarray(values, dtype=np.float32).view(np.uint32)
 
 
-@pytest.mark.skipif(pm._inverse_bilinear_f32_nb is None, reason="Numba is unavailable")
+@pytest.mark.skipif(aff._inverse_bilinear_f32_nb is None, reason="Numba is unavailable")
 def test_compiled_inverse_bilinear_matches_scalar_float32_reference_bit_exactly() -> None:
     rng = np.random.default_rng(20260820)
     base = np.asarray(
@@ -37,11 +37,11 @@ def test_compiled_inverse_bilinear_matches_scalar_float32_reference_bit_exactly(
             vertices = np.ascontiguousarray(vertices[:, orientation])
             u = np.float32(rng.uniform(-0.95, 0.95))
             v = np.float32(rng.uniform(-0.95, 0.95))
-            point = pm._bilinear_f32(vertices, u, v)
+            point = aff._bilinear_f32(vertices, u, v)
 
-            expected = pm._inverse_bilinear_f32_python(vertices, point)
-            compiled = pm._inverse_bilinear_f32_nb(vertices, point)
-            dispatched = pm._inverse_bilinear_f32(vertices, point)
+            expected = aff._inverse_bilinear_f32_python(vertices, point)
+            compiled = aff._inverse_bilinear_f32_nb(vertices, point)
+            dispatched = aff._inverse_bilinear_f32(vertices, point)
 
             np.testing.assert_array_equal(
                 _float32_bits(compiled), _float32_bits(expected)

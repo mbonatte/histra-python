@@ -25,6 +25,7 @@ from histra.types.point import Point
 from histra.io.hr_loader import load_model
 
 pm = importlib.import_module("histra.preprocessing.prepare_model")
+aff = importlib.import_module("histra.preprocessing.afference")
 ROOT = Path(__file__).resolve().parents[1]
 LOCKED_HRX = ROOT / "model-output" / "model.hrx"
 
@@ -459,14 +460,16 @@ def test_afference_reuses_each_quad_endpoint_warping_once(monkeypatch):
                     for node_key in intf.node_keys
                 )
 
+    # The warping vector is resolved inside the owning afference module, so
+    # the interception must patch the owner, not the facade alias.
     calls: list[tuple[int, tuple[float, float, float]]] = []
-    original = pm._warping_vector_from_geometry
+    original = aff._warping_vector_from_geometry
 
     def counted(geometry, point):
         calls.append((id(geometry), tuple(float(value) for value in point)))
         return original(geometry, point)
 
-    monkeypatch.setattr(pm, "_warping_vector_from_geometry", counted)
+    monkeypatch.setattr(aff, "_warping_vector_from_geometry", counted)
     pm._assign_interface_afference(model)
 
     assert len(calls) == len(expected_warping_pairs)
