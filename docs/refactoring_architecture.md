@@ -147,6 +147,14 @@ equal or stronger parity evidence.
     re-exports locked by a dedicated architecture test. The complete suite is
     463 passed, 5 skipped and the same 12 warnings in 75.39 seconds—flat
     against the preceding gate.
+12. `solver/hysteretic_topology.py` now owns the immutable compact topology and
+    extraction layer: the `_InterfaceSlice` record, the inverted
+    local-force afference topology builder, the parameter/committed/trial
+    extraction helpers (the scalar oracle for the compiled dense layouts) and
+    the parameter attrgetters. `hysteretic_batch.py` is reduced from 2,831 to
+    2,718 lines with identity re-exports covered by the kernel-owners
+    architecture test. The complete suite is 464 passed, 5 skipped and the
+    same 12 warnings in 76.05 seconds—flat against the preceding gate.
 
 ## Dependency rules
 

@@ -74,6 +74,25 @@ def test_kernel_modules_share_the_transverse_phase_codes():
         assert getattr(interface_coulomb, name) is getattr(transverse, name)
 
 
+def test_hysteretic_batch_facade_reexports_topology_layer():
+    batch = importlib.import_module("histra.solver.hysteretic_batch")
+    topology = importlib.import_module("histra.solver.hysteretic_topology")
+    names = (
+        "_InterfaceSlice",
+        "_SIMPLE_PARAM_GETTER",
+        "_PARAM_GETTER",
+        "_build_force_by_dof_topology",
+        "_extract_spring_committed",
+        "_extract_spring_curve_type",
+        "_extract_spring_params",
+        "_extract_spring_target",
+        "_extract_spring_trial",
+    )
+
+    for name in names:
+        assert getattr(batch, name) is getattr(topology, name)
+
+
 def test_kernel_owners_have_no_reverse_dependency_on_hysteretic_batch():
     for module in (interface_coulomb, quad_takeda):
         source = importlib.util.find_spec(module.__name__).origin
