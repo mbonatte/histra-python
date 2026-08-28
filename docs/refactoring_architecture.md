@@ -107,6 +107,22 @@ equal or stronger parity evidence.
    the preceding commit; preparation measured 0.536 seconds. The complete
    suite is 454 passed, 5 skipped and the same 12 warnings in 75.12
    seconds—flat against the preceding gate.
+9. Model-dependent spring assignment is now owned by
+   `preprocessing/spring_assignment.py`: diagonal Quad springs, per-side
+   transverse/sliding/out-of-plane spring creation, and the C#
+   ``Interface.SetSpring`` combination order, binding the generic
+   `preprocessing/spring_factory.py` arithmetic to concrete objects.
+   `prepare_model.py` is reduced from 756 to 247 lines, 93.7% below its
+   original size, keeping only `PreparationReport`, the `prepare_model`
+   orchestrator, readiness validation and stable compatibility re-exports.
+   Owner-module monkeypatch retargeting preserves the plane-distance-once and
+   one-parse-per-law call-count contracts; the C# quirks (ultimate
+   displacement after side combination, shared out-of-plane temporary for
+   custom-material restraints, direction-3 broad-face modulus) remain covered.
+   The full preprocessing benchmark output is bit-identical to the preceding
+   commit; preparation measured 0.532 seconds. The complete suite is 456
+   passed, 5 skipped and the same 12 warnings in 75.37 seconds—flat against
+   the preceding gate.
 
 ## Dependency rules
 
@@ -196,8 +212,7 @@ Every slice must pass all applicable gates:
 1. Separate load assembly and complete C# coefficient coverage. **Complete.**
 2. Split stiffness formulas from sparse topology/scatter assembly. **Complete.**
 3. Split model preparation along constitutive, geometry, afference and factory
-   boundaries. **Constitutive mapping, contact geometry, spring factory and
-   afference complete.**
+   boundaries. **Complete.**
 4. Split compiled hysteretic kernels and runtime state ownership.
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
 6. Split large element and spring classes only after their scalar/compiled

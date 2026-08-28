@@ -28,6 +28,7 @@ pm = importlib.import_module("histra.preprocessing.prepare_model")
 aff = importlib.import_module("histra.preprocessing.afference")
 fg = importlib.import_module("histra.preprocessing.fibre_geometry")
 ms = importlib.import_module("histra.preprocessing.material_selection")
+sa = importlib.import_module("histra.preprocessing.spring_assignment")
 ROOT = Path(__file__).resolve().parents[1]
 LOCKED_HRX = ROOT / "model-output" / "model.hrx"
 
@@ -503,15 +504,17 @@ def test_interface_sliding_plane_distance_is_computed_once_per_quad_side(
         )
     )
 
+    # _create_interface_springs resolves the distance helper inside the
+    # spring_assignment owner, so the interception must patch the owner.
     calls: list[int] = []
-    original = pm._distance_to_interface_plane
+    original = sa._distance_to_interface_plane
 
     def counted(quad, interface):
         calls.append(int(quad.key))
         return original(quad, interface)
 
-    monkeypatch.setattr(pm, "_distance_to_interface_plane", counted)
-    pm._create_interface_springs(
+    monkeypatch.setattr(sa, "_distance_to_interface_plane", counted)
+    sa._create_interface_springs(
         model,
         intf,
         flex_law_cache={},
