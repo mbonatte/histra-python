@@ -1,44 +1,39 @@
-"""Step execution for the static nonlinear analysis.
+"""Continuation controls for the static nonlinear analysis.
 
-Owns the committed-step loop: pre-step snapshots, the integrator/algorithm
-attempt sequence, ALS and arc-length retry/cutback continuation, cancellation
-and failure rollback, the independent equilibrium audit hand-off, energy
-accounting, commit and per-step result projection. The call order inside the
-loop is the C# ``StaticNonLinearAnalysis`` execution order and is observable
-through path-dependent spring phases, cached stiffness and arc-length state;
-it must not be reordered.
+Automatic load-step reduction (ALS) following the original C# sequence, the
+load-control predicate and the shared element/state commit helper used by the
+step executor and the ALS sub-stepping path.
+
+ALS always restarts from an exact pre-step snapshot: this restores external
+loads, pseudo-time, all local element values and every trial/committed spring
+field before any reduced increment is applied.
 """
 from __future__ import annotations
 
 import time
-import warnings
-from typing import Any, Callable
-
-import numpy as np
+from typing import Any
 
 from histra.model.model import Model
-from histra.postprocessing import compute_total_reaction
-from histra.solver.arc_length import ArcLength
-from histra.solver.cancellation import (
-    CANCELLED_EXIT_CODE,
-    SolverCancelled,
-)
-from histra.solver.continuation import (
-    _als_loop,
-    _commit_state,
-    _is_load_control,
-)
-from histra.solver.diagnostics import DiagnosticOptions
-from histra.solver.equilibrium import UNSAFE_EQUILIBRIUM_EXIT_CODE
-from histra.solver.equilibrium_audit import run_equilibrium_audit
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
-from histra.solver.incremental_integrator import StaticIntegrator
-from histra.types.linear_system import LinearSolveError, LinearSystem
+from histra.types.linear_system import LinearSystem
 
+
+def _is_load_control(an: Any) -> bool:
+    return "ArcLength" not in str(getattr(an, "integration_method", "LoadControl"))
+
+
+
+def _commit_state(model: Model, ls: LinearSystem) -> None:
+    runtime = ModelManager.hysteretic_batch_for(model)
+    if runtime is not None:
+        runtime.commit()
+    for collection_name in ("quads", "interfaces"):
+        for element in getattr(model.collections, collection_name).values():
+            element.commit(ls)
 
 def _execute_steps(
     model: Model,
@@ -279,32 +274,90 @@ def _execute_steps(
             p.log(f"Analysis stopped: convergence failed at step {step} (code {result})")
             break
         reaction = compute_total_reaction(model)
-        equilibrium_fields, unsafe_equilibrium_steps, warned_unsafe_equilibrium, audit_stop = run_equilibrium_audit(
-            reaction=reaction,
-            integrator=integrator,
-            algorithm=algorithm,
-            analysis=analysis,
-            step=step,
-            p=p,
-            ls=ls,
-            dof=dof,
-            n=n,
-            initial_reaction=initial_reaction,
-            equilibrium_target_force=equilibrium_target_force,
-            equilibrium_reference_load_factor=equilibrium_reference_load_factor,
-            equilibrium_policy=equilibrium_policy,
-            equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
-            equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
-            equilibrium_residual_tolerance=equilibrium_residual_tolerance,
-            step_snapshot=step_snapshot,
-            diagnostic_writer=diagnostic_writer,
-            step_data=step_data,
-            unsafe_equilibrium_steps=unsafe_equilibrium_steps,
-            warned_unsafe_equilibrium=warned_unsafe_equilibrium,
-        )
-        if audit_stop:
-            final_code = UNSAFE_EQUILIBRIUM_EXIT_CODE
-            break
+        equilibrium_fields: dict[str, Any] = {
+            "equilibrium_checked": equilibrium_policy != "off",
+        }
+        if equilibrium_policy != "off":
+            audit = audit_static_equilibrium(
+                reaction=reaction,
+                reference_reaction=initial_reaction,
+                target_force=equilibrium_target_force,
+                load_factor_increment=(
+                    float(integrator.mult) - equilibrium_reference_load_factor
+                ),
+                residual=ls.b,
+                force_absolute_tolerance=equilibrium_force_absolute_tolerance,
+                force_relative_tolerance=equilibrium_force_relative_tolerance,
+                residual_tolerance=equilibrium_residual_tolerance,
+            )
+            equilibrium_fields.update(audit.step_fields())
+            if not audit.safe:
+                unsafe_equilibrium_steps += 1
+                message = audit.warning_message(
+                    analysis_name=str(getattr(analysis, "name", "")),
+                    step=step,
+                    criterion=str(algorithm.the_test.criterion),
+                    criterion_error=float(algorithm.the_test.get_error()),
+                )
+                p.log(f"################# {message} #################")
+                if equilibrium_policy == "warn" and not warned_unsafe_equilibrium:
+                    warnings.warn(
+                        message + " Further unsafe steps are logged and marked in step data.",
+                        UnsafeEquilibriumWarning,
+                        stacklevel=2,
+                    )
+                    warned_unsafe_equilibrium = True
+                if equilibrium_policy == "error":
+                    failure_trial_u = p.u.copy()
+                    failure_load_factor = float(integrator.mult)
+                    failure_displacement = float(p.u[dof]) if 0 <= dof < n else 0.0
+                    failure_increment_norm = float(ls.get_x_norm())
+                    failure_max_u = float(p.max_u)
+                    failure_max_key = int(p.elem_max_u_key)
+                    failure_max_type = str(p.elem_max_u_type)
+                    restore_started = time.perf_counter()
+                    step_snapshot.restore()
+                    if diagnostic_writer is not None:
+                        diagnostic_writer.add_timing(
+                            "restore", time.perf_counter() - restore_started
+                        )
+                        diagnostic_writer.emit(
+                            "restore", step=step, reason="unsafe_equilibrium"
+                        )
+                    p.current_load_factor = integrator.mult
+                    final_code = UNSAFE_EQUILIBRIUM_EXIT_CODE
+                    step_data.append(
+                        {
+                            "step": step,
+                            "status": "FAILED",
+                            "exit_code": UNSAFE_EQUILIBRIUM_EXIT_CODE,
+                            "u": p.u.copy(),
+                            "trial_u": failure_trial_u,
+                            "load_factor": failure_load_factor,
+                            "displacement": failure_displacement,
+                            "iterations": int(algorithm.the_test.current_iter),
+                            "convergence_criterion": str(algorithm.the_test.criterion),
+                            "convergence_tolerance": float(algorithm.the_test.tolerance),
+                            "convergence_error": float(algorithm.the_test.get_error()),
+                            "residual_norm": audit.residual_norm,
+                            "increment_norm": failure_increment_norm,
+                            "max_element_displacement": failure_max_u,
+                            "max_element_key": failure_max_key,
+                            "max_element_type": failure_max_type,
+                            "reaction_x": reaction.x,
+                            "reaction_y": reaction.y,
+                            "reaction_z": reaction.z,
+                            "balancing_reaction_x": reaction.balancing_x,
+                            "balancing_reaction_y": reaction.balancing_y,
+                            "balancing_reaction_z": reaction.balancing_z,
+                            **equilibrium_fields,
+                        }
+                    )
+                    p.log(
+                        f"Analysis stopped before committing step {step}: "
+                        "independent equilibrium safety audit failed"
+                    )
+                    break
 
         de_el, de_pl = ModelManager.compute_energy(model)
         energy_elastic += de_el
@@ -409,3 +462,103 @@ def _execute_steps(
 
 
     return final_code, step_data, unsafe_equilibrium_steps, step
+
+
+def _als_loop(
+    p: Program,
+    ls: LinearSystem,
+    model: Model,
+    an: Any,
+    combination: int,
+    step: int,
+    alfa: float,
+    integrator: StaticIntegrator,
+    algorithm: EquiSolnAlgo,
+    step_snapshot: SolverStateSnapshot,
+) -> int:
+    """Automatic load-step reduction following the original C# sequence."""
+    if not isinstance(integrator, LoadControl):
+        return -2
+    original_increment = integrator.incr_mult
+    factor = max(2, int(getattr(an, "load_factor_als", 2)))
+    max_reductions = max(1, int(getattr(an, "max_number_als", 5)))
+
+    # Start ALS from an exact pre-step snapshot.  This restores external loads,
+    # pseudo-time, all local element values, and every trial/committed spring field.
+    restore_started = time.perf_counter()
+    step_snapshot.restore()
+    if p.diagnostics is not None:
+        p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+        p.diagnostics.emit("restore", step=step, reason="als_start")
+
+    completed = 0.0
+    sub_increment = original_increment / factor
+    reduction = 0
+    while abs(original_increment - completed) > 1e-12 and reduction <= max_reductions:
+        p.check_cancelled()
+        remaining = original_increment - completed
+        direction = 1.0 if remaining >= 0.0 else -1.0
+        trial_increment = direction * min(abs(sub_increment), abs(remaining))
+        p.log(
+            f">>> Automatic step reduction ({reduction + 1}): "
+            f"LoadIncrement={trial_increment:.6g}"
+        )
+        snapshot_started = time.perf_counter()
+        substep_snapshot = SolverStateSnapshot.capture(
+            model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search
+        )
+        if p.diagnostics is not None:
+            p.diagnostics.add_timing("snapshot", time.perf_counter() - snapshot_started)
+            p.diagnostics.emit(
+                "als_substep_start",
+                step=step,
+                reduction=reduction + 1,
+                trial_increment=float(trial_increment),
+                completed_increment=float(completed),
+            )
+        integrator.new_step_with_incr(
+            p, model, ls, an, combination, step, trial_increment
+        )
+        p.check_cancelled()
+        result = algorithm.solve_current_step(
+            p, ls, model, an, combination, step, alfa
+        )
+        p.check_cancelled()
+        if result >= 0:
+            commit_started = time.perf_counter()
+            _commit_state(model, ls)
+            if p.diagnostics is not None:
+                p.diagnostics.add_timing("commit", time.perf_counter() - commit_started)
+                p.diagnostics.emit(
+                    "als_substep_commit",
+                    step=step,
+                    reduction=reduction + 1,
+                    trial_increment=float(trial_increment),
+                )
+            if integrator.u_committed is not None and integrator.u is not None:
+                integrator.u_committed[:] = integrator.u
+            completed += trial_increment
+            continue
+        # Restore the exact last-successful substep checkpoint.
+        restore_started = time.perf_counter()
+        substep_snapshot.restore()
+        if p.diagnostics is not None:
+            p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+            p.diagnostics.emit(
+                "restore",
+                step=step,
+                reason="als_substep_failure",
+                reduction=reduction + 1,
+            )
+        reduction += 1
+        if reduction > max_reductions:
+            restore_started = time.perf_counter()
+            step_snapshot.restore()
+            if p.diagnostics is not None:
+                p.diagnostics.add_timing("restore", time.perf_counter() - restore_started)
+                p.diagnostics.emit("restore", step=step, reason="als_exhausted")
+            return -2
+        sub_increment /= factor
+
+    integrator.incr_mult = original_increment
+    return 0

@@ -192,6 +192,17 @@ equal or stronger parity evidence.
     (unsafe-equilibrium warning regression) before committing. The complete
     suite is 470 passed, 5 skipped and the same 12 warnings in 74.93
     seconds—flat against the preceding gate.
+16. Continuation and the equilibrium audit are isolated:
+    `solver/continuation.py` owns ALS sub-stepping (`_als_loop`), the
+    load-control predicate and the shared `_commit_state`; 
+    `solver/equilibrium_audit.py` owns the independent audit as
+    `run_equilibrium_audit`, keeping the audit strictly separate from the
+    selected C# convergence criterion (``warn`` warns once, ``error`` restores
+    the snapshot and appends the failure row before any commit, ``off`` only
+    marks the field). The moved audit block is line-identical; the loop now
+    sets ``final_code`` and breaks on the returned ``stop`` flag, preserving
+    the C# execution order. The complete suite is 470 passed, 5 skipped and
+    the same 12 warnings in 75.01 seconds—flat against the preceding gate.
 
 ## Dependency rules
 
