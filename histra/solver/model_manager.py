@@ -89,7 +89,7 @@ class ModelManager:
             return cls._hysteretic_batch
         cls.clear_hysteretic_batch()
         try:
-            from histra.solver.hysteretic_batch import build_hysteretic_batch
+            from histra.solver.hysteretic_runtime import build_hysteretic_batch
             runtime = build_hysteretic_batch(model)
         except Exception as exc:
             # Acceleration is optional. The tested scalar implementation remains

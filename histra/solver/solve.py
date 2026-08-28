@@ -80,7 +80,7 @@ def solve_static_nonlinear(
     """
     numba_threads_before: int | None = None
     try:
-        from histra.solver.hysteretic_batch import current_numba_threads
+        from histra.solver.hysteretic_runtime import current_numba_threads
 
         numba_threads_before = current_numba_threads()
         with exclusive_solver_access(should_cancel):
@@ -114,7 +114,7 @@ def solve_static_nonlinear(
                         # of rewriting >10k Python spring objects at every committed step.
                         runtime.sync_all_to_objects()
                 finally:
-                    from histra.solver.hysteretic_batch import restore_numba_threads
+                    from histra.solver.hysteretic_runtime import restore_numba_threads
 
                     restore_numba_threads(numba_threads_before)
                     if gc_was_enabled:

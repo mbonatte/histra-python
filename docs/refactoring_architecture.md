@@ -165,6 +165,18 @@ equal or stronger parity evidence.
     All moved code is byte-identical with identity re-exports locked by the
     architecture test. The complete suite is 465 passed, 5 skipped and the
     same 12 warnings in 75.18 seconds—flat against the preceding gate.
+14. `solver/hysteretic_runtime.py` now owns `HystereticBatchRuntime`, the fused
+    `_update_domain_batch` orchestrator kernel, the thread-count policy
+    helpers, the compact parameter view and the builder
+    (`build_hysteretic_batch`). Production imports (`solve.py`,
+    `model_manager.py`, `diagnostics.py`) use the owner directly, and
+    `hysteretic_batch.py` is reduced from 2,508 lines to a 63-line pure
+    compatibility facade whose complete historical surface is re-exported by
+    identity and locked by a dedicated architecture test. The runtime module
+    preserves the batch invariants (no Python call boundary in the fused hot
+    path, snapshot exactness, slice-scoped material mutation). The complete
+    suite is 465 passed, 5 skipped and the same 12 warnings in 75.83
+    seconds—flat against the preceding gate.
 
 ## Dependency rules
 

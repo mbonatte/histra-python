@@ -174,7 +174,7 @@ class SolverDiagnostics:
 
     def _runtime_spring_rows(self, model: Any):
         from histra.solver.model_manager import ModelManager
-        from histra.solver.hysteretic_batch import (
+        from histra.solver.hysteretic_runtime import (
             CKTANG, CTPHASE, CTSTRAIN, CTSTRESS,
             QKTANG, QTPHASE, QTSTRAIN, QTSTRESS,
         )
