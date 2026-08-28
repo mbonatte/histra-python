@@ -177,6 +177,21 @@ equal or stronger parity evidence.
     path, snapshot exactness, slice-scoped material mutation). The complete
     suite is 465 passed, 5 skipped and the same 12 warnings in 75.83
     seconds—flat against the preceding gate.
+15. The nonlinear driver is split: `solver/nonlinear_setup.py` owns the
+    once-per-analysis setup phase verbatim (equilibrium-policy validation,
+    readiness/preparation, virgin/restart/chained initial state in C#
+    ``SetStatus``/``SetFextEqualToFint`` order, load assembly, initial tangent
+    with the C# lability check, step-0 reference reaction/graph) and
+    `_set_initial_state`; `solver/nonlinear_step.py` owns the committed-step
+    loop (`_execute_steps`), the ALS sub-stepping loop, `_commit_state` and
+    `_is_load_control`. `solve.py` is reduced from 949 to 232 lines: public
+    entry point, GC/thread guards, setup unpack, summary tail and identity
+    re-exports of every private helper previously imported from it. The setup
+    and loop blocks moved byte-identical; an initial omission of the restart
+    import in the new owner was caught by the strict C# checkpoint tests
+    (unsafe-equilibrium warning regression) before committing. The complete
+    suite is 470 passed, 5 skipped and the same 12 warnings in 74.93
+    seconds—flat against the preceding gate.
 
 ## Dependency rules
 
