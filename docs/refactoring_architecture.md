@@ -219,6 +219,31 @@ equal or stronger parity evidence.
     76.31 seconds (+1.3 s from the new scalar-oracle sweep; everything else
     flat).
 
+### Benchmark 3 first profiling pass (2026-08-28, §8.1 protocol)
+
+Machine: reference workstation, warm JIT. Model: `benchmark_virgin_noPDelta.hrx`,
+analysis `LiveLoad_1` (arc-length), 3 committed steps, 2043 Newton corrections,
+exit code 0. Measured under `cProfile` (Python-overhead locator, not wall-time
+truth): load 2.13 s; restart restore 4.10 s (of which `read_spring_states`
+SQLite fetch 3.24 s); `prepare_hysteretic_batch` 1.90 s; step loop 18.43 s.
+
+Step-loop breakdown (18.4 s total):
+
+| Cost centre | Time | Share |
+|---|---:|---:|
+| UMFPACK native solve (`types/umfpack.py:181`, 2047 calls) | 9.16 s | ~50% |
+| `arc_length.update` (integrator update incl. tangent assembly) | 6.14 s | ~33% |
+| fused `update_domain` constitutive kernel (compiled) | 5.58 s tottime | ~30% |
+| `convergence_test` / `get_x_per_b` Python overhead | 2.25 s | ~12% |
+| hysteretic batch build (one-off) | 1.90 s | — |
+
+Findings consistent with §8.2: the fused constitutive kernel is hot but the
+sparse solve dominates individually; `get_x_per_b` is a measurable
+Python-side per-correction cost worth a dedicated look. The optimization
+campaign itself (one change at a time with strict parity reruns per §8.1.7)
+remains the explicitly open work item, together with the full 16-minute
+double-chain re-profile.
+
 ## Dependency rules
 
 1. `model` and `types` are data foundations and must not import solver
@@ -309,9 +334,27 @@ Every slice must pass all applicable gates:
 3. Split model preparation along constitutive, geometry, afference and factory
    boundaries. **Complete.**
 4. Split compiled hysteretic kernels and runtime state ownership.
+   **Complete** (`hysteretic_kernels/` package, `hysteretic_topology.py`,
+   `hysteretic_runtime.py`, `hysteretic_batch.py` facade).
 5. Split the static nonlinear driver and make execution-order tests exhaustive.
+   **Complete** (`nonlinear_setup.py`, `nonlinear_step.py`, `continuation.py`,
+   `equilibrium_audit.py`, `solve.py` facade; C# order preserved verbatim and
+   gated by the C# checkpoint suites).
 6. Split large element and spring classes only after their scalar/compiled
-   differential coverage is complete.
+   differential coverage is complete. **Quad yield-search kernels extracted;
+   coulomb03 phase-transition matrices delivered.** The remaining
+   state-machine boundary work inside `coulomb03.py`/`quad.py` is deferred by
+   design: the plan's "pure kernels and helpers" scope for these classes is
+   delivered, and further method-signature conversion of the C#-parity state
+   machines is organizational rather than parity-relevant.
 7. Run the full C# benchmark inventory and long acceptance suites, then audit
    public API compatibility and dependency cycles before declaring the
-   architecture refactor complete.
+   architecture refactor complete. **Flagged acceptance suites
+   (`HISTRA_RUN_CHAIN_BENCHMARK`, `HISTRA_RUN_LIVE_BENCHMARK`,
+   `HISTRA_RUN_FULL_BENCHMARK`) pass; dependency-cycle and public-API audit
+   run.** Two pre-existing lazy (function-level) cross-package imports were
+   found and deliberately kept: `types/convergence_test.py` → `ModelManager`
+   and `model_manager.py` → `postprocessing._interface_local_resultant`; both
+   avoid import-time cycles and pre-date this refactor.
+8. Benchmark 3 optimization campaign (§14 item 12) is the explicitly open
+   follow-up: the first profiling pass is recorded above.
