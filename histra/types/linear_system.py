@@ -60,6 +60,8 @@ class LinearSystem:
         self._factor_matrix_id: int | None = None
         self._factor_matrix_version: int | None = None
         self._matrix_version = 0
+        self.solve_count = 0
+        self.factorization_count = 0
 
     def sumb(self, i: int, v: float) -> None:
         self.b[i] += v
@@ -178,6 +180,7 @@ class LinearSystem:
         """
         if self.n == 0:
             self.x = np.zeros(0, dtype=np.float64)
+            self.solve_count += 1
             return 0
 
         vector = self.b if rhs is None else np.asarray(rhs, dtype=np.float64)
@@ -213,10 +216,12 @@ class LinearSystem:
                     with warnings.catch_warnings():
                         warnings.simplefilter("error", MatrixRankWarning)
                         self._factorization = splu(matrix)
+                self.factorization_count += 1
                 self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
                 self._factor_matrix_version = self._matrix_version
             solution = self._factorization.solve(vector)
+            self.solve_count += 1
         except (
             MatrixRankWarning, RuntimeError, ValueError,
             UmfpackUnavailable, UmfpackError,

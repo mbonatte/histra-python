@@ -47,7 +47,10 @@ class AnalysisStep(dict[str, Any]):
         ):
             if key in result and result[key] is not None:
                 result[key] = float(result[key])
-        for key in ("iterations", "max_element_key"):
+        for key in (
+            "iterations", "max_element_key", "linear_solve_count",
+            "factorization_count",
+        ):
             if key in result and result[key] is not None:
                 result[key] = int(result[key])
         if "max_element_type" in result:

@@ -5,10 +5,28 @@ import numpy as np
 import pytest
 
 from histra.tools.article_models_benchmark import (
+    ARTICLE_FIGURES,
+    ARTICLE_TABLE_1_CAPACITIES_KN,
     AUDIT_RESIDUAL_TOLERANCE,
+    BENCHMARK_MODELS,
+    compare_phase_distributions,
+    compute_curve_metrics,
     compute_parity_metrics,
     strict_convergence_tolerance,
 )
+
+
+def test_registry_covers_all_models_article_figures_and_table_capacities() -> None:
+    assert len(BENCHMARK_MODELS) == 14
+    assert len({item["id"] for item in BENCHMARK_MODELS}) == 14
+    assert set(ARTICLE_FIGURES) == {
+        figure for item in BENCHMARK_MODELS for figure in item["figures"]
+    }
+    assert ARTICLE_TABLE_1_CAPACITIES_KN == {
+        "3.1": 540.0, "3.2": 360.0, "3.3": 600.0, "3.4": 320.0,
+        "5.1": 1720.0, "5.2": 500.0, "MS1": 455.0, "MS2": 320.0,
+        "MS3": 325.0,
+    }
 
 
 @pytest.mark.parametrize(
@@ -127,3 +145,30 @@ def test_sparse_csharp_output_rows_do_not_look_like_missing_solver_steps() -> No
     assert metrics["within_parity_tolerance"]
     assert metrics["reaction"]["extra_rows"] == 3
     assert metrics["model_point_displacement_mm"]["extra_rows"] == 4
+
+
+def test_curve_metrics_apply_release_acceptance_limits() -> None:
+    reference_x = [0.0, 1.0, 2.0, 3.0]
+    reference_y = [0.0, 10.0, 19.0, 20.0]
+    passing = compute_curve_metrics(
+        reference_x, reference_y, reference_x, [0.0, 10.02, 19.02, 20.02]
+    )
+    failing = compute_curve_metrics(
+        reference_x, reference_y, reference_x, [0.0, 8.0, 15.0, 16.0]
+    )
+    assert passing["within_curve_tolerance"]
+    assert not failing["within_curve_tolerance"]
+
+
+def test_phase_distribution_comparison_fails_closed() -> None:
+    matched = compare_phase_distributions({0: 2, 4: 1}, {0: 2, 4: 1})
+    assert matched["available"]
+    assert matched["exact"]
+    report = compare_phase_distributions({0: 2, 4: 1}, {0: 3})
+    assert not report["exact"]
+    assert report["mismatches"]["4"] == {"csharp": 1, "python": 0}
+
+    missing = compare_phase_distributions({}, {0: 3})
+    assert not missing["available"]
+    assert not missing["exact"]
+    assert missing["reason"] == "no C# SpringStates rows at the terminal step"

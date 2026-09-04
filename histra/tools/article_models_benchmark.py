@@ -23,8 +23,12 @@ import argparse
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
+import hashlib
+from importlib import metadata
 import os
 from pathlib import Path
+import platform
+import sys
 import sqlite3
 import time
 from typing import Any, Iterable, Mapping
@@ -47,21 +51,28 @@ PARITY_DISPLACEMENT_ABSOLUTE_TOLERANCE_MM = 0.05
 
 
 BENCHMARK_MODELS: tuple[dict[str, Any], ...] = (
-    {"id": "3.1_coarse", "name": "Bridge_3.1_Coarse", "target": "Second"},
-    {"id": "3.1_multiring", "name": "Bridge_3.1_Multiring", "target": "NewAnalysis"},
-    {"id": "3.2", "name": "Bridge_3.2", "target": "NewAnalysis"},
-    {"id": "3.3_drucker", "name": "Bridge_3.3_2_Zhang_drucker", "target": "NewAnalysis"},
-    {"id": "3.3_drucker_tol", "name": "Bridge_3.3_2_Zhang_drucker_tol", "target": "NewAnalysis"},
-    {"id": "3.4_zhang", "name": "Bridge_3.4_Zhang", "target": "NewAnalysis"},
-    {"id": "3_abutment", "name": "Bridge_3_abutment", "target": "NewAnalysis"},
-    {"id": "5.1_coarse", "name": "Bridge_5.1_coarse", "target": "NewAnalysis"},
-    {"id": "5.1_spandrel", "name": "Bridge_5.1_load_spandrel", "target": "NewAnalysis"},
-    {"id": "5.1_backfill", "name": "Bridge_5.1_load_spandrel_backfill", "target": "NewAnalysis"},
-    {"id": "5.2_coarse", "name": "Bridge_5.2_coarse", "target": "NewAnalysis"},
-    {"id": "bridge_1", "name": "Bridge_1", "target": "NewAnalysis"},
-    {"id": "bridge_1_layers", "name": "Bridge_1_traversal_layers", "target": "NewAnalysis"},
-    {"id": "bridge_2", "name": "Bridge_2", "target": "NewAnalysis"},
+    {"id": "3.1_coarse", "name": "Bridge_3.1_Coarse", "target": "Second", "specimen": "3.1", "variant": "coarse strip", "figures": [9], "capacity_kn": 540.0, "live_load_analyses": ["First", "Second"], "master_point": 1, "direction": "Uz"},
+    {"id": "3.1_multiring", "name": "Bridge_3.1_Multiring", "target": "NewAnalysis", "specimen": "3.1", "variant": "multi-ring", "figures": [9], "capacity_kn": 540.0, "live_load_analyses": ["NewAnalysis"], "master_point": 5, "direction": "Uz"},
+    {"id": "3.2", "name": "Bridge_3.2", "target": "NewAnalysis", "specimen": "3.2", "variant": "ring separation", "figures": [13], "capacity_kn": 360.0, "live_load_analyses": ["NewAnalysis"], "master_point": 5, "direction": "Uz"},
+    {"id": "3.3_drucker", "name": "Bridge_3.3_2_Zhang_drucker", "target": "NewAnalysis", "specimen": "3.3", "variant": "Drucker configuration", "figures": [17], "capacity_kn": 600.0, "live_load_analyses": ["NewAnalysis"], "master_point": 15, "direction": "Uz"},
+    {"id": "3.3_drucker_tol", "name": "Bridge_3.3_2_Zhang_drucker_tol", "target": "NewAnalysis", "specimen": "3.3", "variant": "Drucker tight tolerance", "figures": [17], "capacity_kn": 600.0, "live_load_analyses": ["NewAnalysis"], "master_point": 15, "direction": "Uz"},
+    {"id": "3.4_zhang", "name": "Bridge_3.4_Zhang", "target": "NewAnalysis", "specimen": "3.4", "variant": "Zhang/ring separation", "figures": [20], "capacity_kn": 320.0, "live_load_analyses": ["NewAnalysis"], "master_point": 18, "direction": "Uz"},
+    {"id": "3_abutment", "name": "Bridge_3_abutment", "target": "NewAnalysis", "specimen": "3 m series", "variant": "abutment staging", "figures": [9, 13], "capacity_kn": None, "live_load_analyses": ["ConcreteBlock", "NewAnalysis"], "master_point": 7, "direction": "Uz"},
+    {"id": "5.1_coarse", "name": "Bridge_5.1_coarse", "target": "NewAnalysis", "specimen": "5.1", "variant": "bare-arch coarse", "figures": [12], "capacity_kn": 1720.0, "live_load_analyses": ["NewAnalysis"], "master_point": 5, "direction": "Uz"},
+    {"id": "5.1_spandrel", "name": "Bridge_5.1_load_spandrel", "target": "NewAnalysis", "specimen": "5.1", "variant": "spandrel loading", "figures": [12], "capacity_kn": 1720.0, "live_load_analyses": ["NewAnalysis"], "master_point": 3, "direction": "Uz"},
+    {"id": "5.1_backfill", "name": "Bridge_5.1_load_spandrel_backfill", "target": "NewAnalysis", "specimen": "5.1", "variant": "spandrel and backfill", "figures": [12], "capacity_kn": 1720.0, "live_load_analyses": ["NewAnalysis"], "master_point": 3, "direction": "Uz"},
+    {"id": "5.2_coarse", "name": "Bridge_5.2_coarse", "target": "NewAnalysis", "specimen": "5.2", "variant": "ring separation coarse", "figures": [15], "capacity_kn": 500.0, "live_load_analyses": ["NewAnalysis"], "master_point": 5, "direction": "Uz"},
+    {"id": "bridge_1", "name": "Bridge_1", "target": "NewAnalysis", "specimen": "MS1", "variant": "attached spandrels", "figures": [24], "capacity_kn": 455.0, "live_load_analyses": ["NewAnalysis"], "master_point": 7, "direction": "Uz"},
+    {"id": "bridge_1_layers", "name": "Bridge_1_traversal_layers", "target": "NewAnalysis", "specimen": "MS3", "variant": "transversal joint layers", "figures": [25], "capacity_kn": 325.0, "live_load_analyses": ["NewAnalysis"], "master_point": 7, "direction": "Uz"},
+    {"id": "bridge_2", "name": "Bridge_2", "target": "NewAnalysis", "specimen": "MS2", "variant": "detached spandrels", "figures": [22], "capacity_kn": 320.0, "live_load_analyses": ["NewAnalysis"], "master_point": 3, "direction": "Uz"},
 )
+
+ARTICLE_FIGURES = (9, 12, 13, 15, 17, 20, 22, 24, 25)
+ARTICLE_TABLE_1_CAPACITIES_KN = {
+    "3.1": 540.0, "3.2": 360.0, "3.3": 600.0, "3.4": 320.0,
+    "5.1": 1720.0, "5.2": 500.0, "MS1": 455.0, "MS2": 320.0,
+    "MS3": 325.0,
+}
 
 
 def strict_convergence_tolerance(
@@ -115,6 +126,104 @@ def _max_steps_by_analysis(
         if step > 0:
             limits[analysis] = max(limits.get(analysis, 0), step)
     return limits
+
+
+def _read_csharp_terminal_steps(
+    results_path: Path,
+    analysis_keys: Iterable[int],
+) -> tuple[dict[int, int], dict[int, dict[int, int]]]:
+    """Read terminal steps independently of sparse reaction/output sampling."""
+    selected = {int(value) for value in analysis_keys}
+    limits: dict[int, int] = {}
+    phase_counts: dict[int, dict[int, int]] = {}
+    with sqlite3.connect(results_path) as db:
+        tables = {
+            str(row[0])
+            for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for table in ("ReactionSumStates", "DisplModelPoints", "SpringStates"):
+            if table not in tables:
+                continue
+            for analysis, step in db.execute(
+                f"SELECT AnalysisKey,MAX(Step) FROM {table} GROUP BY AnalysisKey"
+            ):
+                key = int(analysis)
+                if key in selected and step is not None:
+                    limits[key] = max(limits.get(key, 0), int(step))
+        if "SpringStates" in tables:
+            for analysis, step in limits.items():
+                counts = {
+                    int(phase): int(count)
+                    for phase, count in db.execute(
+                        "SELECT CAST(Phase AS INTEGER),COUNT(*) FROM SpringStates "
+                        "WHERE AnalysisKey=? AND Step=? GROUP BY CAST(Phase AS INTEGER)",
+                        (analysis, step),
+                    )
+                }
+                if counts:
+                    phase_counts[analysis] = counts
+    return limits, phase_counts
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _runtime_provenance(hrx_path: Path, results_path: Path) -> dict[str, Any]:
+    packages: dict[str, str] = {}
+    for name in ("histra-python", "numpy", "scipy", "numba"):
+        try:
+            packages[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            packages[name] = "not-installed"
+    return {
+        "platform": platform.platform(),
+        "python": sys.version.split()[0],
+        "python_implementation": platform.python_implementation(),
+        "packages": packages,
+        "solver_backend": "Python/SciPy sparse",
+        "inputs": {
+            "hrx": {"name": hrx_path.name, "bytes": hrx_path.stat().st_size, "sha256": _file_sha256(hrx_path)},
+            "csharp_results": {"name": results_path.name, "bytes": results_path.stat().st_size, "sha256": _file_sha256(results_path)},
+        },
+    }
+
+
+def _python_phase_distribution(model: Any) -> dict[int, int]:
+    counts: Counter[int] = Counter()
+    collections = model.collections
+    for quad in collections.quads.values():
+        if quad.spring is not None:
+            counts[int(getattr(quad.spring, "phase", 0))] += 1
+    for interface in collections.interfaces.values():
+        for group in (interface.trasv_1, interface.slid, interface.slid_out_plan):
+            for spring in group:
+                counts[int(getattr(spring, "phase", 0))] += 1
+    return dict(sorted(counts.items()))
+
+
+def compare_phase_distributions(
+    reference: Mapping[int, int], actual: Mapping[int, int]
+) -> dict[str, Any]:
+    available = bool(reference)
+    phases = sorted(set(reference) | set(actual))
+    mismatches = {
+        str(phase): {"csharp": int(reference.get(phase, 0)), "python": int(actual.get(phase, 0))}
+        for phase in phases
+        if int(reference.get(phase, 0)) != int(actual.get(phase, 0))
+    }
+    return {
+        "available": available,
+        "csharp_total": int(sum(reference.values())),
+        "python_total": int(sum(actual.values())),
+        "exact": available and not mismatches,
+        "reason": None if available else "no C# SpringStates rows at the terminal step",
+        "mismatches": mismatches,
+    }
 
 
 def _vector_error_metrics(
@@ -220,6 +329,127 @@ def compute_parity_metrics(
     }
 
 
+def _curve_characteristics(displacement_mm: np.ndarray, load_kn: np.ndarray) -> dict[str, float]:
+    x = np.abs(np.asarray(displacement_mm, dtype=np.float64))
+    y = np.abs(np.asarray(load_kn, dtype=np.float64))
+    if not len(x):
+        return {"peak_load_kn": 0.0, "peak_displacement_mm": 0.0, "area": 0.0, "initial_stiffness_kn_per_mm": 0.0}
+    peak_index = int(np.argmax(y))
+    order = np.argsort(x, kind="stable")
+    x_sorted, y_sorted = x[order], y[order]
+    unique_x, unique_indices = np.unique(x_sorted, return_index=True)
+    unique_y = y_sorted[unique_indices]
+    area = float(np.trapezoid(unique_y, unique_x)) if len(unique_x) > 1 else 0.0
+    positive = np.flatnonzero(unique_x > np.finfo(float).eps)
+    initial_indices = positive[: min(10, len(positive))]
+    if len(initial_indices):
+        xi, yi = unique_x[initial_indices], unique_y[initial_indices]
+        denominator = float(np.dot(xi, xi))
+        stiffness = float(np.dot(xi, yi) / denominator) if denominator else 0.0
+    else:
+        stiffness = 0.0
+    return {
+        "peak_load_kn": float(y[peak_index]),
+        "peak_displacement_mm": float(x[peak_index]),
+        "area": area,
+        "initial_stiffness_kn_per_mm": stiffness,
+    }
+
+
+def compute_curve_metrics(
+    reference_displacement_mm: Iterable[float],
+    reference_load_kn: Iterable[float],
+    actual_displacement_mm: Iterable[float],
+    actual_load_kn: Iterable[float],
+) -> dict[str, Any]:
+    """Compare aligned live-load curves using the release acceptance metrics."""
+    ref_x = np.asarray(tuple(reference_displacement_mm), dtype=np.float64)
+    ref_y = np.asarray(tuple(reference_load_kn), dtype=np.float64)
+    act_x = np.asarray(tuple(actual_displacement_mm), dtype=np.float64)
+    act_y = np.asarray(tuple(actual_load_kn), dtype=np.float64)
+    if not len(ref_x) or len(ref_x) != len(act_x) or len(ref_y) != len(act_y) or len(ref_x) != len(ref_y):
+        return {"available": False, "within_curve_tolerance": False}
+    ref = _curve_characteristics(ref_x, ref_y)
+    actual = _curve_characteristics(act_x, act_y)
+    peak_scale = max(ref["peak_load_kn"], np.finfo(float).tiny)
+    normalized_rmse = float(np.sqrt(np.mean((np.abs(act_y) - np.abs(ref_y)) ** 2)) / peak_scale)
+
+    def relative_error(actual_value: float, reference_value: float) -> float:
+        denominator = max(abs(reference_value), np.finfo(float).tiny)
+        return abs(actual_value - reference_value) / denominator
+
+    metrics = {
+        "peak_load_relative_error": relative_error(actual["peak_load_kn"], ref["peak_load_kn"]),
+        "normalized_curve_rmse": normalized_rmse,
+        "curve_area_relative_error": relative_error(actual["area"], ref["area"]),
+        "initial_stiffness_relative_error": relative_error(actual["initial_stiffness_kn_per_mm"], ref["initial_stiffness_kn_per_mm"]),
+        "peak_displacement_absolute_error_mm": abs(actual["peak_displacement_mm"] - ref["peak_displacement_mm"]),
+        "peak_displacement_allowed_mm": max(0.1, 0.02 * abs(ref["peak_displacement_mm"])),
+    }
+    metrics["available"] = True
+    metrics["reference"] = ref
+    metrics["actual"] = actual
+    metrics["within_curve_tolerance"] = bool(
+        metrics["peak_load_relative_error"] <= 0.01
+        and normalized_rmse <= 0.01
+        and metrics["curve_area_relative_error"] <= 0.02
+        and metrics["initial_stiffness_relative_error"] <= 0.02
+        and metrics["peak_displacement_absolute_error_mm"] <= metrics["peak_displacement_allowed_mm"]
+    )
+    return metrics
+
+
+def _live_load_curve_metrics(
+    model_info: Mapping[str, Any],
+    chain: Iterable[Any],
+    csharp_reactions: Mapping[tuple[int, int], np.ndarray],
+    python_reactions: Mapping[tuple[int, int], np.ndarray],
+    csharp_displacements: Mapping[tuple[int, int, int], np.ndarray],
+    python_displacements: Mapping[tuple[int, int, int], np.ndarray],
+) -> dict[str, Any]:
+    chain_list = list(chain)
+    live_names = {str(value).casefold() for value in model_info["live_load_analyses"]}
+    live_keys = [int(item.key) for item in chain_list if str(item.name).casefold() in live_names]
+    if not live_keys:
+        return {"available": False, "within_curve_tolerance": False, "reason": "no live-load analysis in dependency chain"}
+    first_live_index = next(index for index, item in enumerate(chain_list) if int(item.key) == live_keys[0])
+    predecessor_key = int(chain_list[first_live_index - 1].key) if first_live_index else None
+    master_point = int(model_info["master_point"])
+    direction = {"ux": 0, "uy": 1, "uz": 2}[str(model_info["direction"]).casefold()]
+
+    def baseline(mapping: Mapping[Any, np.ndarray], *, point: bool) -> np.ndarray:
+        if predecessor_key is None:
+            return np.zeros(3)
+        candidates = [
+            (key, value) for key, value in mapping.items()
+            if int(key[0]) == predecessor_key and (not point or int(key[2]) == master_point)
+        ]
+        return np.asarray(max(candidates, key=lambda item: int(item[0][1]))[1]) if candidates else np.zeros(3)
+
+    ref_r0 = baseline(csharp_reactions, point=False)
+    py_r0 = baseline(python_reactions, point=False)
+    ref_u0 = baseline(csharp_displacements, point=True)
+    py_u0 = baseline(python_displacements, point=True)
+    common = sorted(
+        key for key in set(csharp_reactions) & set(python_reactions)
+        if int(key[0]) in live_keys and key[1] > 0
+        and (key[0], key[1], master_point) in csharp_displacements
+        and (key[0], key[1], master_point) in python_displacements
+    )
+    ref_x = [(csharp_displacements[(key[0], key[1], master_point)][direction] - ref_u0[direction]) * 10.0 for key in common]
+    py_x = [(python_displacements[(key[0], key[1], master_point)][direction] - py_u0[direction]) * 10.0 for key in common]
+    ref_y = [csharp_reactions[key][direction] - ref_r0[direction] for key in common]
+    py_y = [python_reactions[key][direction] - py_r0[direction] for key in common]
+    result = compute_curve_metrics(ref_x, ref_y, py_x, py_y)
+    result.update({
+        "matched_sample_rows": len(common),
+        "master_point": master_point,
+        "direction": model_info["direction"],
+        "baseline_analysis_key": predecessor_key,
+    })
+    return result
+
+
 def _project_python_history(
     model: Any,
     executions: Iterable[Any],
@@ -266,20 +496,24 @@ def run_model(
 
     session = AnalysisSession(
         model,
-        equilibrium_policy="warn",
+        equilibrium_policy="error" if run_mode == "strict" else "warn",
         equilibrium_force_absolute_tolerance=AUDIT_FORCE_ABSOLUTE_TOLERANCE,
         equilibrium_force_relative_tolerance=AUDIT_FORCE_RELATIVE_TOLERANCE,
         equilibrium_residual_tolerance=AUDIT_RESIDUAL_TOLERANCE,
+        strategy_policy="off",
     )
     chain = session.dependency_chain(str(model_info["target"]))
     chain_keys = tuple(int(analysis.key) for analysis in chain)
     csharp_reactions, csharp_displacements = _read_csharp_reference(
         results_path, chain_keys
     )
-    step_limits = _max_steps_by_analysis(csharp_reactions)
+    step_limits, csharp_phase_counts = _read_csharp_terminal_steps(
+        results_path, chain_keys
+    )
 
     settings: list[dict[str, Any]] = []
     executions: list[Any] = []
+    phase_evidence: dict[int, dict[str, Any]] = {}
     captured_warnings: list[warnings.WarningMessage]
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", UnsafeEquilibriumWarning)
@@ -307,6 +541,10 @@ def run_model(
                 max_committed_steps=step_limits.get(int(analysis.key)),
             )
             executions.append(execution)
+            phase_evidence[int(analysis.key)] = compare_phase_distributions(
+                csharp_phase_counts.get(int(analysis.key), {}),
+                _python_phase_distribution(model),
+            )
             if not execution.completed:
                 break
         captured_warnings = list(captured)
@@ -330,6 +568,14 @@ def run_model(
         expected_steps=expected_steps,
         actual_steps=actual_steps,
     )
+    curve = _live_load_curve_metrics(
+        model_info,
+        chain,
+        csharp_reactions,
+        python_reactions,
+        csharp_displacements,
+        python_displacements,
+    )
     unsafe_steps = [
         step
         for execution in executions
@@ -348,6 +594,23 @@ def run_model(
         }
         for execution in executions
     ]
+    complete_chain = len(executions) == len(chain) and all(
+        execution.completed for execution in executions
+    )
+    phase_distributions_agree = bool(phase_evidence) and all(
+        evidence["exact"] for evidence in phase_evidence.values()
+    )
+    response_accepted = bool(
+        parity["within_parity_tolerance"] or curve.get("within_curve_tolerance", False)
+    )
+    release_gate_pass = bool(
+        complete_chain
+        and parity["complete_step_history"]
+        and parity["reference_outputs_complete"]
+        and response_accepted
+        and phase_distributions_agree
+        and (run_mode != "strict" or not unsafe_steps)
+    )
     return {
         "id": str(model_info["id"]),
         "name": name,
@@ -356,6 +619,11 @@ def run_model(
         "interfaces": int(preparation.interfaces),
         "preparation_seconds": preparation_seconds,
         "total_seconds": time.perf_counter() - started,
+        "provenance": _runtime_provenance(hrx_path, results_path),
+        "registry": {
+            key: model_info.get(key)
+            for key in ("specimen", "variant", "figures", "capacity_kn", "master_point", "direction")
+        },
         "audit_tolerances": {
             "force_absolute": AUDIT_FORCE_ABSOLUTE_TOLERANCE,
             "force_relative": AUDIT_FORCE_RELATIVE_TOLERANCE,
@@ -370,6 +638,10 @@ def run_model(
         "unsafe_step_count": len(unsafe_steps),
         "unsafe_steps_by_criterion": dict(sorted(unsafe_criteria.items())),
         "parity": parity,
+        "live_load_curve": curve,
+        "spring_phase_distributions": phase_evidence,
+        "complete_dependency_chain": complete_chain,
+        "release_gate_pass": release_gate_pass,
     }
 
 
@@ -409,7 +681,7 @@ def _markdown_report(results: list[dict[str, Any]]) -> str:
         displacement = parity["model_point_displacement_mm"]
         step_history = parity["step_history"]
         steps = f"{step_history['actual_steps']}/{step_history['expected_steps']}"
-        status = "PASS" if parity["within_parity_tolerance"] else "DRIFT"
+        status = "PASS" if result["release_gate_pass"] else "NOT RELEASE-READY"
         lines.append(
             f"| {result['run_mode']} | {result['name']} | {steps} | "
             f"{result['unsafe_step_count']} | {reaction['max_absolute']!s} | "
@@ -447,6 +719,11 @@ def main() -> int:
     parser.add_argument("--run-mode", choices=("authored", "strict", "both"), default="both")
     parser.add_argument("--max-workers", type=int, default=None)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Return success while collecting diagnostic evidence from a failing gate.",
+    )
     args = parser.parse_args()
 
     selected = _select_models(args.model)
@@ -456,6 +733,13 @@ def main() -> int:
     # concurrent workers measured faster than eight or fourteen on the 32-GiB
     # reference workstation because the larger pools exhausted swap.
     workers = args.max_workers or min(4, len(tasks), os.cpu_count() or 1)
+    if workers < 1 or workers > 4:
+        parser.error("--max-workers must be between 1 and 4 for the release-candidate gate")
+    for model_info in selected:
+        for suffix in (".hrx", ".Results"):
+            source = args.models_dir / f"{model_info['name']}{suffix}"
+            if not source.is_file():
+                parser.error(f"missing benchmark input: {source}")
     started = time.perf_counter()
     results: list[dict[str, Any]] = []
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -467,7 +751,7 @@ def main() -> int:
             results.append(result)
             model_info, _models_dir, run_mode = futures[future]
             _checkpoint_path(args.output_dir, model_info, run_mode).write_text(
-                json.dumps({"schema_version": 1, "result": result}, indent=2) + "\n",
+                json.dumps({"schema_version": 2, "result": result}, indent=2) + "\n",
                 encoding="utf-8",
             )
             if "error" in result:
@@ -486,7 +770,10 @@ def main() -> int:
                 )
 
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "article_figures": ARTICLE_FIGURES,
+        "article_table_1_capacities_kn": ARTICLE_TABLE_1_CAPACITIES_KN,
+        "model_registry": [dict(item) for item in BENCHMARK_MODELS],
         "wall_seconds": time.perf_counter() - started,
         "workers": workers,
         "results": sorted(results, key=lambda item: (item["run_mode"], item["name"])),
@@ -497,7 +784,11 @@ def main() -> int:
     (args.output_dir / "article_models_csharp_verification.md").write_text(
         _markdown_report(results), encoding="utf-8"
     )
-    return 1 if any("error" in result for result in results) else 0
+    failed = any(
+        "error" in result or not result.get("release_gate_pass", False)
+        for result in results
+    )
+    return 0 if args.allow_incomplete else int(failed)
 
 
 if __name__ == "__main__":

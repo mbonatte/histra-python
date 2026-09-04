@@ -141,6 +141,26 @@ class TestLinearSystem(unittest.TestCase):
         ls.copy_b_to_b0()
         self.assertEqual(ls.b0[0], 42.0)
 
+    def test_solve_and_factorization_counters(self):
+        ls = LinearSystem(2, backend="superlu")
+        ls.set_k(0, 0, 2.0)
+        ls.set_k(1, 1, 4.0)
+
+        ls.solve(np.array([2.0, 8.0]))
+        np.testing.assert_allclose(ls.x, [1.0, 2.0])
+        self.assertEqual(ls.solve_count, 1)
+        self.assertEqual(ls.factorization_count, 1)
+
+        ls.solve(np.array([4.0, 4.0]))
+        np.testing.assert_allclose(ls.x, [2.0, 1.0])
+        self.assertEqual(ls.solve_count, 2)
+        self.assertEqual(ls.factorization_count, 1)
+
+        ls.set_k(0, 0, 1.0)
+        ls.solve(np.array([2.0, 4.0]))
+        self.assertEqual(ls.solve_count, 3)
+        self.assertEqual(ls.factorization_count, 2)
+
 
 class TestIntegratorState(unittest.TestCase):
     def test_defaults(self):
