@@ -1,4 +1,5 @@
 """HiStrA-Python: structural analysis solver port."""
+from importlib.metadata import PackageNotFoundError, version
 from histra.io.hr_loader import load_model
 from histra.solver.backend_api import (
     ConcreteInterfaceMutation,
@@ -25,6 +26,12 @@ from histra.solver.capabilities import (
     UnsupportedSolverCapability,
     inspect_solver_capabilities,
 )
+from histra.solver.strategy import (
+    SolverStrategyAdvisory,
+    SolverStrategyReport,
+    SuboptimalSolverStrategyWarning,
+    inspect_solver_strategy,
+)
 from histra.solver.outcomes import AnalysisExecution, AnalysisOutcome, AnalysisStep
 from histra.solver.output_projection import (
     OutputProjectionError,
@@ -43,7 +50,10 @@ from histra.solver.modal import (
     solve_modal_analysis,
 )
 
-__version__ = "0.3.0"
+try:
+    __version__ = version("histra-python")
+except PackageNotFoundError:  # Source tree used without installation.
+    __version__ = "0+unknown"
 
 __all__ = [
     "__version__",
@@ -67,6 +77,10 @@ __all__ = [
     "SolverCapabilityReport",
     "UnsupportedSolverCapability",
     "inspect_solver_capabilities",
+    "SolverStrategyAdvisory",
+    "SolverStrategyReport",
+    "SuboptimalSolverStrategyWarning",
+    "inspect_solver_strategy",
     "OutputProjectionError",
     "UnsupportedOutputError",
     "ModelPointDisplacement",

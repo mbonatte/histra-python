@@ -194,3 +194,80 @@ def test_capability_preflight_resolves_dependencies_and_outputs() -> None:
 
     assert report.supported
     assert report.issues == ()
+
+
+@pytest.mark.parametrize("pdelta", ["EachStep", "EachIteration", 1, 2])
+def test_capability_preflight_supports_static_pdelta(pdelta: object) -> None:
+    analysis = SimpleNamespace(
+        key=1,
+        name="PDelta",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="ArcLength",
+        method="StandardRegulaFalsiLineSearch",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect=pdelta,
+    )
+    model = SimpleNamespace(collections=SimpleNamespace(analyses={1: analysis}))
+
+    assert inspect_solver_capabilities(model, ["PDelta"]).supported
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("analysis_type", 4, "DYNAMIC_ANALYSIS_UNSUPPORTED"),
+        ("integration_method", "NewmarkMethod", "STATIC_INTEGRATOR_UNSUPPORTED"),
+        ("method", "BFGS", "NONLINEAR_METHOD_UNSUPPORTED"),
+        ("adaptive_convergence_criteria", "RelativeWork", "CONVERGENCE_CRITERION_UNSUPPORTED"),
+        ("pdelta_effect", "FutureMode", "PDELTA_EFFECT_UNSUPPORTED"),
+    ],
+)
+def test_capability_preflight_rejects_unsupported_solver_enums(
+    field: str,
+    value: object,
+    code: str,
+) -> None:
+    analysis = SimpleNamespace(
+        key=1,
+        name="Unsupported",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="LoadControl",
+        method="ModifiedNewtonRaphson",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+    )
+    setattr(analysis, field, value)
+    model = SimpleNamespace(collections=SimpleNamespace(analyses={1: analysis}))
+
+    report = inspect_solver_capabilities(model, ["Unsupported"])
+
+    assert not report.supported
+    assert code in {issue.code for issue in report.issues}
+
+
+def test_capability_preflight_rejects_unknown_masonry_constitutive_enum():
+    analysis = SimpleNamespace(
+        key=1,
+        name="Vert",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="LoadControl",
+        method="ModifiedNewtonRaphson",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+    )
+    material = SimpleNamespace(
+        key=9,
+        properties={"CriterioSnervamento": "FutureDomain"},
+    )
+    material.value = lambda name, default: material.properties.get(name, default)
+    model = SimpleNamespace(
+        collections=SimpleNamespace(analyses={1: analysis}, materials={9: material})
+    )
+
+    report = inspect_solver_capabilities(model, ["Vert"])
+
+    assert not report.supported
+    assert report.issues[-1].code == "MASONRY_CONSTITUTIVE_ENUM_UNSUPPORTED"

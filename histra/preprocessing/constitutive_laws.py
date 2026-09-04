@@ -17,6 +17,90 @@ import numpy as np
 from histra.model.masonry_material import MasonryMaterial
 
 
+_TENSILE_CURVES = ("Elastic", "LinearHardening", "LinearSoftening", "Exponential")
+_COMPRESSIVE_CURVES = ("Elastic", "LinearHardening", "LinearSoftening", "Parabolic")
+_FLEX_LAWS = (
+    "ElastoPlasticDuctilityFixed",
+    "ElastoPlasticFracturalEnergyFixed",
+    "Linear",
+)
+_SHEAR_LAWS = (
+    "Elastic",
+    "ElastoPlastic",
+    "ElastoPlasticDuctilityFixed",
+    "ElastoPlasticAndSoftening",
+    "ElastoPlasticFractureEnergyFixed",
+    "ElastoPlasticEnergySigmaInterpolation",
+)
+_SHEAR_DOMAINS = ("Linear", "Coulomb", "Cacovic")
+_HYSTERETIC_TYPES = ("Initial", "Origin", "Takeda", "Mixed")
+
+
+def material_enum(
+    material: MasonryMaterial,
+    name: str,
+    values: tuple[str, ...],
+    default: str,
+) -> str:
+    """Decode a named or numeric C# enum and reject unknown stored values."""
+    raw = material.value(name, default)
+    text = str(raw).strip()
+    if not text:
+        text = default
+    try:
+        numeric = float(text)
+    except ValueError:
+        numeric = None
+    if numeric is not None and math.isfinite(numeric) and numeric.is_integer():
+        index = int(numeric)
+        if 0 <= index < len(values):
+            return values[index]
+    token = text.rsplit(".", 1)[-1].casefold()
+    for value in values:
+        if token == value.casefold():
+            return value
+    raise ValueError(
+        f"MasonryMaterial {material.key} has unsupported {name}={raw!r}; "
+        f"expected one of {values} or its numeric C# enum value."
+    )
+
+
+def validate_masonry_material_enums(material: MasonryMaterial) -> None:
+    """Validate every V1 masonry enum that selects a constitutive branch."""
+    for name in ("TensileCurveType", "TensileCurveTypeVertical"):
+        material_enum(material, name, _TENSILE_CURVES, "LinearSoftening")
+    for name in ("CompressiveCurveType", "CompressiveCurveTypeVertical"):
+        material_enum(material, name, _COMPRESSIVE_CURVES, "LinearSoftening")
+    material_enum(
+        material,
+        "ConstitutiveLawFlex",
+        _FLEX_LAWS,
+        "ElastoPlasticDuctilityFixed",
+    )
+    material_enum(
+        material,
+        "ConstitutiveLawMasonryShear",
+        _SHEAR_LAWS,
+        "Elastic",
+    )
+    material_enum(material, "CriterioSnervamento", _SHEAR_DOMAINS, "Linear")
+    for name in (
+        "SlidingYieldingDomainHor",
+        "SlidingYieldingDomainVert",
+        "SlidingYieldingDomainDir3",
+    ):
+        material_enum(material, name, _SHEAR_DOMAINS, "Linear")
+    for name in (
+        "UnloadShear",
+        "UnloadTractionRockingHor",
+        "UnloadCompressionRockingHor",
+        "UnloadTractionRockingVer",
+        "UnloadCompressionRockingVer",
+    ):
+        if name in material.properties:
+            material_enum(material, name, _HYSTERETIC_TYPES, "Initial")
+
+
 @dataclass(frozen=True)
 class HystereticLaw:
     E: float
@@ -84,6 +168,24 @@ def _alfa_shear(material: MasonryMaterial) -> float:
 def flex_law(material: MasonryMaterial, *, vertical: bool = False) -> HystereticLaw:
     suffix = "Ver" if vertical else "Hor"
     curve_suffix = "Vertical" if vertical else ""
+    tensile_curve = material_enum(
+        material,
+        f"TensileCurveType{curve_suffix}",
+        _TENSILE_CURVES,
+        "LinearSoftening",
+    )
+    compressive_curve = material_enum(
+        material,
+        f"CompressiveCurveType{curve_suffix}",
+        _COMPRESSIVE_CURVES,
+        "LinearSoftening",
+    )
+    law_type = material_enum(
+        material,
+        "ConstitutiveLawFlex",
+        _FLEX_LAWS,
+        "ElastoPlasticDuctilityFixed",
+    )
     E = material_float(material, "Ever" if vertical else "Ehor")
     fy_t = material_float(material, f"Ftm{suffix}")
     fy_c = material_float(material, f"Fm{suffix}")
@@ -105,14 +207,8 @@ def flex_law(material: MasonryMaterial, *, vertical: bool = False) -> Hysteretic
         E=E,
         fy_t=fy_t,
         fy_c=fy_c,
-        tensile_curve=str(
-            material.value(f"TensileCurveType{curve_suffix}", "LinearSoftening")
-        ),
-        compressive_curve=str(
-            material.value(
-                f"CompressiveCurveType{curve_suffix}", "LinearSoftening"
-            )
-        ),
+        tensile_curve=tensile_curve,
+        compressive_curve=compressive_curve,
         ratio_et_t=material_float(material, "RatioEtTraction"),
         ratio_et_c=material_float(material, "RatioEtCompression"),
         alfa_r_t=1.0,
@@ -123,7 +219,7 @@ def flex_law(material: MasonryMaterial, *, vertical: bool = False) -> Hysteretic
         G_c=material_float(material, "GcVer" if vertical else "Gc"),
         eps_u_t=eps_t,
         eps_u_c=eps_c,
-        law_type=str(material.value("ConstitutiveLawFlex", "Hysteretic")),
+        law_type=law_type,
     )
 
 
@@ -158,7 +254,12 @@ def diagonal_flex_law(material: MasonryMaterial) -> HystereticLaw:
 
 
 def shear_law(material: MasonryMaterial) -> CoulombLaw:
-    law_type = str(material.value("ConstitutiveLawMasonryShear", ""))
+    law_type = material_enum(
+        material,
+        "ConstitutiveLawMasonryShear",
+        _SHEAR_LAWS,
+        "Elastic",
+    )
     is_ductility = law_type in {"Elastic", "ElastoPlastic"}
     return CoulombLaw(
         E=material_float(material, "Gd") / _alfa_shear(material),
@@ -175,8 +276,12 @@ def shear_law(material: MasonryMaterial) -> CoulombLaw:
             material, "ShearPlasticStiffnessRatio2", 1.0
         ),
         plastic_strain=material_float(material, "ShearPlasticStrain", 100.0),
-        sub_law=str(material.value("CriterioSnervamento", "Coulomb")),
-        hysteretic_type=str(material.value("UnloadShear", "Initial")),
+        sub_law=material_enum(
+            material, "CriterioSnervamento", _SHEAR_DOMAINS, "Linear"
+        ),
+        hysteretic_type=material_enum(
+            material, "UnloadShear", _HYSTERETIC_TYPES, "Initial"
+        ),
         fracture_energy=(law_type == "ElastoPlasticFractureEnergyFixed"),
         G=material_float(material, "FractureEnergyShear"),
         ductility=(
@@ -240,7 +345,9 @@ def sliding_law(
             material, f"SlidingPlasticStiffnessRatio{suffix}"
         ),
         max_tensile_ratio=material_float(material, max_tensile_name, 0.8),
-        sub_law=str(material.value(sub_law_name, "Coulomb")),
+        sub_law=material_enum(
+            material, sub_law_name, _SHEAR_DOMAINS, "Linear"
+        ),
         hysteretic_type="Initial",
         fracture_energy=material_bool(material, fracture_name, False),
         G=material_float(material, energy_name),
@@ -258,6 +365,8 @@ __all__ = [
     "flex_law",
     "material_bool",
     "material_float",
+    "material_enum",
     "shear_law",
     "sliding_law",
+    "validate_masonry_material_enums",
 ]

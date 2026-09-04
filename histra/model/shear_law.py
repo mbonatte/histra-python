@@ -26,6 +26,14 @@ ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED = 4
 ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION = 5
 
 _NO_FRACTURE_ENERGY = 0
+_LAW_CODES = {
+    "elastic": 0,
+    "elastoplastic": 1,
+    "elastoplasticductilityfixed": 2,
+    "elastoplasticandsoftening": 3,
+    "elastoplasticfractureenergyfixed": 4,
+    "elastoplasticenergysigmainterpolation": 5,
+}
 _LAW_PROPERTY = "ConstitutiveLawMasonryShear"
 _ENERGY_PROPERTY = "FractureEnergyShear"
 
@@ -71,9 +79,9 @@ def _law_token(value: Any) -> str:
 def masonry_shear_law_code(material: Any) -> int:
     """Return the C# masonry-shear constitutive-law code.
 
-    Unknown, absent, or malformed values deliberately return zero so the batch
-    runtime keeps the authoritative non-fracture-energy behaviour rather than
-    guessing a constitutive branch.
+    An absent value uses the C# default (``Elastic``).  An explicitly stored
+    unknown value is rejected: silently treating it as elastic could change
+    the physical law while still producing plausible results.
     """
     raw = _material_value(material, _LAW_PROPERTY, "")
 
@@ -83,12 +91,11 @@ def masonry_shear_law_code(material: Any) -> int:
         numeric = float(raw)
         if math.isfinite(numeric) and numeric.is_integer():
             code = int(numeric)
-            if code in {
-                ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
-                ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION,
-            }:
+            if code in _LAW_CODES.values():
                 return code
-        return _NO_FRACTURE_ENERGY
+        raise ValueError(
+            f"Unsupported {_LAW_PROPERTY} value {raw!r}; expected a C# enum value 0..5."
+        )
 
     text = str(raw).strip()
     if text:
@@ -98,18 +105,22 @@ def masonry_shear_law_code(material: Any) -> int:
             numeric = math.nan
         if math.isfinite(numeric) and numeric.is_integer():
             code = int(numeric)
-            if code in {
-                ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
-                ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION,
-            }:
+            if code in _LAW_CODES.values():
                 return code
+            raise ValueError(
+                f"Unsupported {_LAW_PROPERTY} value {raw!r}; expected a C# enum value 0..5."
+            )
 
     token = _law_token(raw)
-    if token.endswith("elastoplasticfractureenergyfixed"):
-        return ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED
-    if token.endswith("elastoplasticenergysigmainterpolation"):
-        return ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
-    return _NO_FRACTURE_ENERGY
+    if not token:
+        return _NO_FRACTURE_ENERGY
+    for name, code in _LAW_CODES.items():
+        if token.endswith(name):
+            return code
+    raise ValueError(
+        f"Unsupported {_LAW_PROPERTY} value {raw!r}; expected one of "
+        f"{sorted(_LAW_CODES)}."
+    )
 
 
 def fracture_energy_shear(material: Any) -> float:

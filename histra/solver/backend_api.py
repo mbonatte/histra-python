@@ -81,6 +81,7 @@ def run_python_solver_job(
     on_progress: Callable[[float], None] | None = None,
     should_cancel: CancelCheck | None = None,
     equilibrium_policy: str = "error",
+    strategy_policy: str = "warn",
 ) -> PythonSolverJobResult:
     """Run an HRX analysis plan entirely in process.
 
@@ -124,6 +125,7 @@ def run_python_solver_job(
         on_log=log,
         on_progress=on_progress,
         equilibrium_policy=equilibrium_policy,
+        strategy_policy=strategy_policy,
     )
     request_by_name = {request.name.casefold(): request for request in requested}
     run_order = _dependency_order(session, requested)
@@ -195,6 +197,7 @@ def run_python_solver_job(
             "combination_row": int(combination_row),
             "serialized_in_process": True,
             "equilibrium_policy": str(equilibrium_policy),
+            "strategy_policy": str(strategy_policy),
         },
     )
 

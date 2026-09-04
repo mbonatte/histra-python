@@ -102,10 +102,10 @@ def test_cached_flex_law_caches_by_material_identity_and_orientation(monkeypatch
         FtmVer=4.0,
         FmHor=6.0,
         FmVer=12.0,
-        TensileCurveType="HorizontalTension",
-        TensileCurveTypeVertical="VerticalTension",
-        CompressiveCurveType="HorizontalCompression",
-        CompressiveCurveTypeVertical="VerticalCompression",
+        TensileCurveType="LinearSoftening",
+        TensileCurveTypeVertical="Exponential",
+        CompressiveCurveType="LinearHardening",
+        CompressiveCurveTypeVertical="Parabolic",
     )
     calls = []
     original = ms._flex_law

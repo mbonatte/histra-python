@@ -47,7 +47,10 @@ _LAW_NAME = "ConstitutiveLawMasonryShear"
         ("4", ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED),
         (5, ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION),
         (_Law.FIXED, ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED),
-        ("Hysteretic", 0),
+        ("Elastic", 0),
+        ("ElastoPlastic", 1),
+        ("ElastoPlasticDuctilityFixed", 2),
+        ("ElastoPlasticAndSoftening", 3),
         ("", 0),
         (None, 0),
     ],
@@ -55,6 +58,12 @@ _LAW_NAME = "ConstitutiveLawMasonryShear"
 def test_masonry_shear_law_code(stored, expected) -> None:
     material = _Material({_LAW_NAME: stored}) if stored is not None else None
     assert masonry_shear_law_code(material) == expected
+
+
+@pytest.mark.parametrize("stored", ["Hysteretic", "6", -1, float("nan")])
+def test_unknown_masonry_shear_law_is_rejected(stored) -> None:
+    with pytest.raises(ValueError, match="Unsupported ConstitutiveLawMasonryShear"):
+        masonry_shear_law_code(_Material({_LAW_NAME: stored}))
 
 
 def test_fracture_energy_uses_system_single_rounding() -> None:

@@ -89,7 +89,24 @@ class IncrementalIntegrator(ABC):
 
         Port of C# IncrementalIntegrator.UpdatePtarget.
         """
-        pdelta = str(getattr(an, "pdelta_effect", "") or "").strip().lower()
+        raw_pdelta = getattr(an, "pdelta_effect", "None")
+        if isinstance(raw_pdelta, bool):
+            pdelta = "eachstep" if raw_pdelta else "none"
+        elif isinstance(raw_pdelta, (int, float)):
+            pdelta = str(int(raw_pdelta))
+        else:
+            pdelta = str(raw_pdelta or "None").strip().lower()
+        if pdelta in {"", "none", "no", "false", "disabled", "0"}:
+            pdelta = "none"
+        elif pdelta in {"eachstep", "1"}:
+            pdelta = "eachstep"
+        elif pdelta in {"eachiteration", "2"}:
+            pdelta = "eachiteration"
+        else:
+            raise ValueError(
+                f"Unsupported PdeltaEffect {raw_pdelta!r}; expected None, "
+                "EachStep, or EachIteration."
+            )
         need_pdelta = (pdelta in ("eachiteration", "2")) or (pdelta in ("eachstep", "1") and iteration == 0)
         if getattr(an, "key", None) is not None:
             ModelManager.assemble_load(
@@ -173,10 +190,15 @@ class StaticIntegrator(IncrementalIntegrator):
             from histra.solver.arc_length import ArcLengthLinear
 
             integrator = ArcLengthLinear()
-        else:
+        elif method == "LoadControl":
             from histra.solver.load_control import LoadControl
 
             integrator = LoadControl()
+        else:
+            raise ValueError(
+                f"Unsupported static integration method: {method!r}. "
+                "Expected LoadControl, ArcLength, or ArcLengthLinear."
+            )
         integrator.state.analysis = an
         integrator.state.combination = combination
         return integrator

@@ -4,7 +4,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
-from histra.solver.model_manager import pdelta_enabled
+from histra.preprocessing.constitutive_laws import validate_masonry_material_enums
+
+
+
+_STATIC_INTEGRATORS = {"LoadControl", "ArcLength", "ArcLengthLinear"}
+_STATIC_METHODS = {
+    "StandardNewtonRaphson",
+    "ModifiedNewtonRaphson",
+    "StandardSecantLineSearch",
+    "StandardRegulaFalsiLineSearch",
+    "StandardBisectionLineSearch",
+    "StandardInitialInterpolatedLineSearch",
+    "ModifiedSecantLineSearch",
+    "ModifiedRegulaFalsiLineSearch",
+    "ModifiedBisectionLineSearch",
+    "ModifiedInitialInterpolatedLineSearch",
+}
+_CONVERGENCE_CRITERIA = {"ForceMoment", "DispRotation", "Work"}
+_PDELTA_EFFECTS = {"none", "eachstep", "eachiteration", "0", "1", "2"}
 
 
 @dataclass(frozen=True)
@@ -66,15 +84,6 @@ def inspect_solver_capabilities(
             continue
         analysis = matches[0]
         resolved[str(requested_name)] = analysis
-        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
-            issues.append(
-                SolverCapabilityIssue(
-                    "PDELTA_UNSUPPORTED",
-                    "P-Delta requires a subsystem that is not present in the Python port.",
-                    str(requested_name),
-                )
-            )
-
         request = output_requests.get(str(requested_name)) if output_requests else None
         if request is not None:
             displacements = getattr(request, "displacements", None)
@@ -91,15 +100,32 @@ def inspect_solver_capabilities(
                     )
                 )
 
-    _inspect_dependency_graph(analyses, resolved.values(), issues)
+    reachable = _inspect_dependency_graph(analyses, resolved.values(), issues)
+    for analysis in reachable:
+        _inspect_analysis_definition(analysis, issues)
+    _inspect_materials(collections, issues)
     return SolverCapabilityReport(supported=not issues, issues=tuple(issues))
+
+
+def _inspect_materials(collections: Any, issues: list[SolverCapabilityIssue]) -> None:
+    for key, material in getattr(collections, "materials", {}).items():
+        try:
+            validate_masonry_material_enums(material)
+        except (TypeError, ValueError) as exc:
+            issues.append(
+                SolverCapabilityIssue(
+                    "MASONRY_CONSTITUTIVE_ENUM_UNSUPPORTED",
+                    f"Masonry material {key}: {exc}",
+                )
+            )
 
 
 def _inspect_dependency_graph(
     analyses: Mapping[int, Any],
     requested: Iterable[Any],
     issues: list[SolverCapabilityIssue],
-) -> None:
+) -> tuple[Any, ...]:
+    reachable: dict[int, Any] = {}
     for target in requested:
         seen: set[int] = set()
         current = target
@@ -116,6 +142,7 @@ def _inspect_dependency_graph(
                 )
                 break
             seen.add(key)
+            reachable[key] = current
             predecessor = int(getattr(current, "initial_analysis_key", -100))
             if predecessor < 0:
                 break
@@ -129,6 +156,92 @@ def _inspect_dependency_graph(
                 )
                 break
             current = analyses[predecessor]
+    return tuple(reachable.values())
+
+
+def _inspect_analysis_definition(
+    analysis: Any,
+    issues: list[SolverCapabilityIssue],
+) -> None:
+    name = str(getattr(analysis, "name", getattr(analysis, "key", "<unknown>")))
+    analysis_type = int(getattr(analysis, "analysis_type", 2))
+    if analysis_type in {3, 4}:
+        issues.append(
+            SolverCapabilityIssue(
+                "DYNAMIC_ANALYSIS_UNSUPPORTED",
+                "Dynamic linear and nonlinear analyses are outside the V1 masonry core.",
+                name,
+            )
+        )
+        return
+    if analysis_type not in {2, 5}:
+        issues.append(
+            SolverCapabilityIssue(
+                "ANALYSIS_TYPE_UNSUPPORTED",
+                f"AnalysisType={analysis_type} is not supported by the V1 solver.",
+                name,
+            )
+        )
+        return
+
+    raw_pdelta = getattr(analysis, "pdelta_effect", "None")
+    if isinstance(raw_pdelta, bool):
+        pdelta = "1" if raw_pdelta else "0"
+    elif raw_pdelta is None:
+        pdelta = "none"
+    else:
+        pdelta = str(raw_pdelta).strip().casefold()
+    if pdelta in {"", "false", "disabled", "no"}:
+        pdelta = "none"
+    if pdelta not in _PDELTA_EFFECTS:
+        issues.append(
+            SolverCapabilityIssue(
+                "PDELTA_EFFECT_UNSUPPORTED",
+                f"Unknown PdeltaEffect={raw_pdelta!r}; expected None, EachStep, or EachIteration.",
+                name,
+            )
+        )
+
+    if analysis_type == 5:
+        if pdelta not in {"none", "0"}:
+            issues.append(
+                SolverCapabilityIssue(
+                    "MODAL_PDELTA_UNSUPPORTED",
+                    "Modal analysis cannot be combined with P-Delta in the V1 solver.",
+                    name,
+                )
+            )
+        return
+
+    integration = str(getattr(analysis, "integration_method", "LoadControl"))
+    if integration not in _STATIC_INTEGRATORS:
+        issues.append(
+            SolverCapabilityIssue(
+                "STATIC_INTEGRATOR_UNSUPPORTED",
+                f"Unknown IntegrationMethod={integration!r}; expected one of {sorted(_STATIC_INTEGRATORS)}.",
+                name,
+            )
+        )
+    method = str(getattr(analysis, "method", "StandardNewtonRaphson"))
+    if method not in _STATIC_METHODS:
+        issues.append(
+            SolverCapabilityIssue(
+                "NONLINEAR_METHOD_UNSUPPORTED",
+                f"Unknown Method={method!r}; the C# factory does not provide this V1 path.",
+                name,
+            )
+        )
+    criterion = str(
+        getattr(analysis, "adaptive_convergence_criteria", "ForceMoment")
+    )
+    if criterion not in _CONVERGENCE_CRITERIA:
+        issues.append(
+            SolverCapabilityIssue(
+                "CONVERGENCE_CRITERION_UNSUPPORTED",
+                f"Unknown convergence criterion {criterion!r}; expected ForceMoment, DispRotation, or Work.",
+                name,
+            )
+        )
 
 
 def _inspect_model_points(model: Any, analysis_name: str, issues: list[SolverCapabilityIssue]) -> None:

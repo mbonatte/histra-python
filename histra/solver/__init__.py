@@ -72,6 +72,12 @@ from histra.solver.capabilities import (
     UnsupportedSolverCapability,
     inspect_solver_capabilities,
 )
+from histra.solver.strategy import (
+    SolverStrategyAdvisory,
+    SolverStrategyReport,
+    SuboptimalSolverStrategyWarning,
+    inspect_solver_strategy,
+)
 
 __all__ = [
     "ConvergenceTest",
@@ -129,6 +135,10 @@ __all__ = [
     "SolverCapabilityReport",
     "UnsupportedSolverCapability",
     "inspect_solver_capabilities",
+    "SolverStrategyAdvisory",
+    "SolverStrategyReport",
+    "SuboptimalSolverStrategyWarning",
+    "inspect_solver_strategy",
     "ConcreteInterfaceMutation",
     "PythonAnalysisRequest",
     "PythonAnalysisResult",

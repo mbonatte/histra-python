@@ -22,6 +22,11 @@ from histra.solver.outcomes import (
 from histra.solver.modal import solve_modal_analysis
 from histra.solver.solve import solve_static_nonlinear
 from histra.solver.equilibrium import UNSAFE_EQUILIBRIUM_EXIT_CODE
+from histra.solver.capabilities import inspect_solver_capabilities
+from histra.solver.strategy import (
+    emit_strategy_advisories,
+    normalize_strategy_policy,
+)
 
 
 class AnalysisSessionError(RuntimeError):
@@ -47,6 +52,7 @@ class AnalysisSession:
         equilibrium_force_absolute_tolerance: float = 1.0e-3,
         equilibrium_force_relative_tolerance: float = 1.0e-5,
         equilibrium_residual_tolerance: float | None = None,
+        strategy_policy: str = "warn",
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
@@ -62,6 +68,10 @@ class AnalysisSession:
             equilibrium_force_relative_tolerance
         )
         self.equilibrium_residual_tolerance = equilibrium_residual_tolerance
+        self.strategy_policy = normalize_strategy_policy(strategy_policy)
+        self._emitted_strategy_advisories: set[
+            tuple[str, int, str, str, str]
+        ] = set()
         self.current_analysis_key: int | None = None
         self.current_displacement: np.ndarray | None = None
         self.executions: list[AnalysisExecution] = []
@@ -133,6 +143,15 @@ class AnalysisSession:
     ) -> AnalysisExecution:
         self._require_usable()
         definition = copy.deepcopy(self.resolve_analysis(analysis))
+        inspect_solver_capabilities(
+            self.model, [str(definition.name)]
+        ).require_supported()
+        emit_strategy_advisories(
+            definition,
+            policy=self.strategy_policy,
+            on_log=self.on_log,
+            emitted=self._emitted_strategy_advisories,
+        )
         initial_key = int(getattr(definition, "initial_analysis_key", -100))
         kwargs: dict[str, Any] = {}
         if initial_key < 0:

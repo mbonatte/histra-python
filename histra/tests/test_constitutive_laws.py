@@ -68,19 +68,19 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
         GtVer=20.0,
         Gc=30.0,
         GcVer=40.0,
-        TensileCurveType="HorizontalTension",
-        TensileCurveTypeVertical="VerticalTension",
-        CompressiveCurveType="HorizontalCompression",
-        CompressiveCurveTypeVertical="VerticalCompression",
-        ConstitutiveLawFlex="Hysteretic",
+        TensileCurveType="LinearSoftening",
+        TensileCurveTypeVertical="Exponential",
+        CompressiveCurveType="LinearHardening",
+        CompressiveCurveTypeVertical="Parabolic",
+        ConstitutiveLawFlex="ElastoPlasticDuctilityFixed",
     )
 
     assert asdict(flex_law(material)) == {
         "E": 8.0,
         "fy_t": 2.0,
         "fy_c": 6.0,
-        "tensile_curve": "HorizontalTension",
-        "compressive_curve": "HorizontalCompression",
+        "tensile_curve": "LinearSoftening",
+        "compressive_curve": "LinearHardening",
         "ratio_et_t": 0.625,
         "ratio_et_c": 0.75,
         "alfa_r_t": 1.0,
@@ -91,14 +91,14 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
         "G_c": 30.0,
         "eps_u_t": 0.75,
         "eps_u_c": 5.25,
-        "law_type": "Hysteretic",
+        "law_type": "ElastoPlasticDuctilityFixed",
     }
     assert asdict(flex_law(material, vertical=True)) == {
         "E": 16.0,
         "fy_t": 4.0,
         "fy_c": 12.0,
-        "tensile_curve": "VerticalTension",
-        "compressive_curve": "VerticalCompression",
+        "tensile_curve": "Exponential",
+        "compressive_curve": "Parabolic",
         "ratio_et_t": 0.625,
         "ratio_et_c": 0.75,
         "alfa_r_t": 1.0,
@@ -109,7 +109,7 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
         "G_c": 40.0,
         "eps_u_t": 1.25,
         "eps_u_c": 6.75,
-        "law_type": "Hysteretic",
+        "law_type": "ElastoPlasticDuctilityFixed",
     }
 
 
@@ -127,7 +127,7 @@ def test_diagonal_elastoplastic_preserves_csharp_tensile_weight_asymmetry():
         DuctComprRockingVer=9.0,
         IsDuctTraz=False,
         IsDuctCompr=False,
-        ConstitutiveLawFlex="ElastoPlastic",
+        ConstitutiveLawFlex="ElastoPlasticDuctilityFixed",
     )
     diagonal = diagonal_flex_law(material)
     c = np.sqrt(2.0) / 2.0
@@ -227,8 +227,8 @@ def test_out_of_plane_vertical_sliding_uses_csharp_domain_and_energy_fields():
         FrictionRatioSlidingVert=0.25,
         SlidingPlasticStiffnessRatioVert=0.125,
         SlidingMaxTensileRatioVer=0.75,
-        SlidingYieldingDomainVert="InPlaneDomain",
-        CriterioSnervamento="OutOfPlaneDomain",
+        SlidingYieldingDomainVert="Coulomb",
+        CriterioSnervamento="Cacovic",
         SlidingFractureEnergyVer=True,
         Gs=11.0,
         GsVer=22.0,
@@ -238,10 +238,10 @@ def test_out_of_plane_vertical_sliding_uses_csharp_domain_and_energy_fields():
     out_of_plane = sliding_law(material, out_of_plane=True, direction="vert")
 
     assert in_plane.E == 32.0
-    assert in_plane.sub_law == "InPlaneDomain"
+    assert in_plane.sub_law == "Coulomb"
     assert in_plane.G == 22.0
     assert out_of_plane.E == 8.0
-    assert out_of_plane.sub_law == "OutOfPlaneDomain"
+    assert out_of_plane.sub_law == "Cacovic"
     assert out_of_plane.G == 11.0
     assert out_of_plane.fracture_energy is True
 
@@ -249,9 +249,9 @@ def test_out_of_plane_vertical_sliding_uses_csharp_domain_and_energy_fields():
 @pytest.mark.parametrize(
     ("out_of_plane", "direction", "expected_E", "expected_domain", "expected_G"),
     [
-        (False, "hor", 32.0, "HorizontalDomain", 10.0),
-        (False, "vert", 32.0, "VerticalDomain", 20.0),
-        (False, "dir3", 8.0, "Direction3Domain", 30.0),
+        (False, "hor", 32.0, "Coulomb", 10.0),
+        (False, "vert", 32.0, "Cacovic", 20.0),
+        (False, "dir3", 8.0, "Linear", 30.0),
         (True, "hor", 8.0, "Cacovic", 10.0),
         (True, "vert", 8.0, "Cacovic", 10.0),
         (True, "dir3", 8.0, "Cacovic", 30.0),
@@ -277,9 +277,9 @@ def test_all_six_csharp_sliding_slots_select_exact_directional_fields(
         SlidingPlasticStiffnessRatioDir3=0.75,
         SlidingMaxTensileRatioHor=0.875,
         SlidingMaxTensileRatioVer=0.9375,
-        SlidingYieldingDomainHor="HorizontalDomain",
-        SlidingYieldingDomainVert="VerticalDomain",
-        SlidingYieldingDomainDir3="Direction3Domain",
+        SlidingYieldingDomainHor="Coulomb",
+        SlidingYieldingDomainVert="Cacovic",
+        SlidingYieldingDomainDir3="Linear",
         CriterioSnervamento="Cacovic",
         Gs=10.0,
         GsVer=20.0,
@@ -306,3 +306,24 @@ def test_all_six_csharp_sliding_slots_select_exact_directional_fields(
 def test_sliding_rejects_unknown_direction_instead_of_defaulting():
     with pytest.raises(ValueError, match="Unsupported sliding-law direction"):
         sliding_law(_material(), out_of_plane=False, direction="diagonal")
+
+
+@pytest.mark.parametrize(
+    ("property_name", "value"),
+    [
+        ("TensileCurveType", "FutureTension"),
+        ("CompressiveCurveType", "FutureCompression"),
+        ("ConstitutiveLawFlex", "FutureFlex"),
+        ("CriterioSnervamento", "MohrCoulombMaybe"),
+        ("UnloadShear", "FutureUnload"),
+    ],
+)
+def test_unknown_material_enums_fail_instead_of_selecting_another_law(
+    property_name, value
+):
+    material = _material(**{property_name: value})
+    call = flex_law if property_name in {
+        "TensileCurveType", "CompressiveCurveType", "ConstitutiveLawFlex"
+    } else shear_law
+    with pytest.raises(ValueError, match="unsupported"):
+        call(material)
