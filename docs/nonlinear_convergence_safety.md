@@ -122,13 +122,42 @@ Strict mode restores the complete pre-step state, does not commit the unsafe
 candidate, and returns exit code `-12`. The analysis outcome is classified as
 nonconverged. This is the recommended mode for capacity calculations.
 
-`equilibrium_policy="off"` exists only for controlled legacy diagnostics. It
-should not be used to produce engineering results.
+## Scenario-based strategy guidance
 
-## Engineering recommendation
+No method is universally fastest or most robust. A configuration qualifies for
+recommendation only after it (1) reaches safe equilibrium, (2) preserves the
+accepted response, and (3) completes the relevant reference range. Runtime and
+factorization count break ties only among qualifying configurations.
 
-Use `equilibrium_policy="error"` for production work and treat any existing
-result generated from Work-only or displacement-only acceptance as requiring
-revalidation. For the overturning wall, the force-equilibrated path approaches
-the independent rigid-pivot estimate near 36.93 kN; the 143 kN apparent peak
-comes from unbalanced states and is not a valid collapse load.
+| Scenario | Starting configuration | Required verification |
+|---|---|---|
+| Gravity or seating, `LoadControl` | Preserve the authored C# method; compare modified and standard tangent updates on the representative mesh. | No unsafe step; identical terminal state and reaction baseline. |
+| Monotonic live-load pushover, `ArcLength` | `ForceMoment`; benchmark `StandardRegulaFalsiLineSearch` against the authored path. | Peak, normalized RMSE, curve area, stiffness, peak displacement, and spring phases within the Article gate limits. |
+| Displacement-controlled near-collapse | `ForceMoment` with strict equilibrium; retain cutbacks and the authored displacement controller. | Covers the reference peak/displacement range without an unsafe commit. |
+| P-Delta | Start from the non-P-Delta qualifying strategy, then test `EachStep` and `EachIteration` as distinct scenarios. | Equilibrium, response preservation, and expected geometric-stiffness update frequency. |
+| C# path reproduction | Preserve the complete authored configuration and use warning mode. | Treat unsafe rows as compatibility evidence only, never production capacity. |
+
+`Work` and `DispRotation` are supported compatibility criteria. Because either
+can pass while the force residual is too large, the advisor emits
+`HISTRA-STRATEGY-001`; use strict equilibrium for production. An ArcLength stage
+using a modified tangent receives `HISTRA-STRATEGY-002`, reflecting observed
+stall/slower behavior on current nonlinear live-load cases. This is a prompt to
+benchmark the standard Regula-Falsi path, not a guarantee that it wins for every
+model.
+
+```python
+from histra import AnalysisSession, inspect_solver_strategy
+
+report = inspect_solver_strategy(model, ["Vert", "LiveLoad"])
+session = AnalysisSession(
+    model,
+    equilibrium_policy="error",
+    strategy_policy="warn",  # use "off" only for controlled comparisons
+    on_log=print,
+)
+```
+
+Warnings are emitted once per analysis/configuration, contain a stable code and
+the selected configuration, and never mutate the HRX. The reproducible strategy
+benchmark matrix and measured results are release artifacts; until that matrix
+passes, the table above is qualified guidance rather than a release claim.

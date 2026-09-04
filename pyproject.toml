@@ -4,17 +4,43 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "histra-python"
-version = "0.3.0"
+version = "1.0.0"
 description = "In-process Python solver for HiStrA HRX models"
-requires-python = ">=3.11"
-dependencies = [
-  "numpy",
-  "scipy",
-  "numba>=0.60",
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "Operating System :: Microsoft :: Windows :: Windows 10",
+  "Operating System :: Microsoft :: Windows :: Windows 11",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering",
 ]
+dependencies = [
+  "numpy>=2.0,<2.6",
+  "scipy>=1.14,<2.0",
+  "numba>=0.67,<0.68",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+release = ["build>=1.2,<2", "twine>=6,<7"]
+
+[project.scripts]
+histra-article-benchmark = "histra.tools.article_models_benchmark:main"
+histra-strategy-benchmark = "histra.tools.strategy_benchmark:main"
+
+[tool.setuptools]
+include-package-data = false
 
 [tool.setuptools.packages.find]
 include = ["histra*"]
+exclude = ["histra.tests*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["histra/tests"]

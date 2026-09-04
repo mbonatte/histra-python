@@ -38,8 +38,9 @@ The service:
 python -m pip install -e .
 ```
 
-Runtime dependencies are NumPy, SciPy, and Numba. Python 3.11 or newer is
-required.
+Runtime dependencies are NumPy, SciPy, and Numba. V1 supports 64-bit Linux and
+Windows on Python 3.12 through 3.14. Private-index installation and release
+verification are documented in [the V1 release guide](docs/release/v1-release-checklist.md).
 
 ## Public API
 
@@ -53,6 +54,8 @@ The stable root package exports:
 - `AnalysisExecution`, `AnalysisStep`, `AnalysisOutcome`
 - `solve_modal_analysis`, `ModalAnalysisResult`, `ModalMode`
 - capability and cancellation exceptions
+- `inspect_solver_strategy`, `SolverStrategyReport`, and
+  `SuboptimalSolverStrategyWarning`
 - `project_analysis_outputs`, `project_displacements`, `project_reactions`
 
 ## Output compatibility
@@ -81,6 +84,14 @@ strict mode rejects unsafe states. `run_python_solver_job` uses strict mode by
 default. See
 [nonlinear convergence and equilibrium safety](docs/nonlinear_convergence_safety.md).
 
+## Solver strategy advice
+
+The default strategy policy is `warn`. The advisor reports supported but
+potentially unsafe or inefficient configurations through Python warnings and
+`on_log`; it never changes an analysis definition. Recommendations are
+scenario-qualified and must still pass the independent equilibrium and response
+checks. See [nonlinear convergence and equilibrium safety](docs/nonlinear_convergence_safety.md).
+
 ## Batch modal C#/Python parity
 
 A directory or wildcard can be used to validate many models against C# in one
@@ -99,10 +110,12 @@ are written under `<models-root>/modal-comparison`. Use
 
 ## Current capability boundary
 
-Supported backend scope is the validated static nonlinear and modal Quad /
-Interface model subset. Capability preflight rejects unsupported model-point
-element types, P-Delta, broken analysis chains, and response-spectrum modal
-contribution requests. Modal eigenanalysis itself is supported.
+Supported backend scope is the static nonlinear and modal Quad/Interface masonry
+subset. Capability preflight accepts validated P-Delta `EachStep` and
+`EachIteration`, and rejects unknown solver/material enums, unsupported
+model-point element types, broken analysis chains, dynamic analysis, and
+response-spectrum contributions before solving. Modal eigenanalysis itself is
+supported.
 
 The modal solver ports the active C# consistent Quad mass integration,
 `SubSpaceIteration2`, inverse iteration, mass normalization, participation
