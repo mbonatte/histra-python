@@ -1,0 +1,30 @@
+{
+  "scenario": "coarse-mesh gravity first increment",
+  "hrx": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
+  "target": "Vert",
+  "max_steps": 1,
+  "baseline_id": "force-standard-regula-falsi",
+  "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+  "candidates": [
+    {"id": "authored"},
+    {
+      "id": "force-modified-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment"
+    },
+    {
+      "id": "force-standard-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardRegulaFalsiLineSearch"
+    },
+    {
+      "id": "force-standard-newton",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardNewtonRaphson"
+    },
+    {
+      "id": "force-modified-newton",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "ModifiedNewtonRaphson"
+    }
+  ]
+}

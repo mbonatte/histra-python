@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "scenario": "coarse-mesh gravity first increment",
+  "environment": {
+    "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "packages": {
+      "histra-python": "1.0.0",
+      "numpy": "2.5.2",
+      "scipy": "1.18.1",
+      "numba": "0.67.0"
+    },
+    "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+    "repetitions": 1
+  },
+  "hrx": {
+    "path": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
+    "sha256": "5de23f68978d5465afc87e13b5db0fad76e3e587df8a8cce65becd18419b3a43"
+  },
+  "target": "Vert",
+  "baseline_id": "force-standard-regula-falsi",
+  "recommended_id": "force-standard-regula-falsi",
+  "results": [
+    {
+      "id": "authored",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "ModifiedRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "Work",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05
+        },
+        "analysis_overrides": {}
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "nonconverged",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 1,
+      "committed_steps": 0,
+      "iterations": 0,
+      "linear_solves": 2,
+      "factorizations": 1,
+      "preparation_seconds": 0.0015339360106736422,
+      "runtime_seconds": 0.4332632329897024,
+      "peak_rss_bytes": 221708288,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-modified-regula-falsi",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "ModifiedRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05
+        },
+        "analysis_overrides": {}
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "nonconverged",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 0,
+      "iterations": 1001,
+      "linear_solves": 1001,
+      "factorizations": 1,
+      "preparation_seconds": 0.005653361004078761,
+      "runtime_seconds": 15.079265524982475,
+      "peak_rss_bytes": 262856704,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-standard-regula-falsi",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "StandardRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05
+        },
+        "analysis_overrides": {}
+      },
+      "completed": true,
+      "range_covered": true,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed",
+          "committed_steps": 1
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 1,
+      "iterations": 13,
+      "linear_solves": 14,
+      "factorizations": 14,
+      "preparation_seconds": 0.0033196509757544845,
+      "runtime_seconds": 0.8747695439960808,
+      "peak_rss_bytes": 284004352,
+      "curve": {
+        "displacement_mm": [
+          0.01442639040760696
+        ],
+        "load_kn": [
+          109.14913177490234
+        ]
+      },
+      "response_vs_baseline": {
+        "peak_load_relative_error": 0.0,
+        "normalized_curve_rmse": 0.0,
+        "curve_area_relative_error": 0.0,
+        "initial_stiffness_relative_error": 0.0,
+        "peak_displacement_absolute_error_mm": 0.0,
+        "peak_displacement_allowed_mm": 0.1,
+        "available": true,
+        "reference": {
+          "peak_load_kn": 109.14913177490234,
+          "peak_displacement_mm": 0.01442639040760696,
+          "area": 0.0,
+          "initial_stiffness_kn_per_mm": 7565.934976870485
+        },
+        "actual": {
+          "peak_load_kn": 109.14913177490234,
+          "peak_displacement_mm": 0.01442639040760696,
+          "area": 0.0,
+          "initial_stiffness_kn_per_mm": 7565.934976870485
+        },
+        "within_curve_tolerance": true
+      },
+      "qualifies": true
+    },
+    {
+      "id": "force-standard-newton",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "StandardNewtonRaphson",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05
+        },
+        "analysis_overrides": {}
+      },
+      "completed": true,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 0,
+      "iterations": 8,
+      "linear_solves": 9,
+      "factorizations": 9,
+      "preparation_seconds": 0.00424207400646992,
+      "runtime_seconds": 0.6470125839987304,
+      "peak_rss_bytes": 284057600,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-modified-newton",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "ModifiedNewtonRaphson",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05
+        },
+        "analysis_overrides": {}
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "nonconverged",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 0,
+      "iterations": 1001,
+      "linear_solves": 1001,
+      "factorizations": 1,
+      "preparation_seconds": 0.004030971002066508,
+      "runtime_seconds": 3.207979140977841,
+      "peak_rss_bytes": 284839936,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    }
+  ]
+}

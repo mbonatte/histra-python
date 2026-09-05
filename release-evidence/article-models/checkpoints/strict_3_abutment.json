@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "3_abutment",
+    "name": "Bridge_3_abutment",
+    "run_mode": "strict",
+    "gdl": 7616,
+    "interfaces": 2653,
+    "preparation_seconds": 0.04572926100809127,
+    "total_seconds": 115.0975523829984,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3_abutment.hrx",
+          "bytes": 71556633,
+          "sha256": "d6d2420f21b64c83779338cb9602f20d7ea50069fd0dae1c4a421b256d90893b"
+        },
+        "csharp_results": {
+          "name": "Bridge_3_abutment.Results",
+          "bytes": 3113267200,
+          "sha256": "ffb3e3db132bf9c1037f731b41d96656ffbc92e61ced3156c347f8a42080cff2"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3 m series",
+      "variant": "abutment staging",
+      "figures": [
+        9,
+        13
+      ],
+      "capacity_kn": null,
+      "master_point": 7,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "nonconverged",
+        "exit_code": -2,
+        "committed_steps": 0,
+        "runtime_seconds": 109.07821030099876
+      }
+    ],
+    "warning_count": 0,
+    "unsafe_step_count": 0,
+    "unsafe_steps_by_criterion": {},
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 622,
+        "actual_steps": 0,
+        "matched_steps": 0,
+        "missing_steps": 622,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 622,
+        "actual_rows": 0,
+        "matched_rows": 0,
+        "missing_rows": 622,
+        "extra_rows": 0,
+        "max_absolute": null,
+        "relative_l2": null,
+        "worst_key": null
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 4354,
+        "actual_rows": 0,
+        "matched_rows": 0,
+        "missing_rows": 4354,
+        "extra_rows": 0,
+        "max_absolute": null,
+        "relative_l2": null,
+        "worst_key": null
+      }
+    },
+    "live_load_curve": {
+      "available": false,
+      "within_curve_tolerance": false,
+      "matched_sample_rows": 0,
+      "master_point": 7,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 41879,
+        "python_total": 41879,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 37293,
+            "python": 41879
+          },
+          "1": {
+            "csharp": 1120,
+            "python": 0
+          },
+          "2": {
+            "csharp": 276,
+            "python": 0
+          },
+          "3": {
+            "csharp": 1416,
+            "python": 0
+          },
+          "4": {
+            "csharp": 865,
+            "python": 0
+          },
+          "5": {
+            "csharp": 246,
+            "python": 0
+          },
+          "6": {
+            "csharp": 663,
+            "python": 0
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": false,
+    "release_gate_pass": false
+  }
+}

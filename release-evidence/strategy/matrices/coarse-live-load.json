@@ -1,0 +1,44 @@
+{
+  "scenario": "coarse-mesh live-load pushover first five increments",
+  "hrx": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
+  "target": "Second",
+  "max_steps": 5,
+  "baseline_id": "force-standard-regula-falsi",
+  "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+  "candidates": [
+    {"id": "authored"},
+    {
+      "id": "force-standard-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardRegulaFalsiLineSearch",
+      "analysis_overrides": {
+        "Vert": {
+          "adaptive_convergence_criteria": "ForceMoment",
+          "method": "StandardRegulaFalsiLineSearch"
+        }
+      }
+    },
+    {
+      "id": "force-standard-initial-interpolated",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardInitialInterpolatedLineSearch",
+      "analysis_overrides": {
+        "Vert": {
+          "adaptive_convergence_criteria": "ForceMoment",
+          "method": "StandardRegulaFalsiLineSearch"
+        }
+      }
+    },
+    {
+      "id": "force-modified-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "ModifiedRegulaFalsiLineSearch",
+      "analysis_overrides": {
+        "Vert": {
+          "adaptive_convergence_criteria": "ForceMoment",
+          "method": "StandardRegulaFalsiLineSearch"
+        }
+      }
+    }
+  ]
+}

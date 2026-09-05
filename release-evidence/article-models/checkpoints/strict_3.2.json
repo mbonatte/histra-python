@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "3.2",
+    "name": "Bridge_3.2",
+    "run_mode": "strict",
+    "gdl": 3626,
+    "interfaces": 1002,
+    "preparation_seconds": 0.012343006004812196,
+    "total_seconds": 46.44152175998897,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.2.hrx",
+          "bytes": 42646608,
+          "sha256": "dd24e06696fc9a100a71766ab449d381ff9038aaf1bc97edbbb48c1ffbd1d782"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.2.Results",
+          "bytes": 1063743488,
+          "sha256": "3479548b430e10be07e8bf2225531696e62a9590d0c4fa3dee86aa74cc5cc612"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.2",
+      "variant": "ring separation",
+      "figures": [
+        13
+      ],
+      "capacity_kn": 360.0,
+      "master_point": 5,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "nonconverged",
+        "exit_code": -2,
+        "committed_steps": 0,
+        "runtime_seconds": 44.38481878998573
+      }
+    ],
+    "warning_count": 0,
+    "unsafe_step_count": 0,
+    "unsafe_steps_by_criterion": {},
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 338,
+        "actual_steps": 0,
+        "matched_steps": 0,
+        "missing_steps": 338,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 338,
+        "actual_rows": 0,
+        "matched_rows": 0,
+        "missing_rows": 338,
+        "extra_rows": 0,
+        "max_absolute": null,
+        "relative_l2": null,
+        "worst_key": null
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 1352,
+        "actual_rows": 0,
+        "matched_rows": 0,
+        "missing_rows": 1352,
+        "extra_rows": 0,
+        "max_absolute": null,
+        "relative_l2": null,
+        "worst_key": null
+      }
+    },
+    "live_load_curve": {
+      "available": false,
+      "within_curve_tolerance": false,
+      "matched_sample_rows": 0,
+      "master_point": 5,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 27652,
+        "python_total": 27652,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 20540,
+            "python": 27652
+          },
+          "1": {
+            "csharp": 1779,
+            "python": 0
+          },
+          "2": {
+            "csharp": 170,
+            "python": 0
+          },
+          "3": {
+            "csharp": 4478,
+            "python": 0
+          },
+          "4": {
+            "csharp": 523,
+            "python": 0
+          },
+          "5": {
+            "csharp": 52,
+            "python": 0
+          },
+          "6": {
+            "csharp": 110,
+            "python": 0
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": false,
+    "release_gate_pass": false
+  }
+}

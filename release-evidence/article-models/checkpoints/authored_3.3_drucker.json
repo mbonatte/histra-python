@@ -1,0 +1,239 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "3.3_drucker",
+    "name": "Bridge_3.3_2_Zhang_drucker",
+    "run_mode": "authored",
+    "gdl": 16408,
+    "interfaces": 6376,
+    "preparation_seconds": 0.031011091006803326,
+    "total_seconds": 836.6482447029994,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.3_2_Zhang_drucker.hrx",
+          "bytes": 148769716,
+          "sha256": "1f9127dc1228c526d4d0f50d72416390e55cd1834679c60dfaea88b79fc0a478"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.3_2_Zhang_drucker.Results",
+          "bytes": 1706557440,
+          "sha256": "170296a6e60f38b6e946ac944e7ac5683c92877025598867687f8767331e9e68"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.3",
+      "variant": "Drucker configuration",
+      "figures": [
+        17
+      ],
+      "capacity_kn": 600.0,
+      "master_point": 15,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_criterion": "Work",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 162
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 7.847498467002879
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 162,
+        "runtime_seconds": 821.9064448610006
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 167,
+    "unsafe_steps_by_criterion": {
+      "Work": 167
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 167,
+        "actual_steps": 167,
+        "matched_steps": 167,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 167,
+        "actual_rows": 167,
+        "matched_rows": 167,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 50.01330852508545,
+        "relative_l2": 0.004882177870832821,
+        "worst_key": [
+          22,
+          124
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1057.8288640975952,
+        "actual_at_worst": -1107.8421726226807
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2839,
+        "actual_rows": 2839,
+        "matched_rows": 2839,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.615569120272994,
+        "relative_l2": 0.06185255110696341,
+        "worst_key": [
+          22,
+          162,
+          7
+        ],
+        "worst_component": 0,
+        "reference_at_worst": 0.6429771333932877,
+        "actual_at_worst": 0.027408013120293617
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 4.933534610988624e-05,
+      "normalized_curve_rmse": 0.008032914035633883,
+      "curve_area_relative_error": 0.0019098906583437194,
+      "initial_stiffness_relative_error": 1.649574094443304e-05,
+      "peak_displacement_absolute_error_mm": 3.071967512369156e-05,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 693.7890901565552,
+        "peak_displacement_mm": 1.5145207336172462,
+        "area": 908.9421274070717,
+        "initial_stiffness_kn_per_mm": 953.6880917002728
+      },
+      "actual": {
+        "peak_load_kn": 693.754861831665,
+        "peak_displacement_mm": 1.5145514532923698,
+        "area": 910.6781074851815,
+        "initial_stiffness_kn_per_mm": 953.7038234919753
+      },
+      "within_curve_tolerance": true,
+      "matched_sample_rows": 162,
+      "master_point": 15,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 83454,
+        "python_total": 83454,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 67660,
+            "python": 67659
+          },
+          "3": {
+            "csharp": 3861,
+            "python": 3863
+          },
+          "6": {
+            "csharp": 2666,
+            "python": 2665
+          }
+        }
+      },
+      "22": {
+        "csharp_total": 0,
+        "python_total": 83454,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 14919
+          },
+          "1": {
+            "csharp": 0,
+            "python": 6228
+          },
+          "2": {
+            "csharp": 0,
+            "python": 1443
+          },
+          "3": {
+            "csharp": 0,
+            "python": 10325
+          },
+          "4": {
+            "csharp": 0,
+            "python": 13842
+          },
+          "5": {
+            "csharp": 0,
+            "python": 10667
+          },
+          "6": {
+            "csharp": 0,
+            "python": 23894
+          },
+          "7": {
+            "csharp": 0,
+            "python": 1452
+          },
+          "8": {
+            "csharp": 0,
+            "python": 457
+          },
+          "9": {
+            "csharp": 0,
+            "python": 212
+          },
+          "10": {
+            "csharp": 0,
+            "python": 15
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

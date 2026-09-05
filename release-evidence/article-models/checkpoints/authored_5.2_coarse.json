@@ -1,0 +1,218 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "5.2_coarse",
+    "name": "Bridge_5.2_coarse",
+    "run_mode": "authored",
+    "gdl": 2646,
+    "interfaces": 730,
+    "preparation_seconds": 0.05234673200175166,
+    "total_seconds": 216.7093378300051,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_5.2_coarse.hrx",
+          "bytes": 221597320,
+          "sha256": "0eef5ae5551145e5f964b438e16a0b8b8118bb67fd968682de1162008e413f17"
+        },
+        "csharp_results": {
+          "name": "Bridge_5.2_coarse.Results",
+          "bytes": 1349578752,
+          "sha256": "4299abffdc52a7ba758be3a07772f76abec2eb19e1e41ada56c022bf1d341b9b"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "5.2",
+      "variant": "ring separation coarse",
+      "figures": [
+        15
+      ],
+      "capacity_kn": 500.0,
+      "master_point": 5,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 1775
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 1.9278902629885124
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed_at_configured_displacement_limit",
+        "exit_code": -3,
+        "committed_steps": 1762,
+        "runtime_seconds": 206.21817508401
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 1767,
+    "unsafe_steps_by_criterion": {
+      "Work": 1767
+    },
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 1780,
+        "actual_steps": 1767,
+        "matched_steps": 1767,
+        "missing_steps": 13,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 76,
+        "actual_rows": 1767,
+        "matched_rows": 75,
+        "missing_rows": 1,
+        "extra_rows": 1692,
+        "max_absolute": 23.73193359375,
+        "relative_l2": 0.0035423504003466197,
+        "worst_key": [
+          22,
+          600
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -2011.14208984375,
+        "actual_at_worst": -2034.8740234375
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 152,
+        "actual_rows": 3534,
+        "matched_rows": 150,
+        "missing_rows": 2,
+        "extra_rows": 3384,
+        "max_absolute": 0.21843492984771729,
+        "relative_l2": 0.020839522331909544,
+        "worst_key": [
+          22,
+          1750,
+          5
+        ],
+        "worst_component": 0,
+        "reference_at_worst": 6.163644790649414,
+        "actual_at_worst": 6.382079720497131
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.003252032208209913,
+      "normalized_curve_rmse": 0.011472237263008072,
+      "curve_area_relative_error": 0.020952987639307027,
+      "initial_stiffness_relative_error": 0.019099208646537188,
+      "peak_displacement_absolute_error_mm": 0.21375121548771858,
+      "peak_displacement_allowed_mm": 0.15773233249783516,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 635.9454956054688,
+        "peak_displacement_mm": 7.886616624891758,
+        "area": 4414.801700938784,
+        "initial_stiffness_kn_per_mm": 314.68699573380667
+      },
+      "actual": {
+        "peak_load_kn": 633.8773803710938,
+        "peak_displacement_mm": 7.672865409404039,
+        "area": 4507.304986408546,
+        "initial_stiffness_kn_per_mm": 320.6972683236786
+      },
+      "within_curve_tolerance": false,
+      "matched_sample_rows": 70,
+      "master_point": 5,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 166818,
+        "python_total": 166818,
+        "exact": true,
+        "mismatches": {}
+      },
+      "22": {
+        "csharp_total": 0,
+        "python_total": 166818,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 2204
+          },
+          "1": {
+            "csharp": 0,
+            "python": 28169
+          },
+          "2": {
+            "csharp": 0,
+            "python": 610
+          },
+          "3": {
+            "csharp": 0,
+            "python": 27778
+          },
+          "4": {
+            "csharp": 0,
+            "python": 48633
+          },
+          "5": {
+            "csharp": 0,
+            "python": 14369
+          },
+          "6": {
+            "csharp": 0,
+            "python": 41694
+          },
+          "8": {
+            "csharp": 0,
+            "python": 3360
+          },
+          "10": {
+            "csharp": 0,
+            "python": 1
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

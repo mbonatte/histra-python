@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "scenario": "coarse-mesh live-load pushover first five increments",
+  "environment": {
+    "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "packages": {
+      "histra-python": "1.0.0",
+      "numpy": "2.5.2",
+      "scipy": "1.18.1",
+      "numba": "0.67.0"
+    },
+    "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+    "repetitions": 1
+  },
+  "hrx": {
+    "path": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
+    "sha256": "5de23f68978d5465afc87e13b5db0fad76e3e587df8a8cce65becd18419b3a43"
+  },
+  "target": "Second",
+  "baseline_id": "force-standard-regula-falsi",
+  "recommended_id": null,
+  "results": [
+    {
+      "id": "authored",
+      "configuration": {
+        "target": {
+          "integration_method": "ArcLength",
+          "method": "StandardInitialInterpolatedLineSearch",
+          "adaptive_convergence_criteria": "Work",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 0.00999999977648258
+        },
+        "analysis_overrides": {}
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "nonconverged",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 1,
+      "committed_steps": 0,
+      "iterations": 0,
+      "linear_solves": 2,
+      "factorizations": 1,
+      "preparation_seconds": 0.001547494000988081,
+      "runtime_seconds": 0.45818651499575935,
+      "peak_rss_bytes": 222097408,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-standard-regula-falsi",
+      "configuration": {
+        "target": {
+          "integration_method": "ArcLength",
+          "method": "StandardRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 0.00999999977648258
+        },
+        "analysis_overrides": {
+          "Vert": {
+            "adaptive_convergence_criteria": "ForceMoment",
+            "method": "StandardRegulaFalsiLineSearch"
+          }
+        }
+      },
+      "completed": true,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 1
+        },
+        {
+          "analysis_key": 23,
+          "analysis_name": "Second",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 1,
+      "iterations": 23,
+      "linear_solves": 8,
+      "factorizations": 4,
+      "preparation_seconds": 0.0021100529993418604,
+      "runtime_seconds": 1.6674371300032362,
+      "peak_rss_bytes": 264622080,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-standard-initial-interpolated",
+      "configuration": {
+        "target": {
+          "integration_method": "ArcLength",
+          "method": "StandardInitialInterpolatedLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 0.00999999977648258
+        },
+        "analysis_overrides": {
+          "Vert": {
+            "adaptive_convergence_criteria": "ForceMoment",
+            "method": "StandardRegulaFalsiLineSearch"
+          }
+        }
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 1
+        },
+        {
+          "analysis_key": 23,
+          "analysis_name": "Second",
+          "outcome": "nonconverged",
+          "committed_steps": 0
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 1,
+      "iterations": 10021,
+      "linear_solves": 20003,
+      "factorizations": 2,
+      "preparation_seconds": 0.00215916900197044,
+      "runtime_seconds": 22.03347096600919,
+      "peak_rss_bytes": 321474560,
+      "curve": {
+        "displacement_mm": [],
+        "load_kn": []
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-modified-regula-falsi",
+      "configuration": {
+        "target": {
+          "integration_method": "ArcLength",
+          "method": "ModifiedRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 0.00999999977648258
+        },
+        "analysis_overrides": {
+          "Vert": {
+            "adaptive_convergence_criteria": "ForceMoment",
+            "method": "StandardRegulaFalsiLineSearch"
+          }
+        }
+      },
+      "completed": false,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 1
+        },
+        {
+          "analysis_key": 23,
+          "analysis_name": "Second",
+          "outcome": "nonconverged",
+          "committed_steps": 3
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 4,
+      "iterations": 20923,
+      "linear_solves": 20907,
+      "factorizations": 1,
+      "preparation_seconds": 0.001966354000614956,
+      "runtime_seconds": 210.33750372199574,
+      "peak_rss_bytes": 323252224,
+      "curve": {
+        "displacement_mm": [
+          0.045772711746394634,
+          0.07802878506481647,
+          0.10896650142967701
+        ],
+        "load_kn": [
+          20.95956802368164,
+          42.70182800292969,
+          61.05707550048828
+        ]
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "within_curve_tolerance": false
+      },
+      "qualifies": false
+    }
+  ]
+}

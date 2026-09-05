@@ -1,0 +1,58 @@
+{
+  "directory": "/home/mauricio/coding/histra-python/release-evidence/article-source-data",
+  "valid": false,
+  "figures": {
+    "9": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_09.csv",
+      "available": false
+    },
+    "12": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_12.csv",
+      "available": false
+    },
+    "13": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_13.csv",
+      "available": false
+    },
+    "15": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_15.csv",
+      "available": false
+    },
+    "17": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_17.csv",
+      "available": false
+    },
+    "20": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_20.csv",
+      "available": false
+    },
+    "22": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_22.csv",
+      "available": false
+    },
+    "24": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_24.csv",
+      "available": false
+    },
+    "25": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_25.csv",
+      "available": false
+    }
+  },
+  "table_1": {
+    "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/table_01.csv",
+    "available": false
+  },
+  "issues": [
+    "missing Figure 9 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_09.csv",
+    "missing Figure 12 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_12.csv",
+    "missing Figure 13 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_13.csv",
+    "missing Figure 15 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_15.csv",
+    "missing Figure 17 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_17.csv",
+    "missing Figure 20 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_20.csv",
+    "missing Figure 22 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_22.csv",
+    "missing Figure 24 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_24.csv",
+    "missing Figure 25 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/figure_25.csv",
+    "missing Table 1 source file: /home/mauricio/coding/histra-python/release-evidence/article-source-data/table_01.csv"
+  ]
+}

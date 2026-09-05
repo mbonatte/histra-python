@@ -12,6 +12,7 @@ from histra.tools.article_models_benchmark import (
     compare_phase_distributions,
     compute_curve_metrics,
     compute_parity_metrics,
+    _markdown_report,
     _progress_line,
     strict_convergence_tolerance,
     validate_article_source_data,
@@ -188,6 +189,24 @@ def test_progress_line_handles_a_strict_run_without_comparable_rows() -> None:
         },
     }
     assert "dR=n/a" in _progress_line(result)
+
+
+def test_markdown_report_uses_na_when_strict_run_has_no_comparable_rows() -> None:
+    result = {
+        "run_mode": "strict",
+        "name": "Bridge",
+        "unsafe_step_count": 0,
+        "release_gate_pass": False,
+        "parity": {
+            "step_history": {"actual_steps": 0, "expected_steps": 10},
+            "reaction": {"max_absolute": None},
+            "model_point_displacement_mm": {"max_absolute": None},
+        },
+    }
+
+    report = _markdown_report([result])
+
+    assert "| strict | Bridge | 0/10 | 0 | n/a | n/a | NOT RELEASE-READY |" in report
 
 
 def test_article_source_data_validation_is_fail_closed_and_hashes_inputs(tmp_path) -> None:

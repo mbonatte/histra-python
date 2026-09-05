@@ -1,0 +1,23 @@
+{
+  "scenario": "P-Delta gravity first increment: EachStep versus EachIteration",
+  "hrx": "my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.hrx",
+  "target": "Vert",
+  "max_steps": 1,
+  "baseline_id": "each-step-standard-regula-falsi",
+  "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+  "candidates": [
+    {"id": "authored-each-step"},
+    {
+      "id": "each-step-standard-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardRegulaFalsiLineSearch",
+      "pdelta_effect": "EachStep"
+    },
+    {
+      "id": "each-iteration-standard-regula-falsi",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardRegulaFalsiLineSearch",
+      "pdelta_effect": "EachIteration"
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "bridge_1_layers",
+    "name": "Bridge_1_traversal_layers",
+    "run_mode": "authored",
+    "gdl": 12068,
+    "interfaces": 4490,
+    "preparation_seconds": 0.02273801900446415,
+    "total_seconds": 491.0824993670103,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_1_traversal_layers.hrx",
+          "bytes": 105600556,
+          "sha256": "700838463a5f731c9614038683d6fa76cc3f88c49b2295b916efdd891ceb1b21"
+        },
+        "csharp_results": {
+          "name": "Bridge_1_traversal_layers.Results",
+          "bytes": 1463250944,
+          "sha256": "d502f0d3d19a77c627aef98909f9d3c202e84392060888a2316de5af28f38295"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "MS3",
+      "variant": "transversal joint layers",
+      "figures": [
+        25
+      ],
+      "capacity_kn": 325.0,
+      "master_point": 7,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_criterion": "Work",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 199
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 6.310782142012613
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 199,
+        "runtime_seconds": 479.9120034480002
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 204,
+    "unsafe_steps_by_criterion": {
+      "Work": 204
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 204,
+        "actual_steps": 204,
+        "matched_steps": 204,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 204,
+        "actual_rows": 204,
+        "matched_rows": 204,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 77.7455997467041,
+        "relative_l2": 0.01319268123328279,
+        "worst_key": [
+          22,
+          168
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1622.9568909406662,
+        "actual_at_worst": -1545.211291193962
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2040,
+        "actual_rows": 2040,
+        "matched_rows": 2040,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.48683539032936096,
+        "relative_l2": 0.07369183327023447,
+        "worst_key": [
+          22,
+          198,
+          9
+        ],
+        "worst_component": 2,
+        "reference_at_worst": 2.185003310441971,
+        "actual_at_worst": 2.671838700771332
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.05050374410484667,
+      "normalized_curve_rmse": 0.03644805943618409,
+      "curve_area_relative_error": 0.0410533046590137,
+      "initial_stiffness_relative_error": 0.007594468607208807,
+      "peak_displacement_absolute_error_mm": 0.6704564392566681,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 570.3078050911427,
+        "peak_displacement_mm": 1.479853861965239,
+        "area": 1079.1779163629262,
+        "initial_stiffness_kn_per_mm": 1355.709646274628
+      },
+      "actual": {
+        "peak_load_kn": 541.5051256418228,
+        "peak_displacement_mm": 2.150310301221907,
+        "area": 1123.481736144653,
+        "initial_stiffness_kn_per_mm": 1345.4137519255053
+      },
+      "within_curve_tolerance": false,
+      "matched_sample_rows": 199,
+      "master_point": 7,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 58748,
+        "python_total": 58748,
+        "exact": true,
+        "reason": null,
+        "mismatches": {}
+      },
+      "22": {
+        "available": false,
+        "csharp_total": 0,
+        "python_total": 58748,
+        "exact": false,
+        "reason": "no C# SpringStates rows at the terminal step",
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 11591
+          },
+          "1": {
+            "csharp": 0,
+            "python": 2196
+          },
+          "2": {
+            "csharp": 0,
+            "python": 637
+          },
+          "3": {
+            "csharp": 0,
+            "python": 4812
+          },
+          "4": {
+            "csharp": 0,
+            "python": 9234
+          },
+          "5": {
+            "csharp": 0,
+            "python": 10175
+          },
+          "6": {
+            "csharp": 0,
+            "python": 18765
+          },
+          "7": {
+            "csharp": 0,
+            "python": 642
+          },
+          "8": {
+            "csharp": 0,
+            "python": 688
+          },
+          "10": {
+            "csharp": 0,
+            "python": 8
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

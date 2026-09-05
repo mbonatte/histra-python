@@ -1,0 +1,255 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "3.3_drucker_tol",
+    "name": "Bridge_3.3_2_Zhang_drucker_tol",
+    "run_mode": "authored",
+    "gdl": 16408,
+    "interfaces": 6376,
+    "preparation_seconds": 0.02982659000554122,
+    "total_seconds": 762.6564448700083,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.3_2_Zhang_drucker_tol.hrx",
+          "bytes": 368949403,
+          "sha256": "9f690cfe891f4efc8f399c7617718cbea854e9391e64318c5c760e86e54f4e2e"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.3_2_Zhang_drucker_tol.Results",
+          "bytes": 4086239232,
+          "sha256": "366e9390751f2d0384cbff55aecb4a894f668005f9bd1d11b73b7d6aa36ede81"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.3",
+      "variant": "Drucker tight tolerance",
+      "figures": [
+        17
+      ],
+      "capacity_kn": 600.0,
+      "master_point": 15,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_criterion": "Work",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 146
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 9.448156462996849
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 146,
+        "runtime_seconds": 738.7901408229955
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 151,
+    "unsafe_steps_by_criterion": {
+      "Work": 151
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 151,
+        "actual_steps": 151,
+        "matched_steps": 151,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 151,
+        "actual_rows": 151,
+        "matched_rows": 151,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 12.172088623046875,
+        "relative_l2": 0.0009153670020686211,
+        "worst_key": [
+          22,
+          139
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1141.3155612945557,
+        "actual_at_worst": -1129.1434726715088
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2567,
+        "actual_rows": 2567,
+        "matched_rows": 2567,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.03509633243083954,
+        "relative_l2": 0.003922716949774935,
+        "worst_key": [
+          22,
+          139,
+          1
+        ],
+        "worst_component": 2,
+        "reference_at_worst": 0.45642510056495667,
+        "actual_at_worst": 0.4915214329957962
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.00024494480487887956,
+      "normalized_curve_rmse": 0.0014095237239321959,
+      "curve_area_relative_error": 0.0005106942119077121,
+      "initial_stiffness_relative_error": 0.0008190513449096004,
+      "peak_displacement_absolute_error_mm": 6.387941539287567e-05,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 783.5401744842529,
+        "peak_displacement_mm": 1.5842518396675587,
+        "area": 915.9457061168118,
+        "initial_stiffness_kn_per_mm": 975.0035436867314
+      },
+      "actual": {
+        "peak_load_kn": 783.3482503890991,
+        "peak_displacement_mm": 1.5843157190829515,
+        "area": 915.4779379462763,
+        "initial_stiffness_kn_per_mm": 975.8021216504796
+      },
+      "within_curve_tolerance": true,
+      "matched_sample_rows": 146,
+      "master_point": 15,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 251152,
+        "python_total": 251152,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 198981,
+            "python": 196840
+          },
+          "1": {
+            "csharp": 5155,
+            "python": 5334
+          },
+          "2": {
+            "csharp": 1031,
+            "python": 1044
+          },
+          "3": {
+            "csharp": 14609,
+            "python": 16115
+          },
+          "4": {
+            "csharp": 18842,
+            "python": 21370
+          },
+          "5": {
+            "csharp": 4077,
+            "python": 3549
+          },
+          "6": {
+            "csharp": 8457,
+            "python": 6900
+          }
+        }
+      },
+      "22": {
+        "csharp_total": 0,
+        "python_total": 251152,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 15672
+          },
+          "1": {
+            "csharp": 0,
+            "python": 16798
+          },
+          "2": {
+            "csharp": 0,
+            "python": 1456
+          },
+          "3": {
+            "csharp": 0,
+            "python": 36976
+          },
+          "4": {
+            "csharp": 0,
+            "python": 63556
+          },
+          "5": {
+            "csharp": 0,
+            "python": 39732
+          },
+          "6": {
+            "csharp": 0,
+            "python": 73398
+          },
+          "7": {
+            "csharp": 0,
+            "python": 1395
+          },
+          "8": {
+            "csharp": 0,
+            "python": 1501
+          },
+          "9": {
+            "csharp": 0,
+            "python": 656
+          },
+          "10": {
+            "csharp": 0,
+            "python": 12
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

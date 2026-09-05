@@ -805,10 +805,16 @@ def _markdown_report(
         step_history = parity["step_history"]
         steps = f"{step_history['actual_steps']}/{step_history['expected_steps']}"
         status = "PASS" if result["release_gate_pass"] else "NOT RELEASE-READY"
+        reaction_error = reaction["max_absolute"]
+        displacement_error = displacement["max_absolute"]
+        reaction_text = "n/a" if reaction_error is None else f"{reaction_error:.6g}"
+        displacement_text = (
+            "n/a" if displacement_error is None else f"{displacement_error:.6g}"
+        )
         lines.append(
             f"| {result['run_mode']} | {result['name']} | {steps} | "
-            f"{result['unsafe_step_count']} | {reaction['max_absolute']!s} | "
-            f"{displacement['max_absolute']!s} | {status} |"
+            f"{result['unsafe_step_count']} | {reaction_text} | "
+            f"{displacement_text} | {status} |"
         )
     lines.append("")
     lines.append(

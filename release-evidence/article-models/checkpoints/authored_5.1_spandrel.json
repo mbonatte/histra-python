@@ -1,0 +1,218 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "5.1_spandrel",
+    "name": "Bridge_5.1_load_spandrel",
+    "run_mode": "authored",
+    "gdl": 25515,
+    "interfaces": 9431,
+    "preparation_seconds": 0.06128848600201309,
+    "total_seconds": 128.4520544900006,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_5.1_load_spandrel.hrx",
+          "bytes": 1084914468,
+          "sha256": "a5e504edd5c1c5934aa57739cec265f21f34b5d6159b821d38dec2b91bfc32ad"
+        },
+        "csharp_results": {
+          "name": "Bridge_5.1_load_spandrel.Results",
+          "bytes": 9384697856,
+          "sha256": "79b3f4daef5ef6d94174e42e43a1fc3072f9611bb48509b9e11a0aea7e678693"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "5.1",
+      "variant": "spandrel loading",
+      "figures": [
+        12
+      ],
+      "capacity_kn": 1720.0,
+      "master_point": 3,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 108
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 15.311317642990616
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 108,
+        "runtime_seconds": 71.20701873699727
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 113,
+    "unsafe_steps_by_criterion": {
+      "Work": 113
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 113,
+        "actual_steps": 113,
+        "matched_steps": 113,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 113,
+        "actual_rows": 113,
+        "matched_rows": 113,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 42.898109436035156,
+        "relative_l2": 0.0052507390417982245,
+        "worst_key": [
+          22,
+          104
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -3230.7870712280273,
+        "actual_at_worst": -3273.6851806640625
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 113,
+        "actual_rows": 113,
+        "matched_rows": 113,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.009820070117712021,
+        "relative_l2": 0.0018128878416020597,
+        "worst_key": [
+          22,
+          8,
+          3
+        ],
+        "worst_component": 0,
+        "reference_at_worst": 0.04979622084647417,
+        "actual_at_worst": 0.05961629096418619
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.018417715342846988,
+      "normalized_curve_rmse": 0.010828524343662367,
+      "curve_area_relative_error": 0.007529814586686626,
+      "initial_stiffness_relative_error": 0.013613838222609677,
+      "peak_displacement_absolute_error_mm": 0.0022681429982185364,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 1341.3965377807617,
+        "peak_displacement_mm": 3.1721848249435425,
+        "area": 2458.4767466507756,
+        "initial_stiffness_kn_per_mm": 792.4920096238043
+      },
+      "actual": {
+        "peak_load_kn": 1366.1019973754883,
+        "peak_displacement_mm": 3.174452967941761,
+        "area": 2476.9886207187365,
+        "initial_stiffness_kn_per_mm": 781.703151612075
+      },
+      "within_curve_tolerance": false,
+      "matched_sample_rows": 108,
+      "master_point": 3,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 796317,
+        "python_total": 796317,
+        "exact": true,
+        "mismatches": {}
+      },
+      "22": {
+        "csharp_total": 0,
+        "python_total": 796317,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 45918
+          },
+          "1": {
+            "csharp": 0,
+            "python": 17293
+          },
+          "2": {
+            "csharp": 0,
+            "python": 2529
+          },
+          "3": {
+            "csharp": 0,
+            "python": 101999
+          },
+          "4": {
+            "csharp": 0,
+            "python": 291395
+          },
+          "5": {
+            "csharp": 0,
+            "python": 55379
+          },
+          "6": {
+            "csharp": 0,
+            "python": 281530
+          },
+          "8": {
+            "csharp": 0,
+            "python": 270
+          },
+          "10": {
+            "csharp": 0,
+            "python": 4
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "bridge_1",
+    "name": "Bridge_1",
+    "run_mode": "authored",
+    "gdl": 6398,
+    "interfaces": 2213,
+    "preparation_seconds": 0.038300090993288904,
+    "total_seconds": 491.3834985720023,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_1.hrx",
+          "bytes": 59892385,
+          "sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec"
+        },
+        "csharp_results": {
+          "name": "Bridge_1.Results",
+          "bytes": 1224491008,
+          "sha256": "22d2c1e1f7264ab044ca8f116fba4122c4ae4d713a2d7a16666ef314f4b4de0d"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "MS1",
+      "variant": "attached spandrels",
+      "figures": [
+        24
+      ],
+      "capacity_kn": 455.0,
+      "master_point": 7,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_criterion": "Work",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 292
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 3.2722489870066056
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "nonconverged",
+        "exit_code": -2,
+        "committed_steps": 107,
+        "runtime_seconds": 401.45657788499375
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 112,
+    "unsafe_steps_by_criterion": {
+      "Work": 112
+    },
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 297,
+        "actual_steps": 112,
+        "matched_steps": 112,
+        "missing_steps": 185,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 297,
+        "actual_rows": 112,
+        "matched_rows": 112,
+        "missing_rows": 185,
+        "extra_rows": 0,
+        "max_absolute": 16.454073429107666,
+        "relative_l2": 0.001212703048828258,
+        "worst_key": [
+          22,
+          106
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1630.189257144928,
+        "actual_at_worst": -1646.6433305740356
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2970,
+        "actual_rows": 1120,
+        "matched_rows": 1120,
+        "missing_rows": 1850,
+        "extra_rows": 0,
+        "max_absolute": 0.06403699517250061,
+        "relative_l2": 0.00502384300273824,
+        "worst_key": [
+          22,
+          106,
+          3
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -0.8680921047925949,
+        "actual_at_worst": -0.9321290999650955
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.0004161105686177141,
+      "normalized_curve_rmse": 0.003414302322623674,
+      "curve_area_relative_error": 0.005988077571510061,
+      "initial_stiffness_relative_error": 0.0003502369099885783,
+      "peak_displacement_absolute_error_mm": 0.010158447548747063,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 550.1078200340271,
+        "peak_displacement_mm": 2.3000068264082074,
+        "area": 1012.130505547277,
+        "initial_stiffness_kn_per_mm": 984.6886506107165
+      },
+      "actual": {
+        "peak_load_kn": 549.8789143562317,
+        "peak_displacement_mm": 2.2898483788594604,
+        "area": 1006.0697895675683,
+        "initial_stiffness_kn_per_mm": 984.3437763004258
+      },
+      "within_curve_tolerance": true,
+      "matched_sample_rows": 107,
+      "master_point": 7,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 34925,
+        "python_total": 34925,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 30636,
+            "python": 30875
+          },
+          "1": {
+            "csharp": 1056,
+            "python": 1227
+          },
+          "2": {
+            "csharp": 350,
+            "python": 337
+          },
+          "3": {
+            "csharp": 1006,
+            "python": 807
+          },
+          "4": {
+            "csharp": 912,
+            "python": 779
+          },
+          "5": {
+            "csharp": 527,
+            "python": 498
+          },
+          "6": {
+            "csharp": 438,
+            "python": 402
+          }
+        }
+      },
+      "22": {
+        "csharp_total": 0,
+        "python_total": 34925,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 7152
+          },
+          "1": {
+            "csharp": 0,
+            "python": 1646
+          },
+          "2": {
+            "csharp": 0,
+            "python": 366
+          },
+          "3": {
+            "csharp": 0,
+            "python": 4769
+          },
+          "4": {
+            "csharp": 0,
+            "python": 8930
+          },
+          "5": {
+            "csharp": 0,
+            "python": 2820
+          },
+          "6": {
+            "csharp": 0,
+            "python": 8897
+          },
+          "8": {
+            "csharp": 0,
+            "python": 337
+          },
+          "10": {
+            "csharp": 0,
+            "python": 8
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": false,
+    "release_gate_pass": false
+  }
+}

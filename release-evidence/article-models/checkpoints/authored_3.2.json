@@ -1,0 +1,214 @@
+{
+  "schema_version": 2,
+  "result": {
+    "id": "3.2",
+    "name": "Bridge_3.2",
+    "run_mode": "authored",
+    "gdl": 3626,
+    "interfaces": 1002,
+    "preparation_seconds": 0.003460320003796369,
+    "total_seconds": 45.92446607800957,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.2.hrx",
+          "bytes": 42646608,
+          "sha256": "dd24e06696fc9a100a71766ab449d381ff9038aaf1bc97edbbb48c1ffbd1d782"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.2.Results",
+          "bytes": 1063743488,
+          "sha256": "3479548b430e10be07e8bf2225531696e62a9590d0c4fa3dee86aa74cc5cc612"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.2",
+      "variant": "ring separation",
+      "figures": [
+        13
+      ],
+      "capacity_kn": 360.0,
+      "master_point": 5,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 333
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 1.0266725020046579
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 333,
+        "runtime_seconds": 43.18159198900685
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 338,
+    "unsafe_steps_by_criterion": {
+      "Work": 338
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 338,
+        "actual_steps": 338,
+        "matched_steps": 338,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 338,
+        "actual_rows": 338,
+        "matched_rows": 338,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.892608642578125,
+        "relative_l2": 0.0002380370279309389,
+        "worst_key": [
+          22,
+          99
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -943.521484375,
+        "actual_at_worst": -942.6288757324219
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 1352,
+        "actual_rows": 1352,
+        "matched_rows": 1352,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.013107061386108398,
+        "relative_l2": 0.00035088018779245176,
+        "worst_key": [
+          22,
+          333,
+          2
+        ],
+        "worst_component": 0,
+        "reference_at_worst": 3.7272226810455322,
+        "actual_at_worst": 3.7403297424316406
+      }
+    },
+    "live_load_curve": {
+      "peak_load_relative_error": 0.00024105670546784133,
+      "normalized_curve_rmse": 0.0005308807368423236,
+      "curve_area_relative_error": 0.00014688272043849001,
+      "initial_stiffness_relative_error": 4.412871810087971e-05,
+      "peak_displacement_absolute_error_mm": 0.13298403471708298,
+      "peak_displacement_allowed_mm": 0.29408966042101387,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 420.3092346191406,
+        "peak_displacement_mm": 14.704483021050692,
+        "area": 5736.573233150141,
+        "initial_stiffness_kn_per_mm": 509.97233189105606
+      },
+      "actual": {
+        "peak_load_kn": 420.2079162597656,
+        "peak_displacement_mm": 14.571498986333609,
+        "area": 5735.730629667662,
+        "initial_stiffness_kn_per_mm": 509.9948363163293
+      },
+      "within_curve_tolerance": true,
+      "matched_sample_rows": 333,
+      "master_point": 5,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "csharp_total": 27652,
+        "python_total": 27652,
+        "exact": true,
+        "mismatches": {}
+      },
+      "22": {
+        "csharp_total": 27652,
+        "python_total": 27652,
+        "exact": false,
+        "mismatches": {
+          "0": {
+            "csharp": 2666,
+            "python": 2664
+          },
+          "1": {
+            "csharp": 5821,
+            "python": 5852
+          },
+          "2": {
+            "csharp": 284,
+            "python": 264
+          },
+          "3": {
+            "csharp": 2473,
+            "python": 2418
+          },
+          "4": {
+            "csharp": 6917,
+            "python": 6913
+          },
+          "5": {
+            "csharp": 1027,
+            "python": 1069
+          },
+          "6": {
+            "csharp": 8296,
+            "python": 8312
+          },
+          "8": {
+            "csharp": 165,
+            "python": 157
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}
