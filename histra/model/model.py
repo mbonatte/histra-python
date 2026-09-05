@@ -47,4 +47,5 @@ class Model:
     interface_imax: float = 40.0
     mass_matrix_type: str = "Consistent"
     unsupported_v1_features: Dict[str, int] = field(default_factory=dict)
+    unsupported_material_templates: Dict[int, str] = field(default_factory=dict)
     collections: Optional[Collections] = None

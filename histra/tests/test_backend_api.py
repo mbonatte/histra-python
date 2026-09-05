@@ -293,5 +293,34 @@ def test_capability_preflight_rejects_out_of_v1_hrx_domains(tmp_path) -> None:
     assert not report.supported
     assert {issue.code for issue in report.issues} == {
         "V1_ELEMENT_DOMAIN_UNSUPPORTED",
-        "V1_MATERIAL_DOMAIN_UNSUPPORTED",
     }
+    assert model.unsupported_material_templates == {2: "ConcreteMaterial"}
+
+
+def test_capability_preflight_rejects_referenced_non_masonry_material() -> None:
+    analysis = SimpleNamespace(
+        key=1,
+        name="Static",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="LoadControl",
+        method="StandardNewtonRaphson",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+    )
+    collections = SimpleNamespace(
+        analyses={1: analysis},
+        materials={},
+        quads={1: SimpleNamespace(material_key=7)},
+        interfaces={},
+    )
+    model = SimpleNamespace(
+        collections=collections,
+        unsupported_v1_features={},
+        unsupported_material_templates={7: "SteelMaterial"},
+    )
+
+    report = inspect_solver_capabilities(model, ["Static"])
+
+    assert not report.supported
+    assert report.issues[-1].code == "V1_MATERIAL_DOMAIN_UNSUPPORTED"

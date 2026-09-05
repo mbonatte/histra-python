@@ -307,7 +307,8 @@ def load_model(path: Union[str, Path]) -> Model:
                 )
                 collections.materials[material.key] = material
             elif purpose_type.endswith("Material"):
-                _record_unsupported(model, "material", purpose_type)
+                template_key = _safe_int(_attr(elem, "Key", default="0"))
+                model.unsupported_material_templates[template_key] = purpose_type
             elem.clear()
 
         elif tag == "Analysis":

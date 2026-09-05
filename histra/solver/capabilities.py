@@ -132,13 +132,34 @@ def _inspect_model_scope(model: Any, issues: list[SolverCapabilityIssue]) -> Non
                 f"HRX contains {count} {name} object(s); {name} is outside the "
                 "V1 Quad/Interface masonry domain."
             )
-        else:
-            code = "V1_MATERIAL_DOMAIN_UNSUPPORTED"
-            message = (
-                f"HRX contains {count} {name} template(s); only MasonryMaterial "
-                "is supported in V1."
-            )
-        issues.append(SolverCapabilityIssue(code, message))
+            issues.append(SolverCapabilityIssue(code, message))
+
+    collections = model.collections
+    referenced_materials = {
+        int(getattr(quad, "material_key", 0))
+        for quad in getattr(collections, "quads", {}).values()
+    }
+    referenced_materials.update(
+        int(getattr(interface, "material_key", 0))
+        for interface in getattr(collections, "interfaces", {}).values()
+        if int(getattr(interface, "material_key", 0)) != 0
+    )
+    masonry_materials = getattr(collections, "materials", {})
+    unsupported = getattr(model, "unsupported_material_templates", {})
+    for key in sorted(referenced_materials):
+        if key in masonry_materials:
+            continue
+        if key in unsupported:
+            issues.append(SolverCapabilityIssue(
+                "V1_MATERIAL_DOMAIN_UNSUPPORTED",
+                f"Active Quad/Interface material key {key} is {unsupported[key]}; "
+                "only MasonryMaterial is supported in V1.",
+            ))
+        elif key != 0:
+            issues.append(SolverCapabilityIssue(
+                "MATERIAL_REFERENCE_MISSING",
+                f"Active Quad/Interface references missing material key {key}.",
+            ))
 
 
 def _inspect_dependency_graph(
