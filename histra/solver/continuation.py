@@ -26,6 +26,19 @@ def _is_load_control(an: Any) -> bool:
     return "ArcLength" not in str(getattr(an, "integration_method", "LoadControl"))
 
 
+def _domain_change_requires_tangent_refresh(an: Any) -> bool:
+    """Match the C# domain-change stiffness refresh policy.
+
+    ``StaticNonLinearAnalysis`` only calls ``UpdateK`` at a load-function
+    segment boundary for Modified methods.  Standard methods retain the
+    matrix/factorization produced by their solution algorithm.  Reassembling
+    the tangent unconditionally changes the next arc-length predictor and can
+    select a different equilibrium branch.
+    """
+
+    return "modified" in str(getattr(an, "method", "")).casefold()
+
+
 
 def _commit_state(model: Model, ls: LinearSystem) -> None:
     runtime = ModelManager.hysteretic_batch_for(model)
@@ -451,7 +464,8 @@ def _execute_steps(
                 **diagnostic_writer.spring_metrics(model),
             )
         if changed[0]:
-            integrator.update_k(p, model, alfa)
+            if _domain_change_requires_tangent_refresh(analysis):
+                integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
         continue_steps = not stop
         if on_step_committed is not None:

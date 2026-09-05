@@ -72,6 +72,13 @@ gate passes.
 
 ## Continued numerical investigation
 
+- Root-caused the authored `Bridge_3.1_Coarse` step-42 divergence to an
+  unconditional Python tangent rebuild at the load-function segment boundary.
+  C# rebuilds there only for Modified methods. After matching that policy, the
+  focused authored run covers all 1,065/1,065 C# rows; peak error is 0.0213%,
+  normalized curve RMSE is 0.0708%, and rupture identities agree exactly.
+  All authored commits remain unsafe under the independent residual audit, so
+  this closes the compatibility-path defect but does not close the strict gate.
 - Corrected concrete ArcLength line searches to use the combined correction
   stored in `LS.X` after `ArcLength.Update`, matching the supplied C# call
   sequence. LoadControl is unchanged because its raw and combined corrections

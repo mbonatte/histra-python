@@ -26,6 +26,7 @@ from histra.solver.cancellation import (
 from histra.solver.continuation import (
     _als_loop,
     _commit_state,
+    _domain_change_requires_tangent_refresh,
     _is_load_control,
 )
 from histra.solver.diagnostics import DiagnosticOptions
@@ -408,7 +409,8 @@ def _execute_steps(
                 **diagnostic_writer.spring_metrics(model),
             )
         if changed[0]:
-            integrator.update_k(p, model, alfa)
+            if _domain_change_requires_tangent_refresh(analysis):
+                integrator.update_k(p, model, alfa)
             integrator.domain_changed(p, model, n)
         continue_steps = not stop
         if on_step_committed is not None:
