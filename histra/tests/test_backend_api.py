@@ -222,6 +222,7 @@ def test_capability_preflight_supports_static_pdelta(pdelta: object) -> None:
         ("method", "BFGS", "NONLINEAR_METHOD_UNSUPPORTED"),
         ("adaptive_convergence_criteria", "RelativeWork", "CONVERGENCE_CRITERION_UNSUPPORTED"),
         ("pdelta_effect", "FutureMode", "PDELTA_EFFECT_UNSUPPORTED"),
+        ("type_load_distribution", "FutureDistribution", "LOAD_DISTRIBUTION_UNSUPPORTED"),
     ],
 )
 def test_capability_preflight_rejects_unsupported_solver_enums(
@@ -246,6 +247,71 @@ def test_capability_preflight_rejects_unsupported_solver_enums(
 
     assert not report.supported
     assert code in {issue.code for issue in report.issues}
+
+
+@pytest.mark.parametrize("distribution", ["Modal", "Triangular", "Adaptive", "ShearFloor"])
+def test_capability_preflight_rejects_unimplemented_static_load_distributions(
+    distribution: str,
+) -> None:
+    analysis = SimpleNamespace(
+        key=1,
+        name="Static",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="LoadControl",
+        method="StandardNewtonRaphson",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+        type_load_distribution=distribution,
+    )
+    model = SimpleNamespace(collections=SimpleNamespace(analyses={1: analysis}))
+
+    report = inspect_solver_capabilities(model, ["Static"])
+
+    assert not report.supported
+    assert {issue.code for issue in report.issues} == {
+        "STATIC_LOAD_DISTRIBUTION_UNSUPPORTED"
+    }
+
+
+def test_capability_preflight_accepts_explicit_static_force_and_combination_distributions() -> None:
+    analyses = {
+        key: SimpleNamespace(
+            key=key,
+            name=distribution,
+            initial_analysis_key=-100,
+            analysis_type=2,
+            integration_method="LoadControl",
+            method="StandardNewtonRaphson",
+            adaptive_convergence_criteria="ForceMoment",
+            pdelta_effect="None",
+            type_load_distribution=distribution,
+        )
+        for key, distribution in enumerate(("Force", "LoadCombination"), start=1)
+    }
+    model = SimpleNamespace(collections=SimpleNamespace(analyses=analyses))
+
+    assert inspect_solver_capabilities(model, ["Force", "LoadCombination"]).supported
+
+
+def test_loader_preserves_csharp_force_control_metadata(tmp_path) -> None:
+    hrx = tmp_path / "analysis-controls.hrx"
+    hrx.write_text(
+        '<HiStrA version="1" GDL="1" IsLocked="true">'
+        '<Analysis Key="1" Name="Static" AnalysisType="2" '
+        'InitialAnalysisKey="-100" TypeLoadDistribution="Force" '
+        'ForceImposed="false" ForceControl="false" '
+        'IntegrationMethod="LoadControl" Method="StandardNewtonRaphson" '
+        'AdapticConvergenceCriteria="ForceMoment" />'
+        '</HiStrA>',
+        encoding="utf-8",
+    )
+
+    analysis = load_model(hrx).collections.analyses[1]
+
+    assert analysis.type_load_distribution == "Force"
+    assert not analysis.force_imposed
+    assert not analysis.force_control
 
 
 def test_capability_preflight_inspects_supplied_definition_not_same_name_model_copy() -> None:

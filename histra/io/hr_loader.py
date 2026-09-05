@@ -346,6 +346,15 @@ def load_model(path: Union[str, Path]) -> Model:
                     _attr(elem, "IsSeismic", default="false")
                 ),
                 mult=_safe_float(_attr(elem, "Mult", default="1"), 1.0),
+                type_load_distribution=_attr(
+                    elem, "TypeLoadDistribution", default="LoadCombination"
+                ),
+                force_imposed=_safe_bool(
+                    _attr(elem, "ForceImposed", default="true")
+                ),
+                force_control=_safe_bool(
+                    _attr(elem, "ForceControl", default="true")
+                ),
                 integration_method=_attr(
                     elem, "IntegrationMethod", default="LoadControl"
                 ),

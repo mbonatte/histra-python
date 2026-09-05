@@ -23,6 +23,15 @@ _STATIC_METHODS = {
 }
 _CONVERGENCE_CRITERIA = {"ForceMoment", "DispRotation", "Work"}
 _PDELTA_EFFECTS = {"none", "eachstep", "eachiteration", "0", "1", "2"}
+_LOAD_DISTRIBUTIONS = {
+    "Force",
+    "Modal",
+    "Triangular",
+    "Adaptive",
+    "ShearFloor",
+    "LoadCombination",
+}
+_STATIC_LOAD_DISTRIBUTIONS = {"Force", "LoadCombination"}
 _ARC_LENGTH_PROCEDURES = {
     "OnlyControlPoint",
     "OnlyModelPointsSelected",
@@ -265,6 +274,29 @@ def _inspect_analysis_definition(
             )
         )
         return
+
+    distribution = str(
+        getattr(analysis, "type_load_distribution", "LoadCombination")
+    )
+    if distribution not in _LOAD_DISTRIBUTIONS:
+        issues.append(
+            SolverCapabilityIssue(
+                "LOAD_DISTRIBUTION_UNSUPPORTED",
+                f"Unknown TypeLoadDistribution={distribution!r}; expected one of "
+                f"{sorted(_LOAD_DISTRIBUTIONS)}.",
+                name,
+            )
+        )
+    elif analysis_type == 2 and distribution not in _STATIC_LOAD_DISTRIBUTIONS:
+        issues.append(
+            SolverCapabilityIssue(
+                "STATIC_LOAD_DISTRIBUTION_UNSUPPORTED",
+                f"TypeLoadDistribution={distribution!r} requires a pushover "
+                "load generator not implemented in the V1 Quad/Interface core; "
+                "use Force or LoadCombination.",
+                name,
+            )
+        )
 
     raw_pdelta = getattr(analysis, "pdelta_effect", "None")
     if isinstance(raw_pdelta, bool):

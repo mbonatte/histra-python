@@ -164,6 +164,14 @@ class Analysis:
     dir_z: float = -1.0
     is_seismic: bool = False
     mult: float = 1.0
+    # C# load-path controls.  ``force_imposed`` is retained for HRX fidelity;
+    # the supplied C# runtime only uses it in the desktop UI.  ``force_control``
+    # affects the C# load-refresh path for frame/restraint domains, which are
+    # outside the V1 computational scope, but retaining it prevents an HRX
+    # setting from being silently discarded.
+    type_load_distribution: str = "LoadCombination"
+    force_imposed: bool = True
+    force_control: bool = True
 
     integration_method: str = "LoadControl"
     method: str = "StandardNewtonRaphson"

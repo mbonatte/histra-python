@@ -7,7 +7,7 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 
 ## Completed checks
 
-- Full Linux Python 3.12 suite: `559 passed, 5 skipped, 21 warnings`.
+- Full Linux Python 3.12 suite: `566 passed, 5 skipped, 21 warnings`.
   The nine warnings above the historical baseline are the new, intentional
   `SuboptimalSolverStrategyWarning` diagnostics.
 - Wheel and sdist build completed, `twine check` passed, and the wheel imported
@@ -85,6 +85,10 @@ gate passes.
   arbitrary names containing a supported line-search suffix. The HRX inventory
   also rejects Vertex, InterfaceMF, and NodeBC alongside the other non-V1
   computational domains.
+- HRX analysis metadata now preserves C# `TypeLoadDistribution`,
+  `ForceImposed`, and `ForceControl` values. Static `Modal`, `Triangular`,
+  `Adaptive`, and `ShearFloor` distributions are rejected at preflight rather
+  than silently being assembled as an ordinary force/load-combination run.
 - A fresh revision-3 all-model strict run was stopped recoverably after roughly
   32 minutes without a fourth checkpoint. The three completed checkpoints all
   have zero unsafe commits but fail coverage: 3.1 coarse reached 13/1,065,

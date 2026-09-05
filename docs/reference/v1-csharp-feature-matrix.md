@@ -6,9 +6,10 @@ requires the Article and platform gates.
 
 | Feature | Status | C# authority | Python owner | Test/evidence |
 |---|---|---|---|---|
-| HRX masonry/Quad/Interface/load parsing | verified | `Objects.*`, serializer attributes | `histra/io/hr_loader.py` | `test_hr_loader.py`, `test_load_vector.py` |
+| HRX masonry/Quad/Interface/load parsing | verified | `Objects.*`, serializer attributes | `histra/io/hr_loader.py` | `test_hr_loader.py`, `test_load_vector.py`, analysis-control metadata test |
 | Unlocked preprocessing, six faces, afference | verified | `ModelManagement.ComputationalElementsOperations` | `histra/preprocessing` | `test_prepare_model.py`, contact/afference tests |
-| Self-weight/load combinations | verified | `LoadOperations`, Quad gravity | `histra/solver/load_vector.py` | load-vector and self-weight tests |
+| Self-weight/load combinations | verified | `LoadOperations`, Quad gravity | `histra/solver/load_vector.py` | load-vector and self-weight tests; static `Force`/`LoadCombination` distributions accepted explicitly |
+| Modal/Triangular/Adaptive/ShearFloor static distributions | out of V1 scope | `ModelLoadOperations.GenerateLoadsForPushOverMultiModalAnalysis` and desktop pushover generators | capability preflight | static preflight rejects them rather than assembling a different ordinary-load problem |
 | Dependency/restart/state transfer | verified | `Analysis.InitialAnalysisKey`, domain commit/revert | `histra/solver/session.py` | session, chain, restart tests |
 | Interface material changes/mixed sides | verified | Interface `SetSpring` and material operations | `interface_material.py`, preprocessing selection | interface-material tests |
 | Elastic/hardening/softening/exponential/parabolic envelopes | verified | `ConstitutiveLawHysteretic`, `SpringHysteretic` | `constitutive_laws.py`, `springs/hysteretic.py` | constitutive/envelope/batch tests |
