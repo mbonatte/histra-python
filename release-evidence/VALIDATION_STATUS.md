@@ -28,6 +28,12 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
   `article-models/article_source_data_validation_revision4.json`.
 - The supplied `Bridge_3.1_Coarse.Results`/`.hrx` pair has been schema-audited;
   it is adequate committed-state and spring-state parity evidence.
+- Harness revision 4 repeats the strict `Bridge_3.1_Coarse` diagnostic with the
+  validated source-data gate: all five gravity and eight live-load commits are
+  safe, but only 13/1,065 stored C# steps are covered. The 0.695 mm overlap has
+  80.6407 kN maximum reaction error, 24.6% peak-load error, and 16.0% normalized
+  curve RMSE; terminal spring-phase distributions also differ. This remains a
+  hard physical/numerical failure, not a source-data failure.
 - The complete five-increment P-Delta gravity matrix has zero unsafe commits
   for every measured `EachStep` and `EachIteration` candidate. All candidates
   preserve the selected Standard Bisection baseline response; the authored

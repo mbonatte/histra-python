@@ -1,0 +1,271 @@
+{
+  "schema_version": 3,
+  "harness_revision": 4,
+  "result": {
+    "id": "3.1_coarse",
+    "name": "Bridge_3.1_Coarse",
+    "run_mode": "strict",
+    "gdl": 882,
+    "interfaces": 235,
+    "preparation_seconds": 0.000727572973119095,
+    "total_seconds": 8.702641807001783,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.1_Coarse.hrx",
+          "bytes": 10308324,
+          "sha256": "5de23f68978d5465afc87e13b5db0fad76e3e587df8a8cce65becd18419b3a43"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.1_Coarse.Results",
+          "bytes": 787779584,
+          "sha256": "0209e01970d5a80881c71697b03e5bb4494c844c9a3539c0bd8d8c805d2992f6"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.1",
+      "variant": "coarse strip",
+      "figures": [
+        9
+      ],
+      "capacity_kn": 540.0,
+      "master_point": 1,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_method": "StandardBisectionLineSearch",
+        "csharp_line_search_compatibility": false,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 23,
+        "analysis_name": "Second",
+        "authored_method": "StandardInitialInterpolatedLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_method": "StandardBisectionLineSearch",
+        "csharp_line_search_compatibility": false,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 1060
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 2.4294165809988044
+      },
+      {
+        "analysis_key": 23,
+        "analysis_name": "Second",
+        "outcome": "completed_at_configured_displacement_limit",
+        "exit_code": -3,
+        "committed_steps": 8,
+        "runtime_seconds": 5.871983447985258
+      }
+    ],
+    "warning_count": 0,
+    "unsafe_step_count": 0,
+    "unsafe_steps_by_criterion": {},
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 1065,
+        "actual_steps": 13,
+        "matched_steps": 13,
+        "missing_steps": 1052,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 1065,
+        "actual_rows": 13,
+        "matched_rows": 13,
+        "missing_rows": 1052,
+        "extra_rows": 0,
+        "max_absolute": 80.64071655273438,
+        "relative_l2": 0.05844494532565408,
+        "worst_key": [
+          23,
+          8
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -734.2393798828125,
+        "actual_at_worst": -814.8800964355469
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2130,
+        "actual_rows": 26,
+        "matched_rows": 26,
+        "missing_rows": 2104,
+        "extra_rows": 0,
+        "max_absolute": 0.5939643457531929,
+        "relative_l2": 1.1259931751900127,
+        "worst_key": [
+          23,
+          8,
+          2
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -0.3505649045109749,
+        "actual_at_worst": -0.9445292502641678
+      }
+    },
+    "live_load_curve": {
+      "range_covered": false,
+      "reference_displacement_range_mm": [
+        0.0,
+        30.01512856222689
+      ],
+      "actual_displacement_range_mm": [
+        0.0,
+        0.6947348406538367
+      ],
+      "overlap_displacement_range_mm": [
+        0.0,
+        0.6947348406538367
+      ],
+      "evaluation_points": 230,
+      "peak_load_relative_error": 0.24555825164104028,
+      "normalized_curve_rmse": 0.15983586914539016,
+      "curve_area_relative_error": 0.23770322966808966,
+      "initial_stiffness_relative_error": 0.22096790035994837,
+      "peak_displacement_absolute_error_mm": 0.0,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 356.73321434962236,
+        "peak_displacement_mm": 0.6947348406538367,
+        "area": 151.4075529826644,
+        "initial_stiffness_kn_per_mm": 882.4196960911194
+      },
+      "actual": {
+        "peak_load_kn": 269.1344299316406,
+        "peak_displacement_mm": 0.6947348406538367,
+        "area": 115.41748864254268,
+        "initial_stiffness_kn_per_mm": 687.433268609601
+      },
+      "within_curve_tolerance": false,
+      "reference_sample_rows": 1060,
+      "actual_sample_rows": 8,
+      "master_point": 1,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 6551,
+        "python_total": 6551,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 5758,
+            "python": 5847
+          },
+          "1": {
+            "csharp": 202,
+            "python": 98
+          },
+          "2": {
+            "csharp": 23,
+            "python": 24
+          },
+          "3": {
+            "csharp": 119,
+            "python": 71
+          },
+          "4": {
+            "csharp": 260,
+            "python": 368
+          },
+          "5": {
+            "csharp": 91,
+            "python": 107
+          },
+          "6": {
+            "csharp": 98,
+            "python": 36
+          }
+        }
+      },
+      "23": {
+        "available": true,
+        "csharp_total": 6551,
+        "python_total": 6551,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 540,
+            "python": 2754
+          },
+          "1": {
+            "csharp": 1343,
+            "python": 678
+          },
+          "2": {
+            "csharp": 101,
+            "python": 58
+          },
+          "3": {
+            "csharp": 905,
+            "python": 566
+          },
+          "4": {
+            "csharp": 1611,
+            "python": 1187
+          },
+          "5": {
+            "csharp": 545,
+            "python": 24
+          },
+          "6": {
+            "csharp": 1315,
+            "python": 1277
+          },
+          "8": {
+            "csharp": 136,
+            "python": 7
+          },
+          "9": {
+            "csharp": 55,
+            "python": 0
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

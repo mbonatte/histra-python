@@ -1,0 +1,304 @@
+{
+  "directory": "/home/mauricio/coding/histra-python/release-evidence/article-source-data",
+  "source_mode": "workbook-export",
+  "raw_sources": {
+    "workbook_export": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "bytes": 1586571,
+      "sha256": "fc8277c9e7ca7e616141abcdfbf166ac67bfccb30871a81ba2a6a5cfe03485bc"
+    },
+    "plot_notebook": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Graphs_HISTRA.ipynb",
+      "available": true,
+      "bytes": 2695099,
+      "sha256": "66bfb306f4e43e9541368abae5d821d4e38598307865e1491a292128b089b9c9"
+    }
+  },
+  "valid": true,
+  "figures": {
+    "9": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 379,
+      "series": {
+        "3.1_Experimental": 9,
+        "Bridge_3.1_Coarse": 190,
+        "Bridge_3.1_Multiring": 163,
+        "Bridge_3.1_Zhang": 15,
+        "LimitAnalysis_3.1": 2
+      },
+      "series_provenance": {
+        "3.1_Experimental": {
+          "rows": 9,
+          "provenance": "Original_article_data.csv:3.1_Experimental; Graphs_HISTRA.ipynb:cell-9"
+        },
+        "Bridge_3.1_Coarse": {
+          "rows": 190,
+          "provenance": "Original_article_data.csv:Bridge_3.1_Coarse; Graphs_HISTRA.ipynb:cell-9"
+        },
+        "Bridge_3.1_Multiring": {
+          "rows": 163,
+          "provenance": "Original_article_data.csv:Bridge_3.1_Multiring; Graphs_HISTRA.ipynb:cell-9"
+        },
+        "Bridge_3.1_Zhang": {
+          "rows": 15,
+          "provenance": "Original_article_data.csv:Bridge_3.1_Zhang; Graphs_HISTRA.ipynb:cell-9"
+        },
+        "LimitAnalysis_3.1": {
+          "rows": 2,
+          "provenance": "Original_article_data.csv:LimitAnalysis_3.1; Graphs_HISTRA.ipynb:cell-9"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "12": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 114,
+      "series": {
+        "Bridge_5.1_Experimental": 12,
+        "Bridge_5.1_Load_spandrel": 29,
+        "Bridge_5.1_Masonry_new": 71,
+        "LimitAnalysis_5.1": 2
+      },
+      "series_provenance": {
+        "Bridge_5.1_Experimental": {
+          "rows": 12,
+          "provenance": "Original_article_data.csv:Bridge_5.1_Experimental; Graphs_HISTRA.ipynb:cell-37"
+        },
+        "Bridge_5.1_Masonry_new": {
+          "rows": 71,
+          "provenance": "Original_article_data.csv:Bridge_5.1_Masonry_new; Graphs_HISTRA.ipynb:cell-37",
+          "drop_last": 17
+        },
+        "Bridge_5.1_Load_spandrel": {
+          "rows": 29,
+          "provenance": "Original_article_data.csv:Bridge_5.1_Load_spandrel; Graphs_HISTRA.ipynb:cell-37"
+        },
+        "LimitAnalysis_5.1": {
+          "rows": 2,
+          "provenance": "Original_article_data.csv:LimitAnalysis_5.1; Graphs_HISTRA.ipynb:cell-37"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "13": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 316,
+      "series": {
+        "Bridge_3.2_Experimental": 13,
+        "Bridge_3.2_Sand": 303
+      },
+      "series_provenance": {
+        "Bridge_3.2_Experimental": {
+          "rows": 13,
+          "provenance": "Original_article_data.csv:Bridge_3.2_Experimental; Graphs_HISTRA.ipynb:cell-13"
+        },
+        "Bridge_3.2_Sand": {
+          "rows": 303,
+          "provenance": "Original_article_data.csv:Bridge_3.2_Sand; Graphs_HISTRA.ipynb:cell-13"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "15": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 140,
+      "series": {
+        "Bridge_5.2_Experimental": 9,
+        "Bridge_5.2_Numerical_Coarse": 129,
+        "LimitAnalysis_5.2": 2
+      },
+      "series_provenance": {
+        "Bridge_5.2_Experimental": {
+          "rows": 9,
+          "provenance": "Original_article_data.csv:Bridge_5.2_Experimental; Graphs_HISTRA.ipynb:cell-39"
+        },
+        "Bridge_5.2_Numerical_Coarse": {
+          "rows": 129,
+          "provenance": "Original_article_data.csv:Bridge_5.2_Numerical_Coarse; Graphs_HISTRA.ipynb:cell-39"
+        },
+        "LimitAnalysis_5.2": {
+          "rows": 2,
+          "provenance": "Original_article_data.csv:LimitAnalysis_5.2; Graphs_HISTRA.ipynb:cell-39"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "17": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 170,
+      "series": {
+        "3.3_Experimental": 12,
+        "3.3_FEM (Zhang)": 10,
+        "3.3_Numerical_drucker_z": 148
+      },
+      "series_provenance": {
+        "3.3_Experimental": {
+          "rows": 12,
+          "provenance": "Original_article_data.csv:3.3_Experimental; Graphs_HISTRA.ipynb:cell-15"
+        },
+        "3.3_FEM (Zhang)": {
+          "rows": 10,
+          "provenance": "Original_article_data.csv:3.3_FEM (Zhang); Graphs_HISTRA.ipynb:cell-15"
+        },
+        "3.3_Numerical_drucker_z": {
+          "rows": 148,
+          "provenance": "Original_article_data.csv:3.3_Numerical_drucker_z; Graphs_HISTRA.ipynb:cell-15"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "20": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 769,
+      "series": {
+        "3-4_Numerical_new": 312,
+        "3.3_Numerical_drucker_z": 148,
+        "Bridge_3.2_extended": 303,
+        "Bridge_3.4_Experimental": 6
+      },
+      "series_provenance": {
+        "Bridge_3.4_Experimental": {
+          "rows": 6,
+          "provenance": "Original_article_data.csv:Bridge_3.4_Experimental; Graphs_HISTRA.ipynb:cell-33"
+        },
+        "3-4_Numerical_new": {
+          "rows": 312,
+          "provenance": "Original_article_data.csv:3-4_Numerical_new; Graphs_HISTRA.ipynb:cell-33"
+        },
+        "3.3_Numerical_drucker_z": {
+          "rows": 148,
+          "provenance": "Original_article_data.csv:3.3_Numerical_drucker_z; Graphs_HISTRA.ipynb:cell-33"
+        },
+        "Bridge_3.2_extended": {
+          "rows": 303,
+          "provenance": "Original_article_data.csv:Bridge_3.2_extended; Graphs_HISTRA.ipynb:cell-33"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "22": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 1305,
+      "series": {
+        "Bridge_2_Experimental_Arch": 18,
+        "Bridge_2_Experimental_PierNorth": 16,
+        "Bridge_2_Experimental_PierSouth": 14,
+        "Bridge_2_Numerical_Arch": 419,
+        "Bridge_2_Numerical_PierNorth": 419,
+        "Bridge_2_Numerical_PierSouth": 419
+      },
+      "series_provenance": {
+        "Bridge_2_Experimental_Arch": {
+          "rows": 18,
+          "provenance": "Original_article_data.csv:Bridge_2_Experimental_Arch; Graphs_HISTRA.ipynb:cell-45",
+          "location": "arch"
+        },
+        "Bridge_2_Numerical_Arch": {
+          "rows": 419,
+          "provenance": "Original_article_data.csv:Bridge_2_Numerical_Arch; Graphs_HISTRA.ipynb:cell-45",
+          "location": "arch",
+          "displacement_formula": {
+            "z": 0.916516,
+            "x": 0.399998
+          }
+        },
+        "Bridge_2_Experimental_PierNorth": {
+          "rows": 16,
+          "provenance": "Original_article_data.csv:Bridge_2_Experimental_PierNorth; Graphs_HISTRA.ipynb:cell-47",
+          "location": "pier-north"
+        },
+        "Bridge_2_Numerical_PierNorth": {
+          "rows": 419,
+          "provenance": "Original_article_data.csv:Bridge_2_Numerical_PierNorth; Graphs_HISTRA.ipynb:cell-47",
+          "location": "pier-north"
+        },
+        "Bridge_2_Experimental_PierSouth": {
+          "rows": 14,
+          "provenance": "Original_article_data.csv:Bridge_2_Experimental_PierSouth; Graphs_HISTRA.ipynb:cell-47",
+          "location": "pier-south"
+        },
+        "Bridge_2_Numerical_PierSouth": {
+          "rows": 419,
+          "provenance": "Original_article_data.csv:Bridge_2_Numerical_PierSouth; Graphs_HISTRA.ipynb:cell-47",
+          "location": "pier-south"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "24": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 18,
+      "series": {
+        "Bridge_1_Experimental_PierNorth": 9,
+        "Bridge_1_Experimental_PierSouth": 9
+      },
+      "series_provenance": {
+        "Bridge_1_Experimental_PierNorth": {
+          "rows": 9,
+          "provenance": "Original_article_data.csv:Bridge_1_Experimental_PierNorth; Graphs_HISTRA.ipynb:cell-43",
+          "location": "pier-north"
+        },
+        "Bridge_1_Experimental_PierSouth": {
+          "rows": 9,
+          "provenance": "Original_article_data.csv:Bridge_1_Experimental_PierSouth; Graphs_HISTRA.ipynb:cell-43",
+          "location": "pier-south"
+        }
+      },
+      "invalid_rows": 0
+    },
+    "25": {
+      "path": "/home/mauricio/coding/histra-python/release-evidence/article-source-data/Original_article_data.csv",
+      "available": true,
+      "rows": 1759,
+      "series": {
+        "Bridge_3_Backfill": 1740,
+        "Bridge_3_Experimental_Arch": 5,
+        "Bridge_3_Numerical_Zizi": 14
+      },
+      "series_provenance": {
+        "Bridge_3_Experimental_Arch": {
+          "rows": 5,
+          "provenance": "Original_article_data.csv:Bridge_3_Experimental_Arch; Graphs_HISTRA.ipynb:cell-52"
+        },
+        "Bridge_3_Numerical_Zizi": {
+          "rows": 14,
+          "provenance": "Original_article_data.csv:Bridge_3_Numerical_Zizi; Graphs_HISTRA.ipynb:cell-52"
+        },
+        "Bridge_3_Backfill": {
+          "rows": 1740,
+          "provenance": "Original_article_data.csv:Bridge_3_Backfill; Graphs_HISTRA.ipynb:cell-52"
+        }
+      },
+      "invalid_rows": 0
+    }
+  },
+  "table_1": {
+    "path": "/home/mauricio/coding/histra-python/docs/references/articles/Bonatte et al. - A discrete macro-element method for structural assessment of masonry arch bridges.pdf",
+    "available": true,
+    "bytes": 10817004,
+    "sha256": "06d670190bf5eea09529b73b4b1d35219f77f0dbb1caed7a8581e5804874571d",
+    "rows": 9,
+    "capacities_kn": {
+      "3.1": 540.0,
+      "3.2": 360.0,
+      "3.3": 600.0,
+      "3.4": 320.0,
+      "5.1": 1720.0,
+      "5.2": 500.0,
+      "MS1": 455.0,
+      "MS2": 320.0,
+      "MS3": 325.0
+    },
+    "provenance": "Bonatte et al. (2026), Table 1"
+  },
+  "issues": []
+}
