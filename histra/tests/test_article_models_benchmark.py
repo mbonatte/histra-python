@@ -12,7 +12,9 @@ from histra.tools.article_models_benchmark import (
     compare_phase_distributions,
     compute_curve_metrics,
     compute_parity_metrics,
+    _progress_line,
     strict_convergence_tolerance,
+    validate_article_source_data,
 )
 
 
@@ -172,3 +174,46 @@ def test_phase_distribution_comparison_fails_closed() -> None:
     assert not missing["available"]
     assert not missing["exact"]
     assert missing["reason"] == "no C# SpringStates rows at the terminal step"
+
+
+def test_progress_line_handles_a_strict_run_without_comparable_rows() -> None:
+    result = {
+        "run_mode": "strict",
+        "name": "Bridge",
+        "unsafe_step_count": 0,
+        "total_seconds": 1.25,
+        "parity": {
+            "step_history": {"actual_steps": 0, "expected_steps": 10},
+            "reaction": {"max_absolute": None},
+        },
+    }
+    assert "dR=n/a" in _progress_line(result)
+
+
+def test_article_source_data_validation_is_fail_closed_and_hashes_inputs(tmp_path) -> None:
+    missing = validate_article_source_data(tmp_path)
+    assert not missing["valid"]
+    assert len(missing["issues"]) == len(ARTICLE_FIGURES) + 1
+
+    for figure in ARTICLE_FIGURES:
+        (tmp_path / f"figure_{figure:02d}.csv").write_text(
+            "series,displacement_mm,load_kn,provenance\n"
+            "experiment,0,0,user-original\n"
+            "experiment,1,2,user-original\n",
+            encoding="utf-8",
+        )
+    table_rows = "".join(
+        f"{specimen},{capacity},user-original\n"
+        for specimen, capacity in ARTICLE_TABLE_1_CAPACITIES_KN.items()
+    )
+    (tmp_path / "table_01.csv").write_text(
+        "specimen,capacity_kn,provenance\n" + table_rows,
+        encoding="utf-8",
+    )
+
+    report = validate_article_source_data(tmp_path)
+    assert report["valid"]
+    assert report["issues"] == []
+    assert report["figures"]["9"]["rows"] == 2
+    assert len(report["figures"]["9"]["sha256"]) == 64
+    assert report["table_1"]["capacities_kn"]["MS1"] == 455.0

@@ -20,6 +20,9 @@ python -m histra.tools.article_models_benchmark \
 an unsafe candidate without committing it. The command exits nonzero unless all
 dependency chains, stored rows, response tolerances, and terminal spring-phase
 distributions pass. Use `--allow-incomplete` only to collect diagnostics.
+An interrupted diagnostic run can add `--resume`; release-candidate evidence
+must use a clean output directory so every checkpoint comes from the exact
+candidate under review.
 
 The harness records SHA-256 hashes, byte sizes, platform/package versions,
 backend, analysis settings, runtime, terminal outcomes, unsafe counts, exact
@@ -34,8 +37,11 @@ per figure under `release-evidence/article-source-data/`, named `figure_09.csv`
 through `figure_25.csv` for Figures 9, 12, 13, 15, 17, 20, 22, 24, and 25.
 Required columns are `series`, `displacement_mm`, `load_kn`, and `provenance`.
 Figure 22 may additionally use `location=arch|pier`. Values transcribed from an
-image are not treated as original source data. Table 1 capacities are encoded in
-the canonical registry and tested independently.
+image are not treated as original source data. Supply `table_01.csv` with
+`specimen`, `capacity_kn`, and `provenance`; the gate compares it with every
+published capacity encoded in the canonical registry. Missing, non-finite,
+duplicate, or malformed source rows fail closed before a release run. Use
+`--source-data-dir` only when these files live somewhere else.
 
 ## Deterministic C# trace request
 

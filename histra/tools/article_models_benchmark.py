@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import csv
 import json
 import hashlib
 from importlib import metadata
@@ -171,6 +172,125 @@ def _file_sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def validate_article_source_data(directory: Path) -> dict[str, Any]:
+    """Validate the user-supplied plotting data and Table 1 transcription."""
+    directory = directory.resolve()
+    issues: list[str] = []
+    figures: dict[str, Any] = {}
+    required_curve_columns = {
+        "series", "displacement_mm", "load_kn", "provenance",
+    }
+    for figure in ARTICLE_FIGURES:
+        path = directory / f"figure_{figure:02d}.csv"
+        entry: dict[str, Any] = {"path": str(path), "available": path.is_file()}
+        figures[str(figure)] = entry
+        if not path.is_file():
+            issues.append(f"missing Figure {figure} source file: {path}")
+            continue
+        try:
+            with path.open("r", encoding="utf-8", newline="") as stream:
+                reader = csv.DictReader(stream)
+                fields = set(reader.fieldnames or ())
+                missing_columns = sorted(required_curve_columns - fields)
+                rows = list(reader)
+        except (OSError, UnicodeError, csv.Error) as exc:
+            issues.append(f"unable to read Figure {figure} source file: {exc}")
+            continue
+        if missing_columns:
+            issues.append(
+                f"Figure {figure} is missing columns: {', '.join(missing_columns)}"
+            )
+            continue
+        series_counts: Counter[str] = Counter()
+        invalid_rows = 0
+        for row in rows:
+            series = str(row.get("series", "")).strip()
+            provenance = str(row.get("provenance", "")).strip()
+            try:
+                displacement = float(row.get("displacement_mm", ""))
+                load = float(row.get("load_kn", ""))
+            except (TypeError, ValueError):
+                invalid_rows += 1
+                continue
+            if not series or not provenance or not np.isfinite(displacement) or not np.isfinite(load):
+                invalid_rows += 1
+                continue
+            series_counts[series] += 1
+        short_series = sorted(name for name, count in series_counts.items() if count < 2)
+        if invalid_rows:
+            issues.append(f"Figure {figure} contains {invalid_rows} invalid row(s)")
+        if not series_counts:
+            issues.append(f"Figure {figure} contains no valid series")
+        if short_series:
+            issues.append(
+                f"Figure {figure} series require at least two points: {', '.join(short_series)}"
+            )
+        entry.update({
+            "bytes": path.stat().st_size,
+            "sha256": _file_sha256(path),
+            "rows": len(rows),
+            "series": dict(sorted(series_counts.items())),
+            "invalid_rows": invalid_rows,
+        })
+
+    table_path = directory / "table_01.csv"
+    table: dict[str, Any] = {"path": str(table_path), "available": table_path.is_file()}
+    if not table_path.is_file():
+        issues.append(f"missing Table 1 source file: {table_path}")
+    else:
+        try:
+            with table_path.open("r", encoding="utf-8", newline="") as stream:
+                reader = csv.DictReader(stream)
+                fields = set(reader.fieldnames or ())
+                rows = list(reader)
+        except (OSError, UnicodeError, csv.Error) as exc:
+            issues.append(f"unable to read Table 1 source file: {exc}")
+            rows = []
+            fields = set()
+        required_table_columns = {"specimen", "capacity_kn", "provenance"}
+        missing_columns = sorted(required_table_columns - fields)
+        capacities: dict[str, float] = {}
+        if missing_columns:
+            issues.append(f"Table 1 is missing columns: {', '.join(missing_columns)}")
+        else:
+            for row in rows:
+                specimen = str(row.get("specimen", "")).strip()
+                provenance = str(row.get("provenance", "")).strip()
+                try:
+                    capacity = float(row.get("capacity_kn", ""))
+                except (TypeError, ValueError):
+                    capacity = float("nan")
+                if (
+                    not specimen or not provenance or not np.isfinite(capacity)
+                    or specimen in capacities
+                ):
+                    issues.append(f"Table 1 contains an invalid or duplicate row for {specimen!r}")
+                    continue
+                capacities[specimen] = capacity
+            for specimen, expected in ARTICLE_TABLE_1_CAPACITIES_KN.items():
+                actual = capacities.get(specimen)
+                if actual is None:
+                    issues.append(f"Table 1 is missing specimen {specimen}")
+                elif abs(actual - expected) > 0.1:
+                    issues.append(
+                        f"Table 1 specimen {specimen} is {actual:g} kN; expected {expected:g} kN"
+                    )
+        table.update({
+            "bytes": table_path.stat().st_size,
+            "sha256": _file_sha256(table_path),
+            "rows": len(rows),
+            "capacities_kn": capacities,
+        })
+
+    return {
+        "directory": str(directory),
+        "valid": not issues,
+        "figures": figures,
+        "table_1": table,
+        "issues": issues,
+    }
 
 
 def _runtime_provenance(hrx_path: Path, results_path: Path) -> dict[str, Any]:
@@ -658,7 +778,10 @@ def _worker(task: tuple[dict[str, Any], str, str]) -> dict[str, Any]:
         }
 
 
-def _markdown_report(results: list[dict[str, Any]]) -> str:
+def _markdown_report(
+    results: list[dict[str, Any]],
+    source_data: Mapping[str, Any] | None = None,
+) -> str:
     lines = [
         "# Article Models: Python vs C# verification",
         "",
@@ -692,6 +815,15 @@ def _markdown_report(results: list[dict[str, Any]]) -> str:
         "`strict` uses ForceMoment on every nonlinear stage and tightens, never "
         "loosens, the HRX convergence tolerance to the unchanged audit limit."
     )
+    if source_data is not None:
+        lines.extend((
+            "",
+            "## Article source data",
+            "",
+            "PASS" if source_data.get("valid") else "NOT RELEASE-READY",
+        ))
+        for issue in source_data.get("issues", ()):
+            lines.append(f"- {issue}")
     return "\n".join(lines) + "\n"
 
 
@@ -712,6 +844,62 @@ def _checkpoint_path(output_dir: Path, model_info: Mapping[str, Any], run_mode: 
     return output_dir / "checkpoints" / f"{run_mode}_{model_info['id']}.json"
 
 
+def _load_checkpoint(
+    output_dir: Path,
+    model_info: Mapping[str, Any],
+    run_mode: str,
+    models_dir: Path,
+) -> dict[str, Any] | None:
+    """Load an intact diagnostic checkpoint whose input sizes still match."""
+    path = _checkpoint_path(output_dir, model_info, run_mode)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        result = payload["result"]
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if (
+        payload.get("schema_version") != 2
+        or result.get("id") != str(model_info["id"])
+        or result.get("name") != str(model_info["name"])
+        or result.get("run_mode") != run_mode
+        or "error" in result
+    ):
+        return None
+    inputs = result.get("provenance", {}).get("inputs", {})
+    for key, suffix in (("hrx", ".hrx"), ("csharp_results", ".Results")):
+        source = models_dir / f"{model_info['name']}{suffix}"
+        evidence = inputs.get(key, {})
+        if evidence.get("name") != source.name or evidence.get("bytes") != source.stat().st_size:
+            return None
+    # Schema 2 checkpoints created before the explicit availability field are
+    # upgraded losslessly. An absent C# terminal distribution is missing
+    # evidence, not an all-zero physical state.
+    for evidence in result.get("spring_phase_distributions", {}).values():
+        available = int(evidence.get("csharp_total", 0)) > 0
+        evidence["available"] = available
+        evidence["exact"] = available and bool(evidence.get("exact", False))
+        evidence["reason"] = (
+            None if available else "no C# SpringStates rows at the terminal step"
+        )
+    return result
+
+
+def _progress_line(result: Mapping[str, Any], *, resumed: bool = False) -> str:
+    prefix = "resumed " if resumed else ""
+    if "error" in result:
+        return f"[{result['run_mode']}] {prefix}{result['name']}: {result['error']}"
+    parity = result["parity"]
+    step_history = parity["step_history"]
+    reaction_error = parity["reaction"].get("max_absolute")
+    reaction_text = "n/a" if reaction_error is None else f"{float(reaction_error):.6g} kN"
+    return (
+        f"[{result['run_mode']}] {prefix}{result['name']}: "
+        f"steps={step_history['actual_steps']}/{step_history['expected_steps']}, "
+        f"unsafe={result['unsafe_step_count']}, dR={reaction_text}, "
+        f"time={result['total_seconds']:.2f}s"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models-dir", type=Path, required=True)
@@ -719,6 +907,16 @@ def main() -> int:
     parser.add_argument("--run-mode", choices=("authored", "strict", "both"), default="both")
     parser.add_argument("--max-workers", type=int, default=None)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--source-data-dir",
+        type=Path,
+        help="Figure CSVs and table_01.csv; defaults to OUTPUT-DIR/../article-source-data.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse intact non-error checkpoints with matching input file sizes.",
+    )
     parser.add_argument(
         "--allow-incomplete",
         action="store_true",
@@ -728,22 +926,43 @@ def main() -> int:
 
     selected = _select_models(args.model)
     modes = ("authored", "strict") if args.run_mode == "both" else (args.run_mode,)
-    tasks = [(model, str(args.models_dir.resolve()), mode) for mode in modes for model in selected]
-    # These models can each retain several GiB of constitutive state. Four
-    # concurrent workers measured faster than eight or fourteen on the 32-GiB
-    # reference workstation because the larger pools exhausted swap.
-    workers = args.max_workers or min(4, len(tasks), os.cpu_count() or 1)
-    if workers < 1 or workers > 4:
-        parser.error("--max-workers must be between 1 and 4 for the release-candidate gate")
     for model_info in selected:
         for suffix in (".hrx", ".Results"):
             source = args.models_dir / f"{model_info['name']}{suffix}"
             if not source.is_file():
                 parser.error(f"missing benchmark input: {source}")
-    started = time.perf_counter()
-    results: list[dict[str, Any]] = []
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
+    source_data_dir = args.source_data_dir or args.output_dir.parent / "article-source-data"
+    source_data = validate_article_source_data(source_data_dir)
+    (args.output_dir / "article_source_data_validation.json").write_text(
+        json.dumps(source_data, indent=2) + "\n", encoding="utf-8"
+    )
+    if not source_data["valid"] and not args.allow_incomplete:
+        print("Article source-data gate failed:", file=sys.stderr)
+        for issue in source_data["issues"]:
+            print(f"- {issue}", file=sys.stderr)
+        return 2
+    results: list[dict[str, Any]] = []
+    tasks: list[tuple[dict[str, Any], str, str]] = []
+    for mode in modes:
+        for model in selected:
+            checkpoint = (
+                _load_checkpoint(args.output_dir, model, mode, args.models_dir)
+                if args.resume else None
+            )
+            if checkpoint is None:
+                tasks.append((model, str(args.models_dir.resolve()), mode))
+            else:
+                results.append(checkpoint)
+                print(_progress_line(checkpoint, resumed=True), flush=True)
+    # These models can each retain several GiB of constitutive state. Four
+    # concurrent workers measured faster than eight or fourteen on the 32-GiB
+    # reference workstation because the larger pools exhausted swap.
+    workers = args.max_workers or min(4, max(1, len(tasks)), os.cpu_count() or 1)
+    if workers < 1 or workers > 4:
+        parser.error("--max-workers must be between 1 and 4 for the release-candidate gate")
+    started = time.perf_counter()
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(_worker, task): task for task in tasks}
         for future in as_completed(futures):
@@ -754,25 +973,13 @@ def main() -> int:
                 json.dumps({"schema_version": 2, "result": result}, indent=2) + "\n",
                 encoding="utf-8",
             )
-            if "error" in result:
-                print(f"[{result['run_mode']}] {result['name']}: {result['error']}", flush=True)
-            else:
-                parity = result["parity"]
-                reaction = parity["reaction"]
-                step_history = parity["step_history"]
-                print(
-                    f"[{result['run_mode']}] {result['name']}: "
-                    f"steps={step_history['actual_steps']}/{step_history['expected_steps']}, "
-                    f"unsafe={result['unsafe_step_count']}, "
-                    f"dR={reaction['max_absolute']:.6g} kN, "
-                    f"time={result['total_seconds']:.2f}s",
-                    flush=True,
-                )
+            print(_progress_line(result), flush=True)
 
     payload = {
         "schema_version": 2,
         "article_figures": ARTICLE_FIGURES,
         "article_table_1_capacities_kn": ARTICLE_TABLE_1_CAPACITIES_KN,
+        "article_source_data": source_data,
         "model_registry": [dict(item) for item in BENCHMARK_MODELS],
         "wall_seconds": time.perf_counter() - started,
         "workers": workers,
@@ -782,9 +989,9 @@ def main() -> int:
         json.dumps(payload, indent=2) + "\n", encoding="utf-8"
     )
     (args.output_dir / "article_models_csharp_verification.md").write_text(
-        _markdown_report(results), encoding="utf-8"
+        _markdown_report(results, source_data), encoding="utf-8"
     )
-    failed = any(
+    failed = not source_data["valid"] or any(
         "error" in result or not result.get("release_gate_pass", False)
         for result in results
     )
