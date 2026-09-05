@@ -33,16 +33,26 @@ C# output rows are not mistaken for missing solver steps.
 
 ## Original plot data contract
 
-The original numerical and experimental data must be supplied as one UTF-8 CSV
-per figure under `release-evidence/article-source-data/`, named `figure_09.csv`
-through `figure_25.csv` for Figures 9, 12, 13, 15, 17, 20, 22, 24, and 25.
-Required columns are `series`, `displacement_mm`, `load_kn`, and `provenance`.
-Figure 22 may additionally use `location=arch|pier`. Values transcribed from an
-image are not treated as original source data. Supply `table_01.csv` with
-`specimen`, `capacity_kn`, and `provenance`; the gate compares it with every
-published capacity encoded in the canonical registry. Missing, non-finite,
-duplicate, or malformed source rows fail closed before a release run. Use
-`--source-data-dir` only when these files live somewhere else.
+The preferred original-data input is the supplied workbook export
+`release-evidence/article-source-data/Original_article_data.csv`, accompanied
+by `Graphs_HISTRA.ipynb`. The harness reads its variable-width two-level header
+directly; it does not round or hand-transcribe curves into derived CSVs. The
+reviewable figure-to-series selection, notebook cell, one radial-displacement
+projection for Figure 22, and the deliberate 17-point plot trim for the Bridge
+5.1 original strip series are declared in `ARTICLE_SOURCE_SERIES` in the
+canonical harness. Its validation report records SHA-256 hashes, counts, and
+the exact provenance for every selected series.
+
+As an alternative, one UTF-8 CSV per figure may be supplied, named
+`figure_09.csv` through `figure_25.csv` for Figures 9, 12, 13, 15, 17, 20, 22,
+24, and 25. Required columns are `series`, `displacement_mm`, `load_kn`, and
+`provenance`; Figure 22 may additionally use `location=arch|pier`. Values
+transcribed from an image are not treated as original source data. In this
+legacy per-figure mode, supply `table_01.csv` with `specimen`, `capacity_kn`,
+and `provenance`. In workbook-export mode, Table 1 is anchored to the supplied
+Bonatte paper and its file hash. Missing, non-finite, duplicate, or malformed
+source rows fail closed before a release run. Use `--source-data-dir` only when
+these files live somewhere else.
 
 ## Deterministic C# trace request
 
@@ -56,3 +66,10 @@ global displacement, reaction sums, and spring identity/state using
 `ParentType, ParentKey, SpringPurpose, IdLocal` plus phase, U, F, tangent,
 yield/ultimate points, contact area, normal force, unloading phases, and plastic
 indicators. Never relax acceptance tolerances to compensate for backend drift.
+
+The supplied `.Results` SQLite database is still valuable when an instrumented
+C# executable is unavailable: it records committed public-step reactions,
+model-point displacements, temporary spring states, and final complete spring
+states. It does **not** contain the Newton matrices, residuals, load factors,
+or line-search trials listed above, so it cannot support a numerical-backend
+waiver or reconstruct an iteration trace.

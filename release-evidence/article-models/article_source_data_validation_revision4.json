@@ -1,0 +1,50 @@
+{
+  "harness_revision": 4,
+  "validation": "standalone validate_article_source_data before the next long benchmark run",
+  "source_mode": "workbook-export",
+  "valid": true,
+  "raw_sources": {
+    "workbook_export": {
+      "path": "release-evidence/article-source-data/Original_article_data.csv",
+      "bytes": 1586571,
+      "sha256": "fc8277c9e7ca7e616141abcdfbf166ac67bfccb30871a81ba2a6a5cfe03485bc"
+    },
+    "plot_notebook": {
+      "path": "release-evidence/article-source-data/Graphs_HISTRA.ipynb",
+      "bytes": 2695099,
+      "sha256": "66bfb306f4e43e9541368abae5d821d4e38598307865e1491a292128b089b9c9"
+    },
+    "article_pdf": {
+      "path": "docs/references/articles/Bonatte et al. - A discrete macro-element method for structural assessment of masonry arch bridges.pdf",
+      "bytes": 10817004,
+      "sha256": "06d670190bf5eea09529b73b4b1d35219f77f0dbb1caed7a8581e5804874571d"
+    }
+  },
+  "figures": {
+    "9": {"3.1_Experimental": 9, "Bridge_3.1_Coarse": 190, "Bridge_3.1_Multiring": 163, "Bridge_3.1_Zhang": 15, "LimitAnalysis_3.1": 2},
+    "12": {"Bridge_5.1_Experimental": 12, "Bridge_5.1_Masonry_new": 71, "Bridge_5.1_Load_spandrel": 29, "LimitAnalysis_5.1": 2},
+    "13": {"Bridge_3.2_Experimental": 13, "Bridge_3.2_Sand": 303},
+    "15": {"Bridge_5.2_Experimental": 9, "Bridge_5.2_Numerical_Coarse": 129, "LimitAnalysis_5.2": 2},
+    "17": {"3.3_Experimental": 12, "3.3_FEM (Zhang)": 10, "3.3_Numerical_drucker_z": 148},
+    "20": {"Bridge_3.4_Experimental": 6, "3-4_Numerical_new": 312, "3.3_Numerical_drucker_z": 148, "Bridge_3.2_extended": 303},
+    "22": {"Bridge_2_Experimental_Arch": 18, "Bridge_2_Numerical_Arch": 419, "Bridge_2_Experimental_PierNorth": 16, "Bridge_2_Numerical_PierNorth": 419, "Bridge_2_Experimental_PierSouth": 14, "Bridge_2_Numerical_PierSouth": 419},
+    "24": {"Bridge_1_Experimental_PierNorth": 9, "Bridge_1_Experimental_PierSouth": 9},
+    "25": {"Bridge_3_Experimental_Arch": 5, "Bridge_3_Numerical_Zizi": 14, "Bridge_3_Backfill": 1740}
+  },
+  "special_transforms": {
+    "Figure 12 / Bridge_5.1_Masonry_new": "drop the 17 trailing points, matching notebook cell 37",
+    "Figure 22 / Bridge_2_Numerical_Arch": "displacement_mm = 0.916516*z + 0.399998*x; load_kn = f, matching notebook cell 45"
+  },
+  "table_1_capacities_kn": {
+    "3.1": 540.0,
+    "3.2": 360.0,
+    "3.3": 600.0,
+    "3.4": 320.0,
+    "5.1": 1720.0,
+    "5.2": 500.0,
+    "MS1": 455.0,
+    "MS2": 320.0,
+    "MS3": 325.0
+  },
+  "issues": []
+}

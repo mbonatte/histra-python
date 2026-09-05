@@ -52,7 +52,7 @@ PARITY_REACTION_ABSOLUTE_TOLERANCE = 0.1
 PARITY_DISPLACEMENT_ABSOLUTE_TOLERANCE_MM = 0.05
 # Increment whenever solver semantics or release-gate policy changes.  Resume
 # checkpoints are diagnostic caches, never authorities across harness changes.
-BENCHMARK_HARNESS_REVISION = 3
+BENCHMARK_HARNESS_REVISION = 4
 
 
 BENCHMARK_MODELS: tuple[dict[str, Any], ...] = (
@@ -77,6 +77,67 @@ ARTICLE_TABLE_1_CAPACITIES_KN = {
     "3.1": 540.0, "3.2": 360.0, "3.3": 600.0, "3.4": 320.0,
     "5.1": 1720.0, "5.2": 500.0, "MS1": 455.0, "MS2": 320.0,
     "MS3": 325.0,
+}
+
+# The user-supplied ``Original_article_data.csv`` is an export of the
+# ``Results`` workbook used by ``Graphs_HISTRA.ipynb``.  It has a two-row
+# header beginning on CSV row 3: every named series starts a variable-width
+# group of x/y (or z/x/f) columns.  Keeping this mapping in the harness makes
+# the published-figure selection reviewable without duplicating or rounding
+# the original data into nine hand-maintained CSV files.
+ARTICLE_WORKBOOK_EXPORT = "Original_article_data.csv"
+ARTICLE_GRAPH_NOTEBOOK = "Graphs_HISTRA.ipynb"
+ARTICLE_SOURCE_SERIES: Mapping[int, tuple[Mapping[str, Any], ...]] = {
+    9: (
+        {"source": "3.1_Experimental", "cell": 9},
+        {"source": "Bridge_3.1_Coarse", "cell": 9},
+        {"source": "Bridge_3.1_Multiring", "cell": 9},
+        {"source": "Bridge_3.1_Zhang", "cell": 9},
+        {"source": "LimitAnalysis_3.1", "cell": 9},
+    ),
+    12: (
+        {"source": "Bridge_5.1_Experimental", "cell": 37},
+        {"source": "Bridge_5.1_Masonry_new", "cell": 37, "drop_last": 17},
+        {"source": "Bridge_5.1_Load_spandrel", "cell": 37},
+        {"source": "LimitAnalysis_5.1", "cell": 37},
+    ),
+    13: (
+        {"source": "Bridge_3.2_Experimental", "cell": 13},
+        {"source": "Bridge_3.2_Sand", "cell": 13},
+    ),
+    15: (
+        {"source": "Bridge_5.2_Experimental", "cell": 39},
+        {"source": "Bridge_5.2_Numerical_Coarse", "cell": 39},
+        {"source": "LimitAnalysis_5.2", "cell": 39},
+    ),
+    17: (
+        {"source": "3.3_Experimental", "cell": 15},
+        {"source": "3.3_FEM (Zhang)", "cell": 15},
+        {"source": "3.3_Numerical_drucker_z", "cell": 15},
+    ),
+    20: (
+        {"source": "Bridge_3.4_Experimental", "cell": 33},
+        {"source": "3-4_Numerical_new", "cell": 33},
+        {"source": "3.3_Numerical_drucker_z", "cell": 33},
+        {"source": "Bridge_3.2_extended", "cell": 33},
+    ),
+    22: (
+        {"source": "Bridge_2_Experimental_Arch", "cell": 45, "location": "arch"},
+        {"source": "Bridge_2_Numerical_Arch", "cell": 45, "location": "arch", "displacement": {"z": 0.916516, "x": 0.399998}, "load": "f"},
+        {"source": "Bridge_2_Experimental_PierNorth", "cell": 47, "location": "pier-north"},
+        {"source": "Bridge_2_Numerical_PierNorth", "cell": 47, "location": "pier-north"},
+        {"source": "Bridge_2_Experimental_PierSouth", "cell": 47, "location": "pier-south"},
+        {"source": "Bridge_2_Numerical_PierSouth", "cell": 47, "location": "pier-south"},
+    ),
+    24: (
+        {"source": "Bridge_1_Experimental_PierNorth", "cell": 43, "location": "pier-north"},
+        {"source": "Bridge_1_Experimental_PierSouth", "cell": 43, "location": "pier-south"},
+    ),
+    25: (
+        {"source": "Bridge_3_Experimental_Arch", "cell": 52},
+        {"source": "Bridge_3_Numerical_Zizi", "cell": 52},
+        {"source": "Bridge_3_Backfill", "cell": 52},
+    ),
 }
 
 
@@ -191,71 +252,242 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def validate_article_source_data(directory: Path) -> dict[str, Any]:
+def _default_article_pdf() -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "docs/references/articles/Bonatte et al. - A discrete macro-element method for structural assessment of masonry arch bridges.pdf"
+    )
+
+
+def _read_article_workbook_export(path: Path) -> dict[str, dict[str, list[str]]]:
+    """Read the variable-width, two-level CSV export without pandas.
+
+    The workbook's curve columns deliberately have unequal lengths.  A row is
+    therefore retained by the caller only when the fields selected for that
+    curve are present and finite; blanks in another curve's group are normal.
+    """
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        rows = list(csv.reader(stream))
+    if len(rows) < 4:
+        raise ValueError("workbook export requires at least four header/data rows")
+    names = rows[2]
+    fields = rows[3]
+    starts = [index for index, name in enumerate(names) if name.strip()]
+    if not starts:
+        raise ValueError("workbook export has no named series in header row 3")
+    result: dict[str, dict[str, list[str]]] = {}
+    for position, start in enumerate(starts):
+        stop = starts[position + 1] if position + 1 < len(starts) else len(names)
+        name = names[start].strip()
+        field_positions = [
+            (index, fields[index].strip().casefold())
+            for index in range(start, stop)
+            if fields[index].strip()
+        ]
+        field_names = [field for _, field in field_positions]
+        if not name or not field_names or len(set(field_names)) != len(field_names):
+            raise ValueError(f"invalid field header for source series {name!r}")
+        values = {field: [] for field in field_names}
+        for row in rows[4:]:
+            for index, field in field_positions:
+                values[field].append(row[index].strip() if index < len(row) else "")
+        if name in result:
+            raise ValueError(f"duplicate workbook-export source series {name!r}")
+        result[name] = values
+    return result
+
+
+def _workbook_curve(
+    values: Mapping[str, list[str]], spec: Mapping[str, Any]
+) -> tuple[list[tuple[float, float]], int]:
+    coefficients = {
+        str(field).casefold(): float(coefficient)
+        for field, coefficient in dict(spec.get("displacement", {"x": 1.0})).items()
+    }
+    load_field = str(spec.get("load", "y")).casefold()
+    required = set(coefficients) | {load_field}
+    missing = sorted(required - set(values))
+    if missing:
+        raise ValueError(f"missing workbook field(s): {', '.join(missing)}")
+    curve: list[tuple[float, float]] = []
+    invalid = 0
+    for index in range(len(values[load_field])):
+        raw = {field: values[field][index] for field in required}
+        if not all(raw.values()):
+            continue
+        try:
+            displacement = sum(coefficients[field] * float(raw[field]) for field in coefficients)
+            load = float(raw[load_field])
+        except ValueError:
+            invalid += 1
+            continue
+        if not np.isfinite(displacement) or not np.isfinite(load):
+            invalid += 1
+            continue
+        curve.append((displacement, load))
+    drop_last = int(spec.get("drop_last", 0))
+    if drop_last:
+        curve = curve[:-drop_last] if len(curve) > drop_last else []
+    return curve, invalid
+
+
+def _validate_workbook_source_data(
+    directory: Path,
+    issues: list[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate the user's original workbook export and notebook selection."""
+    export_path = directory / ARTICLE_WORKBOOK_EXPORT
+    notebook_path = directory / ARTICLE_GRAPH_NOTEBOOK
+    raw_sources: dict[str, Any] = {}
+    for label, path in (("workbook_export", export_path), ("plot_notebook", notebook_path)):
+        raw_sources[label] = {"path": str(path), "available": path.is_file()}
+        if path.is_file():
+            raw_sources[label].update({"bytes": path.stat().st_size, "sha256": _file_sha256(path)})
+    if not export_path.is_file():
+        issues.append(f"missing workbook export: {export_path}")
+        return {}, raw_sources
+    if not notebook_path.is_file():
+        issues.append(f"missing plotting notebook: {notebook_path}")
+    else:
+        try:
+            json.loads(notebook_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            issues.append(f"unable to read plotting notebook: {exc}")
+    try:
+        workbook = _read_article_workbook_export(export_path)
+    except (OSError, UnicodeError, csv.Error, ValueError) as exc:
+        issues.append(f"unable to read workbook export: {exc}")
+        return {}, raw_sources
+
+    figures: dict[str, Any] = {}
+    for figure, specs in ARTICLE_SOURCE_SERIES.items():
+        records: dict[str, Any] = {}
+        invalid_rows = 0
+        for spec in specs:
+            source = str(spec["source"])
+            values = workbook.get(source)
+            if values is None:
+                issues.append(f"Figure {figure} is missing workbook series {source!r}")
+                continue
+            try:
+                curve, invalid = _workbook_curve(values, spec)
+            except ValueError as exc:
+                issues.append(f"Figure {figure} series {source!r}: {exc}")
+                continue
+            invalid_rows += invalid
+            if len(curve) < 2:
+                issues.append(f"Figure {figure} series {source!r} requires at least two points")
+                continue
+            record: dict[str, Any] = {
+                "rows": len(curve),
+                "provenance": f"{ARTICLE_WORKBOOK_EXPORT}:{source}; {ARTICLE_GRAPH_NOTEBOOK}:cell-{spec['cell']}",
+            }
+            if "location" in spec:
+                record["location"] = spec["location"]
+            if "displacement" in spec:
+                record["displacement_formula"] = dict(spec["displacement"])
+            if spec.get("drop_last"):
+                record["drop_last"] = int(spec["drop_last"])
+            records[source] = record
+        if invalid_rows:
+            issues.append(f"Figure {figure} contains {invalid_rows} non-finite workbook row(s)")
+        figures[str(figure)] = {
+            "path": str(export_path),
+            "available": bool(records),
+            "rows": sum(item["rows"] for item in records.values()),
+            "series": {name: item["rows"] for name, item in sorted(records.items())},
+            "series_provenance": records,
+            "invalid_rows": invalid_rows,
+        }
+    return figures, raw_sources
+
+
+def validate_article_source_data(
+    directory: Path, *, article_pdf_path: Path | None = None
+) -> dict[str, Any]:
     """Validate the user-supplied plotting data and Table 1 transcription."""
     directory = directory.resolve()
     issues: list[str] = []
     figures: dict[str, Any] = {}
-    required_curve_columns = {
-        "series", "displacement_mm", "load_kn", "provenance",
-    }
-    for figure in ARTICLE_FIGURES:
-        path = directory / f"figure_{figure:02d}.csv"
-        entry: dict[str, Any] = {"path": str(path), "available": path.is_file()}
-        figures[str(figure)] = entry
-        if not path.is_file():
-            issues.append(f"missing Figure {figure} source file: {path}")
-            continue
-        try:
-            with path.open("r", encoding="utf-8", newline="") as stream:
-                reader = csv.DictReader(stream)
-                fields = set(reader.fieldnames or ())
-                missing_columns = sorted(required_curve_columns - fields)
-                rows = list(reader)
-        except (OSError, UnicodeError, csv.Error) as exc:
-            issues.append(f"unable to read Figure {figure} source file: {exc}")
-            continue
-        if missing_columns:
-            issues.append(
-                f"Figure {figure} is missing columns: {', '.join(missing_columns)}"
-            )
-            continue
-        series_counts: Counter[str] = Counter()
-        invalid_rows = 0
-        for row in rows:
-            series = str(row.get("series", "")).strip()
-            provenance = str(row.get("provenance", "")).strip()
+    raw_sources: dict[str, Any] = {}
+    use_workbook_export = (directory / ARTICLE_WORKBOOK_EXPORT).is_file()
+    if use_workbook_export:
+        figures, raw_sources = _validate_workbook_source_data(directory, issues)
+    else:
+        required_curve_columns = {
+            "series", "displacement_mm", "load_kn", "provenance",
+        }
+        for figure in ARTICLE_FIGURES:
+            path = directory / f"figure_{figure:02d}.csv"
+            entry: dict[str, Any] = {"path": str(path), "available": path.is_file()}
+            figures[str(figure)] = entry
+            if not path.is_file():
+                issues.append(f"missing Figure {figure} source file: {path}")
+                continue
             try:
-                displacement = float(row.get("displacement_mm", ""))
-                load = float(row.get("load_kn", ""))
-            except (TypeError, ValueError):
-                invalid_rows += 1
+                with path.open("r", encoding="utf-8", newline="") as stream:
+                    reader = csv.DictReader(stream)
+                    fields = set(reader.fieldnames or ())
+                    missing_columns = sorted(required_curve_columns - fields)
+                    rows = list(reader)
+            except (OSError, UnicodeError, csv.Error) as exc:
+                issues.append(f"unable to read Figure {figure} source file: {exc}")
                 continue
-            if not series or not provenance or not np.isfinite(displacement) or not np.isfinite(load):
-                invalid_rows += 1
+            if missing_columns:
+                issues.append(
+                    f"Figure {figure} is missing columns: {', '.join(missing_columns)}"
+                )
                 continue
-            series_counts[series] += 1
-        short_series = sorted(name for name, count in series_counts.items() if count < 2)
-        if invalid_rows:
-            issues.append(f"Figure {figure} contains {invalid_rows} invalid row(s)")
-        if not series_counts:
-            issues.append(f"Figure {figure} contains no valid series")
-        if short_series:
-            issues.append(
-                f"Figure {figure} series require at least two points: {', '.join(short_series)}"
-            )
-        entry.update({
-            "bytes": path.stat().st_size,
-            "sha256": _file_sha256(path),
-            "rows": len(rows),
-            "series": dict(sorted(series_counts.items())),
-            "invalid_rows": invalid_rows,
-        })
+            series_counts: Counter[str] = Counter()
+            invalid_rows = 0
+            for row in rows:
+                series = str(row.get("series", "")).strip()
+                provenance = str(row.get("provenance", "")).strip()
+                try:
+                    displacement = float(row.get("displacement_mm", ""))
+                    load = float(row.get("load_kn", ""))
+                except (TypeError, ValueError):
+                    invalid_rows += 1
+                    continue
+                if not series or not provenance or not np.isfinite(displacement) or not np.isfinite(load):
+                    invalid_rows += 1
+                    continue
+                series_counts[series] += 1
+            short_series = sorted(name for name, count in series_counts.items() if count < 2)
+            if invalid_rows:
+                issues.append(f"Figure {figure} contains {invalid_rows} invalid row(s)")
+            if not series_counts:
+                issues.append(f"Figure {figure} contains no valid series")
+            if short_series:
+                issues.append(
+                    f"Figure {figure} series require at least two points: {', '.join(short_series)}"
+                )
+            entry.update({
+                "bytes": path.stat().st_size,
+                "sha256": _file_sha256(path),
+                "rows": len(rows),
+                "series": dict(sorted(series_counts.items())),
+                "invalid_rows": invalid_rows,
+            })
 
     table_path = directory / "table_01.csv"
     table: dict[str, Any] = {"path": str(table_path), "available": table_path.is_file()}
     if not table_path.is_file():
-        issues.append(f"missing Table 1 source file: {table_path}")
+        if not use_workbook_export:
+            issues.append(f"missing Table 1 source file: {table_path}")
+        else:
+            pdf_path = (article_pdf_path or _default_article_pdf()).resolve()
+            table = {"path": str(pdf_path), "available": pdf_path.is_file()}
+            if not pdf_path.is_file():
+                issues.append(f"missing Article PDF needed for Table 1: {pdf_path}")
+            else:
+                table.update({
+                    "bytes": pdf_path.stat().st_size,
+                    "sha256": _file_sha256(pdf_path),
+                    "rows": len(ARTICLE_TABLE_1_CAPACITIES_KN),
+                    "capacities_kn": dict(ARTICLE_TABLE_1_CAPACITIES_KN),
+                    "provenance": "Bonatte et al. (2026), Table 1",
+                })
     else:
         try:
             with table_path.open("r", encoding="utf-8", newline="") as stream:
@@ -303,6 +535,8 @@ def validate_article_source_data(directory: Path) -> dict[str, Any]:
 
     return {
         "directory": str(directory),
+        "source_mode": "workbook-export" if use_workbook_export else "per-figure-csv",
+        "raw_sources": raw_sources,
         "valid": not issues,
         "figures": figures,
         "table_1": table,

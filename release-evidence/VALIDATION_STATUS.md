@@ -21,6 +21,13 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 - All 14 Article models were executed in both `authored` and `strict` modes.
 - Compact checkpoints, aggregate Article evidence, and the initial strategy
   matrix are preserved under `release-evidence/`.
+- The supplied original workbook export and plotting notebook now validate every
+  required Article figure series directly, with the published Table 1
+  capacities anchored to the supplied paper. Their input hashes and exact
+  figure-series mapping are recorded by harness revision 4 in
+  `article-models/article_source_data_validation_revision4.json`.
+- The supplied `Bridge_3.1_Coarse.Results`/`.hrx` pair has been schema-audited;
+  it is adequate committed-state and spring-state parity evidence.
 - The complete five-increment P-Delta gravity matrix has zero unsafe commits
   for every measured `EachStep` and `EachIteration` candidate. All candidates
   preserve the selected Standard Bisection baseline response; the authored
@@ -35,8 +42,6 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
   committed; the remaining models stopped before their first safe commit.
 - The authored Zhang 3.4 run covered 179/179 rows, but all 179 commits were
   unsafe and its maximum reaction difference was 60.5843 kN.
-- The source CSVs for Figures 9, 12, 13, 15, 17, 20, 22, 24, and 25 and Table 1
-  have not been supplied, so article/experimental validation is fail-closed.
 - The strategy matrix cannot yet make production recommendations for the full
   live-load path. The revised complete gravity matrix qualifies Standard
   Bisection and Standard Secant, with Bisection faster on the measured coarse
@@ -47,12 +52,13 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 
 ## Required external evidence
 
-Run the deterministic C# trace described in
-`docs/benchmarks/article-models-release-gate.md` for
-`Bridge_3.1_Coarse`, analysis `Vert`, steps 1 and 2. The trace must include
-sparse K, B, X, residual, load factor, line-search values, control displacement,
-and relevant spring identities/states. Also place the original article datasets
-in `release-evidence/article-source-data/` using the documented CSV schema.
+The supplied C# `.Results`/`.hrx` pair does not contain the per-Newton sparse
+K, B, X, residual, load-factor, or line-search values needed for the
+deterministic C# trace described in
+`docs/benchmarks/article-models-release-gate.md`. It cannot be reconstructed
+from these files. No backend waiver may be issued while that evidence is absent;
+the committed-state discrepancy must instead be fixed directly in Python or an
+instrumented C# trace must become available.
 
 No tolerance waiver can replace this evidence. Tagging `v1.0.0`, publishing,
 and deleting the 36 GB raw Article suite remain prohibited until every release

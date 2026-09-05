@@ -1,6 +1,7 @@
 """Strict tests for the compact Article Models benchmark harness."""
 from __future__ import annotations
 
+import csv
 import json
 
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 
 from histra.tools.article_models_benchmark import (
     ARTICLE_FIGURES,
+    ARTICLE_SOURCE_SERIES,
     ARTICLE_TABLE_1_CAPACITIES_KN,
     AUDIT_RESIDUAL_TOLERANCE,
     BENCHMARK_HARNESS_REVISION,
@@ -323,3 +325,45 @@ def test_article_source_data_validation_is_fail_closed_and_hashes_inputs(tmp_pat
     assert report["figures"]["9"]["rows"] == 2
     assert len(report["figures"]["9"]["sha256"]) == 64
     assert report["table_1"]["capacities_kn"]["MS1"] == 455.0
+
+
+def test_article_workbook_export_is_a_first_class_original_data_source(tmp_path) -> None:
+    """The original wide workbook export needs no lossy hand-transcription."""
+    series_specs = {
+        str(spec["source"]): spec
+        for specs in ARTICLE_SOURCE_SERIES.values()
+        for spec in specs
+    }
+    header_names: list[str] = []
+    header_fields: list[str] = []
+    columns: list[tuple[str, ...]] = []
+    for source, spec in series_specs.items():
+        fields = tuple(spec.get("displacement", {"x": 1.0})) + (str(spec.get("load", "y")),)
+        header_names.extend((source, *([""] * (len(fields) - 1))))
+        header_fields.extend(fields)
+        columns.append(fields)
+    export = tmp_path / "Original_article_data.csv"
+    with export.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow([])
+        writer.writerow([])
+        writer.writerow(header_names)
+        writer.writerow(header_fields)
+        for value in range(20):
+            row: list[float] = []
+            for fields in columns:
+                row.extend(float(value + index + 1) for index in range(len(fields)))
+            writer.writerow(row)
+    (tmp_path / "Graphs_HISTRA.ipynb").write_text("{}", encoding="utf-8")
+    article_pdf = tmp_path / "article.pdf"
+    article_pdf.write_bytes(b"PDF source placeholder")
+
+    report = validate_article_source_data(tmp_path, article_pdf_path=article_pdf)
+
+    assert report["valid"]
+    assert report["source_mode"] == "workbook-export"
+    assert report["figures"]["9"]["series"]["Bridge_3.1_Coarse"] == 20
+    assert report["figures"]["12"]["series"]["Bridge_5.1_Masonry_new"] == 3
+    radial = report["figures"]["22"]["series_provenance"]["Bridge_2_Numerical_Arch"]
+    assert radial["displacement_formula"] == {"z": 0.916516, "x": 0.399998}
+    assert report["table_1"]["sha256"]
