@@ -10,13 +10,14 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 - Full Linux Python 3.12 suite: `566 passed, 5 skipped, 21 warnings`.
   The nine warnings above the historical baseline are the new, intentional
   `SuboptimalSolverStrategyWarning` diagnostics.
-- Wheel and sdist build completed, `twine check` passed, and the wheel imported
-  from an isolated environment outside the source tree as version `1.0.0`.
+- Wheel and sdist build completed at `aee9a5c`, `twine check` passed, and the
+  wheel imported from an isolated environment outside the source tree as
+  version `1.0.0`.
 - Artifact checksums are recorded in `dist/SHA256SUMS`.
   The rebuilt wheel SHA-256 is
-  `ef333f33a356bea9b9e78938d359c904e74e4eb875c2de7c6799c36544166de8`;
+  `6274ec428d7ad5b5645a84c9ada52c57734f67a0f844d7d7bea7daea118f1ecb`;
   the sdist SHA-256 is
-  `98ce53ddc6254bd6ddbd6065deea7d55d92048cbefc64a914b1e3211bdf66883`.
+  `6f3d0a9d36c9daa34f62aeeea572ca04fef5413ea4efd45d0c2e1b21919235e2`.
 - All 14 Article models were executed in both `authored` and `strict` modes.
 - Compact checkpoints, aggregate Article evidence, and the initial strategy
   matrix are preserved under `release-evidence/`.
