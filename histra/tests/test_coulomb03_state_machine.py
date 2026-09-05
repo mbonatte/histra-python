@@ -3,6 +3,7 @@ import os, sys, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from histra.model.spring import SpringCoulomb03, PhaseEnum
+from histra.model.masonry_material import MasonryMaterial
 
 def _make_spring():
     """Create a Coulomb03 spring with a proper softening backbone."""
@@ -164,6 +165,27 @@ def test_slip():
     assert s._tstress == 0.0
 
     print("[PASS] Slip works")
+
+
+def test_unmanaged_quad_uses_stress_interpolated_masonry_energy():
+    """The scalar fallback must retain the C# enum-5 energy callback."""
+    s = _make_spring()
+    masonry = MasonryMaterial(
+        properties={
+            "ConstitutiveLawMasonryShear": "ElastoPlasticEnergySigmaInterpolation"
+        }
+    )
+
+    s.set_trial_strain_takeda_diagonal_quad(
+        0.02, 0.0, masonry=masonry, volume=4.0, sigma=-0.0575
+    )
+
+    expected_energy = (0.0007775 + 0.0004402) / 2.0
+    assert math.isclose(
+        s.ur[0], expected_energy * 4.0 / 100.0 + 0.005,
+        rel_tol=1.0e-12,
+        abs_tol=1.0e-12,
+    )
 
 
 if __name__ == "__main__":

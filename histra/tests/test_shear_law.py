@@ -12,6 +12,7 @@ from histra.model.shear_law import (
     fracture_energy_shear,
     masonry_shear_law_code,
 )
+from histra.model.masonry_material import MasonryMaterial
 
 
 @dataclass
@@ -89,3 +90,42 @@ def test_legacy_snake_case_attributes_are_supported() -> None:
     )()
     assert masonry_shear_law_code(material) == ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
     assert fracture_energy_shear(material) == 0.25
+
+
+@pytest.mark.parametrize(
+    ("sigma", "expected_energy"),
+    [
+        (-0.04, 0.0012385),
+        (-0.05, 0.0012385),
+        (-0.0575, (0.0007775 + 0.0004402) / 2.0),
+        (-0.07, 0.0001699),
+        (-0.09, 0.0001699),
+    ],
+)
+def test_masonry_material_interpolates_csharp_shear_energy(
+    sigma: float, expected_energy: float
+) -> None:
+    material = MasonryMaterial(
+        properties={
+            "ConstitutiveLawMasonryShear": "ElastoPlasticEnergySigmaInterpolation"
+        }
+    )
+
+    assert material.constitutive_law_masonry_shear == 5
+    assert material.get_shear_ultimate_strain(2.0, 0.1, 4.0, sigma) == pytest.approx(
+        expected_energy * 2.0 + 0.05
+    )
+
+
+def test_masonry_material_uses_csharp_fixed_fracture_energy() -> None:
+    material = MasonryMaterial(
+        properties={
+            "ConstitutiveLawMasonryShear": "ElastoPlasticFractureEnergyFixed",
+            "FractureEnergyShear": "0.125",
+        }
+    )
+
+    assert material.constitutive_law_masonry_shear == 4
+    assert material.get_shear_ultimate_strain(2.0, 0.1, 4.0, 0.0) == pytest.approx(
+        0.3
+    )
