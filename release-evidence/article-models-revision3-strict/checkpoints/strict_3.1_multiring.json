@@ -1,0 +1,263 @@
+{
+  "schema_version": 3,
+  "harness_revision": 3,
+  "result": {
+    "id": "3.1_multiring",
+    "name": "Bridge_3.1_Multiring",
+    "run_mode": "strict",
+    "gdl": 3626,
+    "interfaces": 1002,
+    "preparation_seconds": 0.0034781410067807883,
+    "total_seconds": 43.688646020018496,
+    "provenance": {
+      "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/SciPy sparse",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.1_Multiring.hrx",
+          "bytes": 42631583,
+          "sha256": "90e8f5a30b48a8a976d40d29fea4a7b49aff029339ed43bdc50bf6d8d5233e75"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.1_Multiring.Results",
+          "bytes": 277254144,
+          "sha256": "c98279222cd02f264763f683fb0cce35a5b162a90204d987bbd7121e043f9baf"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.1",
+      "variant": "multi-ring",
+      "figures": [
+        9
+      ],
+      "capacity_kn": 540.0,
+      "master_point": 5,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_method": "StandardBisectionLineSearch",
+        "csharp_line_search_compatibility": false,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_method": "StandardInitialInterpolatedLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_method": "StandardBisectionLineSearch",
+        "csharp_line_search_compatibility": false,
+        "effective_criterion": "ForceMoment",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 86
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 20.348906380007975
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed_at_configured_displacement_limit",
+        "exit_code": -3,
+        "committed_steps": 4,
+        "runtime_seconds": 21.656269831000827
+      }
+    ],
+    "warning_count": 0,
+    "unsafe_step_count": 0,
+    "unsafe_steps_by_criterion": {},
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 91,
+        "actual_steps": 9,
+        "matched_steps": 9,
+        "missing_steps": 82,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 91,
+        "actual_rows": 9,
+        "matched_rows": 9,
+        "missing_rows": 82,
+        "extra_rows": 0,
+        "max_absolute": 29.01409912109375,
+        "relative_l2": 0.02118127620855564,
+        "worst_key": [
+          22,
+          4
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -700.4828186035156,
+        "actual_at_worst": -729.4969177246094
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 364,
+        "actual_rows": 36,
+        "matched_rows": 36,
+        "missing_rows": 328,
+        "extra_rows": 0,
+        "max_absolute": 0.4632434993982315,
+        "relative_l2": 0.8205181247771243,
+        "worst_key": [
+          22,
+          4,
+          1
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -0.42215220630168915,
+        "actual_at_worst": -0.8853957056999207
+      }
+    },
+    "live_load_curve": {
+      "range_covered": false,
+      "reference_displacement_range_mm": [
+        0.0,
+        3.908859845250845
+      ],
+      "actual_displacement_range_mm": [
+        0.0,
+        0.40358959697186947
+      ],
+      "overlap_displacement_range_mm": [
+        0.0,
+        0.40358959697186947
+      ],
+      "evaluation_points": 212,
+      "peak_load_relative_error": 0.2942615296369061,
+      "normalized_curve_rmse": 0.19707912422482193,
+      "curve_area_relative_error": 0.3042170698208165,
+      "initial_stiffness_relative_error": 0.26102901840985204,
+      "peak_displacement_absolute_error_mm": 0.0,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": 253.12451704772207,
+        "peak_displacement_mm": 0.40358959697186947,
+        "area": 59.17745959900916,
+        "initial_stiffness_kn_per_mm": 883.6684853326251
+      },
+      "actual": {
+        "peak_load_kn": 178.63970947265625,
+        "peak_displacement_mm": 0.40358959697186947,
+        "area": 41.174666240358846,
+        "initial_stiffness_kn_per_mm": 653.0053680065292
+      },
+      "within_curve_tolerance": false,
+      "reference_sample_rows": 86,
+      "actual_sample_rows": 4,
+      "master_point": 5,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 27652,
+        "python_total": 27652,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 20147,
+            "python": 24214
+          },
+          "1": {
+            "csharp": 1040,
+            "python": 499
+          },
+          "2": {
+            "csharp": 118,
+            "python": 74
+          },
+          "3": {
+            "csharp": 4027,
+            "python": 274
+          },
+          "4": {
+            "csharp": 1832,
+            "python": 1657
+          },
+          "5": {
+            "csharp": 142,
+            "python": 743
+          },
+          "6": {
+            "csharp": 346,
+            "python": 191
+          }
+        }
+      },
+      "22": {
+        "available": false,
+        "csharp_total": 0,
+        "python_total": 27652,
+        "exact": false,
+        "reason": "no C# SpringStates rows at the terminal step",
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 13416
+          },
+          "1": {
+            "csharp": 0,
+            "python": 2341
+          },
+          "2": {
+            "csharp": 0,
+            "python": 195
+          },
+          "3": {
+            "csharp": 0,
+            "python": 557
+          },
+          "4": {
+            "csharp": 0,
+            "python": 6843
+          },
+          "5": {
+            "csharp": 0,
+            "python": 1125
+          },
+          "6": {
+            "csharp": 0,
+            "python": 3175
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

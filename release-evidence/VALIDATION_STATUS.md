@@ -85,3 +85,9 @@ gate passes.
   arbitrary names containing a supported line-search suffix. The HRX inventory
   also rejects Vertex, InterfaceMF, and NodeBC alongside the other non-V1
   computational domains.
+- A fresh revision-3 all-model strict run was stopped recoverably after roughly
+  32 minutes without a fourth checkpoint. The three completed checkpoints all
+  have zero unsafe commits but fail coverage: 3.1 coarse reached 13/1,065,
+  3.1 multiring 9/91, and 3.2 1/338. The partial-run record is preserved under
+  `release-evidence/article-models-revision3-strict/`; it is not an aggregate
+  pass and the unfinished workers contribute no evidence.
