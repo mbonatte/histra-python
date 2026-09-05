@@ -143,9 +143,7 @@ class AnalysisSession:
     ) -> AnalysisExecution:
         self._require_usable()
         definition = copy.deepcopy(self.resolve_analysis(analysis))
-        inspect_solver_capabilities(
-            self.model, [str(definition.name)]
-        ).require_supported()
+        inspect_solver_capabilities(self.model, [definition]).require_supported()
         emit_strategy_advisories(
             definition,
             policy=self.strategy_policy,

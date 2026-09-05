@@ -248,6 +248,29 @@ def test_capability_preflight_rejects_unsupported_solver_enums(
     assert code in {issue.code for issue in report.issues}
 
 
+def test_capability_preflight_inspects_supplied_definition_not_same_name_model_copy() -> None:
+    stored = SimpleNamespace(
+        key=1,
+        name="Static",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="LoadControl",
+        method="StandardNewtonRaphson",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+    )
+    supplied = SimpleNamespace(**vars(stored))
+    supplied.method = "BFGS"
+    model = SimpleNamespace(collections=SimpleNamespace(analyses={1: stored}))
+
+    report = inspect_solver_capabilities(model, [supplied])
+
+    assert not report.supported
+    assert {issue.code for issue in report.issues} == {
+        "NONLINEAR_METHOD_UNSUPPORTED"
+    }
+
+
 def test_capability_preflight_rejects_unknown_arc_length_procedure() -> None:
     analysis = SimpleNamespace(
         key=1,
@@ -340,6 +363,9 @@ def test_capability_preflight_rejects_out_of_v1_hrx_domains(tmp_path) -> None:
     hrx.write_text(
         '<HiStrA version="1" GDL="1" IsLocked="true">'
         '<Frame Key="1" />'
+        '<Vertex Key="2" />'
+        '<InterfaceMF Key="3" />'
+        '<NodeBC Key="4" />'
         '<Template Key="2" PurposeType="ConcreteMaterial" />'
         '<Analysis Key="1" Name="Static" AnalysisType="2" '
         'InitialAnalysisKey="-100" IntegrationMethod="LoadControl" '
@@ -354,6 +380,12 @@ def test_capability_preflight_rejects_out_of_v1_hrx_domains(tmp_path) -> None:
     assert not report.supported
     assert {issue.code for issue in report.issues} == {
         "V1_ELEMENT_DOMAIN_UNSUPPORTED",
+    }
+    assert model.unsupported_v1_features == {
+        "element:Frame": 1,
+        "element:InterfaceMF": 1,
+        "element:NodeBC": 1,
+        "element:Vertex": 1,
     }
     assert model.unsupported_material_templates == {2: "ConcreteMaterial"}
 

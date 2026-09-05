@@ -50,7 +50,18 @@ _CONSUMED_TAGS = frozenset(
 )
 
 _UNSUPPORTED_V1_ELEMENT_TAGS = frozenset(
-    {"Frame", "Slab", "Link", "Joint", "Solid", "Fiber", "Truss"}
+    {
+        "Frame",
+        "Slab",
+        "Link",
+        "Joint",
+        "Solid",
+        "Fiber",
+        "Truss",
+        "Vertex",
+        "InterfaceMF",
+        "NodeBC",
+    }
 )
 
 

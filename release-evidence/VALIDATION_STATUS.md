@@ -7,7 +7,7 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 
 ## Completed checks
 
-- Full Linux Python 3.12 suite: `556 passed, 5 skipped, 21 warnings`.
+- Full Linux Python 3.12 suite: `559 passed, 5 skipped, 21 warnings`.
   The nine warnings above the historical baseline are the new, intentional
   `SuboptimalSolverStrategyWarning` diagnostics.
 - Wheel and sdist build completed, `twine check` passed, and the wheel imported
@@ -81,3 +81,7 @@ gate passes.
 - Capability preflight and the direct solver paths now reject unknown
   ArcLength-procedure, modal-procedure, modal-convergence, and mass-matrix enum
   values instead of falling through to a different supported algorithm.
+- Nonlinear factories now match complete C# method names rather than accepting
+  arbitrary names containing a supported line-search suffix. The HRX inventory
+  also rejects Vertex, InterfaceMF, and NodeBC alongside the other non-V1
+  computational domains.

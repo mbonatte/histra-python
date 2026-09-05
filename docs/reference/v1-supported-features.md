@@ -6,7 +6,7 @@ accepts it and its release evidence is green.
 
 | Area | Supported in V1 | Limitations |
 |---|---|---|
-| Model/input | HRX, locked or unlocked geometry, six-face Quad contacts, afference, restraints, masonry templates | Frame, Slab, Link, Joint, Solid, Truss, fiber, concrete, and steel systems are outside V1. |
+| Model/input | HRX, locked or unlocked geometry, six-face Quad contacts, afference, restraints, masonry templates | Frame, Slab, Link, Joint, Solid, Truss, Vertex, InterfaceMF, NodeBC, fiber, concrete, and steel systems are outside V1. |
 | Loading/state | Self-weight, load combinations, line loads, staged dependencies, restart transfer, interface material changes | Unknown load-element types fail while loading. |
 | Static integration | LoadControl, ArcLength, ArcLengthLinear; force and displacement control; C# ArcLength procedures plus explicit `ProjectedControlPoint` safe extension | Dynamic Newmark/HHT/Wilson paths are outside V1. Unknown constraint procedures fail before solving. |
 | Nonlinear methods | Standard/Modified Newton; Standard/Modified Secant, Regula-Falsi, Bisection, Initial-Interpolated line search | Krylov, Broyden, BFGS, Accelerated Newton, and Periodic Newton are not constructible in the supplied C# factory and are rejected. |

@@ -5,7 +5,6 @@ from typing import Any
 from histra.solver.incremental_integrator import IncrementalIntegrator, StaticIntegrator
 from histra.solver.line_search import (
     BisectionLineSearch,
-    InitialInterpolatedLineSearch,
     LineSearch,
     RegulaFalsiLineSearch,
     SecantLineSearch,
@@ -14,15 +13,27 @@ from histra.types.convergence_test import ConvergenceTest
 from histra.types.linear_system import LinearSystem
 
 
+_NEWTON_METHODS = {"StandardNewtonRaphson", "ModifiedNewtonRaphson"}
+_LINE_SEARCH_TYPES = {
+    "StandardSecantLineSearch": SecantLineSearch,
+    "StandardRegulaFalsiLineSearch": RegulaFalsiLineSearch,
+    "StandardBisectionLineSearch": BisectionLineSearch,
+    "ModifiedSecantLineSearch": SecantLineSearch,
+    "ModifiedRegulaFalsiLineSearch": RegulaFalsiLineSearch,
+    "ModifiedBisectionLineSearch": BisectionLineSearch,
+}
+_INITIAL_INTERPOLATED_METHODS = {
+    "StandardInitialInterpolatedLineSearch",
+    "ModifiedInitialInterpolatedLineSearch",
+}
+_LINE_SEARCH_METHODS = set(_LINE_SEARCH_TYPES) | _INITIAL_INTERPOLATED_METHODS
+
+
 def _new_line_search(an: Any) -> LineSearch:
     method = str(getattr(an, "method", ""))
-    if "RegulaFalsi" in method:
-        search: LineSearch = RegulaFalsiLineSearch()
-    elif "Bisection" in method:
-        search = BisectionLineSearch()
-    elif "Secant" in method:
-        search = SecantLineSearch()
-    elif "InitialInterpolated" in method:
+    if method in _LINE_SEARCH_TYPES:
+        search: LineSearch = _LINE_SEARCH_TYPES[method]()
+    elif method in _INITIAL_INTERPOLATED_METHODS:
         # C# ``InitialInterpolatedSearch`` hides ``search``/``newStep`` with
         # ``new virtual`` instead of overriding the base methods.  The solver
         # stores it through a ``LineSearch`` reference, so runtime dispatch is
@@ -30,8 +41,10 @@ def _new_line_search(an: Any) -> LineSearch:
         # compatibility with committed C# ArcLength results.  The intended
         # algorithm remains available by constructing InitialInterpolatedLineSearch directly.
         search = LineSearch()
-    else:
+    elif method in _NEWTON_METHODS:
         search = LineSearch()
+    else:
+        raise ValueError(f"Unsupported nonlinear solution method: {method}")
 
     search.tolerance = float(getattr(an, "line_search_tolerance", 0.8))
     search.max_eta = float(getattr(an, "line_search_max_eta", 10.0))
@@ -69,12 +82,9 @@ class EquiSolnAlgo(SolutionAlgorithm):
         from histra.solver.newton_raphson import NewtonRaphson
 
         method = str(getattr(an, "method", "StandardNewtonRaphson"))
-        if method in {"StandardNewtonRaphson", "ModifiedNewtonRaphson"}:
+        if method in _NEWTON_METHODS:
             algo: EquiSolnAlgo = NewtonRaphson()
-        elif any(
-            name in method
-            for name in ("Bisection", "RegulaFalsi", "Secant", "InitialInterpolated")
-        ):
+        elif method in _LINE_SEARCH_METHODS:
             algo = NewtonLineSearch()
         else:
             raise ValueError(f"Unsupported nonlinear solution method: {method}")

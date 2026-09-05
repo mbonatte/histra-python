@@ -36,6 +36,12 @@ class TestNewLineSearchFactory(unittest.TestCase):
         self.assertEqual(ls.min_eta, 0.2)
         self.assertEqual(ls.max_iter, 50)
 
+    def test_rejects_method_name_that_only_contains_supported_suffix(self):
+        an = self.FakeAnalysis()
+        an.method = "FutureRegulaFalsiLineSearch"
+        with self.assertRaisesRegex(ValueError, "Unsupported nonlinear"):
+            _new_line_search(an)
+
 
 class TestLoadControl(unittest.TestCase):
     def test_create(self):
@@ -76,6 +82,14 @@ class TestEquiSolnAlgo(unittest.TestCase):
         an = FakeAnalysis()
         algo = EquiSolnAlgo.new_equi_soln_algo(an, 1)
         self.assertIsInstance(algo, EquiSolnAlgo)
+
+    def test_factory_rejects_method_name_that_only_contains_supported_suffix(self):
+        class FakeAnalysis:
+            method = "FutureBisectionLineSearch"
+            integration_method = "LoadControl"
+
+        with self.assertRaisesRegex(ValueError, "Unsupported nonlinear"):
+            EquiSolnAlgo.new_equi_soln_algo(FakeAnalysis(), 1)
 
 
 class TestNewtonRaphson(unittest.TestCase):

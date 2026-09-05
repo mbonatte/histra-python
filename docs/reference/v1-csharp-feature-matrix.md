@@ -24,7 +24,7 @@ requires the Article and platform gates.
 | P-Delta EachStep/EachIteration | partial | C# incremental-integrator geometric update | `incremental_integrator.py` | unit parity passes; Article/Windows gate pending |
 | Modal mass/eigensolution/projection | verified | `SolverRuntime/ModelManager.cs`, `Pseudovectors.cs`, `SubSpaceIteration2`; modal/mass enums in `UtilityLibrary.Tipi` | `mass_matrix.py`, `modal.py`, output projection | modal and batch comparison tests; unknown modal/mass enums fail before assembly |
 | Dynamic nonlinear/response spectrum | out of V1 scope | dynamic analysis subsystem | capability preflight | precise rejection tests |
-| Frame/Slab/Link/Joint and concrete/steel/fiber | out of V1 scope | desktop element/material subsystems | capability/input boundary | inventory only; no partial-result claim |
+| Frame/Slab/Link/Joint/Solid/Truss/Vertex/InterfaceMF/NodeBC and concrete/steel/fiber | out of V1 scope | C# computational-element and material collections | capability/input boundary | every serialized non-V1 element tag is inventoried and rejected; no partial-result claim |
 
 The authoritative release evidence is the versioned Article report, strategy
 report, full test logs, and platform CI—not this inventory alone.

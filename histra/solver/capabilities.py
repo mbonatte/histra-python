@@ -63,7 +63,7 @@ class UnsupportedSolverCapability(RuntimeError):
 
 def inspect_solver_capabilities(
     model: Any,
-    analysis_names: Iterable[str],
+    analysis_names: Iterable[int | str | Any],
     *,
     output_requests: Mapping[str, Any] | None = None,
 ) -> SolverCapabilityReport:
@@ -82,24 +82,45 @@ def inspect_solver_capabilities(
         by_name.setdefault(str(getattr(analysis, "name", "")).casefold(), []).append(analysis)
 
     resolved: dict[str, Any] = {}
-    for requested_name in analysis_names:
-        matches = by_name.get(str(requested_name).casefold(), [])
-        if len(matches) != 1:
-            issues.append(
-                SolverCapabilityIssue(
-                    "ANALYSIS_NOT_UNIQUE",
-                    f"Expected exactly one analysis, found {len(matches)}.",
-                    str(requested_name),
+    for requested_analysis in analysis_names:
+        if hasattr(requested_analysis, "key") and hasattr(
+            requested_analysis, "name"
+        ):
+            analysis = requested_analysis
+        elif isinstance(requested_analysis, int) or str(
+            requested_analysis
+        ).lstrip("-").isdigit():
+            key = int(requested_analysis)
+            analysis = analyses.get(key)
+            if analysis is None:
+                issues.append(
+                    SolverCapabilityIssue(
+                        "ANALYSIS_NOT_UNIQUE",
+                        f"Analysis key {key} is absent from the model.",
+                        str(requested_analysis),
+                    )
                 )
-            )
-            continue
-        analysis = matches[0]
-        resolved[str(requested_name)] = analysis
-        request = output_requests.get(str(requested_name)) if output_requests else None
+                continue
+        else:
+            requested_name = str(requested_analysis)
+            matches = by_name.get(requested_name.casefold(), [])
+            if len(matches) != 1:
+                issues.append(
+                    SolverCapabilityIssue(
+                        "ANALYSIS_NOT_UNIQUE",
+                        f"Expected exactly one analysis, found {len(matches)}.",
+                        requested_name,
+                    )
+                )
+                continue
+            analysis = matches[0]
+        analysis_name = str(getattr(analysis, "name", requested_analysis))
+        resolved[analysis_name] = analysis
+        request = output_requests.get(analysis_name) if output_requests else None
         if request is not None:
             displacements = getattr(request, "displacements", None)
             if displacements is not None and bool(getattr(displacements, "enabled", False)):
-                _inspect_model_points(model, str(requested_name), issues)
+                _inspect_model_points(model, analysis_name, issues)
             modal = getattr(request, "modal_contributions", None)
             if modal is not None and bool(getattr(modal, "enabled", False)):
                 issues.append(
@@ -107,7 +128,7 @@ def inspect_solver_capabilities(
                         "MODAL_CONTRIBUTION_OUTPUT_UNSUPPORTED",
                         "Response-spectrum modal contribution projection is not implemented; "
                         "modal eigenanalysis itself is supported.",
-                        str(requested_name),
+                        analysis_name,
                     )
                 )
 
