@@ -65,6 +65,7 @@ def inspect_solver_capabilities(
             issues=(SolverCapabilityIssue("MODEL_NOT_LOADED", "Model.collections is not initialized."),),
         )
 
+    _inspect_model_scope(model, issues)
     analyses = getattr(collections, "analyses", {})
     by_name: dict[str, list[Any]] = {}
     for analysis in analyses.values():
@@ -118,6 +119,26 @@ def _inspect_materials(collections: Any, issues: list[SolverCapabilityIssue]) ->
                     f"Masonry material {key}: {exc}",
                 )
             )
+
+
+def _inspect_model_scope(model: Any, issues: list[SolverCapabilityIssue]) -> None:
+    for feature, count in sorted(
+        getattr(model, "unsupported_v1_features", {}).items()
+    ):
+        category, _, name = str(feature).partition(":")
+        if category == "element":
+            code = "V1_ELEMENT_DOMAIN_UNSUPPORTED"
+            message = (
+                f"HRX contains {count} {name} object(s); {name} is outside the "
+                "V1 Quad/Interface masonry domain."
+            )
+        else:
+            code = "V1_MATERIAL_DOMAIN_UNSUPPORTED"
+            message = (
+                f"HRX contains {count} {name} template(s); only MasonryMaterial "
+                "is supported in V1."
+            )
+        issues.append(SolverCapabilityIssue(code, message))
 
 
 def _inspect_dependency_graph(

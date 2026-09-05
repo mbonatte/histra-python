@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from histra.io import load_model
 from histra.solver.cancellation import CANCELLED_EXIT_CODE, SolverCancelled, raise_if_cancelled
 from histra.solver.capabilities import inspect_solver_capabilities
 from histra.solver.outcomes import (
@@ -271,3 +272,26 @@ def test_capability_preflight_rejects_unknown_masonry_constitutive_enum():
 
     assert not report.supported
     assert report.issues[-1].code == "MASONRY_CONSTITUTIVE_ENUM_UNSUPPORTED"
+
+
+def test_capability_preflight_rejects_out_of_v1_hrx_domains(tmp_path) -> None:
+    hrx = tmp_path / "unsupported.hrx"
+    hrx.write_text(
+        '<HiStrA version="1" GDL="1" IsLocked="true">'
+        '<Frame Key="1" />'
+        '<Template Key="2" PurposeType="ConcreteMaterial" />'
+        '<Analysis Key="1" Name="Static" AnalysisType="2" '
+        'InitialAnalysisKey="-100" IntegrationMethod="LoadControl" '
+        'Method="StandardNewtonRaphson" AdapticConvergenceCriteria="ForceMoment" />'
+        '</HiStrA>',
+        encoding="utf-8",
+    )
+    model = load_model(hrx)
+
+    report = inspect_solver_capabilities(model, ["Static"])
+
+    assert not report.supported
+    assert {issue.code for issue in report.issues} == {
+        "V1_ELEMENT_DOMAIN_UNSUPPORTED",
+        "V1_MATERIAL_DOMAIN_UNSUPPORTED",
+    }

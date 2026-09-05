@@ -49,6 +49,15 @@ _CONSUMED_TAGS = frozenset(
     }
 )
 
+_UNSUPPORTED_V1_ELEMENT_TAGS = frozenset(
+    {"Frame", "Slab", "Link", "Joint", "Solid", "Fiber", "Truss"}
+)
+
+
+def _record_unsupported(model: Model, category: str, value: str) -> None:
+    key = f"{category}:{value}"
+    model.unsupported_v1_features[key] = model.unsupported_v1_features.get(key, 0) + 1
+
 
 def load_model(path: Union[str, Path]) -> Model:
     """Load a ``.hrx`` file into the translated Python model."""
@@ -114,6 +123,10 @@ def load_model(path: Union[str, Path]) -> Model:
         elif tag == "Restraint":
             restraint = Restraint.from_xml(elem)
             collections.restraints[restraint.key] = restraint
+            elem.clear()
+
+        elif tag in _UNSUPPORTED_V1_ELEMENT_TAGS:
+            _record_unsupported(model, "element", tag)
             elem.clear()
 
         elif tag == "LoadCombination":
@@ -293,6 +306,8 @@ def load_model(path: Union[str, Path]) -> Model:
                     properties=dict(elem.attrib),
                 )
                 collections.materials[material.key] = material
+            elif purpose_type.endswith("Material"):
+                _record_unsupported(model, "material", purpose_type)
             elem.clear()
 
         elif tag == "Analysis":
