@@ -10,6 +10,7 @@ from histra.model.load import LoadFunction, LoadFunctionItem
 from histra.solver.line_search import RegulaFalsiLineSearch
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager
+from histra.solver.newton_line_search import NewtonLineSearch
 from histra.solver.program import Program
 from histra.types.convergence_test import ConvergenceTest
 from histra.types.linear_system import LinearSystem
@@ -75,6 +76,112 @@ def test_regula_falsi_uses_eta_zero_one_bracket_and_keeps_state_consistent():
     assert integrator.position == 0.5
     np.testing.assert_allclose(ls.x, [0.5])
     np.testing.assert_allclose(ls.b, [0.0])
+
+
+def test_newton_line_search_uses_post_integrator_arc_length_direction():
+    """Concrete C# searches read LS.X after ArcLength.Update combines it."""
+    model = empty_model(1)
+    ls = LinearSystem(1)
+    p = Program(gdl=1, ls=ls, u=np.zeros(1), v=np.zeros(1))
+
+    class ArcLengthLikeIntegrator:
+        def form_unbalance(self, p, model, analysis):
+            del model, analysis
+            p.ls.b[:] = [0.0 if p.ls.x[0] == 3.0 else 2.0]
+
+        def compute_increment(self, p, ls, model, analysis):
+            del p, model, analysis
+            ls.x[:] = [1.0]  # raw residual correction, delta_u_bar
+
+        def update(self, model, p, analysis):
+            del model, analysis
+            p.ls.x[:] = [3.0]  # combined ArcLength correction
+            return 0
+
+    class CapturingSearch:
+        def __init__(self):
+            self.direction = None
+            self.s0 = None
+            self.s1 = None
+
+        def new_step(self, p, ls):
+            del p, ls
+
+        def search(self, model, p, ls, integrator, analysis, direction, s0, s1):
+            del model, p, ls, integrator, analysis
+            self.direction = direction.copy()
+            self.s0 = s0
+            self.s1 = s1
+            return 1.0
+
+    search = CapturingSearch()
+    algorithm = NewtonLineSearch()
+    algorithm.the_integrator = ArcLengthLikeIntegrator()
+    algorithm.the_line_search = search
+    algorithm.the_test = ConvergenceTest(
+        tolerance=1.0e-12, max_iter=2, criterion="ForceMoment"
+    )
+    analysis = SimpleNamespace(method="ModifiedBisectionLineSearch")
+
+    result = algorithm.solve_current_step(
+        p, ls, model, analysis, combination=1, step=1, alfa=0.0
+    )
+
+    assert result == 1
+    np.testing.assert_allclose(search.direction, [3.0])
+    assert search.s0 == -2.0  # C# projects the endpoint with raw delta_u_bar.
+    assert search.s1 == 0.0
+
+
+def test_production_line_search_projects_endpoints_on_combined_direction():
+    model = empty_model(1)
+    ls = LinearSystem(1)
+    p = Program(gdl=1, ls=ls, u=np.zeros(1), v=np.zeros(1))
+
+    class ArcLengthLikeIntegrator:
+        def form_unbalance(self, p, model, analysis):
+            del model, analysis
+            p.ls.b[:] = [1.0 if p.ls.x[0] == 3.0 else 2.0]
+
+        def compute_increment(self, p, ls, model, analysis):
+            del p, model, analysis
+            ls.x[:] = [1.0]
+
+        def update(self, model, p, analysis):
+            del model, analysis
+            p.ls.x[:] = [3.0]
+            return 0
+
+    class CapturingSearch:
+        def new_step(self, p, ls):
+            del p, ls
+
+        def search(self, model, p, ls, integrator, analysis, direction, s0, s1):
+            del model, p, ls, integrator, analysis
+            self.values = (direction.copy(), s0, s1)
+            return 1.0
+
+    search = CapturingSearch()
+    algorithm = NewtonLineSearch()
+    algorithm.the_integrator = ArcLengthLikeIntegrator()
+    algorithm.the_line_search = search
+    algorithm.the_test = ConvergenceTest(
+        tolerance=2.0, max_iter=2, criterion="ForceMoment"
+    )
+    analysis = SimpleNamespace(
+        method="ModifiedBisectionLineSearch",
+        csharp_line_search_compatibility=False,
+    )
+
+    result = algorithm.solve_current_step(
+        p, ls, model, analysis, combination=1, step=1, alfa=0.0
+    )
+
+    assert result == 1
+    direction, s0, s1 = search.values
+    np.testing.assert_allclose(direction, [3.0])
+    assert s0 == -6.0
+    assert s1 == -3.0
 
 
 def test_load_control_preserves_total_displacement_between_steps():

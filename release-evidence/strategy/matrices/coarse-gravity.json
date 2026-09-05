@@ -1,9 +1,9 @@
 {
-  "scenario": "coarse-mesh gravity first increment",
+  "scenario": "coarse-mesh gravity complete authored range",
   "hrx": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
   "target": "Vert",
-  "max_steps": 1,
-  "baseline_id": "force-standard-regula-falsi",
+  "max_steps": 5,
+  "baseline_id": "force-standard-bisection",
   "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
   "candidates": [
     {"id": "authored"},
@@ -15,6 +15,16 @@
       "id": "force-standard-regula-falsi",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "StandardRegulaFalsiLineSearch"
+    },
+    {
+      "id": "force-standard-bisection",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardBisectionLineSearch"
+    },
+    {
+      "id": "force-standard-secant",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardSecantLineSearch"
     },
     {
       "id": "force-standard-newton",

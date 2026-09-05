@@ -1,6 +1,8 @@
 """Strict tests for the compact Article Models benchmark harness."""
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -8,12 +10,15 @@ from histra.tools.article_models_benchmark import (
     ARTICLE_FIGURES,
     ARTICLE_TABLE_1_CAPACITIES_KN,
     AUDIT_RESIDUAL_TOLERANCE,
+    BENCHMARK_HARNESS_REVISION,
     BENCHMARK_MODELS,
     compare_phase_distributions,
     compute_curve_metrics,
     compute_parity_metrics,
     _markdown_report,
+    _load_checkpoint,
     _progress_line,
+    _apply_strict_strategy,
     strict_convergence_tolerance,
     validate_article_source_data,
 )
@@ -54,6 +59,26 @@ def test_strict_force_moment_tolerance_never_loosens_limits(
 def test_strict_force_moment_tolerance_rejects_invalid_values(invalid: float) -> None:
     with pytest.raises(ValueError, match="finite and positive"):
         strict_convergence_tolerance(invalid)
+
+
+def test_strict_strategy_selects_measured_bisection_without_looser_tolerance() -> None:
+    analysis = type(
+        "Analysis",
+        (),
+        {
+            "analysis_type": 2,
+            "method": "ModifiedRegulaFalsiLineSearch",
+            "adaptive_convergence_criteria": "Work",
+            "convergence_tolerance": 1.0e-2,
+        },
+    )()
+
+    _apply_strict_strategy(analysis)
+
+    assert analysis.method == "StandardBisectionLineSearch"
+    assert analysis.adaptive_convergence_criteria == "ForceMoment"
+    assert analysis.convergence_tolerance == AUDIT_RESIDUAL_TOLERANCE
+    assert analysis.csharp_line_search_compatibility is False
 
 
 def test_parity_compares_signed_all_component_vectors() -> None:
@@ -163,6 +188,32 @@ def test_curve_metrics_apply_release_acceptance_limits() -> None:
     assert not failing["within_curve_tolerance"]
 
 
+def test_curve_metrics_interpolate_different_step_counts_on_displacement() -> None:
+    reference_x = [0.0, 1.0, 2.0, 3.0]
+    reference_y = [0.0, 10.0, 20.0, 30.0]
+    actual_x = [0.0, 0.5, 1.5, 2.5, 3.0]
+    actual_y = [0.0, 5.0, 15.0, 25.0, 30.0]
+
+    metrics = compute_curve_metrics(reference_x, reference_y, actual_x, actual_y)
+
+    assert metrics["range_covered"]
+    assert metrics["within_curve_tolerance"]
+    assert metrics["normalized_curve_rmse"] == pytest.approx(0.0, abs=1.0e-14)
+
+
+def test_curve_metrics_reject_incomplete_displacement_range() -> None:
+    metrics = compute_curve_metrics(
+        [0.0, 1.0, 2.0, 3.0],
+        [0.0, 10.0, 20.0, 30.0],
+        [0.0, 1.0, 2.0],
+        [0.0, 10.0, 20.0],
+    )
+
+    assert metrics["available"]
+    assert not metrics["range_covered"]
+    assert not metrics["within_curve_tolerance"]
+
+
 def test_phase_distribution_comparison_fails_closed() -> None:
     matched = compare_phase_distributions({0: 2, 4: 1}, {0: 2, 4: 1})
     assert matched["available"]
@@ -207,6 +258,42 @@ def test_markdown_report_uses_na_when_strict_run_has_no_comparable_rows() -> Non
     report = _markdown_report([result])
 
     assert "| strict | Bridge | 0/10 | 0 | n/a | n/a | NOT RELEASE-READY |" in report
+
+
+def test_resume_rejects_checkpoint_from_older_harness_revision(tmp_path) -> None:
+    model_info = {"id": "bridge", "name": "Bridge"}
+    models_dir = tmp_path / "models"
+    output_dir = tmp_path / "out"
+    models_dir.mkdir()
+    (output_dir / "checkpoints").mkdir(parents=True)
+    (models_dir / "Bridge.hrx").write_bytes(b"hrx")
+    (models_dir / "Bridge.Results").write_bytes(b"results")
+    result = {
+        "id": "bridge",
+        "name": "Bridge",
+        "run_mode": "strict",
+        "provenance": {
+            "inputs": {
+                "hrx": {"name": "Bridge.hrx", "bytes": 3},
+                "csharp_results": {"name": "Bridge.Results", "bytes": 7},
+            }
+        },
+    }
+    checkpoint = output_dir / "checkpoints" / "strict_bridge.json"
+    checkpoint.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "harness_revision": BENCHMARK_HARNESS_REVISION - 1,
+                "result": result,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _load_checkpoint(
+        output_dir, model_info, "strict", models_dir
+    ) is None
 
 
 def test_article_source_data_validation_is_fail_closed_and_hashes_inputs(tmp_path) -> None:

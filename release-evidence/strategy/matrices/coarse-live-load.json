@@ -3,7 +3,7 @@
   "hrx": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
   "target": "Second",
   "max_steps": 5,
-  "baseline_id": "force-standard-regula-falsi",
+  "baseline_id": "force-standard-bisection",
   "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
   "candidates": [
     {"id": "authored"},
@@ -11,10 +11,37 @@
       "id": "force-standard-regula-falsi",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "StandardRegulaFalsiLineSearch",
+      "max_iterations": 300,
       "analysis_overrides": {
         "Vert": {
           "adaptive_convergence_criteria": "ForceMoment",
-          "method": "StandardRegulaFalsiLineSearch"
+          "method": "StandardBisectionLineSearch"
+        }
+      }
+    },
+    {
+      "id": "force-standard-bisection",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardBisectionLineSearch",
+      "csharp_line_search_compatibility": false,
+      "max_iterations": 300,
+      "analysis_overrides": {
+        "Vert": {
+          "adaptive_convergence_criteria": "ForceMoment",
+          "method": "StandardBisectionLineSearch"
+        }
+      }
+    },
+    {
+      "id": "force-standard-secant",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardSecantLineSearch",
+      "csharp_line_search_compatibility": false,
+      "max_iterations": 300,
+      "analysis_overrides": {
+        "Vert": {
+          "adaptive_convergence_criteria": "ForceMoment",
+          "method": "StandardBisectionLineSearch"
         }
       }
     },
@@ -22,10 +49,11 @@
       "id": "force-standard-initial-interpolated",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "StandardInitialInterpolatedLineSearch",
+      "max_iterations": 300,
       "analysis_overrides": {
         "Vert": {
           "adaptive_convergence_criteria": "ForceMoment",
-          "method": "StandardRegulaFalsiLineSearch"
+          "method": "StandardBisectionLineSearch"
         }
       }
     },
@@ -33,10 +61,11 @@
       "id": "force-modified-regula-falsi",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "ModifiedRegulaFalsiLineSearch",
+      "max_iterations": 300,
       "analysis_overrides": {
         "Vert": {
           "adaptive_convergence_criteria": "ForceMoment",
-          "method": "StandardRegulaFalsiLineSearch"
+          "method": "StandardBisectionLineSearch"
         }
       }
     }

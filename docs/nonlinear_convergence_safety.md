@@ -131,8 +131,8 @@ factorization count break ties only among qualifying configurations.
 
 | Scenario | Starting configuration | Required verification |
 |---|---|---|
-| Gravity or seating, `LoadControl` | Preserve the authored C# method; compare modified and standard tangent updates on the representative mesh. | No unsafe step; identical terminal state and reaction baseline. |
-| Monotonic live-load pushover, `ArcLength` | `ForceMoment`; benchmark `StandardRegulaFalsiLineSearch` against the authored path. | Peak, normalized RMSE, curve area, stiffness, peak displacement, and spring phases within the Article gate limits. |
+| Gravity or seating, `LoadControl` | `ForceMoment` with `StandardBisectionLineSearch` is the measured starting point for the coarse Article model. | The five-step gravity matrix completed safely; requalify on the representative mesh. |
+| Monotonic live-load pushover, `ArcLength` | `ForceMoment`; start the model-specific matrix with `StandardBisectionLineSearch`. | It is the only qualifier over the measured first five coarse-model increments; the full peak/range gate remains mandatory. |
 | Displacement-controlled near-collapse | `ForceMoment` with strict equilibrium; retain cutbacks and the authored displacement controller. | Covers the reference peak/displacement range without an unsafe commit. |
 | P-Delta | Start from the non-P-Delta qualifying strategy, then test `EachStep` and `EachIteration` as distinct scenarios. | Equilibrium, response preservation, and expected geometric-stiffness update frequency. |
 | C# path reproduction | Preserve the complete authored configuration and use warning mode. | Treat unsafe rows as compatibility evidence only, never production capacity. |
@@ -141,9 +141,10 @@ factorization count break ties only among qualifying configurations.
 can pass while the force residual is too large, the advisor emits
 `HISTRA-STRATEGY-001`; use strict equilibrium for production. An ArcLength stage
 using a modified tangent receives `HISTRA-STRATEGY-002`, reflecting observed
-stall/slower behavior on current nonlinear live-load cases. This is a prompt to
-benchmark the standard Regula-Falsi path, not a guarantee that it wins for every
-model.
+stall/slower behavior on current nonlinear live-load cases. `HISTRA-STRATEGY-003`
+marks a ForceMoment ArcLength method that is not the currently measured
+Standard Bisection starting point. Both are prompts for a model-specific full-
+range benchmark, not claims that one method wins for every model.
 
 ```python
 from histra import AnalysisSession, inspect_solver_strategy

@@ -17,6 +17,7 @@ from histra.solver.arc_length import ArcLength
 from histra.solver.assembler import assemble_load_vector
 from histra.solver.line_search import LineSearch
 from histra.solver.solve import solve_static_nonlinear
+from histra.solver.nonlinear_step import _cutback_tangent_alfa
 from histra.solver.output_projection import model_point_displacement
 from histra.springs.coulomb03 import SpringCoulomb03
 from histra.types.linear_system import LinearSystem
@@ -154,6 +155,14 @@ def test_arc_length_failed_step_cutback_is_opt_in_and_bounded():
     assert analysis.dr2 == pytest.approx(0.75**2)
     assert not ArcLength.cutback_step(analysis)
     assert analysis.dr2 == pytest.approx(0.75**2)
+
+
+def test_arc_length_cutback_preserves_standard_or_modified_tangent_policy():
+    standard = type("Analysis", (), {"method": "StandardBisectionLineSearch"})()
+    modified = type("Analysis", (), {"method": "ModifiedBisectionLineSearch"})()
+
+    assert _cutback_tangent_alfa(standard) == 1.0
+    assert _cutback_tangent_alfa(modified) == 0.0
 
 
 def test_linear_system_reuses_and_invalidates_sparse_factorization():

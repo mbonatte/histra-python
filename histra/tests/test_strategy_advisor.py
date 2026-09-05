@@ -56,9 +56,20 @@ def test_strategy_inspection_is_read_only_and_structured() -> None:
     assert analysis.adaptive_convergence_criteria == "Work"
 
 
-def test_recommended_force_moment_arc_length_has_no_advisory() -> None:
+def test_unqualified_force_moment_arc_length_method_has_advisory() -> None:
     analysis = _analysis(
         method="StandardRegulaFalsiLineSearch",
+        criterion="ForceMoment",
+    )
+
+    report = inspect_solver_strategy(_model(analysis), [1])
+
+    assert [item.code for item in report.advisories] == ["HISTRA-STRATEGY-003"]
+
+
+def test_measured_force_moment_bisection_has_no_advisory() -> None:
+    analysis = _analysis(
+        method="StandardBisectionLineSearch",
         criterion="ForceMoment",
     )
 

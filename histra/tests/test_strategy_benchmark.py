@@ -39,6 +39,7 @@ def test_candidate_can_override_dependency_strategies_without_mutating_others() 
     live = SimpleNamespace(
         name="Live", method="ModifiedNewtonRaphson",
         adaptive_convergence_criteria="Work",
+        csharp_line_search_compatibility=True,
     )
     _apply_candidate_overrides(
         [vert, live],
@@ -46,6 +47,7 @@ def test_candidate_can_override_dependency_strategies_without_mutating_others() 
             "id": "safe",
             "method": "StandardRegulaFalsiLineSearch",
             "adaptive_convergence_criteria": "ForceMoment",
+            "csharp_line_search_compatibility": False,
             "analysis_overrides": {
                 "Vert": {"method": "StandardRegulaFalsiLineSearch"},
             },
@@ -54,6 +56,7 @@ def test_candidate_can_override_dependency_strategies_without_mutating_others() 
     assert vert.method == "StandardRegulaFalsiLineSearch"
     assert live.method == "StandardRegulaFalsiLineSearch"
     assert live.adaptive_convergence_criteria == "ForceMoment"
+    assert live.csharp_line_search_compatibility is False
 
 
 def test_candidate_rejects_unknown_dependency_override() -> None:

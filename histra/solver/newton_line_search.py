@@ -125,20 +125,46 @@ class NewtonLineSearch(EquiSolnAlgo):
             if update_code < 0:
                 return update_code
 
+            # C# computes s0/s1 with the raw residual solve ``dx0``, but each
+            # concrete LineSearch reads LS.X only *after* Integrator.Update.
+            # LoadControl leaves the two vectors equal; ArcLength replaces
+            # LS.X with delta_u_bar + delta_lambda * delta_u_hat.  Passing the
+            # pre-update vector here made ArcLength line searches move along a
+            # different direction from C# and could produce runaway load
+            # factors after an otherwise safe predecessor stage.
+            line_search_direction = ls.x.copy()
+            csharp_line_search_compatibility = bool(
+                getattr(an, "csharp_line_search_compatibility", True)
+            )
+            if not csharp_line_search_compatibility:
+                # Production-safe ArcLength mode uses one physical search
+                # direction for both endpoint projections and every trial.
+                # The C# path projects s0/s1 with delta_u_bar while searching
+                # along the combined constrained correction; retain that only
+                # when compatibility was explicitly selected/defaulted.
+                s0 = -_csharp_dot(line_search_direction, residual0)
+
             if diagnostics is None:
                 self.the_integrator.form_unbalance(p, model, an)
             else:
                 with diagnostics.timed("residual_assembly"):
                     self.the_integrator.form_unbalance(p, model, an)
-            s1 = -_csharp_dot(dx0, ls.b)
+            projection_direction = (
+                dx0
+                if csharp_line_search_compatibility
+                else line_search_direction
+            )
+            s1 = -_csharp_dot(projection_direction, ls.b)
             if diagnostics is None:
                 eta = self.the_line_search.search(
-                    model, p, ls, self.the_integrator, an, dx0, s0, s1
+                    model, p, ls, self.the_integrator, an,
+                    line_search_direction, s0, s1
                 )
             else:
                 with diagnostics.timed("line_search"):
                     eta = self.the_line_search.search(
-                        model, p, ls, self.the_integrator, an, dx0, s0, s1
+                        model, p, ls, self.the_integrator, an,
+                        line_search_direction, s0, s1
                     )
             if eta < 0.0:
                 return -10

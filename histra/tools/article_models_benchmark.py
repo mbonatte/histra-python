@@ -9,9 +9,10 @@ Two runs are supported:
 
 ``strict``
     Select the C# ``ForceMoment`` residual criterion for every nonlinear stage
-    and tighten (never loosen) its convergence tolerance to the unchanged
-    equilibrium-audit residual limit.  The warning policy and warning
-    tolerances are identical to the authored run.
+    with the measured Standard Bisection strategy, use a consistent ArcLength
+    line-search projection, and tighten (never loosen) its convergence
+    tolerance to the unchanged equilibrium-audit residual limit.  The warning
+    policy and warning tolerances are identical to the authored run.
 
 The command intentionally returns compact metrics from worker processes rather
 than complete displacement histories.  That keeps parallel runs fast and
@@ -49,6 +50,9 @@ AUDIT_FORCE_RELATIVE_TOLERANCE = 1.0e-5
 AUDIT_RESIDUAL_TOLERANCE = 1.0e-4
 PARITY_REACTION_ABSOLUTE_TOLERANCE = 0.1
 PARITY_DISPLACEMENT_ABSOLUTE_TOLERANCE_MM = 0.05
+# Increment whenever solver semantics or release-gate policy changes.  Resume
+# checkpoints are diagnostic caches, never authorities across harness changes.
+BENCHMARK_HARNESS_REVISION = 3
 
 
 BENCHMARK_MODELS: tuple[dict[str, Any], ...] = (
@@ -89,6 +93,19 @@ def strict_convergence_tolerance(
     if not np.isfinite(audit) or audit <= 0.0:
         raise ValueError("audit residual tolerance must be finite and positive")
     return min(authored, audit)
+
+
+def _apply_strict_strategy(analysis: Any) -> None:
+    """Apply the measured production-safe strategy to one nonlinear stage."""
+
+    if int(getattr(analysis, "analysis_type", 0)) == 5:
+        return
+    analysis.adaptive_convergence_criteria = "ForceMoment"
+    analysis.convergence_tolerance = strict_convergence_tolerance(
+        float(analysis.convergence_tolerance)
+    )
+    analysis.method = "StandardBisectionLineSearch"
+    analysis.csharp_line_search_compatibility = False
 
 
 def _read_csharp_reference(
@@ -482,23 +499,91 @@ def compute_curve_metrics(
     actual_displacement_mm: Iterable[float],
     actual_load_kn: Iterable[float],
 ) -> dict[str, Any]:
-    """Compare aligned live-load curves using the release acceptance metrics."""
+    """Compare live-load curves on displacement, independent of step numbering."""
     ref_x = np.asarray(tuple(reference_displacement_mm), dtype=np.float64)
     ref_y = np.asarray(tuple(reference_load_kn), dtype=np.float64)
     act_x = np.asarray(tuple(actual_displacement_mm), dtype=np.float64)
     act_y = np.asarray(tuple(actual_load_kn), dtype=np.float64)
-    if not len(ref_x) or len(ref_x) != len(act_x) or len(ref_y) != len(act_y) or len(ref_x) != len(ref_y):
-        return {"available": False, "within_curve_tolerance": False}
-    ref = _curve_characteristics(ref_x, ref_y)
-    actual = _curve_characteristics(act_x, act_y)
+    if (
+        len(ref_x) < 2
+        or len(act_x) < 2
+        or len(ref_x) != len(ref_y)
+        or len(act_x) != len(act_y)
+        or not np.all(np.isfinite(np.concatenate((ref_x, ref_y, act_x, act_y))))
+    ):
+        return {
+            "available": False,
+            "range_covered": False,
+            "within_curve_tolerance": False,
+            "reason": "each finite curve requires at least two displacement/load rows",
+        }
+
+    def ordered_unique(
+        displacement: np.ndarray, load: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        x = np.abs(displacement)
+        y = np.abs(load)
+        order = np.argsort(x, kind="stable")
+        x, y = x[order], y[order]
+        unique_x, unique_indices = np.unique(x, return_index=True)
+        return unique_x, y[unique_indices]
+
+    ref_x, ref_y = ordered_unique(ref_x, ref_y)
+    act_x, act_y = ordered_unique(act_x, act_y)
+    if len(ref_x) < 2 or len(act_x) < 2:
+        return {
+            "available": False,
+            "range_covered": False,
+            "within_curve_tolerance": False,
+            "reason": "each curve requires at least two distinct displacements",
+        }
+
+    displacement_epsilon = max(1.0e-9, 1.0e-8 * float(ref_x[-1] - ref_x[0]))
+    range_covered = bool(
+        act_x[0] <= ref_x[0] + displacement_epsilon
+        and act_x[-1] >= ref_x[-1] - displacement_epsilon
+    )
+    overlap_min = max(float(ref_x[0]), float(act_x[0]))
+    overlap_max = min(float(ref_x[-1]), float(act_x[-1]))
+    if overlap_max <= overlap_min + displacement_epsilon:
+        return {
+            "available": False,
+            "range_covered": False,
+            "within_curve_tolerance": False,
+            "reason": "reference and actual displacement ranges do not overlap",
+        }
+
+    # A fixed displacement grid makes RMSE, area and stiffness independent of
+    # each solver's adaptive step count. Preserve all observed knots inside the
+    # overlap as well so sharp peaks are not smoothed away by the regular grid.
+    evaluation_x = np.unique(
+        np.concatenate(
+            (
+                np.linspace(overlap_min, overlap_max, 201),
+                ref_x[(ref_x >= overlap_min) & (ref_x <= overlap_max)],
+                act_x[(act_x >= overlap_min) & (act_x <= overlap_max)],
+            )
+        )
+    )
+    ref_evaluated = np.interp(evaluation_x, ref_x, ref_y)
+    act_evaluated = np.interp(evaluation_x, act_x, act_y)
+    ref = _curve_characteristics(evaluation_x, ref_evaluated)
+    actual = _curve_characteristics(evaluation_x, act_evaluated)
     peak_scale = max(ref["peak_load_kn"], np.finfo(float).tiny)
-    normalized_rmse = float(np.sqrt(np.mean((np.abs(act_y) - np.abs(ref_y)) ** 2)) / peak_scale)
+    normalized_rmse = float(
+        np.sqrt(np.mean((act_evaluated - ref_evaluated) ** 2)) / peak_scale
+    )
 
     def relative_error(actual_value: float, reference_value: float) -> float:
         denominator = max(abs(reference_value), np.finfo(float).tiny)
         return abs(actual_value - reference_value) / denominator
 
     metrics = {
+        "range_covered": range_covered,
+        "reference_displacement_range_mm": [float(ref_x[0]), float(ref_x[-1])],
+        "actual_displacement_range_mm": [float(act_x[0]), float(act_x[-1])],
+        "overlap_displacement_range_mm": [overlap_min, overlap_max],
+        "evaluation_points": int(len(evaluation_x)),
         "peak_load_relative_error": relative_error(actual["peak_load_kn"], ref["peak_load_kn"]),
         "normalized_curve_rmse": normalized_rmse,
         "curve_area_relative_error": relative_error(actual["area"], ref["area"]),
@@ -510,7 +595,8 @@ def compute_curve_metrics(
     metrics["reference"] = ref
     metrics["actual"] = actual
     metrics["within_curve_tolerance"] = bool(
-        metrics["peak_load_relative_error"] <= 0.01
+        range_covered
+        and metrics["peak_load_relative_error"] <= 0.01
         and normalized_rmse <= 0.01
         and metrics["curve_area_relative_error"] <= 0.02
         and metrics["initial_stiffness_relative_error"] <= 0.02
@@ -550,19 +636,44 @@ def _live_load_curve_metrics(
     py_r0 = baseline(python_reactions, point=False)
     ref_u0 = baseline(csharp_displacements, point=True)
     py_u0 = baseline(python_displacements, point=True)
-    common = sorted(
-        key for key in set(csharp_reactions) & set(python_reactions)
-        if int(key[0]) in live_keys and key[1] > 0
-        and (key[0], key[1], master_point) in csharp_displacements
-        and (key[0], key[1], master_point) in python_displacements
+    def live_rows(
+        reactions: Mapping[tuple[int, int], np.ndarray],
+        displacements: Mapping[tuple[int, int, int], np.ndarray],
+        reaction0: np.ndarray,
+        displacement0: np.ndarray,
+    ) -> tuple[list[float], list[float]]:
+        keys = sorted(
+            (
+                key for key in reactions
+                if int(key[0]) in live_keys
+                and key[1] > 0
+                and (key[0], key[1], master_point) in displacements
+            ),
+            key=lambda key: (live_keys.index(int(key[0])), int(key[1])),
+        )
+        x = [0.0]
+        y = [0.0]
+        for key in keys:
+            x.append(
+                float(
+                    (displacements[(key[0], key[1], master_point)][direction]
+                    - displacement0[direction])
+                    * 10.0
+                )
+            )
+            y.append(float(reactions[key][direction] - reaction0[direction]))
+        return x, y
+
+    ref_x, ref_y = live_rows(
+        csharp_reactions, csharp_displacements, ref_r0, ref_u0
     )
-    ref_x = [(csharp_displacements[(key[0], key[1], master_point)][direction] - ref_u0[direction]) * 10.0 for key in common]
-    py_x = [(python_displacements[(key[0], key[1], master_point)][direction] - py_u0[direction]) * 10.0 for key in common]
-    ref_y = [csharp_reactions[key][direction] - ref_r0[direction] for key in common]
-    py_y = [python_reactions[key][direction] - py_r0[direction] for key in common]
+    py_x, py_y = live_rows(
+        python_reactions, python_displacements, py_r0, py_u0
+    )
     result = compute_curve_metrics(ref_x, ref_y, py_x, py_y)
     result.update({
-        "matched_sample_rows": len(common),
+        "reference_sample_rows": max(0, len(ref_x) - 1),
+        "actual_sample_rows": max(0, len(py_x) - 1),
         "master_point": master_point,
         "direction": model_info["direction"],
         "baseline_analysis_key": predecessor_key,
@@ -640,17 +751,20 @@ def run_model(
         for analysis in chain:
             authored_criterion = str(analysis.adaptive_convergence_criteria)
             authored_tolerance = float(analysis.convergence_tolerance)
-            if run_mode == "strict" and int(getattr(analysis, "analysis_type", 0)) != 5:
-                analysis.adaptive_convergence_criteria = "ForceMoment"
-                analysis.convergence_tolerance = strict_convergence_tolerance(
-                    authored_tolerance
-                )
+            authored_method = str(analysis.method)
+            if run_mode == "strict":
+                _apply_strict_strategy(analysis)
             settings.append(
                 {
                     "analysis_key": int(analysis.key),
                     "analysis_name": str(analysis.name),
+                    "authored_method": authored_method,
                     "authored_criterion": authored_criterion,
                     "authored_tolerance": authored_tolerance,
+                    "effective_method": str(analysis.method),
+                    "csharp_line_search_compatibility": bool(
+                        getattr(analysis, "csharp_line_search_compatibility", True)
+                    ),
                     "effective_criterion": str(analysis.adaptive_convergence_criteria),
                     "effective_tolerance": float(analysis.convergence_tolerance),
                     "csharp_steps": int(step_limits.get(int(analysis.key), 0)),
@@ -818,8 +932,9 @@ def _markdown_report(
         )
     lines.append("")
     lines.append(
-        "`strict` uses ForceMoment on every nonlinear stage and tightens, never "
-        "loosens, the HRX convergence tolerance to the unchanged audit limit."
+        "`strict` uses ForceMoment with Standard Bisection on every nonlinear "
+        "stage, uses consistent ArcLength line-search projections, and tightens, "
+        "never loosens, the HRX convergence tolerance to the unchanged audit limit."
     )
     if source_data is not None:
         lines.extend((
@@ -864,7 +979,8 @@ def _load_checkpoint(
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
     if (
-        payload.get("schema_version") != 2
+        payload.get("schema_version") != 3
+        or payload.get("harness_revision") != BENCHMARK_HARNESS_REVISION
         or result.get("id") != str(model_info["id"])
         or result.get("name") != str(model_info["name"])
         or result.get("run_mode") != run_mode
@@ -877,9 +993,8 @@ def _load_checkpoint(
         evidence = inputs.get(key, {})
         if evidence.get("name") != source.name or evidence.get("bytes") != source.stat().st_size:
             return None
-    # Schema 2 checkpoints created before the explicit availability field are
-    # upgraded losslessly. An absent C# terminal distribution is missing
-    # evidence, not an all-zero physical state.
+    # An absent C# terminal distribution is missing evidence, not an all-zero
+    # physical state.
     for evidence in result.get("spring_phase_distributions", {}).values():
         available = int(evidence.get("csharp_total", 0)) > 0
         evidence["available"] = available
@@ -976,13 +1091,21 @@ def main() -> int:
             results.append(result)
             model_info, _models_dir, run_mode = futures[future]
             _checkpoint_path(args.output_dir, model_info, run_mode).write_text(
-                json.dumps({"schema_version": 2, "result": result}, indent=2) + "\n",
+                json.dumps(
+                    {
+                        "schema_version": 3,
+                        "harness_revision": BENCHMARK_HARNESS_REVISION,
+                        "result": result,
+                    },
+                    indent=2,
+                ) + "\n",
                 encoding="utf-8",
             )
             print(_progress_line(result), flush=True)
 
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "harness_revision": BENCHMARK_HARNESS_REVISION,
         "article_figures": ARTICLE_FIGURES,
         "article_table_1_capacities_kn": ARTICLE_TABLE_1_CAPACITIES_KN,
         "article_source_data": source_data,

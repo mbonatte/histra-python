@@ -16,8 +16,9 @@ python -m histra.tools.article_models_benchmark \
 ```
 
 `authored` preserves the C# numerical path and marks independently unsafe rows.
-`strict` selects ForceMoment, never loosens the authored tolerance, and rejects
-an unsafe candidate without committing it. The command exits nonzero unless all
+`strict` selects ForceMoment with the measured Standard Bisection strategy,
+uses a consistent ArcLength line-search projection, never loosens the authored
+tolerance, and rejects an unsafe candidate without committing it. The command exits nonzero unless all
 dependency chains, stored rows, response tolerances, and terminal spring-phase
 distributions pass. Use `--allow-incomplete` only to collect diagnostics.
 An interrupted diagnostic run can add `--resume`; release-candidate evidence

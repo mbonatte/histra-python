@@ -113,8 +113,32 @@ def _analysis_advisories(analysis: Any) -> tuple[SolverStrategyAdvisory, ...]:
                     "or stalled convergence on strongly nonlinear live-load stages"
                 ),
                 recommendation=(
-                    "benchmark StandardRegulaFalsiLineSearch for this ArcLength stage "
+                    "benchmark StandardBisectionLineSearch for this ArcLength stage "
                     "and keep the independently audited response"
+                ),
+            )
+        )
+
+    if (
+        integration in {"ArcLength", "ArcLengthLinear"}
+        and criterion == "ForceMoment"
+        and method != "StandardBisectionLineSearch"
+    ):
+        result.append(
+            SolverStrategyAdvisory(
+                code="HISTRA-STRATEGY-003",
+                analysis_key=key,
+                analysis_name=name,
+                integration_method=integration,
+                nonlinear_method=method,
+                convergence_criterion=criterion,
+                reason=(
+                    "the current coarse Article live-load matrix qualifies only "
+                    "StandardBisectionLineSearch over its measured five-step range"
+                ),
+                recommendation=(
+                    "benchmark StandardBisectionLineSearch for this model and retain "
+                    "the selected method only if the full safe response qualifies"
                 ),
             )
         )

@@ -20,7 +20,17 @@ from histra.tools.article_models_benchmark import compute_curve_metrics, _file_s
 _STRATEGY_FIELDS = (
     "integration_method", "method", "adaptive_convergence_criteria",
     "pdelta_effect", "convergence_tolerance",
+    "csharp_line_search_compatibility", "arc_length_procedure", "dr2",
+    "is_max_arc_length_ray", "max_arc_length_ray", "update_dr2",
+    "arc_length_max_cutbacks", "arc_length_cutback_factor",
+    "arc_length_min_radius", "max_iterations", "line_search_max_iterations",
 )
+_STRATEGY_DEFAULTS: dict[str, Any] = {
+    "csharp_line_search_compatibility": True,
+    "arc_length_max_cutbacks": 0,
+    "arc_length_cutback_factor": 0.5,
+    "arc_length_min_radius": 0.0,
+}
 
 
 def _apply_candidate_overrides(
@@ -134,7 +144,9 @@ def run_candidate(
         "id": str(candidate["id"]),
         "configuration": {
             "target": {
-                field: getattr(target_definition, field)
+                field: getattr(
+                    target_definition, field, _STRATEGY_DEFAULTS.get(field)
+                )
                 for field in _STRATEGY_FIELDS
             },
             "analysis_overrides": candidate.get("analysis_overrides", {}),

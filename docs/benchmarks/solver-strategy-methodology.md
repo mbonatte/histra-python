@@ -31,6 +31,7 @@ The canonical runner accepts a JSON matrix and writes a versioned raw report:
       "id": "force-rf",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "StandardRegulaFalsiLineSearch",
+      "csharp_line_search_compatibility": false,
       "analysis_overrides": {
         "Vert": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"},
         "First": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"}
@@ -52,3 +53,7 @@ metrics, qualification, and the fastest qualifying candidate.
 The baseline must itself be a safe, accepted response. An authored C# strategy
 that fails the independent equilibrium audit belongs in the matrix as
 compatibility evidence, but it must not be used as the correctness baseline.
+ArcLength matrices may additionally vary `csharp_line_search_compatibility`,
+`arc_length_procedure`, `dr2`, predictor caps, adaptive-radius behavior, and
+bounded cutback settings. These values are recorded with each candidate; they
+must not be changed implicitly by the public advisor.

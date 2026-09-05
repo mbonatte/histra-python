@@ -2,12 +2,12 @@
 
 Status: **BLOCKED — do not tag or retire raw benchmark assets**
 
-Recorded on 2026-09-05 from branch `codex/v1-release` at commit `7b704b7`,
-plus the report-formatting change that accompanies this evidence snapshot.
+Recorded on 2026-09-05 from branch `codex/v1-release`. The compact revision-3
+diagnostic accompanies the solver and release-gate changes in this snapshot.
 
 ## Completed checks
 
-- Full Linux Python 3.12 suite: `539 passed, 5 skipped, 21 warnings`.
+- Full Linux Python 3.12 suite: `548 passed, 5 skipped, 21 warnings`.
   The nine warnings above the historical baseline are the new, intentional
   `SuboptimalSolverStrategyWarning` diagnostics.
 - Wheel and sdist build completed, `twine check` passed, and the wheel imported
@@ -29,8 +29,10 @@ plus the report-formatting change that accompanies this evidence snapshot.
 - The source CSVs for Figures 9, 12, 13, 15, 17, 20, 22, 24, and 25 and Table 1
   have not been supplied, so article/experimental validation is fail-closed.
 - The strategy matrix cannot yet make production recommendations for the full
-  gravity/live-load path. Standard Regula-Falsi with ForceMoment safely solves
-  the first coarse-gravity increment, then diverges at the next increment.
+  live-load path. The revised complete gravity matrix qualifies Standard
+  Bisection and Standard Secant, with Bisection faster on the measured coarse
+  model. Bisection also qualifies over the first five live-load increments,
+  but the strict path still stops before the reference peak/range.
 - Windows and the Python 3.13/3.14 CI matrix have not been executed on their
   target platforms.
 
@@ -46,3 +48,25 @@ in `release-evidence/article-source-data/` using the documented CSV schema.
 No tolerance waiver can replace this evidence. Tagging `v1.0.0`, publishing,
 and deleting the 36 GB raw Article suite remain prohibited until every release
 gate passes.
+
+## Continued numerical investigation
+
+- Corrected concrete ArcLength line searches to use the combined correction
+  stored in `LS.X` after `ArcLength.Update`, matching the supplied C# call
+  sequence. LoadControl is unchanged because its raw and combined corrections
+  are identical.
+- Added an explicit production-safe endpoint projection while retaining the C#
+  projection as the compatibility default.
+- Corrected opt-in ArcLength cutbacks so Standard methods retain the current-
+  tangent policy instead of silently becoming Modified methods.
+- The revised strict `Bridge_3.1_Coarse` run now safely completes all five
+  gravity steps and eight live-load steps (13/1,065 overall), then reaches a
+  divergent ArcLength branch. This is progress over the previous zero-step
+  strict result, but remains a hard release failure.
+- Curve metrics now interpolate by physical displacement and fail when the
+  Python curve does not cover the reference range; step-number pairing is no
+  longer used for branch-insensitive acceptance.
+- The revision-3 diagnostic covers only 0.695 mm of the 30.015 mm C# live-load
+  displacement range. Over that overlap its peak-load error is 24.6% and its
+  normalized curve RMSE is 16.0%, so the remaining difference is physical,
+  not a reporting artefact.

@@ -40,6 +40,18 @@ from histra.solver.incremental_integrator import StaticIntegrator
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
+def _cutback_tangent_alfa(analysis: Any) -> float:
+    """Retain the selected Newton tangent policy during opt-in cutbacks.
+
+    Arc-length radius cutbacks are a Python production-safety extension rather
+    than part of the authored C# path.  Forcing every retry to ``alfa=0``
+    silently turned Standard methods into Modified methods precisely at the
+    difficult branch where a current tangent is needed.
+    """
+
+    return 0.0 if "Modified" in str(getattr(analysis, "method", "")) else 1.0
+
+
 def _execute_steps(
     model: Model,
     analysis: Any,
@@ -160,7 +172,7 @@ def _execute_steps(
                         cutback=cutback,
                         radius=float(np.sqrt(abs(float(analysis.dr2)))),
                     )
-                alfa = 0.0
+                alfa = _cutback_tangent_alfa(analysis)
                 integrator.update_k(p, model, alfa)
                 p.log(
                     f"Step {step}: retrying after ArcLength cutback {cutback}/"

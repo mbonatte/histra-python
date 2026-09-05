@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scenario": "coarse-mesh gravity first increment",
+  "scenario": "coarse-mesh gravity complete authored range",
   "environment": {
     "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
     "python": "3.12.3",
@@ -18,8 +18,8 @@
     "sha256": "5de23f68978d5465afc87e13b5db0fad76e3e587df8a8cce65becd18419b3a43"
   },
   "target": "Vert",
-  "baseline_id": "force-standard-regula-falsi",
-  "recommended_id": "force-standard-regula-falsi",
+  "baseline_id": "force-standard-bisection",
+  "recommended_id": "force-standard-bisection",
   "results": [
     {
       "id": "authored",
@@ -29,7 +29,18 @@
           "method": "ModifiedRegulaFalsiLineSearch",
           "adaptive_convergence_criteria": "Work",
           "pdelta_effect": "None",
-          "convergence_tolerance": 9.99999974737875e-05
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
         },
         "analysis_overrides": {}
       },
@@ -48,16 +59,18 @@
       "iterations": 0,
       "linear_solves": 2,
       "factorizations": 1,
-      "preparation_seconds": 0.0015339360106736422,
-      "runtime_seconds": 0.4332632329897024,
-      "peak_rss_bytes": 221708288,
+      "preparation_seconds": 0.0007062400109134614,
+      "runtime_seconds": 0.36039263900602236,
+      "peak_rss_bytes": 223805440,
       "curve": {
         "displacement_mm": [],
         "load_kn": []
       },
       "response_vs_baseline": {
         "available": false,
-        "within_curve_tolerance": false
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows"
       },
       "qualifies": false
     },
@@ -69,7 +82,18 @@
           "method": "ModifiedRegulaFalsiLineSearch",
           "adaptive_convergence_criteria": "ForceMoment",
           "pdelta_effect": "None",
-          "convergence_tolerance": 9.99999974737875e-05
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
         },
         "analysis_overrides": {}
       },
@@ -88,16 +112,18 @@
       "iterations": 1001,
       "linear_solves": 1001,
       "factorizations": 1,
-      "preparation_seconds": 0.005653361004078761,
-      "runtime_seconds": 15.079265524982475,
-      "peak_rss_bytes": 262856704,
+      "preparation_seconds": 0.0018133610137738287,
+      "runtime_seconds": 13.907560355000896,
+      "peak_rss_bytes": 265330688,
       "curve": {
         "displacement_mm": [],
         "load_kn": []
       },
       "response_vs_baseline": {
         "available": false,
-        "within_curve_tolerance": false
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows"
       },
       "qualifies": false
     },
@@ -109,7 +135,75 @@
           "method": "StandardRegulaFalsiLineSearch",
           "adaptive_convergence_criteria": "ForceMoment",
           "pdelta_effect": "None",
-          "convergence_tolerance": 9.99999974737875e-05
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
+        },
+        "analysis_overrides": {}
+      },
+      "completed": true,
+      "range_covered": false,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed_at_configured_displacement_limit",
+          "committed_steps": 1
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 1,
+      "iterations": 20,
+      "linear_solves": 21,
+      "factorizations": 21,
+      "preparation_seconds": 0.0018022699805442244,
+      "runtime_seconds": 0.9095339369960129,
+      "peak_rss_bytes": 285282304,
+      "curve": {
+        "displacement_mm": [
+          0.01442639040760696
+        ],
+        "load_kn": [
+          109.14913177490234
+        ]
+      },
+      "response_vs_baseline": {
+        "available": false,
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows"
+      },
+      "qualifies": false
+    },
+    {
+      "id": "force-standard-bisection",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "StandardBisectionLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
         },
         "analysis_overrides": {}
       },
@@ -120,26 +214,48 @@
           "analysis_key": 1,
           "analysis_name": "Vert",
           "outcome": "completed",
-          "committed_steps": 1
+          "committed_steps": 5
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 1,
-      "iterations": 13,
-      "linear_solves": 14,
-      "factorizations": 14,
-      "preparation_seconds": 0.0033196509757544845,
-      "runtime_seconds": 0.8747695439960808,
-      "peak_rss_bytes": 284004352,
+      "committed_steps": 5,
+      "iterations": 58,
+      "linear_solves": 59,
+      "factorizations": 59,
+      "preparation_seconds": 0.001837176998378709,
+      "runtime_seconds": 2.2694286740152165,
+      "peak_rss_bytes": 286187520,
       "curve": {
         "displacement_mm": [
-          0.01442639040760696
+          0.01442639040760696,
+          0.028783949092030525,
+          0.0429659616202116,
+          0.05732634570449591,
+          0.07144948933273554
         ],
         "load_kn": [
-          109.14913177490234
+          109.14913177490234,
+          218.2982635498047,
+          327.4474334716797,
+          436.5965881347656,
+          545.7456665039062
         ]
       },
       "response_vs_baseline": {
+        "range_covered": true,
+        "reference_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "actual_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "overlap_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "evaluation_points": 204,
         "peak_load_relative_error": 0.0,
         "normalized_curve_rmse": 0.0,
         "curve_area_relative_error": 0.0,
@@ -148,16 +264,111 @@
         "peak_displacement_allowed_mm": 0.1,
         "available": true,
         "reference": {
-          "peak_load_kn": 109.14913177490234,
-          "peak_displacement_mm": 0.01442639040760696,
-          "area": 0.0,
-          "initial_stiffness_kn_per_mm": 7565.934976870485
+          "peak_load_kn": 545.7456665039062,
+          "peak_displacement_mm": 0.07144948933273554,
+          "area": 18.643421934358106,
+          "initial_stiffness_kn_per_mm": 7568.987654238729
         },
         "actual": {
-          "peak_load_kn": 109.14913177490234,
-          "peak_displacement_mm": 0.01442639040760696,
-          "area": 0.0,
-          "initial_stiffness_kn_per_mm": 7565.934976870485
+          "peak_load_kn": 545.7456665039062,
+          "peak_displacement_mm": 0.07144948933273554,
+          "area": 18.643421934358106,
+          "initial_stiffness_kn_per_mm": 7568.987654238729
+        },
+        "within_curve_tolerance": true
+      },
+      "qualifies": true
+    },
+    {
+      "id": "force-standard-secant",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "StandardSecantLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None",
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
+        },
+        "analysis_overrides": {}
+      },
+      "completed": true,
+      "range_covered": true,
+      "outcomes": [
+        {
+          "analysis_key": 1,
+          "analysis_name": "Vert",
+          "outcome": "completed",
+          "committed_steps": 5
+        }
+      ],
+      "unsafe_steps": 0,
+      "committed_steps": 5,
+      "iterations": 63,
+      "linear_solves": 64,
+      "factorizations": 64,
+      "preparation_seconds": 0.0018294950132258236,
+      "runtime_seconds": 2.46611817998928,
+      "peak_rss_bytes": 287858688,
+      "curve": {
+        "displacement_mm": [
+          0.01442639040760696,
+          0.028783949092030525,
+          0.0429659616202116,
+          0.05732634570449591,
+          0.07144948933273554
+        ],
+        "load_kn": [
+          109.14913177490234,
+          218.2982635498047,
+          327.4474334716797,
+          436.5965881347656,
+          545.7456665039062
+        ]
+      },
+      "response_vs_baseline": {
+        "range_covered": true,
+        "reference_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "actual_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "overlap_displacement_range_mm": [
+          0.01442639040760696,
+          0.07144948933273554
+        ],
+        "evaluation_points": 204,
+        "peak_load_relative_error": 0.0,
+        "normalized_curve_rmse": 0.0,
+        "curve_area_relative_error": 0.0,
+        "initial_stiffness_relative_error": 0.0,
+        "peak_displacement_absolute_error_mm": 0.0,
+        "peak_displacement_allowed_mm": 0.1,
+        "available": true,
+        "reference": {
+          "peak_load_kn": 545.7456665039062,
+          "peak_displacement_mm": 0.07144948933273554,
+          "area": 18.643421934358106,
+          "initial_stiffness_kn_per_mm": 7568.987654238729
+        },
+        "actual": {
+          "peak_load_kn": 545.7456665039062,
+          "peak_displacement_mm": 0.07144948933273554,
+          "area": 18.643421934358106,
+          "initial_stiffness_kn_per_mm": 7568.987654238729
         },
         "within_curve_tolerance": true
       },
@@ -171,7 +382,18 @@
           "method": "StandardNewtonRaphson",
           "adaptive_convergence_criteria": "ForceMoment",
           "pdelta_effect": "None",
-          "convergence_tolerance": 9.99999974737875e-05
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
         },
         "analysis_overrides": {}
       },
@@ -190,16 +412,18 @@
       "iterations": 8,
       "linear_solves": 9,
       "factorizations": 9,
-      "preparation_seconds": 0.00424207400646992,
-      "runtime_seconds": 0.6470125839987304,
-      "peak_rss_bytes": 284057600,
+      "preparation_seconds": 0.001847904990427196,
+      "runtime_seconds": 0.44865146599477157,
+      "peak_rss_bytes": 288657408,
       "curve": {
         "displacement_mm": [],
         "load_kn": []
       },
       "response_vs_baseline": {
         "available": false,
-        "within_curve_tolerance": false
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows"
       },
       "qualifies": false
     },
@@ -211,7 +435,18 @@
           "method": "ModifiedNewtonRaphson",
           "adaptive_convergence_criteria": "ForceMoment",
           "pdelta_effect": "None",
-          "convergence_tolerance": 9.99999974737875e-05
+          "convergence_tolerance": 9.99999974737875e-05,
+          "csharp_line_search_compatibility": true,
+          "arc_length_procedure": "OnlyControlPoint",
+          "dr2": 0.01,
+          "is_max_arc_length_ray": true,
+          "max_arc_length_ray": 0.01,
+          "update_dr2": false,
+          "arc_length_max_cutbacks": 0,
+          "arc_length_cutback_factor": 0.5,
+          "arc_length_min_radius": 0.0,
+          "max_iterations": 1000,
+          "line_search_max_iterations": 1000
         },
         "analysis_overrides": {}
       },
@@ -230,16 +465,18 @@
       "iterations": 1001,
       "linear_solves": 1001,
       "factorizations": 1,
-      "preparation_seconds": 0.004030971002066508,
-      "runtime_seconds": 3.207979140977841,
-      "peak_rss_bytes": 284839936,
+      "preparation_seconds": 0.002129899978172034,
+      "runtime_seconds": 1.7799251740216278,
+      "peak_rss_bytes": 288657408,
       "curve": {
         "displacement_mm": [],
         "load_kn": []
       },
       "response_vs_baseline": {
         "available": false,
-        "within_curve_tolerance": false
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows"
       },
       "qualifies": false
     }
