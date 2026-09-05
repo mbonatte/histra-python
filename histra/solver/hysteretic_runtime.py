@@ -1170,7 +1170,7 @@ class HystereticBatchRuntime:
 
         for spring in old_springs:
             if hasattr(spring, "_histra_batch_managed"):
-                delattr(spring, "_histra_batch_managed")
+                spring._histra_batch_managed = False
 
         rejection_reasons: Counter[str] = Counter()
         springs: list[Any] = []
@@ -1585,7 +1585,7 @@ class HystereticBatchRuntime:
                 dense_index = start + offset
                 predecessor = self.springs[dense_index]
                 if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
-                    delattr(predecessor, "_histra_batch_managed")
+                    predecessor._histra_batch_managed = False
                 self.springs[dense_index] = spring
                 self.managed_springs[dense_index] = spring
                 spring._histra_batch_managed = True
@@ -1597,7 +1597,7 @@ class HystereticBatchRuntime:
                 for dense_index, spring in candidates:
                     predecessor = self.coulomb_springs[dense_index]
                     if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
-                        delattr(predecessor, "_histra_batch_managed")
+                        predecessor._histra_batch_managed = False
                     self.coulomb_springs[dense_index] = spring
                     self.managed_springs[coulomb_offset + dense_index] = spring
                     spring._histra_batch_managed = True

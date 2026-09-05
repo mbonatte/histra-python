@@ -68,8 +68,10 @@ class ModelManager:
                     if hasattr(interface, name):
                         delattr(interface, name)
             for spring in getattr(runtime, "managed_springs", runtime.springs):
+                if hasattr(spring, "_histra_batch_managed"):
+                    spring._histra_batch_managed = False
                 for name in (
-                    "_histra_batch_managed", "_histra_quad_batch",
+                    "_histra_quad_batch",
                     "_histra_quad_batch_index",
                 ):
                     if hasattr(spring, name):

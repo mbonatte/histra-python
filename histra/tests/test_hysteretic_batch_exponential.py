@@ -457,3 +457,48 @@ def test_reference_hrx_snapshot_restore_and_object_sync_for_exponential(
     assert spring._tstrain == runtime.trial[index, 7]
     assert int(spring.t_phase) == int(runtime.trial[index, 8])
     assert spring.k_tang == runtime.trial[index, 9]
+
+
+def test_spring_repr_and_batch_lifecycle() -> None:
+    from histra.io.hr_loader import load_model
+    from histra.solver.model_manager import ModelManager
+    from histra.springs.elastic import SpringElastic
+
+    spring = SpringElastic()
+    assert repr(spring)
+
+    model = load_model(MODEL)
+    ModelManager.prepare_model(model)
+    batch = ModelManager.prepare_hysteretic_batch(model, rebuild=True)
+    assert batch is not None
+
+    for interface in model.collections.interfaces.values():
+        springs = (
+            list(interface.trasv_1)
+            + list(interface.trasv_2)
+            + list(interface.slid)
+            + list(interface.slid_out_plan)
+        )
+        for spring in springs:
+            assert repr(spring)
+
+    for quad in model.collections.quads.values():
+        if quad.spring:
+            assert repr(quad.spring)
+
+    ModelManager.clear_hysteretic_batch()
+
+    for interface in model.collections.interfaces.values():
+        springs = (
+            list(interface.trasv_1)
+            + list(interface.trasv_2)
+            + list(interface.slid)
+            + list(interface.slid_out_plan)
+        )
+        for spring in springs:
+            assert repr(spring)
+            assert not spring._histra_batch_managed
+
+    for quad in model.collections.quads.values():
+        if quad.spring:
+            assert repr(quad.spring)
