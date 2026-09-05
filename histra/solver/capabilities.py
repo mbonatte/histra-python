@@ -23,6 +23,16 @@ _STATIC_METHODS = {
 }
 _CONVERGENCE_CRITERIA = {"ForceMoment", "DispRotation", "Work"}
 _PDELTA_EFFECTS = {"none", "eachstep", "eachiteration", "0", "1", "2"}
+_ARC_LENGTH_PROCEDURES = {
+    "OnlyControlPoint",
+    "OnlyModelPointsSelected",
+    "AllDegreesOfFreedom",
+    # Explicit Python production-safe extension; never selected implicitly.
+    "ProjectedControlPoint",
+}
+_MODAL_PROCEDURES = {"SubspaceIterations", "InverseIterations"}
+_MODAL_CONVERGENCE_CRITERIA = {"Frquency", "EigenVector"}
+_MASS_MATRIX_TYPES = {"Lumped", "Consistent"}
 
 
 @dataclass(frozen=True)
@@ -104,6 +114,15 @@ def inspect_solver_capabilities(
     reachable = _inspect_dependency_graph(analyses, resolved.values(), issues)
     for analysis in reachable:
         _inspect_analysis_definition(analysis, issues)
+    if any(int(getattr(analysis, "analysis_type", 2)) == 5 for analysis in reachable):
+        mass_matrix_type = str(getattr(model, "mass_matrix_type", "Consistent"))
+        if mass_matrix_type not in _MASS_MATRIX_TYPES:
+            issues.append(
+                SolverCapabilityIssue(
+                    "MASS_MATRIX_TYPE_UNSUPPORTED",
+                    f"Unknown MassMatrixType={mass_matrix_type!r}; expected Lumped or Consistent.",
+                )
+            )
     _inspect_materials(collections, issues)
     return SolverCapabilityReport(supported=not issues, issues=tuple(issues))
 
@@ -253,6 +272,28 @@ def _inspect_analysis_definition(
                     name,
                 )
             )
+        procedure = str(getattr(analysis, "modal_procedure", "SubspaceIterations"))
+        if procedure not in _MODAL_PROCEDURES:
+            issues.append(
+                SolverCapabilityIssue(
+                    "MODAL_PROCEDURE_UNSUPPORTED",
+                    f"Unknown ModalProcedure={procedure!r}; expected one of "
+                    f"{sorted(_MODAL_PROCEDURES)}.",
+                    name,
+                )
+            )
+        criterion = str(
+            getattr(analysis, "modal_convergence_criteria", "Frquency")
+        )
+        if criterion not in _MODAL_CONVERGENCE_CRITERIA:
+            issues.append(
+                SolverCapabilityIssue(
+                    "MODAL_CONVERGENCE_CRITERION_UNSUPPORTED",
+                    f"Unknown ModalConvergenceCriteria={criterion!r}; expected "
+                    f"one of {sorted(_MODAL_CONVERGENCE_CRITERIA)}.",
+                    name,
+                )
+            )
         return
 
     integration = str(getattr(analysis, "integration_method", "LoadControl"))
@@ -264,6 +305,19 @@ def _inspect_analysis_definition(
                 name,
             )
         )
+    elif integration in {"ArcLength", "ArcLengthLinear"}:
+        procedure = str(
+            getattr(analysis, "arc_length_procedure", "OnlyControlPoint")
+        )
+        if procedure not in _ARC_LENGTH_PROCEDURES:
+            issues.append(
+                SolverCapabilityIssue(
+                    "ARC_LENGTH_PROCEDURE_UNSUPPORTED",
+                    f"Unknown ArcLengthProcedure={procedure!r}; expected one of "
+                    f"{sorted(_ARC_LENGTH_PROCEDURES)}.",
+                    name,
+                )
+            )
     method = str(getattr(analysis, "method", "StandardNewtonRaphson"))
     if method not in _STATIC_METHODS:
         issues.append(

@@ -11,6 +11,14 @@ from histra.solver.program import Program
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
+_SUPPORTED_ARC_LENGTH_PROCEDURES = {
+    "onlycontrolpoint",
+    "onlymodelpointsselected",
+    "alldegreesoffreedom",
+    "projectedcontrolpoint",
+}
+
+
 class ArcLength(StaticIntegrator):
     """Arc-length integrator ported from the original C# implementation.
 
@@ -107,7 +115,16 @@ class ArcLength(StaticIntegrator):
         fallback_dof: int | None = None,
     ) -> np.ndarray:
         n = p.ls.n
-        procedure = str(getattr(an, "arc_length_procedure", "OnlyControlPoint")).lower()
+        raw_procedure = str(
+            getattr(an, "arc_length_procedure", "OnlyControlPoint")
+        )
+        procedure = raw_procedure.casefold()
+        if procedure not in _SUPPORTED_ARC_LENGTH_PROCEDURES:
+            raise ValueError(
+                f"Unknown ArcLengthProcedure={raw_procedure!r}; expected "
+                "OnlyControlPoint, OnlyModelPointsSelected, "
+                "AllDegreesOfFreedom, or ProjectedControlPoint."
+            )
         master = int(getattr(an, "master_point", -10))
 
         if "modelpointsselected" in procedure:
@@ -274,7 +291,16 @@ class ArcLength(StaticIntegrator):
         without changing the applied load direction.
         """
 
-        procedure = str(getattr(an, "arc_length_procedure", "")).casefold()
+        raw_procedure = str(
+            getattr(an, "arc_length_procedure", "OnlyControlPoint")
+        )
+        procedure = raw_procedure.casefold()
+        if procedure not in _SUPPORTED_ARC_LENGTH_PROCEDURES:
+            raise ValueError(
+                f"Unknown ArcLengthProcedure={raw_procedure!r}; expected "
+                "OnlyControlPoint, OnlyModelPointsSelected, "
+                "AllDegreesOfFreedom, or ProjectedControlPoint."
+            )
         if "projectedcontrolpoint" not in procedure:
             self._projected_control_indices = None
             self._projected_control_weights = None

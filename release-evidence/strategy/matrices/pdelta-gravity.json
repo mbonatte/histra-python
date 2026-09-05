@@ -1,9 +1,9 @@
 {
-  "scenario": "P-Delta gravity first increment: EachStep versus EachIteration",
+  "scenario": "P-Delta gravity full five-increment range: EachStep versus EachIteration",
   "hrx": "my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.hrx",
   "target": "Vert",
-  "max_steps": 1,
-  "baseline_id": "each-step-standard-regula-falsi",
+  "max_steps": 5,
+  "baseline_id": "each-step-standard-bisection",
   "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
   "candidates": [
     {"id": "authored-each-step"},
@@ -17,6 +17,30 @@
       "id": "each-iteration-standard-regula-falsi",
       "adaptive_convergence_criteria": "ForceMoment",
       "method": "StandardRegulaFalsiLineSearch",
+      "pdelta_effect": "EachIteration"
+    },
+    {
+      "id": "each-step-standard-bisection",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardBisectionLineSearch",
+      "pdelta_effect": "EachStep"
+    },
+    {
+      "id": "each-iteration-standard-bisection",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardBisectionLineSearch",
+      "pdelta_effect": "EachIteration"
+    },
+    {
+      "id": "each-step-standard-secant",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardSecantLineSearch",
+      "pdelta_effect": "EachStep"
+    },
+    {
+      "id": "each-iteration-standard-secant",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardSecantLineSearch",
       "pdelta_effect": "EachIteration"
     }
   ]

@@ -6,6 +6,7 @@ import gc
 import importlib
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -25,6 +26,18 @@ from histra.types.linear_system import LinearSystem
 ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-live" / "model.hrx"
 RESULTS = ROOT / "model-live" / "model.Results"
+
+
+def test_direct_arc_length_integrator_rejects_unknown_procedure() -> None:
+    integrator = ArcLength()
+    program = SimpleNamespace(ls=SimpleNamespace(n=3))
+    analysis = SimpleNamespace(
+        arc_length_procedure="FutureConstraint",
+        master_point=-10,
+    )
+
+    with pytest.raises(ValueError, match="ArcLengthProcedure"):
+        integrator._select_dofs(program, SimpleNamespace(), analysis)
 
 
 def test_live_model_entities_and_reference_steps_are_detected():

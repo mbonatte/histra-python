@@ -5,9 +5,9 @@ tagged until every checkbox below is backed by an artifact.
 
 - [ ] Linux Python 3.12, 3.13, and 3.14 CI passes.
 - [ ] Windows Python 3.12, 3.13, and 3.14 CI passes.
-- [ ] Full suite preserves or explains the `496 passed, 5 skipped, 12 warnings` baseline.
-- [ ] Wheel and sdist build; `twine check dist/*` passes.
-- [ ] A clean environment installs the wheel and passes import/version/public-API smoke tests.
+- [x] Full suite preserves or explains the `496 passed, 5 skipped, 12 warnings` baseline.
+- [x] Wheel and sdist build; `twine check dist/*.whl dist/*.tar.gz` passes.
+- [x] A clean environment installs the wheel and passes import/version/public-API smoke tests.
 - [ ] All 14 Article models pass authored and strict gates; strict has zero unsafe commits.
 - [ ] Original data validates Figures 9, 12, 13, 15, 17, 20, 22, 24, 25 and Table 1.
 - [ ] Strategy benchmark report contains only safe, response-preserving recommendations.

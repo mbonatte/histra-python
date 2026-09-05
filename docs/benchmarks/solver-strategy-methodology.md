@@ -23,18 +23,18 @@ The canonical runner accepts a JSON matrix and writes a versioned raw report:
   "scenario": "coarse live-load pushover",
   "hrx": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.hrx",
   "target": "Second",
-  "max_steps": 40,
-  "baseline_id": "force-rf",
+  "max_steps": 5,
+  "baseline_id": "force-bisection",
   "candidates": [
     {"id": "authored"},
     {
-      "id": "force-rf",
+      "id": "force-bisection",
       "adaptive_convergence_criteria": "ForceMoment",
-      "method": "StandardRegulaFalsiLineSearch",
+      "method": "StandardBisectionLineSearch",
       "csharp_line_search_compatibility": false,
       "analysis_overrides": {
-        "Vert": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"},
-        "First": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"}
+        "Vert": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardBisectionLineSearch"},
+        "First": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardBisectionLineSearch"}
       }
     }
   ]
@@ -57,3 +57,10 @@ ArcLength matrices may additionally vary `csharp_line_search_compatibility`,
 `arc_length_procedure`, `dr2`, predictor caps, adaptive-radius behavior, and
 bounded cutback settings. These values are recorded with each candidate; they
 must not be changed implicitly by the public advisor.
+
+The current P-Delta gravity matrix executes the complete five-increment range.
+All measured `EachStep` and `EachIteration` Standard line-search variants
+preserve the Bisection baseline response and pass strict equilibrium. The
+authored Modified Regula-Falsi `EachStep` configuration is also safe and was
+fastest in the recorded single run. This qualifies the gravity scenario only;
+it does not replace a P-Delta live-load or near-collapse gate.

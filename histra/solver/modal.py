@@ -38,6 +38,11 @@ class ModalAnalysisError(RuntimeError):
     """Raised when a modal analysis cannot produce valid eigenmodes."""
 
 
+_SUPPORTED_MODAL_PROCEDURES = {"SubspaceIterations", "InverseIterations"}
+_SUPPORTED_MODAL_CRITERIA = {"Frquency", "EigenVector"}
+_SUPPORTED_MASS_MATRIX_TYPES = {"Lumped", "Consistent"}
+
+
 class _DotNetRandom:
     """Legacy .NET ``System.Random`` sequence used by the C# solver."""
 
@@ -310,6 +315,23 @@ def _solve_modal_analysis_impl(
             "P-Delta modal stiffness is unavailable because the Python port does not "
             "yet include the C# frame/load-generation subsystem."
         )
+    procedure = str(getattr(analysis, "modal_procedure", "SubspaceIterations"))
+    if procedure not in _SUPPORTED_MODAL_PROCEDURES:
+        raise ModalAnalysisError(
+            f"Unknown ModalProcedure={procedure!r}; expected one of "
+            f"{sorted(_SUPPORTED_MODAL_PROCEDURES)}."
+        )
+    criteria = str(getattr(analysis, "modal_convergence_criteria", "Frquency"))
+    if criteria not in _SUPPORTED_MODAL_CRITERIA:
+        raise ModalAnalysisError(
+            f"Unknown ModalConvergenceCriteria={criteria!r}; expected one of "
+            f"{sorted(_SUPPORTED_MODAL_CRITERIA)}."
+        )
+    mass_matrix_type = str(getattr(model, "mass_matrix_type", "Consistent"))
+    if mass_matrix_type not in _SUPPORTED_MASS_MATRIX_TYPES:
+        raise ModalAnalysisError(
+            f"Unknown MassMatrixType={mass_matrix_type!r}; expected Lumped or Consistent."
+        )
 
     readiness = inspect_solver_readiness(model)
     if not readiness.is_ready and auto_prepare:
@@ -425,8 +447,6 @@ def _solve_modal_analysis_impl(
     )
     progress(0.48)
 
-    procedure = str(getattr(analysis, "modal_procedure", "SubspaceIterations"))
-    criteria = str(getattr(analysis, "modal_convergence_criteria", "Frquency"))
     tolerance = _resolve_modal_tolerance(analysis, eigensolver_tolerance)
     max_iterations = max(1, int(getattr(analysis, "max_iterations", 1000)))
     log(

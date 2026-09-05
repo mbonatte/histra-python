@@ -16,13 +16,13 @@ requires the Article and platform gates.
 | Fracture energy/ductility/contact area/orthotropy | verified | `ConstitutiveLawCoulomb` | preprocessing and Coulomb runtime | constitutive, material-selection, Coulomb tests |
 | Initial/Takeda Coulomb reversal | verified | `SpringCoulomb03.setTrialStrain*` | `coulomb03_state.py`, batch kernels | scalar/batch hysteretic tests |
 | `UnloadShear` Origin/Mixed selector | intentional C# defect | C# stores the material enum but Quad diagonal construction forces Takeda and combined Interface sliding forces Initial | `constitutive_laws.py`, `spring_assignment.py` | enum is validated; Python follows the same constructible Initial/Takeda paths instead of dispatching a different law |
-| Static integrators and controllers | verified | `LoadControl`, `ArcLength`, `ArcLengthLinear` | `incremental_integrator.py` | integrator/controller tests |
+| Static integrators and controllers | verified | `SolverRuntime.Integrator/StaticIntegrator.cs`, `UtilityLibrary.Tipi/IntegratorEnum.cs`, `ArcLengthProcedureEnum.cs` | `incremental_integrator.py`, `arc_length.py` | integrator/controller and unknown-procedure preflight tests |
 | Newton and line-search methods | verified | `EquiSolnAlgo` factory | `solution_algorithm.py` | solution-algorithm tests |
 | Initial-Interpolated through base factory | intentional C# defect | C# hidden `new` method/base dispatch | explicit compatibility behavior | dispatch regression test |
 | ForceMoment/DispRotation/Work | verified | C# convergence-test factory | `convergence_test.py` | convergence and equilibrium tests |
 | RelativeWork | intentional C# defect | enum exists; C# factory branch absent | `capabilities.py` | preflight rejection test |
 | P-Delta EachStep/EachIteration | partial | C# incremental-integrator geometric update | `incremental_integrator.py` | unit parity passes; Article/Windows gate pending |
-| Modal mass/eigensolution/projection | verified | mass operations, `SubSpaceIteration2` | `modal.py`, output projection | modal and batch comparison tests |
+| Modal mass/eigensolution/projection | verified | `SolverRuntime/ModelManager.cs`, `Pseudovectors.cs`, `SubSpaceIteration2`; modal/mass enums in `UtilityLibrary.Tipi` | `mass_matrix.py`, `modal.py`, output projection | modal and batch comparison tests; unknown modal/mass enums fail before assembly |
 | Dynamic nonlinear/response spectrum | out of V1 scope | dynamic analysis subsystem | capability preflight | precise rejection tests |
 | Frame/Slab/Link/Joint and concrete/steel/fiber | out of V1 scope | desktop element/material subsystems | capability/input boundary | inventory only; no partial-result claim |
 

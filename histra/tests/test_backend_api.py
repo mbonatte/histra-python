@@ -248,6 +248,67 @@ def test_capability_preflight_rejects_unsupported_solver_enums(
     assert code in {issue.code for issue in report.issues}
 
 
+def test_capability_preflight_rejects_unknown_arc_length_procedure() -> None:
+    analysis = SimpleNamespace(
+        key=1,
+        name="Arc",
+        initial_analysis_key=-100,
+        analysis_type=2,
+        integration_method="ArcLength",
+        arc_length_procedure="FutureConstraint",
+        method="StandardBisectionLineSearch",
+        adaptive_convergence_criteria="ForceMoment",
+        pdelta_effect="None",
+    )
+    model = SimpleNamespace(collections=SimpleNamespace(analyses={1: analysis}))
+
+    report = inspect_solver_capabilities(model, ["Arc"])
+
+    assert not report.supported
+    assert {issue.code for issue in report.issues} == {
+        "ARC_LENGTH_PROCEDURE_UNSUPPORTED"
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("modal_procedure", "FutureModes", "MODAL_PROCEDURE_UNSUPPORTED"),
+        (
+            "modal_convergence_criteria",
+            "FutureCriterion",
+            "MODAL_CONVERGENCE_CRITERION_UNSUPPORTED",
+        ),
+        ("mass_matrix_type", "FutureMass", "MASS_MATRIX_TYPE_UNSUPPORTED"),
+    ],
+)
+def test_capability_preflight_rejects_unknown_modal_enums(
+    field: str, value: str, code: str
+) -> None:
+    analysis = SimpleNamespace(
+        key=30,
+        name="Modal",
+        initial_analysis_key=-100,
+        analysis_type=5,
+        modal_procedure="SubspaceIterations",
+        modal_convergence_criteria="Frquency",
+        pdelta_effect="None",
+    )
+    model = SimpleNamespace(
+        mass_matrix_type="Consistent",
+        collections=SimpleNamespace(analyses={30: analysis}),
+    )
+    if field == "mass_matrix_type":
+        setattr(model, field, value)
+    else:
+        setattr(analysis, field, value)
+
+    report = inspect_solver_capabilities(model, ["Modal"])
+
+    assert not report.supported
+    assert code in {issue.code for issue in report.issues}
+
+
 def test_capability_preflight_rejects_unknown_masonry_constitutive_enum():
     analysis = SimpleNamespace(
         key=1,

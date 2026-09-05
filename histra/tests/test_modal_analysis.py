@@ -20,7 +20,7 @@ from histra.solver.mass_matrix import (
     build_translational_pseudovectors,
     compute_quad_local_mass,
 )
-from histra.solver.modal import _subspace_modes, solve_modal_analysis
+from histra.solver.modal import ModalAnalysisError, _subspace_modes, solve_modal_analysis
 from histra.types.afference_entry import AfferenceEntry
 from histra.types.point import Point
 
@@ -132,6 +132,34 @@ def test_hrx_loader_reads_modal_configuration(tmp_path: Path) -> None:
     assert analysis.number_of_lanczos_eigen_vectors == 5
     assert analysis.modal_procedure == "InverseIterations"
     assert analysis.modal_convergence_criteria == "EigenVector"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("modal_procedure", "FutureModes", "ModalProcedure"),
+        ("modal_convergence_criteria", "FutureCriterion", "ModalConvergenceCriteria"),
+        ("mass_matrix_type", "FutureMass", "MassMatrixType"),
+    ],
+)
+def test_direct_modal_solver_rejects_unknown_enums_before_preparation(
+    field: str, value: str, message: str
+) -> None:
+    model = _single_quad_model()
+    analysis = SimpleNamespace(
+        key=30,
+        analysis_type=5,
+        pdelta_effect="None",
+        modal_procedure="SubspaceIterations",
+        modal_convergence_criteria="Frquency",
+    )
+    if field == "mass_matrix_type":
+        setattr(model, field, value)
+    else:
+        setattr(analysis, field, value)
+
+    with pytest.raises(ModalAnalysisError, match=message):
+        solve_modal_analysis(model, analysis)
 
 
 @pytest.mark.integration

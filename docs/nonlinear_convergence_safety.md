@@ -134,7 +134,7 @@ factorization count break ties only among qualifying configurations.
 | Gravity or seating, `LoadControl` | `ForceMoment` with `StandardBisectionLineSearch` is the measured starting point for the coarse Article model. | The five-step gravity matrix completed safely; requalify on the representative mesh. |
 | Monotonic live-load pushover, `ArcLength` | `ForceMoment`; start the model-specific matrix with `StandardBisectionLineSearch`. | It is the only qualifier over the measured first five coarse-model increments; the full peak/range gate remains mandatory. |
 | Displacement-controlled near-collapse | `ForceMoment` with strict equilibrium; retain cutbacks and the authored displacement controller. | Covers the reference peak/displacement range without an unsafe commit. |
-| P-Delta | Start from the non-P-Delta qualifying strategy, then test `EachStep` and `EachIteration` as distinct scenarios. | Equilibrium, response preservation, and expected geometric-stiffness update frequency. |
+| P-Delta gravity | The measured five-increment matrix qualifies `EachStep` and `EachIteration` with Standard Regula-Falsi, Bisection, and Secant; the authored Modified Regula-Falsi `EachStep` run was fastest in this single run. | Requalify on the model's live-load/near-collapse range; one gravity timing is not a universal performance ranking. |
 | C# path reproduction | Preserve the complete authored configuration and use warning mode. | Treat unsafe rows as compatibility evidence only, never production capacity. |
 
 `Work` and `DispRotation` are supported compatibility criteria. Because either

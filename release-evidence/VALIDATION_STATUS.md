@@ -7,7 +7,7 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 
 ## Completed checks
 
-- Full Linux Python 3.12 suite: `548 passed, 5 skipped, 21 warnings`.
+- Full Linux Python 3.12 suite: `556 passed, 5 skipped, 21 warnings`.
   The nine warnings above the historical baseline are the new, intentional
   `SuboptimalSolverStrategyWarning` diagnostics.
 - Wheel and sdist build completed, `twine check` passed, and the wheel imported
@@ -20,6 +20,10 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 - All 14 Article models were executed in both `authored` and `strict` modes.
 - Compact checkpoints, aggregate Article evidence, and the initial strategy
   matrix are preserved under `release-evidence/`.
+- The complete five-increment P-Delta gravity matrix has zero unsafe commits
+  for every measured `EachStep` and `EachIteration` candidate. All candidates
+  preserve the selected Standard Bisection baseline response; the authored
+  Modified Regula-Falsi `EachStep` run was fastest in this single measurement.
 
 ## Mandatory gate failures
 
@@ -74,3 +78,6 @@ gate passes.
   displacement range. Over that overlap its peak-load error is 24.6% and its
   normalized curve RMSE is 16.0%, so the remaining difference is physical,
   not a reporting artefact.
+- Capability preflight and the direct solver paths now reject unknown
+  ArcLength-procedure, modal-procedure, modal-convergence, and mass-matrix enum
+  values instead of falling through to a different supported algorithm.
