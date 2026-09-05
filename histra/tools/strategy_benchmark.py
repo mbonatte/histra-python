@@ -17,6 +17,43 @@ from histra.solver.model_manager import ModelManager
 from histra.tools.article_models_benchmark import compute_curve_metrics, _file_sha256
 
 
+_STRATEGY_FIELDS = (
+    "integration_method", "method", "adaptive_convergence_criteria",
+    "pdelta_effect", "convergence_tolerance",
+)
+
+
+def _apply_candidate_overrides(
+    chain: list[Any], candidate: Mapping[str, Any]
+) -> None:
+    target = chain[-1]
+    per_analysis = candidate.get("analysis_overrides", {})
+    if not isinstance(per_analysis, Mapping):
+        raise ValueError("analysis_overrides must be a mapping by analysis name")
+    for definition in chain:
+        overrides: dict[str, Any] = {}
+        if definition is target:
+            overrides.update(
+                (field, candidate[field])
+                for field in _STRATEGY_FIELDS
+                if field in candidate
+            )
+        named = per_analysis.get(str(definition.name), {})
+        if not isinstance(named, Mapping):
+            raise ValueError(
+                f"analysis_overrides[{definition.name!r}] must be a mapping"
+            )
+        unknown = sorted(set(named) - set(_STRATEGY_FIELDS))
+        if unknown:
+            raise ValueError(
+                f"Unsupported strategy override field(s) for {definition.name}: "
+                f"{', '.join(unknown)}"
+            )
+        overrides.update(named)
+        for field, value in overrides.items():
+            setattr(definition, field, value)
+
+
 def _peak_rss_bytes() -> int | None:
     try:
         import resource
@@ -69,13 +106,8 @@ def run_candidate(
         strategy_policy="off",
     )
     chain = session.dependency_chain(target)
+    _apply_candidate_overrides(chain, candidate)
     target_definition = chain[-1]
-    for field in (
-        "integration_method", "method", "adaptive_convergence_criteria",
-        "pdelta_effect", "convergence_tolerance",
-    ):
-        if field in candidate:
-            setattr(target_definition, field, candidate[field])
     started = time.perf_counter()
     executions = []
     for definition in chain:
@@ -88,7 +120,11 @@ def run_candidate(
             break
     runtime_seconds = time.perf_counter() - started
     target_execution = executions[-1]
-    x, y = _candidate_curve(target_execution, target_definition)
+    target_reached = int(target_execution.analysis_key) == int(target_definition.key)
+    x, y = (
+        _candidate_curve(target_execution, target_definition)
+        if target_reached else ([], [])
+    )
     steps = [step for execution in executions for step in execution.steps]
     terminal_step = next(
         (execution.steps[-1] for execution in reversed(executions) if execution.steps),
@@ -97,13 +133,30 @@ def run_candidate(
     return {
         "id": str(candidate["id"]),
         "configuration": {
-            field: getattr(target_definition, field)
-            for field in (
-                "integration_method", "method", "adaptive_convergence_criteria",
-                "pdelta_effect", "convergence_tolerance",
-            )
+            "target": {
+                field: getattr(target_definition, field)
+                for field in _STRATEGY_FIELDS
+            },
+            "analysis_overrides": candidate.get("analysis_overrides", {}),
         },
         "completed": len(executions) == len(chain) and all(item.completed for item in executions),
+        "range_covered": bool(
+            target_reached
+            and all(item.completed for item in executions[:-1])
+            and (
+                len(target_execution.committed_steps) >= max_steps
+                if max_steps is not None else target_execution.completed
+            )
+        ),
+        "outcomes": [
+            {
+                "analysis_key": int(execution.analysis_key),
+                "analysis_name": execution.analysis_name,
+                "outcome": execution.outcome.value,
+                "committed_steps": len(execution.committed_steps),
+            }
+            for execution in executions
+        ],
         "unsafe_steps": sum(step.equilibrium_ok is False for step in steps),
         "committed_steps": sum(len(item.committed_steps) for item in executions),
         "iterations": sum(int(step.get("iterations", 0)) for step in steps),
@@ -129,7 +182,7 @@ def qualify_candidates(results: list[dict[str, Any]], baseline_id: str) -> None:
         )
         result["response_vs_baseline"] = response
         result["qualifies"] = bool(
-            result["completed"]
+            result.get("range_covered", result["completed"])
             and result["unsafe_steps"] == 0
             and response.get("within_curve_tolerance", False)
         )

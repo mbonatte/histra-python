@@ -114,6 +114,8 @@ def run_equilibrium_audit(
                         "load_factor": failure_load_factor,
                         "displacement": failure_displacement,
                         "iterations": int(algorithm.the_test.current_iter),
+                        "linear_solve_count": int(getattr(p.ls, "solve_count", 0)),
+                        "factorization_count": int(getattr(p.ls, "factorization_count", 0)),
                         "convergence_criterion": str(algorithm.the_test.criterion),
                         "convergence_tolerance": float(algorithm.the_test.tolerance),
                         "convergence_error": float(algorithm.the_test.get_error()),

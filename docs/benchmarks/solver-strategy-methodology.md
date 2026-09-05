@@ -27,7 +27,15 @@ The canonical runner accepts a JSON matrix and writes a versioned raw report:
   "baseline_id": "force-rf",
   "candidates": [
     {"id": "authored"},
-    {"id": "force-rf", "adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"}
+    {
+      "id": "force-rf",
+      "adaptive_convergence_criteria": "ForceMoment",
+      "method": "StandardRegulaFalsiLineSearch",
+      "analysis_overrides": {
+        "Vert": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"},
+        "First": {"adaptive_convergence_criteria": "ForceMoment", "method": "StandardRegulaFalsiLineSearch"}
+      }
+    }
   ]
 }
 ```

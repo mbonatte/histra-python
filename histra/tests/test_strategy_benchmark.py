@@ -1,4 +1,8 @@
-from histra.tools.strategy_benchmark import qualify_candidates
+from types import SimpleNamespace
+
+import pytest
+
+from histra.tools.strategy_benchmark import _apply_candidate_overrides, qualify_candidates
 
 
 def _result(identifier: str, load: list[float], *, completed: bool = True, unsafe: int = 0):
@@ -24,3 +28,38 @@ def test_qualification_is_correctness_first() -> None:
     qualify_candidates(results, "baseline")
 
     assert [item["qualifies"] for item in results] == [True, True, False, False]
+
+    results[1]["range_covered"] = False
+    qualify_candidates(results, "baseline")
+    assert not results[1]["qualifies"]
+
+
+def test_candidate_can_override_dependency_strategies_without_mutating_others() -> None:
+    vert = SimpleNamespace(name="Vert", method="ModifiedNewtonRaphson")
+    live = SimpleNamespace(
+        name="Live", method="ModifiedNewtonRaphson",
+        adaptive_convergence_criteria="Work",
+    )
+    _apply_candidate_overrides(
+        [vert, live],
+        {
+            "id": "safe",
+            "method": "StandardRegulaFalsiLineSearch",
+            "adaptive_convergence_criteria": "ForceMoment",
+            "analysis_overrides": {
+                "Vert": {"method": "StandardRegulaFalsiLineSearch"},
+            },
+        },
+    )
+    assert vert.method == "StandardRegulaFalsiLineSearch"
+    assert live.method == "StandardRegulaFalsiLineSearch"
+    assert live.adaptive_convergence_criteria == "ForceMoment"
+
+
+def test_candidate_rejects_unknown_dependency_override() -> None:
+    definition = SimpleNamespace(name="Vert")
+    with pytest.raises(ValueError, match="Unsupported strategy override"):
+        _apply_candidate_overrides(
+            [definition],
+            {"id": "bad", "analysis_overrides": {"Vert": {"future": 1}}},
+        )
