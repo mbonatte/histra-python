@@ -13,6 +13,10 @@ diagnostic accompanies the solver and release-gate changes in this snapshot.
 - Wheel and sdist build completed, `twine check` passed, and the wheel imported
   from an isolated environment outside the source tree as version `1.0.0`.
 - Artifact checksums are recorded in `dist/SHA256SUMS`.
+  The rebuilt wheel SHA-256 is
+  `ef333f33a356bea9b9e78938d359c904e74e4eb875c2de7c6799c36544166de8`;
+  the sdist SHA-256 is
+  `98ce53ddc6254bd6ddbd6065deea7d55d92048cbefc64a914b1e3211bdf66883`.
 - All 14 Article models were executed in both `authored` and `strict` modes.
 - Compact checkpoints, aggregate Article evidence, and the initial strategy
   matrix are preserved under `release-evidence/`.
