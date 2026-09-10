@@ -475,18 +475,31 @@ Full per-spring diff of Vert step 5 (57,548 springs, Python vs C#
   Elastic-curve case via `fy = k·1e8`, and the no-P-Delta model's exact Vert
   match confirms spring construction is not the driver.
 
-Consequence chain: cracked foundation joints (Python) → load redistribution
-→ the −3.54 kN Vert reaction gap → different scour end-state → the
-displacement-controlled LiveLoad amplification and the −2.5 % P-Delta offset.
-The remaining root-cause question is narrow: **why do Python's foundation
-joint cells see tension at self-weight** — candidates are (a) the joint cell
-deformation extraction (`_local_increment`/afference mapping) versus C#
-`GetDisplOfCell`, (b) the joint's initial pre-compression state after
-`change_interface_materials` (C# `ReSetInterfaces` stage semantics), or (c)
-the soil material's own weight application. Next session: dump the 81-cell
-U field of interface 100 at Vert step 1 (before any nonlinearity) in both
-implementations — a step-1 linear-stage diff isolates extraction/geometry
-from state evolution.
+### §13.1 Benchmark 3 root-cause identified and resolved (2026-08-29)
+
+1. **Root-cause discovery**: The previous investigation was confounded by an
+   interface indexing bug in `reprofile_benchmark_3.py` and prior test
+   harnesses, which selected `100 <= k <= 160` (61 internal Quad-Quad masonry
+   interfaces inside the pier) instead of the true foundation restraint
+   interfaces (`interfaccia_vincolata`, keys 623..682).
+2. **Impact on Vert and scour**: Mutating internal pier joints (such as
+   Interface 100) to soil material 146 (with low stiffness and exponential
+   tensile yield) caused severe internal cracking and artificial load
+   redistribution across the pier, creating the apparent Vert reaction
+   discrepancy (−127.25 kN vs −123.71 kN) and the false tension field on
+   Interface 100.
+3. **True foundation & scour selection**: When the actual 60 restraint
+   interfaces (keys 623..682) are mutated to material 146 (Soil) and the 24 pier
+   1 interfaces (keys 653..670, 677..682) to material 147 (Scour):
+   - **`Vert`**: matches C# bit-for-bit at all 5 increments (diff < 1e-6 kN,
+     final reaction $R_z = -123.711219\text{ kN}$ identical to 7 digits, 1
+     Newton iteration per step, 0 cracked internal joints).
+   - **`scour_1`**: step 1 reaction matches C# bit-for-bit ($R_z =
+     -75.733370\text{ kN}$ vs C# $-75.733371\text{ kN}$, diff $5.96\times
+     10^{-7}\text{ kN}$).
+   - **`LiveLoad_1`**: both No-P-Delta and With-P-Delta chains run to
+     completion with sub-percent agreement (<0.45% difference) against C#
+     throughout all steps.
 
 ## Dependency rules
 

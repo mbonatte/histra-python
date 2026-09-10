@@ -38,9 +38,10 @@ The service:
 python -m pip install -e .
 ```
 
-Runtime dependencies are NumPy, SciPy, and Numba. V1 supports 64-bit Linux and
-Windows on Python 3.12 through 3.14. Private-index installation and release
-verification are documented in [the V1 release guide](docs/release/v1-release-checklist.md).
+Runtime dependencies are NumPy, SciPy, and Numba. V1 supports 64-bit Linux on
+Python 3.12 through 3.14. Windows validation is deferred to a post-V1 release.
+Private-index installation and release verification are documented in [the V1
+release guide](docs/release/v1-release-checklist.md).
 
 ## Public API
 

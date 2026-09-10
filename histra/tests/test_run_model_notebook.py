@@ -12,6 +12,10 @@ from histra.solver import AnalysisSession
 from histra.solver.model_manager import ModelManager
 from histra.solver.output_projection import compute_model_point_displacements
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.strategy.SuboptimalSolverStrategyWarning"
+)
+
 
 def test_run_model_notebook_is_valid_json():
     nb_path = Path(__file__).parents[2] / "run_model.ipynb"

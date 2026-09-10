@@ -143,8 +143,12 @@ can pass while the force residual is too large, the advisor emits
 using a modified tangent receives `HISTRA-STRATEGY-002`, reflecting observed
 stall/slower behavior on current nonlinear live-load cases. `HISTRA-STRATEGY-003`
 marks a ForceMoment ArcLength method that is not the currently measured
-Standard Bisection starting point. Both are prompts for a model-specific full-
-range benchmark, not claims that one method wins for every model.
+Standard Bisection starting point. `HISTRA-STRATEGY-004` means that no signed,
+full-range, model-qualified evidence is attached to the selected configuration.
+It is emitted even when the narrower rule families do not apply: no warning of
+another kind is not evidence that a configuration is recommended. These are
+prompts for a model-specific full-range benchmark, not claims that one method
+wins for every model.
 
 ```python
 from histra import AnalysisSession, inspect_solver_strategy

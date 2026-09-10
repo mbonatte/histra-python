@@ -82,7 +82,7 @@ identified the first suspicious step.
 
 ```console
 python -m histra.tools.compare_csharp_results state \
-  parity/vert/vectors/step_00010_iter_00006_committed.npz \
+  parity/vert/vectors/event_000042_step_00010_iter_00006_committed.npz \
   first-bridge.Results 1 10 --combination 1 \
   --output parity/vertical-step-10.json
 
