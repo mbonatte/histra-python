@@ -42,6 +42,12 @@ class Model:
     gdl: int = 0
     wizard_type: str = ""
     is_locked: bool = False
+    # A locked HRX may serialize C#-prepared interfaces, afference and spring
+    # definitions.  Those are reference data, never Python solver input: the
+    # first Python preparation/solve must regenerate them from geometry and
+    # material definitions.  The HRX loader sets this flag and Python
+    # preprocessing clears it only after a successful fresh build.
+    requires_python_preparation: bool = False
     source_path: Optional[str] = None
     interface_nrow: int = 3
     interface_imax: float = 40.0

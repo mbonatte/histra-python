@@ -14,6 +14,10 @@ from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager
 from histra.solver.solve import solve_static_nonlinear
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.equilibrium.UnsafeEquilibriumWarning"
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 LOCKED_HRX = ROOT / "model-output" / "model.hrx"
 
@@ -119,6 +123,30 @@ def test_prepare_model_is_idempotent_and_model_manager_exposes_csharp_entrypoint
     assert not second.prepared
     assert tuple(model.collections.interfaces) == interfaces_before
     assert tuple(id(q.spring) for q in model.collections.quads.values()) == springs_before
+
+
+def test_loaded_locked_hrx_never_reuses_serialized_interface_springs():
+    """Fresh Python preparation is mandatory even when HRX reports ready."""
+    serialized = load_model(LOCKED_HRX)
+    clean = load_model(LOCKED_HRX)
+    assert serialized.requires_python_preparation
+    assert clean.requires_python_preparation
+
+    saved = serialized.collections.interfaces[1].trasv_1[0]
+    saved_id = id(saved)
+    saved.e1n = 9.87654321e99  # prove the serialized object cannot leak in
+
+    report = ModelManager.prepare_model(serialized)
+    clean_report = ModelManager.prepare_model(clean, force=True)
+
+    assert report.prepared
+    assert clean_report.prepared
+    assert not serialized.requires_python_preparation
+    regenerated = serialized.collections.interfaces[1].trasv_1[0]
+    expected = clean.collections.interfaces[1].trasv_1[0]
+    assert id(regenerated) != saved_id
+    assert regenerated.e1n != pytest.approx(9.87654321e99)
+    assert regenerated.e1n == pytest.approx(expected.e1n)
 
 
 def test_solver_auto_prepares_unlocked_geometry_model(monkeypatch):
@@ -720,3 +748,65 @@ def test_interface_subdivision_preserves_csharp_single_precision_boundary():
 
     assert _interface_division_count(159.999959, minimum=4, imax=40.0) == 6
     assert _interface_division_count(128.0, minimum=4, imax=40.0) == 4
+
+
+def test_force_preparation_always_starts_brand_new_structural_model():
+    """Preparing with force mesh creation must purge non-structural nodes and C# artifacts."""
+    from histra.model.node import Node
+    from histra.types.point import Point
+    from histra.elements.interface import Interface
+
+    model = load_model(LOCKED_HRX)
+    assert model.requires_python_preparation
+
+    # Inject spurious non-structural node and fake interface
+    dummy_key = 99999
+    model.collections.nodes[dummy_key] = Node(key=dummy_key, point=Point(999, 999, 999), name="spurious")
+    model.collections.interfaces[dummy_key] = Interface(key=dummy_key, name="spurious")
+    first_quad = next(iter(model.collections.quads.values()))
+    first_quad.spring.e1n = 1.2345e99  # spurious spring value
+
+    report = ModelManager.prepare_model(model, force=True)
+
+    assert report.prepared
+    assert not model.requires_python_preparation
+    # Verify spurious non-structural node was pruned
+    assert dummy_key not in model.collections.nodes
+    # Verify spurious interface was wiped
+    assert dummy_key not in model.collections.interfaces
+    # Verify quad spring was cleanly recreated
+    assert first_quad.spring.e1n != pytest.approx(1.2345e99)
+    # Verify HRX reference interfaces were preserved for testing/comparison
+    assert hasattr(model, "hrx_reference_interfaces")
+    assert 1 in model.hrx_reference_interfaces
+
+
+def test_create_brand_new_model_leaves_hrx_untouched_for_comparison():
+    """create_brand_new_model and prepare_brand_new_model leave source HRX intact."""
+    source_hrx = load_model(LOCKED_HRX)
+    orig_nodes = len(source_hrx.collections.nodes)
+    orig_interfaces = len(source_hrx.collections.interfaces)
+    assert source_hrx.requires_python_preparation
+
+    new_model, report = ModelManager.prepare_brand_new_model(source_hrx)
+
+    # Source model is 100% untouched for reference comparison
+    assert len(source_hrx.collections.nodes) == orig_nodes
+    assert len(source_hrx.collections.interfaces) == orig_interfaces
+    assert source_hrx.requires_python_preparation
+
+    # Prepared model is ready and independent
+    assert report.prepared
+    assert not new_model.requires_python_preparation
+    assert inspect_solver_readiness(new_model).is_ready
+
+
+def test_solver_rejects_solving_serialized_hrx_when_auto_prepare_is_false():
+    """The solver must NEVER solve on serialized HRX mesh; it is reference-only."""
+    from histra.preprocessing.errors import ModelPreparationError
+
+    model = load_model(LOCKED_HRX)
+    analysis = copy.deepcopy(model.collections.analyses[1])
+
+    with pytest.raises(ModelPreparationError, match="Cannot solve model using serialized HRX mesh"):
+        solve_static_nonlinear(model, analysis, 1, auto_prepare=False)

@@ -172,6 +172,78 @@ class PreparationReport:
     out_of_plane_springs: int
 
 
+def reset_to_brand_new_structural_model(model: Model) -> None:
+    """Reset model to a brand-new, unprepared structural model state.
+
+    Removes all pre-baked C# interfaces, springs, afferences, and extra
+    geometric nodes from a serialized HRX, retaining ONLY the raw structural
+    definition: structural corner nodes, Quads, Restraints, Materials, Loads,
+    and Analyses.
+    """
+    if model.collections is None:
+        raise ModelPreparationError("Model.collections is not initialized.")
+    c = model.collections
+
+    # If the model had serialized HRX interfaces, save them as reference for testing/comparison
+    if c.interfaces and getattr(model, "requires_python_preparation", False):
+        if not hasattr(model, "hrx_reference_interfaces"):
+            model.hrx_reference_interfaces = dict(c.interfaces)
+
+    # Retain ONLY structural nodes referenced by Quads and Restraints
+    structural_node_keys: set[int] = set()
+    for quad in c.quads.values():
+        structural_node_keys.update(quad.node_keys)
+    for restraint in c.restraints.values():
+        for k in getattr(restraint, "node_keys", ()):
+            if k > 0:
+                structural_node_keys.add(k)
+        for k in getattr(restraint, "node_c_keys", ()):
+            if k > 0 and k in c.nodes:
+                structural_node_keys.add(k)
+
+    # Prune non-structural nodes (e.g. C#-generated interface midpoints)
+    c.nodes = {k: c.nodes[k] for k in structural_node_keys if k in c.nodes}
+
+    # Clear all generated interfaces
+    c.interfaces.clear()
+
+    # Reset quads to fresh state
+    for quad in c.quads.values():
+        quad.spring = None
+        quad.aff = []
+        quad.status = QuadState()
+        quad.interface_keys = [[] for _ in range(6)]
+        quad._perf_aff_pairs = None
+        quad._perf_dn_edges = None
+        quad._perf_dn_areas = None
+
+    model.gdl = 0
+    model.is_locked = False
+
+    # Clear spatial and stiffness caches
+    for cache_name in (
+        "_perf_element_stiffness_topology_signature",
+        "_perf_element_stiffness_alfa",
+        "_perf_initial_stiffness_dirty_interfaces",
+        "_prep_geometric_node_index",
+    ):
+        if hasattr(model, cache_name):
+            delattr(model, cache_name)
+
+
+def create_brand_new_model(source: Model) -> Model:
+    """Create an independent brand-new structural model from a source HRX model.
+
+    The original source model remains completely untouched with its serialized
+    C# reference data intact for testing and comparison.
+    """
+    import copy
+    new_model = copy.deepcopy(source)
+    reset_to_brand_new_structural_model(new_model)
+    new_model.requires_python_preparation = True
+    return new_model
+
+
 def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
     """Prepare an unlocked Quad/Restraint HRX for the nonlinear solver.
 
@@ -181,6 +253,11 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
     """
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
+    # Serialized HRX interface/spring objects belong to the C# reference, not
+    # to a Python computational model.  Do not let the usual idempotent-ready
+    # shortcut preserve them.  This is intentionally enforced here (rather
+    # than only in runners) so direct callers cannot accidentally bypass it.
+    force = bool(force or getattr(model, "requires_python_preparation", False))
     from .validation import inspect_solver_readiness
     current = inspect_solver_readiness(model)
     if current.is_ready and not force:
@@ -195,13 +272,9 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
             sliding_springs=sum(len(i.slid) for i in c.interfaces.values()),
             out_of_plane_springs=sum(len(i.slid_out_plan) for i in c.interfaces.values()),
         )
-    for cache_name in (
-        "_perf_element_stiffness_topology_signature",
-        "_perf_element_stiffness_alfa",
-        "_perf_initial_stiffness_dirty_interfaces",
-    ):
-        if hasattr(model, cache_name):
-            delattr(model, cache_name)
+    # Mesh creation must ALWAYS start from a brand-new structural model.
+    # Purge any pre-baked C# interfaces, springs, afferences, and extra nodes.
+    reset_to_brand_new_structural_model(model)
     c = model.collections
     if not c.quads:
         raise ModelPreparationError("PrepareModel currently requires at least one Quad.")
@@ -237,6 +310,7 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
         raise ModelPreparationError(
             "Python PrepareModel produced an incomplete model: " + "; ".join(report.missing)
         )
+    model.requires_python_preparation = False
     return PreparationReport(
         prepared=True, gdl=model.gdl, quads=len(c.quads),
         quad_springs=sum(q.spring is not None for q in c.quads.values()),

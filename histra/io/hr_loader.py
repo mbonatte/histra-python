@@ -484,6 +484,12 @@ def load_model(path: Union[str, Path]) -> Model:
 
     model.collections = collections
 
+    # A saved locked HRX contains C#-generated computational objects.  Keep
+    # them available to a comparison reader, but prevent a Python solve from
+    # treating them as a prepared Python model.  Python preparation clears
+    # this marker after recreating interfaces, afference and springs.
+    model.requires_python_preparation = True
+
     # HRX files normally contain the active generalized-DOF count and saved
     # afference matrices.  Recover the count only when the header is zero.
     if model.gdl == 0:

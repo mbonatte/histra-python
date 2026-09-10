@@ -13,6 +13,10 @@ from histra.solver.assembler import extract_displacements
 from histra.solver.solve import solve_static_nonlinear
 from histra.solver.state_snapshot import SolverStateSnapshot
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.equilibrium.UnsafeEquilibriumWarning"
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-output" / "model.hrx"
 RESULTS = ROOT / "model-output" / "model.Results"
