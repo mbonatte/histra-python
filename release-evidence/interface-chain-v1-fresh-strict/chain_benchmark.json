@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "harness_revision": 6,
+  "hrx": {
+    "path": "/home/mauricio/coding/histra-python/histra/model-chain/model.hrx",
+    "sha256": "5d653de1edbf15729d89940df2c13a7acedabea1a479ae09a4a91aadfce5c2ee"
+  },
+  "environment": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "affected_interfaces": [
+    359,
+    360,
+    361,
+    362
+  ],
+  "modes": {
+    "strict": {
+      "mode": "strict",
+      "passed": false,
+      "total_time_seconds": 15.148478269577026,
+      "unmanaged_initial": 0,
+      "unmanaged_after_mut1": 0,
+      "unmanaged_after_mut2": 0,
+      "total_unsafe_steps": 0,
+      "exact_output_parity": {
+        "complete_step_history": false,
+        "reference_outputs_complete": false,
+        "within_parity_tolerance": false,
+        "step_history": {
+          "expected_steps": 48,
+          "actual_steps": 6,
+          "matched_steps": 6,
+          "missing_steps": 42,
+          "extra_steps": 0
+        },
+        "reaction": {
+          "reference_rows": 48,
+          "actual_rows": 6,
+          "matched_rows": 6,
+          "missing_rows": 42,
+          "extra_rows": 0,
+          "max_absolute": 221.383288468307,
+          "relative_l2": 0.21954125670937577,
+          "worst_key": [
+            23,
+            1
+          ],
+          "worst_component": 2,
+          "reference_at_worst": -402.0880551099981,
+          "actual_at_worst": -623.4713435783051
+        },
+        "model_point_displacement_mm": {
+          "reference_rows": 144,
+          "actual_rows": 18,
+          "matched_rows": 18,
+          "missing_rows": 126,
+          "extra_rows": 0,
+          "max_absolute": 0.19271070035615795,
+          "relative_l2": 0.6767898672154302,
+          "worst_key": [
+            23,
+            1,
+            3
+          ],
+          "worst_component": 1,
+          "reference_at_worst": -1.0200417593919653e-09,
+          "actual_at_worst": -0.19271070137619972
+        }
+      },
+      "stepwise_parity_applicable": false,
+      "strict_phase_checkpoint_comparison": {
+        "1": {
+          "available": true,
+          "csharp_total": 4536,
+          "python_total": 4536,
+          "exact": false,
+          "reason": null,
+          "mismatches": {
+            "0": {
+              "csharp": 3756,
+              "python": 3820
+            },
+            "2": {
+              "csharp": 42,
+              "python": 60
+            },
+            "3": {
+              "csharp": 86,
+              "python": 38
+            },
+            "4": {
+              "csharp": 279,
+              "python": 33
+            },
+            "6": {
+              "csharp": 54,
+              "python": 266
+            }
+          },
+          "accepted": false,
+          "strict_step": 5,
+          "csharp_step": 5,
+          "direction": "Uz",
+          "strict_displacement_mm": -0.15560626052320004,
+          "csharp_displacement_mm": -0.14932699501514435,
+          "displacement_absolute_error_mm": 0.006279265508055687,
+          "displacement_allowed_mm": 0.05,
+          "comparison": "physical_displacement_phase_checkpoint_v1"
+        },
+        "23": {
+          "available": true,
+          "csharp_total": 4536,
+          "python_total": 4536,
+          "exact": false,
+          "reason": null,
+          "mismatches": {
+            "0": {
+              "csharp": 1721,
+              "python": 2967
+            },
+            "1": {
+              "csharp": 65,
+              "python": 176
+            },
+            "2": {
+              "csharp": 21,
+              "python": 52
+            },
+            "3": {
+              "csharp": 644,
+              "python": 229
+            },
+            "4": {
+              "csharp": 1210,
+              "python": 956
+            },
+            "5": {
+              "csharp": 145,
+              "python": 19
+            },
+            "6": {
+              "csharp": 724,
+              "python": 131
+            }
+          },
+          "accepted": false,
+          "strict_step": 1,
+          "csharp_step": 5,
+          "direction": "Uz",
+          "strict_displacement_mm": -0.2278822660446167,
+          "csharp_displacement_mm": -0.21574800834059715,
+          "displacement_absolute_error_mm": 0.012134257704019547,
+          "displacement_allowed_mm": 0.05,
+          "comparison": "physical_displacement_phase_checkpoint_v1"
+        },
+        "22": {
+          "available": false,
+          "accepted": false,
+          "reason": "analysis has no committed strict state or valid master point"
+        }
+      },
+      "live_load_curve": {
+        "available": false,
+        "range_covered": false,
+        "within_curve_tolerance": false,
+        "reason": "each finite curve requires at least two displacement/load rows",
+        "reference_sample_rows": 38,
+        "actual_sample_rows": 0,
+        "master_point": 1,
+        "direction": "Uz",
+        "baseline_analysis_key": 23
+      },
+      "stages": [
+        {
+          "analysis_name": "Vert",
+          "analysis_key": 1,
+          "configuration": {
+            "integration_method": "LoadControl",
+            "method": "StandardBisectionLineSearch",
+            "convergence_criterion": "ForceMoment",
+            "convergence_tolerance": 0.0001,
+            "max_iterations": 1000,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": false,
+            "arc_length_radius_squared": 0.01,
+            "arc_length_max_cutbacks": 0
+          },
+          "outcome": "completed",
+          "code": 0,
+          "completed": true,
+          "committed_steps": 5,
+          "expected_steps": 5,
+          "unsafe_steps": 0,
+          "response": {
+            "available": false,
+            "within_tolerance": null,
+            "reason": "strict predecessor stages are checked for completion and safe equilibrium; C# authored rows are not a comparable response path"
+          },
+          "response_acceptable": true,
+          "response_comparison": "not_applicable",
+          "authored_stepwise_diagnostic": {
+            "available": true,
+            "reference_step": 5,
+            "actual_step": 5,
+            "master_point": 1,
+            "direction": "Uz",
+            "reaction_reference_kn": -623.4713401794434,
+            "reaction_actual_kn": -623.4713478088379,
+            "reaction_absolute_error_kn": 7.62939453125e-06,
+            "reaction_allowed_kn": 0.1,
+            "displacement_reference_mm": -0.14932699501514435,
+            "displacement_actual_mm": -0.15560626052320004,
+            "displacement_absolute_error_mm": 0.006279265508055687,
+            "displacement_allowed_mm": 0.05,
+            "within_tolerance": true
+          },
+          "strict_phase_checkpoint": {
+            "available": true,
+            "csharp_total": 4536,
+            "python_total": 4536,
+            "exact": false,
+            "reason": null,
+            "mismatches": {
+              "0": {
+                "csharp": 3756,
+                "python": 3820
+              },
+              "2": {
+                "csharp": 42,
+                "python": 60
+              },
+              "3": {
+                "csharp": 86,
+                "python": 38
+              },
+              "4": {
+                "csharp": 279,
+                "python": 33
+              },
+              "6": {
+                "csharp": 54,
+                "python": 266
+              }
+            },
+            "accepted": false,
+            "strict_step": 5,
+            "csharp_step": 5,
+            "direction": "Uz",
+            "strict_displacement_mm": -0.15560626052320004,
+            "csharp_displacement_mm": -0.14932699501514435,
+            "displacement_absolute_error_mm": 0.006279265508055687,
+            "displacement_allowed_mm": 0.05,
+            "comparison": "physical_displacement_phase_checkpoint_v1"
+          },
+          "terminal_diagnostics": {
+            "step": 5,
+            "status": "OK",
+            "exit_code": 4,
+            "iterations": 4,
+            "convergence_criterion": "ForceMoment",
+            "convergence_tolerance": 0.0001,
+            "convergence_error": 2.0901260045445652e-12,
+            "residual_norm": 2.0901260045445652e-12,
+            "increment_norm": 0.00014300700626092617,
+            "max_element_displacement": 0.03305991828699809
+          },
+          "passed": true
+        },
+        {
+          "analysis_name": "scour_1",
+          "analysis_key": 23,
+          "configuration": {
+            "integration_method": "LoadControl",
+            "method": "ModifiedRegulaFalsiLineSearch",
+            "convergence_criterion": "ForceMoment",
+            "convergence_tolerance": 0.0001,
+            "max_iterations": 3000,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": false,
+            "arc_length_radius_squared": 0.01,
+            "arc_length_max_cutbacks": 0
+          },
+          "outcome": "nonconverged",
+          "code": -2,
+          "completed": false,
+          "committed_steps": 1,
+          "expected_steps": 5,
+          "unsafe_steps": 0,
+          "response": {
+            "available": false,
+            "within_tolerance": null,
+            "reason": "strict predecessor stages are checked for completion and safe equilibrium; C# authored rows are not a comparable response path"
+          },
+          "response_acceptable": true,
+          "response_comparison": "not_applicable",
+          "authored_stepwise_diagnostic": {
+            "available": true,
+            "reference_step": 1,
+            "actual_step": 1,
+            "master_point": 1,
+            "direction": "Uz",
+            "reaction_reference_kn": -402.0880551099981,
+            "reaction_actual_kn": -623.4713435783051,
+            "reaction_absolute_error_kn": 221.383288468307,
+            "reaction_allowed_kn": 0.1,
+            "displacement_reference_mm": -0.14932699501514435,
+            "displacement_actual_mm": -0.2278822660446167,
+            "displacement_absolute_error_mm": 0.07855527102947235,
+            "displacement_allowed_mm": 0.05,
+            "within_tolerance": false
+          },
+          "strict_phase_checkpoint": {
+            "available": true,
+            "csharp_total": 4536,
+            "python_total": 4536,
+            "exact": false,
+            "reason": null,
+            "mismatches": {
+              "0": {
+                "csharp": 1721,
+                "python": 2967
+              },
+              "1": {
+                "csharp": 65,
+                "python": 176
+              },
+              "2": {
+                "csharp": 21,
+                "python": 52
+              },
+              "3": {
+                "csharp": 644,
+                "python": 229
+              },
+              "4": {
+                "csharp": 1210,
+                "python": 956
+              },
+              "5": {
+                "csharp": 145,
+                "python": 19
+              },
+              "6": {
+                "csharp": 724,
+                "python": 131
+              }
+            },
+            "accepted": false,
+            "strict_step": 1,
+            "csharp_step": 5,
+            "direction": "Uz",
+            "strict_displacement_mm": -0.2278822660446167,
+            "csharp_displacement_mm": -0.21574800834059715,
+            "displacement_absolute_error_mm": 0.012134257704019547,
+            "displacement_allowed_mm": 0.05,
+            "comparison": "physical_displacement_phase_checkpoint_v1"
+          },
+          "terminal_diagnostics": {
+            "step": 2,
+            "status": "FAILED",
+            "exit_code": -2,
+            "iterations": 3001,
+            "convergence_criterion": "ForceMoment",
+            "convergence_tolerance": 0.0001,
+            "convergence_error": 33.646243518296934,
+            "residual_norm": 33.646243518296934,
+            "increment_norm": 1.4074544516214275e-05,
+            "max_element_displacement": 0.06977949052043338
+          },
+          "passed": false
+        },
+        {
+          "analysis_name": "LiveLoad_1",
+          "analysis_key": 22,
+          "configuration": {
+            "integration_method": "ArcLength",
+            "method": "StandardBisectionLineSearch",
+            "convergence_criterion": "ForceMoment",
+            "convergence_tolerance": 0.0001,
+            "max_iterations": 60,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": false,
+            "arc_length_radius_squared": 1.0,
+            "arc_length_max_cutbacks": 6
+          },
+          "outcome": "failed",
+          "code": -10,
+          "completed": false,
+          "committed_steps": 0,
+          "expected_steps": 38,
+          "unsafe_steps": 0,
+          "response": {
+            "available": false,
+            "range_covered": false,
+            "within_curve_tolerance": false,
+            "reason": "each finite curve requires at least two displacement/load rows",
+            "reference_sample_rows": 38,
+            "actual_sample_rows": 0,
+            "master_point": 1,
+            "direction": "Uz",
+            "baseline_analysis_key": 23
+          },
+          "response_acceptable": false,
+          "response_comparison": "strict_curve_response",
+          "authored_stepwise_diagnostic": {
+            "available": false,
+            "within_tolerance": false,
+            "reason": "analysis has no committed step or valid master point"
+          },
+          "strict_phase_checkpoint": {
+            "available": false,
+            "accepted": false,
+            "reason": "analysis has no committed strict state or valid master point"
+          },
+          "terminal_diagnostics": {
+            "blocked_reason": "blocked by incomplete predecessor: 23:scour_1 nonconverged"
+          },
+          "passed": false
+        }
+      ]
+    }
+  },
+  "gate_c_pass": false
+}

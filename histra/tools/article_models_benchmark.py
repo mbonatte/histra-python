@@ -52,7 +52,7 @@ PARITY_REACTION_ABSOLUTE_TOLERANCE = 0.1
 PARITY_DISPLACEMENT_ABSOLUTE_TOLERANCE_MM = 0.05
 # Increment whenever solver semantics or release-gate policy changes.  Resume
 # checkpoints are diagnostic caches, never authorities across harness changes.
-BENCHMARK_HARNESS_REVISION = 4
+BENCHMARK_HARNESS_REVISION = 7
 
 
 BENCHMARK_MODELS: tuple[dict[str, Any], ...] = (
@@ -157,7 +157,7 @@ def strict_convergence_tolerance(
 
 
 def _apply_strict_strategy(analysis: Any) -> None:
-    """Apply the measured production-safe strategy to one nonlinear stage."""
+    """Apply the unqualified ForceMoment candidate used for strict evidence."""
 
     if int(getattr(analysis, "analysis_type", 0)) == 5:
         return
@@ -167,6 +167,12 @@ def _apply_strict_strategy(analysis: Any) -> None:
     )
     analysis.method = "StandardBisectionLineSearch"
     analysis.csharp_line_search_compatibility = False
+    if "arclength" not in str(getattr(analysis, "integration_method", "")).lower():
+        analysis.als = True
+    else:
+        analysis.arc_length_max_cutbacks = 6
+        analysis.arc_length_cutback_factor = 0.5
+        analysis.desired_iterations = min(getattr(analysis, "desired_iterations", 10), 10)
 
 
 def _read_csharp_reference(
@@ -545,6 +551,8 @@ def validate_article_source_data(
 
 
 def _runtime_provenance(hrx_path: Path, results_path: Path) -> dict[str, Any]:
+    from histra.types.linear_system import LinearSystem
+
     packages: dict[str, str] = {}
     for name in ("histra-python", "numpy", "scipy", "numba"):
         try:
@@ -556,7 +564,10 @@ def _runtime_provenance(hrx_path: Path, results_path: Path) -> dict[str, Any]:
         "python": sys.version.split()[0],
         "python_implementation": platform.python_implementation(),
         "packages": packages,
-        "solver_backend": "Python/SciPy sparse",
+        # Resolve the same auto/explicit backend selected by nonlinear setup;
+        # importing SciPy alone is not evidence that SuperLU was used.
+        "solver_backend": f"Python/{LinearSystem(0).backend}",
+        "requested_linear_solver_backend": LinearSystem(0).requested_backend,
         "inputs": {
             "hrx": {"name": hrx_path.name, "bytes": hrx_path.stat().st_size, "sha256": _file_sha256(hrx_path)},
             "csharp_results": {"name": results_path.name, "bytes": results_path.stat().st_size, "sha256": _file_sha256(results_path)},
@@ -595,6 +606,114 @@ def compare_phase_distributions(
         "reason": None if available else "no C# SpringStates rows at the terminal step",
         "mismatches": mismatches,
     }
+
+
+def compare_phase_checkpoint_at_physical_displacement(
+    results_path: Path,
+    execution: Any,
+    analysis: Any,
+    csharp_displacements: Mapping[tuple[int, int, int], np.ndarray],
+    python_displacements: Mapping[tuple[int, int, int], np.ndarray],
+    python_phase_counts: Mapping[int, int],
+    *,
+    combination: int = 1,
+    maximum_displacement_error_mm: float = PARITY_DISPLACEMENT_ABSOLUTE_TOLERANCE_MM,
+) -> dict[str, Any]:
+    """Match strict spring phases at a physical model-point displacement.
+
+    Strict continuation can have a different step count from C# authored Work.
+    The closest C# model-point displacement in the requested direction is the
+    only valid phase checkpoint; an ordinal solver step is deliberately never
+    used as a substitute.
+    """
+
+    committed = tuple(execution.committed_steps)
+    analysis_key = int(getattr(analysis, "key"))
+    master_point = int(getattr(analysis, "master_point", -1))
+    if not committed or master_point < 0:
+        return {
+            "available": False,
+            "accepted": False,
+            "reason": "analysis has no committed strict state or valid master point",
+        }
+    component = {"ux": 0, "uy": 1, "uz": 2}.get(
+        str(getattr(analysis, "direction", "")).casefold()
+    )
+    if component is None:
+        direction = np.asarray(
+            (getattr(analysis, "dir_x", 0.0), getattr(analysis, "dir_y", 0.0), getattr(analysis, "dir_z", 0.0)),
+            dtype=float,
+        )
+        if not np.any(direction):
+            return {"available": False, "accepted": False, "reason": "analysis has no output direction"}
+        component = int(np.argmax(np.abs(direction)))
+
+    actual_step = int(committed[-1].step)
+    actual_key = (analysis_key, actual_step, master_point)
+    actual = python_displacements.get(actual_key)
+    references = [
+        (int(step), values)
+        for (key, step, point), values in csharp_displacements.items()
+        if int(key) == analysis_key and int(point) == master_point and int(step) > 0
+    ]
+    if actual is None or not references:
+        return {
+            "available": False,
+            "accepted": False,
+            "reason": "model-point displacement is unavailable for strict/C# checkpoint matching",
+        }
+    actual_mm = float(actual[component] * 10.0)
+    reference_step, reference = min(
+        references, key=lambda item: abs(float(item[1][component] * 10.0) - actual_mm)
+    )
+    reference_mm = float(reference[component] * 10.0)
+    displacement_error = abs(actual_mm - reference_mm)
+    if displacement_error > maximum_displacement_error_mm:
+        return {
+            "available": False,
+            "accepted": False,
+            "strict_step": actual_step,
+            "csharp_step": reference_step,
+            "direction": ("Ux", "Uy", "Uz")[component],
+            "strict_displacement_mm": actual_mm,
+            "csharp_displacement_mm": reference_mm,
+            "displacement_absolute_error_mm": displacement_error,
+            "displacement_allowed_mm": maximum_displacement_error_mm,
+            "reason": "no C# spring checkpoint lies within the physical-displacement tolerance",
+        }
+
+    reference_counts: dict[int, int] = {}
+    with sqlite3.connect(results_path) as db:
+        tables = {str(row[0]) for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        for table in ("SpringStatesTmp", "SpringStates"):
+            if table not in tables:
+                continue
+            reference_counts = {
+                int(phase): int(count)
+                for phase, count in db.execute(
+                    f"SELECT CAST(Phase AS INTEGER),COUNT(*) FROM {table} "
+                    "WHERE AnalysisKey=? AND Combination=? AND Step=? "
+                    "GROUP BY CAST(Phase AS INTEGER)",
+                    (analysis_key, int(combination), reference_step),
+                )
+            }
+            if reference_counts:
+                break
+    comparison = compare_phase_distributions(reference_counts, python_phase_counts)
+    comparison.update(
+        {
+            "accepted": bool(comparison["exact"]),
+            "strict_step": actual_step,
+            "csharp_step": reference_step,
+            "direction": ("Ux", "Uy", "Uz")[component],
+            "strict_displacement_mm": actual_mm,
+            "csharp_displacement_mm": reference_mm,
+            "displacement_absolute_error_mm": displacement_error,
+            "displacement_allowed_mm": maximum_displacement_error_mm,
+            "comparison": "physical_displacement_phase_checkpoint_v1",
+        }
+    )
+    return comparison
 
 
 def _vector_error_metrics(
@@ -701,20 +820,17 @@ def compute_parity_metrics(
 
 
 def _curve_characteristics(displacement_mm: np.ndarray, load_kn: np.ndarray) -> dict[str, float]:
-    x = np.abs(np.asarray(displacement_mm, dtype=np.float64))
-    y = np.abs(np.asarray(load_kn, dtype=np.float64))
+    """Return signed characteristics of an already-oriented monotonic curve."""
+    x = np.asarray(displacement_mm, dtype=np.float64)
+    y = np.asarray(load_kn, dtype=np.float64)
     if not len(x):
         return {"peak_load_kn": 0.0, "peak_displacement_mm": 0.0, "area": 0.0, "initial_stiffness_kn_per_mm": 0.0}
-    peak_index = int(np.argmax(y))
-    order = np.argsort(x, kind="stable")
-    x_sorted, y_sorted = x[order], y[order]
-    unique_x, unique_indices = np.unique(x_sorted, return_index=True)
-    unique_y = y_sorted[unique_indices]
-    area = float(np.trapezoid(unique_y, unique_x)) if len(unique_x) > 1 else 0.0
-    positive = np.flatnonzero(unique_x > np.finfo(float).eps)
+    peak_index = int(np.argmax(np.abs(y)))
+    area = float(np.trapezoid(y, x)) if len(x) > 1 else 0.0
+    positive = np.flatnonzero(x > np.finfo(float).eps)
     initial_indices = positive[: min(10, len(positive))]
     if len(initial_indices):
-        xi, yi = unique_x[initial_indices], unique_y[initial_indices]
+        xi, yi = x[initial_indices], y[initial_indices]
         denominator = float(np.dot(xi, xi))
         stiffness = float(np.dot(xi, yi) / denominator) if denominator else 0.0
     else:
@@ -733,7 +849,13 @@ def compute_curve_metrics(
     actual_displacement_mm: Iterable[float],
     actual_load_kn: Iterable[float],
 ) -> dict[str, Any]:
-    """Compare live-load curves on displacement, independent of step numbering."""
+    """Compare a signed, monotonic live-load response without branch erasure.
+
+    The curve-error waiver is valid only for a known monotonic envelope. A
+    descending, cyclic, reversed-sign, or repeated-displacement response must
+    be compared using a path-aware reference instead; sorting absolute values
+    would turn a physically wrong branch into an apparent match.
+    """
     ref_x = np.asarray(tuple(reference_displacement_mm), dtype=np.float64)
     ref_y = np.asarray(tuple(reference_load_kn), dtype=np.float64)
     act_x = np.asarray(tuple(actual_displacement_mm), dtype=np.float64)
@@ -752,19 +874,30 @@ def compute_curve_metrics(
             "reason": "each finite curve requires at least two displacement/load rows",
         }
 
-    def ordered_unique(
-        displacement: np.ndarray, load: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
-        x = np.abs(displacement)
-        y = np.abs(load)
-        order = np.argsort(x, kind="stable")
-        x, y = x[order], y[order]
-        unique_x, unique_indices = np.unique(x, return_index=True)
-        return unique_x, y[unique_indices]
-
-    ref_x, ref_y = ordered_unique(ref_x, ref_y)
-    act_x, act_y = ordered_unique(act_x, act_y)
-    if len(ref_x) < 2 or len(act_x) < 2:
+    reference_direction = float(ref_x[-1] - ref_x[0])
+    if abs(reference_direction) <= np.finfo(float).eps:
+        return {
+            "available": False,
+            "range_covered": False,
+            "within_curve_tolerance": False,
+            "reason": "reference curve has no signed displacement direction",
+        }
+    orientation = 1.0 if reference_direction > 0.0 else -1.0
+    ref_x = (ref_x - ref_x[0]) * orientation
+    act_x = (act_x - act_x[0]) * orientation
+    monotonic_epsilon = max(1.0e-9, 1.0e-8 * float(np.max(ref_x)))
+    reference_monotonic = bool(np.all(np.diff(ref_x) >= -monotonic_epsilon))
+    actual_monotonic = bool(np.all(np.diff(act_x) >= -monotonic_epsilon))
+    if not reference_monotonic or not actual_monotonic:
+        return {
+            "available": False,
+            "range_covered": False,
+            "within_curve_tolerance": False,
+            "reference_monotonic": reference_monotonic,
+            "actual_monotonic": actual_monotonic,
+            "reason": "curve waiver applies only to signed monotonic paths; use path-aware comparison",
+        }
+    if len(np.unique(ref_x)) < 2 or len(np.unique(act_x)) < 2:
         return {
             "available": False,
             "range_covered": False,
@@ -772,10 +905,20 @@ def compute_curve_metrics(
             "reason": "each curve requires at least two distinct displacements",
         }
 
-    displacement_epsilon = max(1.0e-9, 1.0e-8 * float(ref_x[-1] - ref_x[0]))
+    displacement_span = float(ref_x[-1] - ref_x[0])
+    displacement_epsilon = max(1.0e-9, 1.0e-8 * displacement_span)
+    # A branch-sensitive solver may terminate a fraction of a millimetre on
+    # either side of the C# terminal point.  The V1 acceptance plan explicitly
+    # permits max(0.1 mm, 2%) peak-displacement error, so requiring bit-level
+    # endpoint coverage here contradicted the stated gate and rejected a
+    # response that the later peak metric accepted.  This allowance is only
+    # for the terminal range; no values are extrapolated outside the overlap.
+    terminal_range_allowed = max(0.1, 0.02 * abs(displacement_span))
+    range_shortfall_start = max(0.0, float(act_x[0] - ref_x[0]))
+    range_shortfall_end = max(0.0, float(ref_x[-1] - act_x[-1]))
     range_covered = bool(
-        act_x[0] <= ref_x[0] + displacement_epsilon
-        and act_x[-1] >= ref_x[-1] - displacement_epsilon
+        range_shortfall_start <= terminal_range_allowed + displacement_epsilon
+        and range_shortfall_end <= terminal_range_allowed + displacement_epsilon
     )
     overlap_min = max(float(ref_x[0]), float(act_x[0]))
     overlap_max = min(float(ref_x[-1]), float(act_x[-1]))
@@ -801,9 +944,14 @@ def compute_curve_metrics(
     )
     ref_evaluated = np.interp(evaluation_x, ref_x, ref_y)
     act_evaluated = np.interp(evaluation_x, act_x, act_y)
-    ref = _curve_characteristics(evaluation_x, ref_evaluated)
-    actual = _curve_characteristics(evaluation_x, act_evaluated)
-    peak_scale = max(ref["peak_load_kn"], np.finfo(float).tiny)
+    # Area/RMSE/stiffness use the shared physical interval.  Peak position and
+    # magnitude must use each native terminal response, otherwise an accepted
+    # shortfall is masked by clipping both curves to the overlap endpoint.
+    ref_overlap = _curve_characteristics(evaluation_x, ref_evaluated)
+    actual_overlap = _curve_characteristics(evaluation_x, act_evaluated)
+    ref = _curve_characteristics(ref_x, ref_y)
+    actual = _curve_characteristics(act_x, act_y)
+    peak_scale = max(abs(ref["peak_load_kn"]), np.finfo(float).tiny)
     normalized_rmse = float(
         np.sqrt(np.mean((act_evaluated - ref_evaluated) ** 2)) / peak_scale
     )
@@ -814,14 +962,20 @@ def compute_curve_metrics(
 
     metrics = {
         "range_covered": range_covered,
+        "reference_monotonic": reference_monotonic,
+        "actual_monotonic": actual_monotonic,
+        "displacement_orientation": orientation,
         "reference_displacement_range_mm": [float(ref_x[0]), float(ref_x[-1])],
         "actual_displacement_range_mm": [float(act_x[0]), float(act_x[-1])],
         "overlap_displacement_range_mm": [overlap_min, overlap_max],
+        "terminal_range_allowed_mm": terminal_range_allowed,
+        "terminal_range_shortfall_start_mm": range_shortfall_start,
+        "terminal_range_shortfall_end_mm": range_shortfall_end,
         "evaluation_points": int(len(evaluation_x)),
         "peak_load_relative_error": relative_error(actual["peak_load_kn"], ref["peak_load_kn"]),
         "normalized_curve_rmse": normalized_rmse,
-        "curve_area_relative_error": relative_error(actual["area"], ref["area"]),
-        "initial_stiffness_relative_error": relative_error(actual["initial_stiffness_kn_per_mm"], ref["initial_stiffness_kn_per_mm"]),
+        "curve_area_relative_error": relative_error(actual_overlap["area"], ref_overlap["area"]),
+        "initial_stiffness_relative_error": relative_error(actual_overlap["initial_stiffness_kn_per_mm"], ref_overlap["initial_stiffness_kn_per_mm"]),
         "peak_displacement_absolute_error_mm": abs(actual["peak_displacement_mm"] - ref["peak_displacement_mm"]),
         "peak_displacement_allowed_mm": max(0.1, 0.02 * abs(ref["peak_displacement_mm"])),
     }
@@ -956,7 +1110,7 @@ def run_model(
     started = time.perf_counter()
     model = load_model(hrx_path)
     preparation_started = time.perf_counter()
-    preparation = ModelManager.prepare_model(model)
+    preparation = ModelManager.prepare_model(model, force=True)
     preparation_seconds = time.perf_counter() - preparation_started
 
     session = AnalysisSession(
@@ -979,6 +1133,7 @@ def run_model(
     settings: list[dict[str, Any]] = []
     executions: list[Any] = []
     phase_evidence: dict[int, dict[str, Any]] = {}
+    python_phase_counts: dict[int, dict[int, int]] = {}
     captured_warnings: list[warnings.WarningMessage]
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", UnsafeEquilibriumWarning)
@@ -1009,9 +1164,10 @@ def run_model(
                 max_committed_steps=step_limits.get(int(analysis.key)),
             )
             executions.append(execution)
+            phase_counts = _python_phase_distribution(model)
+            python_phase_counts[int(analysis.key)] = phase_counts
             phase_evidence[int(analysis.key)] = compare_phase_distributions(
-                csharp_phase_counts.get(int(analysis.key), {}),
-                _python_phase_distribution(model),
+                csharp_phase_counts.get(int(analysis.key), {}), phase_counts
             )
             if not execution.completed:
                 break
@@ -1044,6 +1200,21 @@ def run_model(
         csharp_displacements,
         python_displacements,
     )
+    strict_phase_checkpoints = (
+        {
+            int(execution.analysis_key): compare_phase_checkpoint_at_physical_displacement(
+                results_path,
+                execution,
+                next(item for item in chain if int(item.key) == int(execution.analysis_key)),
+                csharp_displacements,
+                python_displacements,
+                python_phase_counts.get(int(execution.analysis_key), {}),
+            )
+            for execution in executions
+        }
+        if run_mode == "strict"
+        else None
+    )
     unsafe_steps = [
         step
         for execution in executions
@@ -1068,17 +1239,33 @@ def run_model(
     phase_distributions_agree = bool(phase_evidence) and all(
         evidence["exact"] for evidence in phase_evidence.values()
     )
-    response_accepted = bool(
-        parity["within_parity_tolerance"] or curve.get("within_curve_tolerance", False)
-    )
-    release_gate_pass = bool(
-        complete_chain
-        and parity["complete_step_history"]
-        and parity["reference_outputs_complete"]
-        and response_accepted
-        and phase_distributions_agree
-        and (run_mode != "strict" or not unsafe_steps)
-    )
+    if run_mode == "authored":
+        response_accepted = bool(parity["within_parity_tolerance"])
+        release_gate_pass = bool(
+            complete_chain
+            and parity["complete_step_history"]
+            and parity["reference_outputs_complete"]
+            and response_accepted
+            and phase_distributions_agree
+        )
+        response_comparison = "authored_stepwise_parity"
+    else:
+        # ForceMoment and a production-safe line-search path can legitimately
+        # select different intermediate equilibria.  C#'s authored Work rows
+        # are therefore *not* a pointwise strict reference.  Strict response
+        # acceptance is curve-based over the physical displacement range.
+        response_accepted = bool(curve.get("within_curve_tolerance", False))
+        strict_phase_checkpoints_accepted = bool(strict_phase_checkpoints) and all(
+            item.get("accepted", False)
+            for item in strict_phase_checkpoints.values()
+        )
+        release_gate_pass = bool(
+            complete_chain
+            and response_accepted
+            and not unsafe_steps
+            and strict_phase_checkpoints_accepted
+        )
+        response_comparison = "strict_curve_response"
     return {
         "id": str(model_info["id"]),
         "name": name,
@@ -1106,6 +1293,11 @@ def run_model(
         "unsafe_step_count": len(unsafe_steps),
         "unsafe_steps_by_criterion": dict(sorted(unsafe_criteria.items())),
         "parity": parity,
+        "stepwise_parity_applicable": run_mode == "authored",
+        "response_comparison": response_comparison,
+        "strict_phase_checkpoint_comparison": (
+            strict_phase_checkpoints
+        ),
         "live_load_curve": curve,
         "spring_phase_distributions": phase_evidence,
         "complete_dependency_chain": complete_chain,
@@ -1127,8 +1319,9 @@ def _worker(task: tuple[dict[str, Any], str, str]) -> dict[str, Any]:
 
 
 def _markdown_report(
-    results: list[dict[str, Any]],
+    results: Sequence[Mapping[str, Any]],
     source_data: Mapping[str, Any] | None = None,
+    expected_tasks: Sequence[tuple[str, Mapping[str, Any]]] | None = None,
 ) -> str:
     lines = [
         "# Article Models: Python vs C# verification",
@@ -1136,39 +1329,56 @@ def _markdown_report(
         "Warning tolerances are unchanged: force absolute `1e-3`, force relative "
         "`1e-5`, active-residual L2 `1e-4`.",
         "",
-        "| Mode | Model | Steps | Unsafe | Max reaction error (kN) | "
-        "Max model-point error (mm) | C# parity |",
-        "|---|---|---:|---:|---:|---:|---|",
+        "| Mode | Model | Steps | Unsafe | Comparable response | Status |",
+        "|---|---|---:|---:|---|---|",
     ]
+    seen_pairs: set[tuple[str, str]] = set()
     for result in sorted(results, key=lambda item: (item["run_mode"], item["name"])):
+        seen_pairs.add((result["run_mode"], str(result.get("id"))))
         if "error" in result:
             lines.append(
-                f"| {result['run_mode']} | {result['name']} | - | - | - | - | "
+                f"| {result['run_mode']} | {result['name']} | - | - | - | "
                 f"ERROR: {result['error']} |"
             )
             continue
         parity = result["parity"]
-        reaction = parity["reaction"]
-        displacement = parity["model_point_displacement_mm"]
         step_history = parity["step_history"]
         steps = f"{step_history['actual_steps']}/{step_history['expected_steps']}"
         status = "PASS" if result["release_gate_pass"] else "NOT RELEASE-READY"
-        reaction_error = reaction["max_absolute"]
-        displacement_error = displacement["max_absolute"]
-        reaction_text = "n/a" if reaction_error is None else f"{reaction_error:.6g}"
-        displacement_text = (
-            "n/a" if displacement_error is None else f"{displacement_error:.6g}"
-        )
+        if result.get("response_comparison", "authored_stepwise_parity" if result["run_mode"] == "authored" else "strict_curve_response") == "authored_stepwise_parity":
+            reaction_error = parity["reaction"]["max_absolute"]
+            displacement_error = parity["model_point_displacement_mm"]["max_absolute"]
+            reaction_text = "n/a" if reaction_error is None else f"{reaction_error:.6g}"
+            displacement_text = "n/a" if displacement_error is None else f"{displacement_error:.6g}"
+            response_text = f"row parity: dR={reaction_text} kN; du={displacement_text} mm"
+        else:
+            curve = result.get("live_load_curve", {})
+            if curve.get("available"):
+                response_text = (
+                    "curve: RMSE="
+                    f"{float(curve.get('normalized_curve_rmse', float('nan'))):.3e}; "
+                    f"pass={bool(curve.get('within_curve_tolerance', False))}"
+                )
+            else:
+                response_text = f"curve: n/a ({curve.get('reason', 'unavailable')})"
         lines.append(
             f"| {result['run_mode']} | {result['name']} | {steps} | "
-            f"{result['unsafe_step_count']} | {reaction_text} | "
-            f"{displacement_text} | {status} |"
+            f"{result['unsafe_step_count']} | {response_text} | {status} |"
         )
+
+    if expected_tasks is not None:
+        for mode, model_info in expected_tasks:
+            if (mode, str(model_info["id"])) not in seen_pairs:
+                lines.append(
+                    f"| {mode} | {model_info['name']} | - | - | - | "
+                    "MISSING EVIDENCE (NOT RUN) |"
+                )
+
     lines.append("")
     lines.append(
-        "`strict` uses ForceMoment with Standard Bisection on every nonlinear "
-        "stage, uses consistent ArcLength line-search projections, and tightens, "
-        "never loosens, the HRX convergence tolerance to the unchanged audit limit."
+        "`authored` is judged by stored C# rows. `strict` is judged only by its "
+        "physical load--displacement curve, safe committed states, and physical-"
+        "displacement spring checkpoints; it is never judged by C# authored row number."
     )
     if source_data is not None:
         lines.extend((
@@ -1245,12 +1455,20 @@ def _progress_line(result: Mapping[str, Any], *, resumed: bool = False) -> str:
         return f"[{result['run_mode']}] {prefix}{result['name']}: {result['error']}"
     parity = result["parity"]
     step_history = parity["step_history"]
-    reaction_error = parity["reaction"].get("max_absolute")
-    reaction_text = "n/a" if reaction_error is None else f"{float(reaction_error):.6g} kN"
+    if result.get("response_comparison", "authored_stepwise_parity" if result["run_mode"] == "authored" else "strict_curve_response") == "strict_curve_response":
+        curve = result.get("live_load_curve", {})
+        if curve.get("available"):
+            response_text = f"curve RMSE={float(curve.get('normalized_curve_rmse', float('nan'))):.3e}"
+        else:
+            response_text = "curve=n/a"
+    else:
+        reaction_error = parity["reaction"].get("max_absolute")
+        reaction_text = "n/a" if reaction_error is None else f"{float(reaction_error):.6g} kN"
+        response_text = f"dR={reaction_text}"
     return (
         f"[{result['run_mode']}] {prefix}{result['name']}: "
         f"steps={step_history['actual_steps']}/{step_history['expected_steps']}, "
-        f"unsafe={result['unsafe_step_count']}, dR={reaction_text}, "
+        f"unsafe={result['unsafe_step_count']}, {response_text}, "
         f"time={result['total_seconds']:.2f}s"
     )
 
@@ -1276,6 +1494,11 @@ def main() -> int:
         "--allow-incomplete",
         action="store_true",
         help="Return success while collecting diagnostic evidence from a failing gate.",
+    )
+    parser.add_argument(
+        "--aggregate-only",
+        action="store_true",
+        help="Compile report from existing checkpoints without scheduling missing tasks.",
     )
     args = parser.parse_args()
 
@@ -1311,6 +1534,8 @@ def main() -> int:
             else:
                 results.append(checkpoint)
                 print(_progress_line(checkpoint, resumed=True), flush=True)
+    if args.aggregate_only:
+        tasks = []
     # These models can each retain several GiB of constitutive state. Four
     # concurrent workers measured faster than eight or fourteen on the 32-GiB
     # reference workstation because the larger pools exhausted swap.
@@ -1318,24 +1543,37 @@ def main() -> int:
     if workers < 1 or workers > 4:
         parser.error("--max-workers must be between 1 and 4 for the release-candidate gate")
     started = time.perf_counter()
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_worker, task): task for task in tasks}
-        for future in as_completed(futures):
-            result = future.result()
-            results.append(result)
-            model_info, _models_dir, run_mode = futures[future]
-            _checkpoint_path(args.output_dir, model_info, run_mode).write_text(
-                json.dumps(
-                    {
-                        "schema_version": 3,
-                        "harness_revision": BENCHMARK_HARNESS_REVISION,
-                        "result": result,
-                    },
-                    indent=2,
-                ) + "\n",
-                encoding="utf-8",
-            )
-            print(_progress_line(result), flush=True)
+    if tasks:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_worker, task): task for task in tasks}
+            for future in as_completed(futures):
+                result = future.result()
+                results.append(result)
+                model_info, _models_dir, run_mode = futures[future]
+                _checkpoint_path(args.output_dir, model_info, run_mode).write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 3,
+                            "harness_revision": BENCHMARK_HARNESS_REVISION,
+                            "result": result,
+                        },
+                        indent=2,
+                    ) + "\n",
+                    encoding="utf-8",
+                )
+                print(_progress_line(result), flush=True)
+
+    expected_tasks = [(mode, model) for mode in modes for model in selected]
+    actual_pairs = {(res.get("run_mode"), str(res.get("id"))): res for res in results}
+    missing_tasks = [
+        (mode, model)
+        for mode, model in expected_tasks
+        if (mode, str(model["id"])) not in actual_pairs
+    ]
+    if missing_tasks:
+        print(f"Notice: {len(missing_tasks)} expected task(s) missing from results:", file=sys.stderr)
+        for mode, model in missing_tasks:
+            print(f"  - [{mode}] {model['name']}", file=sys.stderr)
 
     payload = {
         "schema_version": 3,
@@ -1344,6 +1582,10 @@ def main() -> int:
         "article_table_1_capacities_kn": ARTICLE_TABLE_1_CAPACITIES_KN,
         "article_source_data": source_data,
         "model_registry": [dict(item) for item in BENCHMARK_MODELS],
+        "expected_task_count": len(expected_tasks),
+        "loaded_result_count": len(results),
+        "missing_task_count": len(missing_tasks),
+        "missing_tasks": [f"{mode}:{model['name']}" for mode, model in missing_tasks],
         "wall_seconds": time.perf_counter() - started,
         "workers": workers,
         "results": sorted(results, key=lambda item: (item["run_mode"], item["name"])),
@@ -1352,11 +1594,16 @@ def main() -> int:
         json.dumps(payload, indent=2) + "\n", encoding="utf-8"
     )
     (args.output_dir / "article_models_csharp_verification.md").write_text(
-        _markdown_report(results, source_data), encoding="utf-8"
+        _markdown_report(results, source_data, expected_tasks=expected_tasks), encoding="utf-8"
     )
-    failed = not source_data["valid"] or any(
-        "error" in result or not result.get("release_gate_pass", False)
-        for result in results
+    failed = (
+        not source_data["valid"]
+        or bool(missing_tasks)
+        or not results
+        or any(
+            "error" in result or not result.get("release_gate_pass", False)
+            for result in results
+        )
     )
     return 0 if args.allow_incomplete else int(failed)
 

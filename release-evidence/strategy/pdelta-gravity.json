@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scenario": "P-Delta gravity full five-increment range: EachStep versus EachIteration",
   "environment": {
-    "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
     "python": "3.12.3",
     "packages": {
       "histra-python": "1.0.0",
@@ -11,7 +11,8 @@
       "numba": "0.67.0"
     },
     "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
-    "repetitions": 1
+    "cache_state": "process-warm; fresh model and runtime per observation",
+    "repetitions": 3
   },
   "hrx": {
     "path": "/home/mauricio/coding/histra-python/my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.hrx",
@@ -19,6 +20,15 @@
   },
   "target": "Vert",
   "baseline_id": "each-step-standard-bisection",
+  "reference_evidence": {
+    "accepted": true,
+    "source": "C# benchmark_virgin_PDelta.Results; AnalysisKey=1, Combination=1, master point 9, Uz",
+    "source_sha256": "1df967ed4c8cb10c8ebfc3964fc24b68208c9ebb90516d1fa18027d6f6d5eaa4"
+  },
+  "reference_results": {
+    "path": "/home/mauricio/coding/histra-python/my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.Results",
+    "sha256": "1df967ed4c8cb10c8ebfc3964fc24b68208c9ebb90516d1fa18027d6f6d5eaa4"
+  },
   "recommended_id": "authored-each-step",
   "results": [
     {
@@ -55,65 +65,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 24,
-      "linear_solves": 25,
-      "factorizations": 1,
-      "preparation_seconds": 0.0018559109885245562,
-      "runtime_seconds": 1.304978377011139,
-      "peak_rss_bytes": 316784640,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 1.0,
+      "preparation_seconds": 1.8894222669987357,
+      "runtime_seconds": 0.6958379039988358,
+      "peak_rss_bytes": 457752576,
       "curve": {
         "displacement_mm": [
-          0.0027404403954278678,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742254304725066,
-          49.48449193754641,
-          74.22673722587933,
-          98.96897672186606,
-          123.71122335776454
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "authored-each-step",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "ModifiedRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 1,
+          "preparation_seconds": 1.8894222669987357,
+          "runtime_seconds": 0.7089184699998441,
+          "peak_rss_bytes": 401768448,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "authored-each-step",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "ModifiedRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 1,
+          "preparation_seconds": 1.887452287999622,
+          "runtime_seconds": 0.6517025840003043,
+          "peak_rss_bytes": 443928576,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "authored-each-step",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "ModifiedRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 1,
+          "preparation_seconds": 2.0147576950002986,
+          "runtime_seconds": 0.6958379039988358,
+          "peak_rss_bytes": 457752576,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.0027404403954278678,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 3.179863852149828e-08,
-        "normalized_curve_rmse": 4.179730079399344e-08,
-        "curve_area_relative_error": 6.579974966298319e-08,
-        "initial_stiffness_relative_error": 3.6704389057802313e-07,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71122335776454,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137005262311905,
-          "initial_stiffness_kn_per_mm": 9028.543917627172
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -150,65 +398,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.010033054975792766,
-      "runtime_seconds": 2.383172875997843,
-      "peak_rss_bytes": 461860864,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 2.0280509109998093,
+      "runtime_seconds": 1.6948518299996067,
+      "peak_rss_bytes": 460718080,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-step-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.0280509109998093,
+          "runtime_seconds": 1.709118564000164,
+          "peak_rss_bytes": 458518528,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.982859631001702,
+          "runtime_seconds": 1.686355267998806,
+          "peak_rss_bytes": 459735040,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.0683896850005112,
+          "runtime_seconds": 1.6948518299996067,
+          "peak_rss_bytes": 460718080,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -245,65 +731,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.009990468010073528,
-      "runtime_seconds": 2.3999078419874422,
-      "peak_rss_bytes": 461860864,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 2.095095864000541,
+      "runtime_seconds": 1.6789418629996362,
+      "peak_rss_bytes": 462979072,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-iteration-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.9718383109993738,
+          "runtime_seconds": 1.6789418629996362,
+          "peak_rss_bytes": 462475264,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.131515944000057,
+          "runtime_seconds": 1.6818687920003867,
+          "peak_rss_bytes": 462979072,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-regula-falsi",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardRegulaFalsiLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.095095864000541,
+          "runtime_seconds": 1.5805424789996323,
+          "peak_rss_bytes": 462979072,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -340,65 +1064,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.01007562901941128,
-      "runtime_seconds": 2.3507399419904687,
-      "peak_rss_bytes": 467259392,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 1.920103554999514,
+      "runtime_seconds": 1.5995754670002498,
+      "peak_rss_bytes": 470290432,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-step-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.843279873000938,
+          "runtime_seconds": 1.6150017500003742,
+          "peak_rss_bytes": 469590016,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.956482423000125,
+          "runtime_seconds": 1.5977965370002494,
+          "peak_rss_bytes": 469590016,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.920103554999514,
+          "runtime_seconds": 1.5995754670002498,
+          "peak_rss_bytes": 470290432,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -435,65 +1397,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.010219128016615286,
-      "runtime_seconds": 2.380928644008236,
-      "peak_rss_bytes": 467259392,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 1.9353013879990613,
+      "runtime_seconds": 1.5872655029997986,
+      "peak_rss_bytes": 479465472,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-iteration-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.941561642999659,
+          "runtime_seconds": 1.5868264260006981,
+          "peak_rss_bytes": 475328512,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.9353013879990613,
+          "runtime_seconds": 1.5872655029997986,
+          "peak_rss_bytes": 475328512,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-bisection",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardBisectionLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.8934073540003737,
+          "runtime_seconds": 1.6210654449987487,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -530,65 +1730,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.009993606974603608,
-      "runtime_seconds": 2.365890004992252,
-      "peak_rss_bytes": 467259392,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 1.9646830899982888,
+      "runtime_seconds": 1.671000926000488,
+      "peak_rss_bytes": 479465472,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-step-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.9210032619994308,
+          "runtime_seconds": 1.6705868919998466,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.9646830899982888,
+          "runtime_seconds": 1.7052706360009324,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-step-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachStep",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.988688022000133,
+          "runtime_seconds": 1.671000926000488,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {
@@ -625,65 +2063,303 @@
         }
       ],
       "unsafe_steps": 0,
-      "committed_steps": 5,
-      "iterations": 12,
-      "linear_solves": 13,
-      "factorizations": 13,
-      "preparation_seconds": 0.010341004992369562,
-      "runtime_seconds": 2.411009991017636,
-      "peak_rss_bytes": 487010304,
+      "committed_steps": 5.0,
+      "iterations": 5.0,
+      "linear_solves": 6.0,
+      "factorizations": 6.0,
+      "preparation_seconds": 2.0029954590008856,
+      "runtime_seconds": 1.6046004670006369,
+      "peak_rss_bytes": 479641600,
       "curve": {
         "displacement_mm": [
-          0.00274044054094702,
-          0.005480967229232192,
-          0.008221502066589892,
-          0.010962043888866901,
-          0.013702725991606712
+          0.0,
+          -0.0006684976324322633,
+          -0.0013369952648645267,
+          -0.0020054930064361542,
+          -0.002673990820767358,
+          -0.0033424884895794094
         ],
         "load_kn": [
-          24.742245095869293,
-          49.48448782482592,
-          74.22673341119662,
-          98.96897234092467,
-          123.71121942391619
+          0.0,
+          -24.742244452238083,
+          -49.48448950052261,
+          -74.22673380374908,
+          -98.96897876262665,
+          -123.71122181415558
         ]
       },
+      "observations": [
+        {
+          "id": "each-iteration-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.155281076000392,
+          "runtime_seconds": 1.692710041999817,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 2.0029954590008856,
+          "runtime_seconds": 1.577165963999505,
+          "peak_rss_bytes": 479465472,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        },
+        {
+          "id": "each-iteration-standard-secant",
+          "configuration": {
+            "target": {
+              "integration_method": "LoadControl",
+              "method": "StandardSecantLineSearch",
+              "adaptive_convergence_criteria": "ForceMoment",
+              "pdelta_effect": "EachIteration",
+              "convergence_tolerance": 0.0001,
+              "csharp_line_search_compatibility": true,
+              "arc_length_procedure": "OnlyControlPoint",
+              "dr2": 0.01,
+              "is_max_arc_length_ray": true,
+              "max_arc_length_ray": 0.01,
+              "update_dr2": false,
+              "arc_length_max_cutbacks": 0,
+              "arc_length_cutback_factor": 0.5,
+              "arc_length_min_radius": 0.0,
+              "max_iterations": 1000,
+              "line_search_max_iterations": 1000
+            },
+            "analysis_overrides": {}
+          },
+          "completed": true,
+          "range_covered": true,
+          "outcomes": [
+            {
+              "analysis_key": 1,
+              "analysis_name": "Vert",
+              "outcome": "completed",
+              "committed_steps": 5
+            }
+          ],
+          "unsafe_steps": 0,
+          "committed_steps": 5,
+          "iterations": 5,
+          "linear_solves": 6,
+          "factorizations": 6,
+          "preparation_seconds": 1.8640669950000301,
+          "runtime_seconds": 1.6046004670006369,
+          "peak_rss_bytes": 479641600,
+          "curve": {
+            "displacement_mm": [
+              0.0,
+              -0.0006684976324322633,
+              -0.0013369952648645267,
+              -0.0020054930064361542,
+              -0.002673990820767358,
+              -0.0033424884895794094
+            ],
+            "load_kn": [
+              0.0,
+              -24.742244452238083,
+              -49.48448950052261,
+              -74.22673380374908,
+              -98.96897876262665,
+              -123.71122181415558
+            ]
+          }
+        }
+      ],
+      "repetitions": 3,
       "response_vs_baseline": {
+        "available": true,
+        "comparison": "signed_path_arclength_v1",
         "range_covered": true,
+        "peak_sign_match": true,
+        "normalized_load_path_rmse": 1.800501216421607e-08,
+        "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+        "peak_load_relative_error": 7.70887470893421e-09,
+        "path_area_relative_error": 1.4952522639821852e-07,
+        "endpoint_displacement_relative_error": 2.612169610610842e-07,
+        "endpoint_load_relative_error": 7.70887470893421e-09,
         "reference_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.003342489362694323,
+          0.0
         ],
         "actual_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
+          -0.0033424884895794094,
+          0.0
         ],
-        "overlap_displacement_range_mm": [
-          0.00274044054094702,
-          0.013702725991606712
-        ],
-        "evaluation_points": 204,
-        "peak_load_relative_error": 0.0,
-        "normalized_curve_rmse": 0.0,
-        "curve_area_relative_error": 0.0,
-        "initial_stiffness_relative_error": 0.0,
-        "peak_displacement_absolute_error_mm": 0.0,
-        "peak_displacement_allowed_mm": 0.1,
-        "available": true,
-        "reference": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
-        "actual": {
-          "peak_load_kn": 123.71121942391619,
-          "peak_displacement_mm": 0.013702725991606712,
-          "area": 0.8137004726899031,
-          "initial_stiffness_kn_per_mm": 9028.540603756503
-        },
         "within_curve_tolerance": true
       },
+      "response_observations": [
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        },
+        {
+          "available": true,
+          "comparison": "signed_path_arclength_v1",
+          "range_covered": true,
+          "peak_sign_match": true,
+          "normalized_load_path_rmse": 1.800501216421607e-08,
+          "normalized_displacement_path_rmse": 1.4029514183645388e-07,
+          "peak_load_relative_error": 7.70887470893421e-09,
+          "path_area_relative_error": 1.4952522639821852e-07,
+          "endpoint_displacement_relative_error": 2.612169610610842e-07,
+          "endpoint_load_relative_error": 7.70887470893421e-09,
+          "reference_displacement_range_mm": [
+            -0.003342489362694323,
+            0.0
+          ],
+          "actual_displacement_range_mm": [
+            -0.0033424884895794094,
+            0.0
+          ],
+          "within_curve_tolerance": true
+        }
+      ],
+      "all_repetitions_response_accepted": true,
+      "baseline_safe": true,
+      "reference_evidence_accepted": true,
       "qualifies": true
     }
   ]

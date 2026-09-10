@@ -1,0 +1,279 @@
+{
+  "schema_version": 3,
+  "harness_revision": 7,
+  "result": {
+    "id": "5.2_coarse",
+    "name": "Bridge_5.2_coarse",
+    "run_mode": "authored",
+    "gdl": 2646,
+    "interfaces": 730,
+    "preparation_seconds": 6.189528988999882,
+    "total_seconds": 30.34128462699846,
+    "provenance": {
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/umfpack",
+      "requested_linear_solver_backend": "auto",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_5.2_coarse.hrx",
+          "bytes": 221597320,
+          "sha256": "0eef5ae5551145e5f964b438e16a0b8b8118bb67fd968682de1162008e413f17"
+        },
+        "csharp_results": {
+          "name": "Bridge_5.2_coarse.Results",
+          "bytes": 1349578752,
+          "sha256": "4299abffdc52a7ba758be3a07772f76abec2eb19e1e41ada56c022bf1d341b9b"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "5.2",
+      "variant": "ring separation coarse",
+      "figures": [
+        15
+      ],
+      "capacity_kn": 500.0,
+      "master_point": 5,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_method": "ModifiedRegulaFalsiLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.00999999977648258,
+        "effective_method": "ModifiedRegulaFalsiLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.00999999977648258,
+        "csharp_steps": 1775
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 1.6184710649995395
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed_at_configured_displacement_limit",
+        "exit_code": -3,
+        "committed_steps": 252,
+        "runtime_seconds": 14.082455969000875
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 257,
+    "unsafe_steps_by_criterion": {
+      "Work": 257
+    },
+    "parity": {
+      "complete_step_history": false,
+      "reference_outputs_complete": false,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 1780,
+        "actual_steps": 257,
+        "matched_steps": 257,
+        "missing_steps": 1523,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 76,
+        "actual_rows": 257,
+        "matched_rows": 15,
+        "missing_rows": 61,
+        "extra_rows": 242,
+        "max_absolute": 424.727294921875,
+        "relative_l2": 0.15150983738407517,
+        "worst_key": [
+          22,
+          250
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1871.9638671875,
+        "actual_at_worst": -2296.691162109375
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 152,
+        "actual_rows": 514,
+        "matched_rows": 30,
+        "missing_rows": 122,
+        "extra_rows": 484,
+        "max_absolute": 0.3387333080172539,
+        "relative_l2": 0.1981585268637398,
+        "worst_key": [
+          22,
+          250,
+          5
+        ],
+        "worst_component": 0,
+        "reference_at_worst": 0.72104811668396,
+        "actual_at_worst": 0.3823148086667061
+      }
+    },
+    "stepwise_parity_applicable": true,
+    "response_comparison": "authored_stepwise_parity",
+    "strict_phase_checkpoint_comparison": null,
+    "live_load_curve": {
+      "range_covered": false,
+      "reference_monotonic": true,
+      "actual_monotonic": true,
+      "displacement_orientation": -1.0,
+      "reference_displacement_range_mm": [
+        -0.0,
+        8.904611505568027
+      ],
+      "actual_displacement_range_mm": [
+        -0.0,
+        1.2470198050141335
+      ],
+      "overlap_displacement_range_mm": [
+        -0.0,
+        1.2470198050141335
+      ],
+      "terminal_range_allowed_mm": 0.17809223011136055,
+      "terminal_range_shortfall_start_mm": 0.0,
+      "terminal_range_shortfall_end_mm": 7.657591700553894,
+      "evaluation_points": 461,
+      "peak_load_relative_error": 0.21755437081325088,
+      "normalized_curve_rmse": 0.4354097645678313,
+      "curve_area_relative_error": 1.1096261696819485,
+      "initial_stiffness_relative_error": 0.6611767272748159,
+      "peak_displacement_absolute_error_mm": 6.657852083444595,
+      "peak_displacement_allowed_mm": 0.15773233249783516,
+      "available": true,
+      "reference": {
+        "peak_load_kn": -635.9454956054688,
+        "peak_displacement_mm": 7.886616624891758,
+        "area": -4496.962644693568,
+        "initial_stiffness_kn_per_mm": -314.68699573380667
+      },
+      "actual": {
+        "peak_load_kn": -774.2982177734375,
+        "peak_displacement_mm": 1.2287645414471626,
+        "area": -579.120945319242,
+        "initial_stiffness_kn_per_mm": -1156.684466452422
+      },
+      "within_curve_tolerance": false,
+      "reference_sample_rows": 71,
+      "actual_sample_rows": 252,
+      "master_point": 5,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 166818,
+        "python_total": 166818,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 144903,
+            "python": 149631
+          },
+          "1": {
+            "csharp": 17296,
+            "python": 12912
+          },
+          "2": {
+            "csharp": 152,
+            "python": 109
+          },
+          "3": {
+            "csharp": 1561,
+            "python": 1321
+          },
+          "4": {
+            "csharp": 797,
+            "python": 571
+          },
+          "5": {
+            "csharp": 1895,
+            "python": 2000
+          },
+          "6": {
+            "csharp": 214,
+            "python": 274
+          }
+        }
+      },
+      "22": {
+        "available": false,
+        "csharp_total": 0,
+        "python_total": 166818,
+        "exact": false,
+        "reason": "no C# SpringStates rows at the terminal step",
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 6871
+          },
+          "1": {
+            "csharp": 0,
+            "python": 8512
+          },
+          "2": {
+            "csharp": 0,
+            "python": 369
+          },
+          "3": {
+            "csharp": 0,
+            "python": 16094
+          },
+          "4": {
+            "csharp": 0,
+            "python": 56438
+          },
+          "5": {
+            "csharp": 0,
+            "python": 8481
+          },
+          "6": {
+            "csharp": 0,
+            "python": 69438
+          },
+          "8": {
+            "csharp": 0,
+            "python": 615
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

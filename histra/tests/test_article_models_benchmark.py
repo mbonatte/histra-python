@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import csv
 import json
+import sqlite3
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -15,12 +17,14 @@ from histra.tools.article_models_benchmark import (
     BENCHMARK_HARNESS_REVISION,
     BENCHMARK_MODELS,
     compare_phase_distributions,
+    compare_phase_checkpoint_at_physical_displacement,
     compute_curve_metrics,
     compute_parity_metrics,
     _markdown_report,
     _load_checkpoint,
     _progress_line,
     _apply_strict_strategy,
+    _runtime_provenance,
     strict_convergence_tolerance,
     validate_article_source_data,
 )
@@ -32,6 +36,20 @@ def test_registry_covers_all_models_article_figures_and_table_capacities() -> No
     assert set(ARTICLE_FIGURES) == {
         figure for item in BENCHMARK_MODELS for figure in item["figures"]
     }
+
+
+def test_runtime_provenance_records_selected_sparse_backend(tmp_path) -> None:
+    hrx = tmp_path / "Bridge.hrx"
+    results = tmp_path / "Bridge.Results"
+    hrx.write_bytes(b"hrx")
+    results.write_bytes(b"results")
+
+    provenance = _runtime_provenance(hrx, results)
+
+    from histra.types.linear_system import LinearSystem
+
+    assert provenance["solver_backend"] == f"Python/{LinearSystem(0).backend}"
+    assert provenance["requested_linear_solver_backend"] == LinearSystem(0).requested_backend
     assert ARTICLE_TABLE_1_CAPACITIES_KN == {
         "3.1": 540.0, "3.2": 360.0, "3.3": 600.0, "3.4": 320.0,
         "5.1": 1720.0, "5.2": 500.0, "MS1": 455.0, "MS2": 320.0,
@@ -216,6 +234,46 @@ def test_curve_metrics_reject_incomplete_displacement_range() -> None:
     assert not metrics["within_curve_tolerance"]
 
 
+def test_curve_metrics_accepts_terminal_shortfall_within_peak_displacement_limit() -> None:
+    metrics = compute_curve_metrics(
+        [0.0, 5.0, 10.0],
+        [0.0, 50.0, 100.0],
+        [0.0, 5.0, 9.95],
+        [0.0, 50.0, 99.5],
+    )
+
+    assert metrics["range_covered"]
+    assert metrics["terminal_range_shortfall_end_mm"] == pytest.approx(0.05)
+    assert metrics["peak_displacement_absolute_error_mm"] == pytest.approx(0.05)
+    assert metrics["within_curve_tolerance"]
+
+
+def test_curve_metrics_rejects_reversed_signed_response() -> None:
+    metrics = compute_curve_metrics(
+        [0.0, 1.0, 2.0, 3.0],
+        [0.0, 10.0, 20.0, 30.0],
+        [0.0, -1.0, -2.0, -3.0],
+        [0.0, -10.0, -20.0, -30.0],
+    )
+
+    assert not metrics["available"]
+    assert not metrics["within_curve_tolerance"]
+    assert metrics["actual_monotonic"] is False
+
+
+def test_curve_metrics_rejects_descending_or_cyclic_path_waiver() -> None:
+    metrics = compute_curve_metrics(
+        [0.0, 1.0, 2.0, 1.0, 0.5],
+        [0.0, 10.0, 20.0, 8.0, 1.0],
+        [0.0, 1.0, 2.0, 1.0, 0.5],
+        [0.0, 10.0, 20.0, 8.0, 1.0],
+    )
+
+    assert not metrics["available"]
+    assert not metrics["within_curve_tolerance"]
+    assert metrics["reference_monotonic"] is False
+
+
 def test_phase_distribution_comparison_fails_closed() -> None:
     matched = compare_phase_distributions({0: 2, 4: 1}, {0: 2, 4: 1})
     assert matched["available"]
@@ -230,18 +288,50 @@ def test_phase_distribution_comparison_fails_closed() -> None:
     assert missing["reason"] == "no C# SpringStates rows at the terminal step"
 
 
+def test_strict_phase_checkpoint_matches_physical_displacement_not_step_number(tmp_path) -> None:
+    results = tmp_path / "reference.Results"
+    with sqlite3.connect(results) as db:
+        db.execute(
+            "CREATE TABLE SpringStatesTmp (AnalysisKey INTEGER, Combination INTEGER, Step INTEGER, Phase REAL)"
+        )
+        db.executemany(
+            "INSERT INTO SpringStatesTmp VALUES (?, ?, ?, ?)",
+            [(22, 1, 3, 0), (22, 1, 3, 0), (22, 1, 3, 4)],
+        )
+    analysis = SimpleNamespace(key=22, master_point=5, dir_x=0.0, dir_y=0.0, dir_z=-1.0)
+    execution = SimpleNamespace(committed_steps=(SimpleNamespace(step=7),))
+
+    result = compare_phase_checkpoint_at_physical_displacement(
+        results,
+        execution,
+        analysis,
+        {(22, 3, 5): np.array([0.0, 0.0, -0.3000])},
+        {(22, 7, 5): np.array([0.0, 0.0, -0.3002])},
+        {0: 2, 4: 1},
+    )
+
+    assert result["accepted"]
+    assert result["strict_step"] == 7
+    assert result["csharp_step"] == 3
+    assert result["comparison"] == "physical_displacement_phase_checkpoint_v1"
+
+
 def test_progress_line_handles_a_strict_run_without_comparable_rows() -> None:
     result = {
         "run_mode": "strict",
         "name": "Bridge",
         "unsafe_step_count": 0,
         "total_seconds": 1.25,
+        "response_comparison": "strict_curve_response",
         "parity": {
             "step_history": {"actual_steps": 0, "expected_steps": 10},
-            "reaction": {"max_absolute": None},
+            "reaction": {"max_absolute": 999.0},
         },
+        "live_load_curve": {"available": False},
     }
-    assert "dR=n/a" in _progress_line(result)
+    progress = _progress_line(result)
+    assert "curve=n/a" in progress
+    assert "dR=" not in progress
 
 
 def test_markdown_report_uses_na_when_strict_run_has_no_comparable_rows() -> None:
@@ -250,16 +340,19 @@ def test_markdown_report_uses_na_when_strict_run_has_no_comparable_rows() -> Non
         "name": "Bridge",
         "unsafe_step_count": 0,
         "release_gate_pass": False,
+        "response_comparison": "strict_curve_response",
         "parity": {
             "step_history": {"actual_steps": 0, "expected_steps": 10},
-            "reaction": {"max_absolute": None},
-            "model_point_displacement_mm": {"max_absolute": None},
+            "reaction": {"max_absolute": 999.0},
+            "model_point_displacement_mm": {"max_absolute": 999.0},
         },
+        "live_load_curve": {"available": False, "reason": "no completed live-load path"},
     }
 
     report = _markdown_report([result])
 
-    assert "| strict | Bridge | 0/10 | 0 | n/a | n/a | NOT RELEASE-READY |" in report
+    assert "| strict | Bridge | 0/10 | 0 | curve: n/a (no completed live-load path) | NOT RELEASE-READY |" in report
+    assert "999" not in report
 
 
 def test_resume_rejects_checkpoint_from_older_harness_revision(tmp_path) -> None:

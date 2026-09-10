@@ -3,8 +3,22 @@
   "hrx": "my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.hrx",
   "target": "Vert",
   "max_steps": 5,
+  "repetitions": 3,
   "baseline_id": "each-step-standard-bisection",
+  "reference_results": "my_model/benchmark_3_Pdelta/benchmark_virgin_PDelta.Results",
+  "reference_evidence": {
+    "accepted": true,
+    "source": "C# benchmark_virgin_PDelta.Results; AnalysisKey=1, Combination=1, master point 9, Uz",
+    "source_sha256": "1df967ed4c8cb10c8ebfc3964fc24b68208c9ebb90516d1fa18027d6f6d5eaa4"
+  },
+  "setup_mutations": [
+    {
+      "selector": "pier_foundation",
+      "material_key": 146
+    }
+  ],
   "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
+  "cache_state": "process-warm; fresh model and runtime per observation",
   "candidates": [
     {"id": "authored-each-step"},
     {

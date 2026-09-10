@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -14,15 +15,21 @@ from histra.solver.interface_material import (
     change_interface_materials,
 )
 from histra.solver.session import AnalysisSession, AnalysisSessionError
+from histra.tools import interface_chain_benchmark as chain_benchmark
 
 ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-chain" / "model.hrx"
 RESULTS = ROOT / "model-chain" / "model.Results"
 AFFECTED = (359, 360, 361, 362)
 
-pytestmark = pytest.mark.skipif(
-    not HRX.exists(), reason="model-chain benchmark assets are not installed"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not HRX.exists(), reason="model-chain benchmark assets are not installed"
+    ),
+    pytest.mark.filterwarnings(
+        "ignore::histra.solver.strategy.SuboptimalSolverStrategyWarning"
+    ),
+]
 
 
 def test_hrx_dependency_chain_is_vert_scour_live():
@@ -103,6 +110,95 @@ def test_session_rejects_skipping_required_predecessor():
     session = AnalysisSession(model)
     with pytest.raises(AnalysisSessionError, match="requires predecessor 23"):
         session.run("LiveLoad_1", max_committed_steps=1)
+
+
+def test_chain_terminal_response_uses_master_point_not_global_displacements(monkeypatch):
+    """Gate C compares the requested physical response in native units."""
+
+    analysis = SimpleNamespace(key=22, name="LiveLoad_1", master_point=5, dir_x=0.0, dir_y=0.0, dir_z=-1.0)
+    step = SimpleNamespace(
+        step=9,
+        u=np.array([1.0]),
+        reaction_x=0.0,
+        reaction_y=0.0,
+        reaction_z=-12.04,
+    )
+    execution = SimpleNamespace(committed_steps=(step,))
+    monkeypatch.setattr(
+        chain_benchmark,
+        "compute_model_point_displacements",
+        lambda model, u, step: (
+            SimpleNamespace(parent_key=5, ux=0.0, uy=0.0, uz=-0.3002),
+        ),
+    )
+
+    metrics = chain_benchmark._terminal_response_metrics(
+        object(),
+        execution,
+        analysis,
+        {(22, 9): np.array([0.0, 0.0, -12.0])},
+        {(22, 9, 5): np.array([0.0, 0.0, -0.3000])},
+    )
+
+    assert metrics["direction"] == "Uz"
+    assert metrics["reaction_absolute_error_kn"] == pytest.approx(0.04)
+    assert metrics["displacement_absolute_error_mm"] == pytest.approx(0.002)
+    assert metrics["within_tolerance"]
+
+
+def test_chain_terminal_response_rejects_missing_csharp_model_point():
+    analysis = SimpleNamespace(key=22, name="LiveLoad_1", master_point=5, dir_x=0.0, dir_y=0.0, dir_z=-1.0)
+    execution = SimpleNamespace(committed_steps=(SimpleNamespace(step=1, u=np.zeros(1)),))
+
+    metrics = chain_benchmark._terminal_response_metrics(
+        object(), execution, analysis, {(22, 1): np.zeros(3)}, {}
+    )
+
+    assert not metrics["available"]
+    assert not metrics["within_tolerance"]
+
+
+def test_chain_reports_blocked_dependent_stage_without_reusing_tainted_state():
+    analysis = SimpleNamespace(key=22, name="LiveLoad_1")
+
+    execution = chain_benchmark._blocked_execution(analysis, "23:scour_1 nonconverged")
+
+    assert execution.outcome.value == "failed"
+    assert not execution.completed
+    assert execution.committed_steps == ()
+    assert execution.message == (
+        "blocked by incomplete predecessor: 23:scour_1 nonconverged"
+    )
+
+
+def test_chain_records_reproducible_solver_configuration():
+    analysis = SimpleNamespace(
+        integration_method="ArcLength",
+        method="StandardBisectionLineSearch",
+        adaptive_convergence_criteria="ForceMoment",
+        convergence_tolerance=1.0e-4,
+        max_iterations=50,
+        line_search_tolerance=0.8,
+        line_search_max_iterations=100,
+        csharp_line_search_compatibility=False,
+        dr2=0.04,
+        arc_length_max_cutbacks=6,
+    )
+
+    configuration = chain_benchmark._analysis_configuration(analysis)
+
+    assert configuration == {
+        "integration_method": "ArcLength",
+        "method": "StandardBisectionLineSearch",
+        "convergence_criterion": "ForceMoment",
+        "convergence_tolerance": 1.0e-4,
+        "max_iterations": 50,
+        "line_search_tolerance": 0.8,
+        "line_search_max_iterations": 100,
+        "csharp_line_search_compatibility": False,
+        "arc_length_radius_squared": 0.04,
+        "arc_length_max_cutbacks": 6,
+    }
 
 
 @pytest.mark.skipif(

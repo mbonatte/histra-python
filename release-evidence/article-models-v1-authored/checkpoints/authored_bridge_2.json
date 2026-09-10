@@ -1,0 +1,275 @@
+{
+  "schema_version": 3,
+  "harness_revision": 7,
+  "result": {
+    "id": "bridge_2",
+    "name": "Bridge_2",
+    "run_mode": "authored",
+    "gdl": 1890,
+    "interfaces": 489,
+    "preparation_seconds": 2.350714350000999,
+    "total_seconds": 125.9594694339994,
+    "provenance": {
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/umfpack",
+      "requested_linear_solver_backend": "auto",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_2.hrx",
+          "bytes": 57242073,
+          "sha256": "64e2fc7b4a8d573635ed4374aab75f7ae4a88bf2f30f8ba0e9d3630b78260510"
+        },
+        "csharp_results": {
+          "name": "Bridge_2.Results",
+          "bytes": 1833537536,
+          "sha256": "fbfd843680ddf938897cddfb277e766be282d942c887341af63f5de8d7e1640a"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "MS2",
+      "variant": "detached spandrels",
+      "figures": [
+        22
+      ],
+      "capacity_kn": 320.0,
+      "master_point": 3,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_method": "ModifiedRegulaFalsiLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_method": "StandardInitialInterpolatedLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.000500000023748726,
+        "effective_method": "StandardInitialInterpolatedLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.000500000023748726,
+        "csharp_steps": 425
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 2.712906937000298
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 425,
+        "runtime_seconds": 118.07521325599919
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 430,
+    "unsafe_steps_by_criterion": {
+      "Work": 430
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 430,
+        "actual_steps": 430,
+        "matched_steps": 430,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 430,
+        "actual_rows": 430,
+        "matched_rows": 430,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 2.561523437489541,
+        "relative_l2": 0.00012630919572616839,
+        "worst_key": [
+          22,
+          278
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1217.9704895019427,
+        "actual_at_worst": -1215.4089660644531
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2580,
+        "actual_rows": 2580,
+        "matched_rows": 2580,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.008208751678466797,
+        "relative_l2": 0.00014302375076824002,
+        "worst_key": [
+          22,
+          278,
+          5
+        ],
+        "worst_component": 0,
+        "reference_at_worst": -24.48120355606079,
+        "actual_at_worst": -24.489412307739258
+      }
+    },
+    "stepwise_parity_applicable": true,
+    "response_comparison": "authored_stepwise_parity",
+    "strict_phase_checkpoint_comparison": null,
+    "live_load_curve": {
+      "range_covered": true,
+      "reference_monotonic": true,
+      "actual_monotonic": true,
+      "displacement_orientation": -1.0,
+      "reference_displacement_range_mm": [
+        -0.0,
+        40.00763238873333
+      ],
+      "actual_displacement_range_mm": [
+        -0.0,
+        40.008667460642755
+      ],
+      "overlap_displacement_range_mm": [
+        -0.0,
+        40.00763238873333
+      ],
+      "terminal_range_allowed_mm": 0.8001526477746665,
+      "terminal_range_shortfall_start_mm": 0.0,
+      "terminal_range_shortfall_end_mm": 0.0,
+      "evaluation_points": 1049,
+      "peak_load_relative_error": 4.9834928699460444e-05,
+      "normalized_curve_rmse": 0.0004416340683253605,
+      "curve_area_relative_error": 4.49482416719345e-05,
+      "initial_stiffness_relative_error": 2.8863520056261714e-08,
+      "peak_displacement_absolute_error_mm": 0.09309496730566025,
+      "peak_displacement_allowed_mm": 0.7982705715112388,
+      "available": true,
+      "reference": {
+        "peak_load_kn": -343.0821228027178,
+        "peak_displacement_mm": 39.91352857556194,
+        "area": -12954.539909111418,
+        "initial_stiffness_kn_per_mm": -281.7063092941328
+      },
+      "actual": {
+        "peak_load_kn": -343.06502532958984,
+        "peak_displacement_mm": 39.82043360825628,
+        "area": -12954.312707980574,
+        "initial_stiffness_kn_per_mm": -281.70466283745566
+      },
+      "within_curve_tolerance": true,
+      "reference_sample_rows": 425,
+      "actual_sample_rows": 425,
+      "master_point": 3,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 41346,
+        "python_total": 41346,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 29534,
+            "python": 29525
+          },
+          "1": {
+            "csharp": 4189,
+            "python": 4155
+          },
+          "2": {
+            "csharp": 95,
+            "python": 111
+          },
+          "3": {
+            "csharp": 2651,
+            "python": 2669
+          },
+          "5": {
+            "csharp": 1521,
+            "python": 1494
+          },
+          "6": {
+            "csharp": 1269,
+            "python": 1305
+          }
+        }
+      },
+      "22": {
+        "available": true,
+        "csharp_total": 41346,
+        "python_total": 41346,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 1422,
+            "python": 1431
+          },
+          "1": {
+            "csharp": 9277,
+            "python": 9292
+          },
+          "2": {
+            "csharp": 175,
+            "python": 180
+          },
+          "3": {
+            "csharp": 3085,
+            "python": 2527
+          },
+          "4": {
+            "csharp": 12188,
+            "python": 10127
+          },
+          "5": {
+            "csharp": 1825,
+            "python": 2311
+          },
+          "6": {
+            "csharp": 12296,
+            "python": 14348
+          },
+          "8": {
+            "csharp": 1078,
+            "python": 1130
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

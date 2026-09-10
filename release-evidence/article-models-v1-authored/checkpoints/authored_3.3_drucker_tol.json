@@ -1,0 +1,275 @@
+{
+  "schema_version": 3,
+  "harness_revision": 7,
+  "result": {
+    "id": "3.3_drucker_tol",
+    "name": "Bridge_3.3_2_Zhang_drucker_tol",
+    "run_mode": "authored",
+    "gdl": 16408,
+    "interfaces": 6376,
+    "preparation_seconds": 15.524872202000552,
+    "total_seconds": 724.0434999809986,
+    "provenance": {
+      "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "python_implementation": "CPython",
+      "packages": {
+        "histra-python": "1.0.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.1",
+        "numba": "0.67.0"
+      },
+      "solver_backend": "Python/umfpack",
+      "requested_linear_solver_backend": "auto",
+      "inputs": {
+        "hrx": {
+          "name": "Bridge_3.3_2_Zhang_drucker_tol.hrx",
+          "bytes": 368949403,
+          "sha256": "9f690cfe891f4efc8f399c7617718cbea854e9391e64318c5c760e86e54f4e2e"
+        },
+        "csharp_results": {
+          "name": "Bridge_3.3_2_Zhang_drucker_tol.Results",
+          "bytes": 4086239232,
+          "sha256": "366e9390751f2d0384cbff55aecb4a894f668005f9bd1d11b73b7d6aa36ede81"
+        }
+      }
+    },
+    "registry": {
+      "specimen": "3.3",
+      "variant": "Drucker tight tolerance",
+      "figures": [
+        17
+      ],
+      "capacity_kn": 600.0,
+      "master_point": 15,
+      "direction": "Uz"
+    },
+    "audit_tolerances": {
+      "force_absolute": 0.001,
+      "force_relative": 1e-05,
+      "residual": 0.0001
+    },
+    "settings": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "authored_method": "ModifiedRegulaFalsiLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 0.0001,
+        "effective_method": "ModifiedRegulaFalsiLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 0.0001,
+        "csharp_steps": 5
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "authored_method": "StandardInitialInterpolatedLineSearch",
+        "authored_criterion": "Work",
+        "authored_tolerance": 9.99999974737875e-05,
+        "effective_method": "StandardInitialInterpolatedLineSearch",
+        "csharp_line_search_compatibility": true,
+        "effective_criterion": "Work",
+        "effective_tolerance": 9.99999974737875e-05,
+        "csharp_steps": 146
+      }
+    ],
+    "outcomes": [
+      {
+        "analysis_key": 1,
+        "analysis_name": "Vert",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 5,
+        "runtime_seconds": 9.17404680800064
+      },
+      {
+        "analysis_key": 22,
+        "analysis_name": "NewAnalysis",
+        "outcome": "completed",
+        "exit_code": 0,
+        "committed_steps": 146,
+        "runtime_seconds": 682.5106349220005
+      }
+    ],
+    "warning_count": 2,
+    "unsafe_step_count": 151,
+    "unsafe_steps_by_criterion": {
+      "Work": 151
+    },
+    "parity": {
+      "complete_step_history": true,
+      "reference_outputs_complete": true,
+      "within_parity_tolerance": false,
+      "step_history": {
+        "expected_steps": 151,
+        "actual_steps": 151,
+        "matched_steps": 151,
+        "missing_steps": 0,
+        "extra_steps": 0
+      },
+      "reaction": {
+        "reference_rows": 151,
+        "actual_rows": 151,
+        "matched_rows": 151,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 2.3913917541503906,
+        "relative_l2": 0.00022235593640207674,
+        "worst_key": [
+          22,
+          135
+        ],
+        "worst_component": 2,
+        "reference_at_worst": -1134.7395210266113,
+        "actual_at_worst": -1137.1309127807617
+      },
+      "model_point_displacement_mm": {
+        "reference_rows": 2567,
+        "actual_rows": 2567,
+        "matched_rows": 2567,
+        "missing_rows": 0,
+        "extra_rows": 0,
+        "max_absolute": 0.005173161625862122,
+        "relative_l2": 0.0005083474018475241,
+        "worst_key": [
+          22,
+          135,
+          1
+        ],
+        "worst_component": 2,
+        "reference_at_worst": 0.4171933978796005,
+        "actual_at_worst": 0.4120202362537384
+      }
+    },
+    "stepwise_parity_applicable": true,
+    "response_comparison": "authored_stepwise_parity",
+    "strict_phase_checkpoint_comparison": null,
+    "live_load_curve": {
+      "range_covered": true,
+      "reference_monotonic": true,
+      "actual_monotonic": true,
+      "displacement_orientation": -1.0,
+      "reference_displacement_range_mm": [
+        -0.0,
+        1.8461245484650135
+      ],
+      "actual_displacement_range_mm": [
+        -0.0,
+        1.8461642460897565
+      ],
+      "overlap_displacement_range_mm": [
+        -0.0,
+        1.8461245484650135
+      ],
+      "terminal_range_allowed_mm": 0.1,
+      "terminal_range_shortfall_start_mm": 0.0,
+      "terminal_range_shortfall_end_mm": 0.0,
+      "evaluation_points": 491,
+      "peak_load_relative_error": 0.00011432915947411785,
+      "normalized_curve_rmse": 0.0004443795183115064,
+      "curve_area_relative_error": 0.00014048056539271115,
+      "initial_stiffness_relative_error": 1.5516649734039515e-05,
+      "peak_displacement_absolute_error_mm": 2.3455359041690826e-05,
+      "peak_displacement_allowed_mm": 0.1,
+      "available": true,
+      "reference": {
+        "peak_load_kn": -783.5401744842529,
+        "peak_displacement_mm": 1.5842518396675587,
+        "area": -916.0370610638787,
+        "initial_stiffness_kn_per_mm": -975.0035436867314
+      },
+      "actual": {
+        "peak_load_kn": -783.6297559738159,
+        "peak_displacement_mm": 1.5842752950266004,
+        "area": -916.183787669514,
+        "initial_stiffness_kn_per_mm": -975.0161152893784
+      },
+      "within_curve_tolerance": true,
+      "reference_sample_rows": 146,
+      "actual_sample_rows": 146,
+      "master_point": 15,
+      "direction": "Uz",
+      "baseline_analysis_key": 1
+    },
+    "spring_phase_distributions": {
+      "1": {
+        "available": true,
+        "csharp_total": 251152,
+        "python_total": 251152,
+        "exact": false,
+        "reason": null,
+        "mismatches": {
+          "0": {
+            "csharp": 198981,
+            "python": 198983
+          },
+          "3": {
+            "csharp": 14609,
+            "python": 14608
+          },
+          "4": {
+            "csharp": 18842,
+            "python": 18841
+          }
+        }
+      },
+      "22": {
+        "available": false,
+        "csharp_total": 0,
+        "python_total": 251152,
+        "exact": false,
+        "reason": "no C# SpringStates rows at the terminal step",
+        "mismatches": {
+          "0": {
+            "csharp": 0,
+            "python": 15747
+          },
+          "1": {
+            "csharp": 0,
+            "python": 16595
+          },
+          "2": {
+            "csharp": 0,
+            "python": 1413
+          },
+          "3": {
+            "csharp": 0,
+            "python": 33719
+          },
+          "4": {
+            "csharp": 0,
+            "python": 61638
+          },
+          "5": {
+            "csharp": 0,
+            "python": 42023
+          },
+          "6": {
+            "csharp": 0,
+            "python": 76572
+          },
+          "7": {
+            "csharp": 0,
+            "python": 1380
+          },
+          "8": {
+            "csharp": 0,
+            "python": 1402
+          },
+          "9": {
+            "csharp": 0,
+            "python": 656
+          },
+          "10": {
+            "csharp": 0,
+            "python": 7
+          }
+        }
+      }
+    },
+    "complete_dependency_chain": true,
+    "release_gate_pass": false
+  }
+}

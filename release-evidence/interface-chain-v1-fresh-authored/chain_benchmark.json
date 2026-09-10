@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "harness_revision": 6,
+  "hrx": {
+    "path": "/home/mauricio/coding/histra-python/histra/model-chain/model.hrx",
+    "sha256": "5d653de1edbf15729d89940df2c13a7acedabea1a479ae09a4a91aadfce5c2ee"
+  },
+  "environment": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "affected_interfaces": [
+    359,
+    360,
+    361,
+    362
+  ],
+  "modes": {
+    "authored": {
+      "mode": "authored",
+      "passed": false,
+      "total_time_seconds": 26.199894189834595,
+      "unmanaged_initial": 0,
+      "unmanaged_after_mut1": 0,
+      "unmanaged_after_mut2": 0,
+      "total_unsafe_steps": 48,
+      "exact_output_parity": {
+        "complete_step_history": true,
+        "reference_outputs_complete": true,
+        "within_parity_tolerance": false,
+        "step_history": {
+          "expected_steps": 48,
+          "actual_steps": 48,
+          "matched_steps": 48,
+          "missing_steps": 0,
+          "extra_steps": 0
+        },
+        "reaction": {
+          "reference_rows": 48,
+          "actual_rows": 48,
+          "matched_rows": 48,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "max_absolute": 0.13474025146570057,
+          "relative_l2": 3.786545925911257e-05,
+          "worst_key": [
+            22,
+            9
+          ],
+          "worst_component": 2,
+          "reference_at_worst": -728.2964573304635,
+          "actual_at_worst": -728.4311975819292
+        },
+        "model_point_displacement_mm": {
+          "reference_rows": 144,
+          "actual_rows": 144,
+          "matched_rows": 144,
+          "missing_rows": 0,
+          "extra_rows": 0,
+          "max_absolute": 0.0036859512329101562,
+          "relative_l2": 0.0001995668821025681,
+          "worst_key": [
+            22,
+            37,
+            3
+          ],
+          "worst_component": 2,
+          "reference_at_worst": -20.72028160095215,
+          "actual_at_worst": -20.71659564971924
+        }
+      },
+      "stepwise_parity_applicable": true,
+      "strict_phase_checkpoint_comparison": null,
+      "live_load_curve": {
+        "range_covered": true,
+        "reference_monotonic": true,
+        "actual_monotonic": true,
+        "displacement_orientation": -1.0,
+        "reference_displacement_range_mm": [
+          -0.0,
+          10.062557999044657
+        ],
+        "actual_displacement_range_mm": [
+          -0.0,
+          10.060277618467808
+        ],
+        "overlap_displacement_range_mm": [
+          -0.0,
+          10.060277618467808
+        ],
+        "terminal_range_allowed_mm": 0.20125115998089313,
+        "terminal_range_shortfall_start_mm": 0.0,
+        "terminal_range_shortfall_end_mm": 0.0022803805768489838,
+        "evaluation_points": 275,
+        "peak_load_relative_error": 0.00027648366243227077,
+        "normalized_curve_rmse": 0.0002687744739260278,
+        "curve_area_relative_error": 0.00021418286140982906,
+        "initial_stiffness_relative_error": 0.00030056148099260775,
+        "peak_displacement_absolute_error_mm": 0.0022803805768489838,
+        "peak_displacement_allowed_mm": 0.20125115998089313,
+        "available": true,
+        "reference": {
+          "peak_load_kn": -106.05729443195742,
+          "peak_displacement_mm": 10.062557999044657,
+          "area": -1010.7327324294486,
+          "initial_stiffness_kn_per_mm": -55.67558112824493
+        },
+        "actual": {
+          "peak_load_kn": -106.08661754114962,
+          "peak_displacement_mm": 10.060277618467808,
+          "area": -1010.7073125101969,
+          "initial_stiffness_kn_per_mm": -55.70959496356694
+        },
+        "within_curve_tolerance": true,
+        "reference_sample_rows": 38,
+        "actual_sample_rows": 38,
+        "master_point": 1,
+        "direction": "Uz",
+        "baseline_analysis_key": 23
+      },
+      "stages": [
+        {
+          "analysis_name": "Vert",
+          "analysis_key": 1,
+          "configuration": {
+            "integration_method": "LoadControl",
+            "method": "ModifiedRegulaFalsiLineSearch",
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.0001,
+            "max_iterations": 1000,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": true,
+            "arc_length_radius_squared": 0.01,
+            "arc_length_max_cutbacks": 0
+          },
+          "outcome": "completed",
+          "code": 0,
+          "completed": true,
+          "committed_steps": 5,
+          "expected_steps": 5,
+          "unsafe_steps": 5,
+          "response": {
+            "available": true,
+            "reference_step": 5,
+            "actual_step": 5,
+            "master_point": 1,
+            "direction": "Uz",
+            "reaction_reference_kn": -623.4713401794434,
+            "reaction_actual_kn": -623.4713363647461,
+            "reaction_absolute_error_kn": 3.814697265625e-06,
+            "reaction_allowed_kn": 0.1,
+            "displacement_reference_mm": -0.14932699501514435,
+            "displacement_actual_mm": -0.14932694844901562,
+            "displacement_absolute_error_mm": 4.6566128730773926e-08,
+            "displacement_allowed_mm": 0.05,
+            "within_tolerance": true
+          },
+          "response_acceptable": true,
+          "response_comparison": "authored_stepwise_parity",
+          "authored_stepwise_diagnostic": null,
+          "strict_phase_checkpoint": null,
+          "terminal_diagnostics": {
+            "step": 5,
+            "status": "OK",
+            "exit_code": 5,
+            "iterations": 5,
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.0001,
+            "convergence_error": 6.057847745975226e-06,
+            "residual_norm": 74.6318237854273,
+            "increment_norm": 0.005651222369518354,
+            "max_element_displacement": 0.030779596077451184
+          },
+          "passed": false
+        },
+        {
+          "analysis_name": "scour_1",
+          "analysis_key": 23,
+          "configuration": {
+            "integration_method": "LoadControl",
+            "method": "ModifiedRegulaFalsiLineSearch",
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.0001,
+            "max_iterations": 1000,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": true,
+            "arc_length_radius_squared": 0.01,
+            "arc_length_max_cutbacks": 0
+          },
+          "outcome": "completed",
+          "code": 0,
+          "completed": true,
+          "committed_steps": 5,
+          "expected_steps": 5,
+          "unsafe_steps": 5,
+          "response": {
+            "available": true,
+            "reference_step": 5,
+            "actual_step": 5,
+            "master_point": 1,
+            "direction": "Uz",
+            "reaction_reference_kn": -623.50415853085,
+            "reaction_actual_kn": -623.5041318261065,
+            "reaction_absolute_error_kn": 2.670474350452423e-05,
+            "reaction_allowed_kn": 0.1,
+            "displacement_reference_mm": -0.21574800834059715,
+            "displacement_actual_mm": -0.2157479152083397,
+            "displacement_absolute_error_mm": 9.313225746154785e-08,
+            "displacement_allowed_mm": 0.05,
+            "within_tolerance": true
+          },
+          "response_acceptable": true,
+          "response_comparison": "authored_stepwise_parity",
+          "authored_stepwise_diagnostic": null,
+          "strict_phase_checkpoint": null,
+          "terminal_diagnostics": {
+            "step": 5,
+            "status": "OK",
+            "exit_code": 1,
+            "iterations": 1,
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.0001,
+            "convergence_error": 8.223230856877807e-05,
+            "residual_norm": 125.78192036956757,
+            "increment_norm": 0.0004908410831157965,
+            "max_element_displacement": 0.066070124300406
+          },
+          "passed": false
+        },
+        {
+          "analysis_name": "LiveLoad_1",
+          "analysis_key": 22,
+          "configuration": {
+            "integration_method": "ArcLength",
+            "method": "StandardInitialInterpolatedLineSearch",
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.000500000023748726,
+            "max_iterations": 10000,
+            "line_search_tolerance": 0.8,
+            "line_search_max_iterations": 1000,
+            "csharp_line_search_compatibility": true,
+            "arc_length_radius_squared": 1.0,
+            "arc_length_max_cutbacks": 0
+          },
+          "outcome": "completed_at_configured_displacement_limit",
+          "code": -3,
+          "completed": true,
+          "committed_steps": 38,
+          "expected_steps": 38,
+          "unsafe_steps": 38,
+          "response": {
+            "range_covered": true,
+            "reference_monotonic": true,
+            "actual_monotonic": true,
+            "displacement_orientation": -1.0,
+            "reference_displacement_range_mm": [
+              -0.0,
+              10.062557999044657
+            ],
+            "actual_displacement_range_mm": [
+              -0.0,
+              10.060277618467808
+            ],
+            "overlap_displacement_range_mm": [
+              -0.0,
+              10.060277618467808
+            ],
+            "terminal_range_allowed_mm": 0.20125115998089313,
+            "terminal_range_shortfall_start_mm": 0.0,
+            "terminal_range_shortfall_end_mm": 0.0022803805768489838,
+            "evaluation_points": 275,
+            "peak_load_relative_error": 0.00027648366243227077,
+            "normalized_curve_rmse": 0.0002687744739260278,
+            "curve_area_relative_error": 0.00021418286140982906,
+            "initial_stiffness_relative_error": 0.00030056148099260775,
+            "peak_displacement_absolute_error_mm": 0.0022803805768489838,
+            "peak_displacement_allowed_mm": 0.20125115998089313,
+            "available": true,
+            "reference": {
+              "peak_load_kn": -106.05729443195742,
+              "peak_displacement_mm": 10.062557999044657,
+              "area": -1010.7327324294486,
+              "initial_stiffness_kn_per_mm": -55.67558112824493
+            },
+            "actual": {
+              "peak_load_kn": -106.08661754114962,
+              "peak_displacement_mm": 10.060277618467808,
+              "area": -1010.7073125101969,
+              "initial_stiffness_kn_per_mm": -55.70959496356694
+            },
+            "within_curve_tolerance": true,
+            "reference_sample_rows": 38,
+            "actual_sample_rows": 38,
+            "master_point": 1,
+            "direction": "Uz",
+            "baseline_analysis_key": 23
+          },
+          "response_acceptable": true,
+          "response_comparison": "authored_curve",
+          "authored_stepwise_diagnostic": null,
+          "strict_phase_checkpoint": null,
+          "terminal_diagnostics": {
+            "step": 39,
+            "status": "FAILED",
+            "exit_code": -3,
+            "iterations": 134,
+            "convergence_criterion": "Work",
+            "convergence_tolerance": 0.000500000023748726,
+            "convergence_error": 0.0010195379523704395,
+            "residual_norm": 456.93509121516155,
+            "increment_norm": 0.00040426005026620166,
+            "max_element_displacement": 2.0000103092829082
+          },
+          "passed": false
+        }
+      ]
+    }
+  },
+  "gate_c_pass": false
+}
