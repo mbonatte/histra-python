@@ -82,6 +82,7 @@ def run_python_solver_job(
     should_cancel: CancelCheck | None = None,
     equilibrium_policy: str = "error",
     strategy_policy: str = "warn",
+    performance_policy: str = "compiled",
 ) -> PythonSolverJobResult:
     """Run an HRX analysis plan entirely in process.
 
@@ -112,6 +113,14 @@ def run_python_solver_job(
     )
     capability_report.require_supported()
 
+    from histra.solver.backend_coverage import inspect_solver_backend
+
+    backend_report = inspect_solver_backend(
+        model, [request.name for request in requested]
+    )
+    if performance_policy == "compiled":
+        backend_report.require_compiled()
+
     captured_logs: list[str] = []
 
     def log(message: str) -> None:
@@ -126,6 +135,7 @@ def run_python_solver_job(
         on_progress=on_progress,
         equilibrium_policy=equilibrium_policy,
         strategy_policy=strategy_policy,
+        performance_policy=performance_policy,
     )
     request_by_name = {request.name.casefold(): request for request in requested}
     run_order = _dependency_order(session, requested)
@@ -198,6 +208,8 @@ def run_python_solver_job(
             "serialized_in_process": True,
             "equilibrium_policy": str(equilibrium_policy),
             "strategy_policy": str(strategy_policy),
+            "performance_policy": str(performance_policy),
+            "backend_coverage": backend_report,
         },
     )
 

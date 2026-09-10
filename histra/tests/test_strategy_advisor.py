@@ -51,6 +51,7 @@ def test_strategy_inspection_is_read_only_and_structured() -> None:
     assert [item.code for item in report.advisories] == [
         "HISTRA-STRATEGY-001",
         "HISTRA-STRATEGY-002",
+        "HISTRA-STRATEGY-004",
     ]
     assert analysis.method == "ModifiedRegulaFalsiLineSearch"
     assert analysis.adaptive_convergence_criteria == "Work"
@@ -64,16 +65,21 @@ def test_unqualified_force_moment_arc_length_method_has_advisory() -> None:
 
     report = inspect_solver_strategy(_model(analysis), [1])
 
-    assert [item.code for item in report.advisories] == ["HISTRA-STRATEGY-003"]
+    assert [item.code for item in report.advisories] == [
+        "HISTRA-STRATEGY-003",
+        "HISTRA-STRATEGY-004",
+    ]
 
 
-def test_measured_force_moment_bisection_has_no_advisory() -> None:
+def test_force_moment_bisection_is_explicitly_unqualified_without_model_evidence() -> None:
     analysis = _analysis(
         method="StandardBisectionLineSearch",
         criterion="ForceMoment",
     )
 
-    assert inspect_solver_strategy(_model(analysis), [1]).recommended
+    report = inspect_solver_strategy(_model(analysis), [1])
+    assert not report.recommended
+    assert [item.code for item in report.advisories] == ["HISTRA-STRATEGY-004"]
 
 
 def test_session_emits_warning_and_log_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -102,9 +108,10 @@ def test_session_emits_warning_and_log_once(monkeypatch: pytest.MonkeyPatch) -> 
     with pytest.warns(SuboptimalSolverStrategyWarning) as captured:
         session.run("Live")
 
-    assert len(captured) == 2
+    assert len(captured) == 3
     assert sum("HISTRA-STRATEGY-001" in item for item in logs) == 1
     assert sum("HISTRA-STRATEGY-002" in item for item in logs) == 1
+    assert sum("HISTRA-STRATEGY-004" in item for item in logs) == 1
 
 
 def test_strategy_policy_off_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:

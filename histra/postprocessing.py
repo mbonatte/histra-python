@@ -197,14 +197,30 @@ def compute_total_reaction(model: Model) -> ReactionResult:
     from histra.solver.model_manager import ModelManager
 
     runtime = ModelManager.hysteretic_batch_for(model)
+    if runtime is not None and getattr(runtime, "active", False):
+        total = runtime.compute_total_reaction_vector().astype(float)
+        # In diagnostic mixed-runtime mode, include any restrained interfaces
+        # that were not managed by the compiled batch runtime.
+        managed_ids = getattr(runtime, "interface_ids", None)
+        if managed_ids is None:
+            managed_ids = {id(rec.interface) for rec in runtime.records}
+        for interface in model.collections.interfaces.values():
+            if id(interface) not in managed_ids and interface.interfaccia_vincolata_computed():
+                local = _interface_local_resultant(interface)
+                e1 = np.asarray(interface.reference_e1, dtype=np.float32)
+                e2 = np.asarray(interface.reference_e2, dtype=np.float32)
+                e3 = np.asarray(interface.reference_e3, dtype=np.float32)
+                global_force = (
+                    e1 * local[0] + e2 * local[1] + e3 * local[2]
+                ).astype(np.float32)
+                total += global_force.astype(float)
+        return ReactionResult(float(total[0]), float(total[1]), float(total[2]))
+
     total = np.zeros(3, dtype=float)
     for interface in model.collections.interfaces.values():
         if not interface.interfaccia_vincolata_computed():
             continue
-        if runtime is not None and runtime.manages(interface):
-            local = runtime.resultant_force_for(interface)
-        else:
-            local = _interface_local_resultant(interface)
+        local = _interface_local_resultant(interface)
         e1 = np.asarray(interface.reference_e1, dtype=np.float32)
         e2 = np.asarray(interface.reference_e2, dtype=np.float32)
         e3 = np.asarray(interface.reference_e3, dtype=np.float32)

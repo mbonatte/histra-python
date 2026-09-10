@@ -58,6 +58,28 @@ class ModelManager:
         return prepare_model(model, force=force)
 
     @classmethod
+    def create_brand_new_model(cls, source: Model) -> Model:
+        """Create an independent brand-new structural model from a source HRX model.
+
+        The source model is left untouched with its serialized C# reference data
+        intact for testing and comparison.
+        """
+        from histra.preprocessing.prepare_model import create_brand_new_model
+
+        return create_brand_new_model(source)
+
+    @classmethod
+    def prepare_brand_new_model(cls, source: Model):
+        """Create and prepare a brand-new computational model from a source HRX model.
+
+        Returns a tuple of ``(prepared_model, report)``.  The source model is untouched
+        and preserved for reference and comparison.
+        """
+        new_model = cls.create_brand_new_model(source)
+        report = cls.prepare_model(new_model, force=True)
+        return new_model, report
+
+    @classmethod
     def clear_hysteretic_batch(cls) -> None:
         """Detach any compiled spring runtime from its model objects."""
         runtime = cls._hysteretic_batch
@@ -269,120 +291,105 @@ class ModelManager:
         pq_global = np.zeros(gdl, dtype=np.float64)
         runtime = cls.hysteretic_batch_for(model)
 
-        managed_quad_indices = (
-            {id(quad): index for index, quad in enumerate(runtime.quad_records)}
-            if runtime is not None
-            else {}
-        )
-        line_loads_by_quad: dict[int, list[Any]] = {}
-        if analysis is not None:
-            for load in collections.line_loads.values():
-                if load.element_type == "Quad":
-                    line_loads_by_quad.setdefault(int(load.element_key), []).append(load)
+        if runtime is not None:
+            runtime.compute_pdelta_interface_moments(pq_global)
+            if analysis is not None and collections.line_loads:
+                runtime.compute_pdelta_line_load_moments(
+                    pq_global, analysis, combination
+                )
+        else:
+            line_loads_by_quad: dict[int, list[Any]] = {}
+            if analysis is not None:
+                for load in collections.line_loads.values():
+                    if load.element_type == "Quad":
+                        line_loads_by_quad.setdefault(int(load.element_key), []).append(load)
 
-        for quad in collections.quads.values():
-            managed_index = managed_quad_indices.get(id(quad))
-            local_u = (
-                runtime._quad_local_u[managed_index]
-                if managed_index is not None
-                else np.asarray(quad.status.u, dtype=np.float64)
-            )
-            if len(local_u) < 6:
-                continue
-            # System.Numerics.Vector3 is single precision in the C# path.
-            phi_g = np.asarray(local_u[3:6], dtype=np.float32)
-            if phi_g[0] == 0.0 and phi_g[1] == 0.0 and phi_g[2] == 0.0:
-                continue
-            g_quad = np.asarray([quad.g.x, quad.g.y, quad.g.z], dtype=np.float32)
-            pq_quad = np.zeros(6, dtype=np.float64)
-
-            # C# ComputePDeltaLoads includes the force resultant of every line
-            # load assigned to this Quad. DisplacementsCurrent is called with
-            # a one-point array, so only rigid translation/rotation contributes;
-            # the translation cancels in the difference below.
-            for load in line_loads_by_quad.get(int(quad.key), ()):
-                template = collections.load_templates.get(load.load_template_key)
-                if template is None:
+            for quad in collections.quads.values():
+                local_u = np.asarray(quad.status.u, dtype=np.float64)
+                if len(local_u) < 6:
                     continue
-                point1 = np.asarray(load.point1, dtype=np.float32)
-                point2 = np.asarray(load.point2, dtype=np.float32)
-                midpoint = np.float32(0.5) * (point1 + point2)
-                length = np.float32(np.linalg.norm(point1 - point2))
-                delta_u = np.cross(phi_g, midpoint - g_quad).astype(np.float32)
-                for item in template.items:
-                    coefficient = np.float32(
-                        _get_load_template_coefficient(
-                            model,
-                            int(analysis.key),
-                            combination,
-                            int(item.load_condition_id),
-                            item,
-                        )
-                    )
-                    direction = (
-                        np.asarray(
-                            (analysis.dir_x, analysis.dir_y, analysis.dir_z),
-                            dtype=np.float32,
-                        )
-                        if bool(getattr(analysis, "is_seismic", False))
-                        else np.asarray(item.direction, dtype=np.float32)
-                    )
-                    force = (
-                        np.float32(item.load_value)
-                        * length
-                        * coefficient
-                        * direction
-                    ).astype(np.float32)
-                    pq_quad[3:] += np.cross(delta_u, force).astype(np.float32)
+                # System.Numerics.Vector3 is single precision in the C# path.
+                phi_g = np.asarray(local_u[3:6], dtype=np.float32)
+                if phi_g[0] == 0.0 and phi_g[1] == 0.0 and phi_g[2] == 0.0:
+                    continue
+                g_quad = np.asarray([quad.g.x, quad.g.y, quad.g.z], dtype=np.float32)
+                pq_quad = np.zeros(6, dtype=np.float64)
 
-            # C# ModelLoadOperations.ComputePDeltaLoads explicitly visits
-            # Interfaces1..Interfaces4.  Quads expose six interface lists, but
-            # faces 5 and 6 do not participate in this geometric-load term.
-            for face_intf_keys in quad.interface_keys[:4]:
-                for intf_key in face_intf_keys:
-                    intf = collections.interfaces.get(intf_key)
-                    if intf is None:
+                for load in line_loads_by_quad.get(int(quad.key), ()):
+                    template = collections.load_templates.get(load.load_template_key)
+                    if template is None:
                         continue
-                    sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
-                    if runtime is not None and id(intf) in runtime._record_by_id:
-                        f_local = runtime.resultant_force_for(intf)
-                    else:
-                        # Status.Forces is populated as part of C# result
-                        # output, whereas the scalar Python path keeps the
-                        # spring forces authoritative. Reconstruct the same
-                        # physical resultant directly instead of consuming a
-                        # potentially stale status tuple.
-                        from histra.postprocessing import _interface_local_resultant
+                    point1 = np.asarray(load.point1, dtype=np.float32)
+                    point2 = np.asarray(load.point2, dtype=np.float32)
+                    midpoint = np.float32(0.5) * (point1 + point2)
+                    length = np.float32(np.linalg.norm(point1 - point2))
+                    delta_u = np.cross(phi_g, midpoint - g_quad).astype(np.float32)
+                    for item in template.items:
+                        coefficient = np.float32(
+                            _get_load_template_coefficient(
+                                model,
+                                int(analysis.key),
+                                combination,
+                                int(item.load_condition_id),
+                                item,
+                            )
+                        )
+                        direction = (
+                            np.asarray(
+                                (analysis.dir_x, analysis.dir_y, analysis.dir_z),
+                                dtype=np.float32,
+                            )
+                            if bool(getattr(analysis, "is_seismic", False))
+                            else np.asarray(item.direction, dtype=np.float32)
+                        )
+                        force = (
+                            np.float32(item.load_value)
+                            * length
+                            * coefficient
+                            * direction
+                        ).astype(np.float32)
+                        pq_quad[3:] += np.cross(delta_u, force).astype(np.float32)
 
+                for face_intf_keys in quad.interface_keys[:4]:
+                    for intf_key in face_intf_keys:
+                        intf = collections.interfaces.get(intf_key)
+                        if intf is None:
+                            continue
+                        sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
+                        from histra.postprocessing import _interface_local_resultant
                         f_local = _interface_local_resultant(intf)
 
-                    e1 = np.array(intf.reference_e1, dtype=np.float64)
-                    e2 = np.array(intf.reference_e2, dtype=np.float64)
-                    e3 = np.array(intf.reference_e3, dtype=np.float64)
-                    f_global = np.asarray(
-                        sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3),
-                        dtype=np.float32,
-                    )
+                        e1 = np.array(intf.reference_e1, dtype=np.float64)
+                        e2 = np.array(intf.reference_e2, dtype=np.float64)
+                        e3 = np.array(intf.reference_e3, dtype=np.float64)
+                        f_global = np.asarray(
+                            sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3),
+                            dtype=np.float32,
+                        )
 
-                    intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
-                    if intf_nodes:
-                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf_nodes], axis=0)
-                    elif getattr(intf, "vint3d", None):
-                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf.vint3d], axis=0)
-                    else:
-                        continue
+                        intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
+                        if intf_nodes:
+                            g_intf = np.mean([[p.x, p.y, p.z] for p in intf_nodes], axis=0)
+                        elif getattr(intf, "vint3d", None):
+                            g_intf = np.mean([[p.x, p.y, p.z] for p in intf.vint3d], axis=0)
+                        else:
+                            continue
 
-                    r = np.asarray(g_intf, dtype=np.float32) - g_quad
-                    delta_u = np.cross(phi_g, r).astype(np.float32)
-                    moment = np.cross(delta_u, f_global)
-                    pq_quad[3:] += moment
+                        r = np.asarray(g_intf, dtype=np.float32) - g_quad
+                        delta_u = np.cross(phi_g, r).astype(np.float32)
+                        moment = np.cross(delta_u, f_global)
+                        pq_quad[3:] += moment
 
-            for i in range(3, 6):
-                if i < len(quad.aff):
-                    for entry in quad.aff[i]:
-                        dof = entry.gdl - 1
-                        if 0 <= dof < gdl:
-                            pq_global[dof] += pq_quad[i] * entry.alfa
+                for i in range(3, 6):
+                    if i < len(quad.aff):
+                        for entry in quad.aff[i]:
+                            dof = entry.gdl - 1
+                            if 0 <= dof < gdl:
+                                pq_global[dof] += pq_quad[i] * entry.alfa
+
+        relaxation = float(getattr(analysis, "pdelta_relaxation", 0.0) or 0.0)
+        if relaxation > 0.0 and cls._pq_prev is not None and len(cls._pq_prev) == len(pq_global):
+            pq_global = (1.0 - relaxation) * pq_global + relaxation * cls._pq_prev
 
         cls._pq = pq_global
         return pq_global

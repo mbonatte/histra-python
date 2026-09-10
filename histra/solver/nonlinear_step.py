@@ -128,7 +128,7 @@ def _execute_steps(
             except LinearSolveError as exc:
                 p.log(f"Linear solve failed at step {step}: {exc}")
                 result = -3
-            if result == -2 and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
+            if result in {-2, -3} and isinstance(integrator, LoadControl) and bool(getattr(analysis, "als", False)):
                 result = _als_loop(
                     p, ls, model, analysis, combination, step, alfa, integrator, algorithm, step_snapshot
                 )
@@ -382,6 +382,8 @@ def _execute_steps(
         # commit decisions.  This matters for chained analyses whose predecessor
         # already displaced the control point.
         stop = integrator.commit(model, analysis, relative_displacement, dof, changed)
+        if ModelManager._pq is not None:
+            ModelManager._pq_prev = ModelManager._pq.copy()
         if diagnostic_writer is not None:
             captured = diagnostic_writer.capture_state(
                 label="committed",

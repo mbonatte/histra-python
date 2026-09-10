@@ -143,6 +143,30 @@ def _analysis_advisories(analysis: Any) -> tuple[SolverStrategyAdvisory, ...]:
             )
         )
 
+    # The public inspector has no access to a model's signed benchmark path,
+    # hardware profile, or accepted reference artifact.  A lack of one of the
+    # narrower safety advisories must therefore never be represented as a
+    # positive recommendation.  This warning is intentionally stable and
+    # explicit: qualification is evidence, not a default property of a method.
+    result.append(
+        SolverStrategyAdvisory(
+            code="HISTRA-STRATEGY-004",
+            analysis_key=key,
+            analysis_name=name,
+            integration_method=integration,
+            nonlinear_method=method,
+            convergence_criterion=criterion,
+            reason=(
+                "no signed full-range, model-qualified strategy evidence is attached "
+                "to this analysis configuration"
+            ),
+            recommendation=(
+                "run the strict strategy matrix against a traceable accepted response "
+                "before treating this configuration as recommended"
+            ),
+        )
+    )
+
     return tuple(result)
 
 

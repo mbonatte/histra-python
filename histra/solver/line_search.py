@@ -95,8 +95,12 @@ class LineSearch:
         reached incrementally, exactly as in the C# algorithm.
         """
         _check_cancelled(p)
-        ls.set_x_vector((eta - eta_previous) * direction)
-        code = integrator.update(model, p, an)
+        delta_eta = eta - eta_previous
+        if not getattr(an, "csharp_line_search_compatibility", True) and hasattr(integrator, "update_trial"):
+            code = integrator.update_trial(model, p, an, delta_eta, direction)
+        else:
+            ls.set_x_vector(delta_eta * direction)
+            code = integrator.update(model, p, an)
         if code < 0:
             return code, float("nan")
         integrator.form_unbalance(p, model, an)
@@ -156,8 +160,12 @@ class RegulaFalsiLineSearch(LineSearch):
             if eta < self.min_eta:
                 eta = self.min_eta
 
-            ls.set_x_vector((eta - eta_previous) * dx0)
-            code = integrator.update(model, p, an)
+            delta_eta = eta - eta_previous
+            if not getattr(an, "csharp_line_search_compatibility", True) and hasattr(integrator, "update_trial"):
+                code = integrator.update_trial(model, p, an, delta_eta, dx0)
+            else:
+                ls.set_x_vector(delta_eta * dx0)
+                code = integrator.update(model, p, an)
             if code < 0:
                 return -1.0
             integrator.form_unbalance(p, model, an)

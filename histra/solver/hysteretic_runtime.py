@@ -46,6 +46,9 @@ except Exception:  # pragma: no cover - exercised when numba is unavailable
 
 
 from histra.solver.hysteretic_kernels.transverse import (
+    COMPRESSIVE_LINEAR,
+    COMPRESSIVE_PARABOLIC,
+    COMPRESSIVE_CURVE_TYPE_PARAM,
     ELASTIC,
     LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE,
     PLASTIC_C,
@@ -230,6 +233,7 @@ from histra.solver.hysteretic_topology import (
     _PARAM_GETTER,
     _build_force_by_dof_topology,
     _extract_spring_committed,
+    _extract_spring_compressive_curve_type,
     _extract_spring_curve_type,
     _extract_spring_params,
     _extract_spring_target,
@@ -242,11 +246,40 @@ from histra.solver.hysteretic_kernels.kinematics import (
     _prepare_quad_kinematics,
 )
 from histra.solver.hysteretic_kernels.scatter import (
+    _batch_interface_resultants,
+    _eval_pdelta_interfaces_kernel,
+    _eval_pdelta_line_loads_kernel,
     _refresh_global_resisting_force,
     _refresh_global_resisting_force_by_dof,
     _refresh_max_u_cache,
     _scatter_local_forces,
 )
+
+
+@dataclass(frozen=True)
+class PDeltaPlan:
+    """Precomputed static topology and geometry for compiled P-Delta load assembly."""
+
+    quad_indices: np.ndarray
+    intf_indices: np.ndarray
+    r_arr: np.ndarray
+    R_arr: np.ndarray
+    scatter_quad_idx: np.ndarray
+    scatter_comp: np.ndarray
+    scatter_dof: np.ndarray
+    scatter_alfa: np.ndarray
+    scatter_offsets: np.ndarray
+
+
+@dataclass(frozen=True)
+class PDeltaLineLoadPlan:
+    """Analysis-specific, object-free inputs for line-load P-Delta assembly."""
+
+    load_quad_indices: np.ndarray
+    load_r_arr: np.ndarray
+    item_offsets: np.ndarray
+    item_forces: np.ndarray
+
 
 # ``PhaseEnum(code)`` goes through EnumMeta on every call.  Dense batch rows
 # contain only the canonical C# phase codes 0..10, so reuse the singleton
@@ -465,18 +498,18 @@ def _uses_simple_hysteretic_parameters(spring: Any) -> bool:
 
 
 class _TransverseParameterView:
-    """Logical 33-column view over transverse hysteretic parameters.
+    """Logical 34-column view over transverse hysteretic parameters.
 
     ``HystereticBatchRuntime.params`` historically exposed the complete dense
     parameter layout.  The compact simple-law runtime stores only the 21 values
     consumed by the specialized Numba kernel, but diagnostics and regression
-    tooling still rely on the legacy column numbers (notably column 32 for the
-    tensile-envelope discriminator).  This view preserves those read/write
+    tooling still rely on the legacy column numbers (notably columns 32/33 for
+    the tensile/compressive-envelope discriminators).  This view preserves those read/write
     semantics without allocating a second full matrix during normal solves.
 
     Accessing a broad slice or coercing the view to an ndarray materializes only
     the requested logical values.  Writing through the view promotes the runtime
-    to the full 33-column storage first; this is intentionally rare and preserves
+    to the full 34-column storage first; this is intentionally rare and preserves
     the historical mutability of ``params`` without compromising the compact
     production path.
     """
@@ -547,6 +580,7 @@ class _TransverseParameterView:
             result[..., TENSILE_CURVE_TYPE_PARAM] = (
                 compact[..., SIMPLE_TENSILE_CURVE_TYPE_PARAM]
             )
+        result[..., COMPRESSIVE_CURVE_TYPE_PARAM] = 0.0
         return result
 
     def __getitem__(self, key: Any) -> Any:
@@ -574,6 +608,13 @@ class _TransverseParameterView:
                     return self._selected_energy_a(rows)
                 if column == 31:
                     return runtime._transverse_k[rows]
+                if column == COMPRESSIVE_CURVE_TYPE_PARAM:
+                    selected = runtime._transverse_k[rows]
+                    if np.ndim(selected) == 0:
+                        return 0.0
+                    return np.zeros_like(selected, dtype=np.float64)
+                if column != TENSILE_CURVE_TYPE_PARAM:
+                    raise IndexError(f"unsupported compact parameter column {column}")
                 if runtime._compact_linear_params:
                     selected = runtime._transverse_k[rows]
                     if np.ndim(selected) == 0:
@@ -652,6 +693,11 @@ class HystereticBatchRuntime:
             n
             and not _force_general_hysteretic_batch()
             and all(_uses_simple_hysteretic_parameters(spring) for spring in springs)
+            and all(
+                not isinstance(spring, SpringHysteretic)
+                or spring.compressive_curve_type != "Parabolic"
+                for spring in springs
+            )
         )
         self._compact_linear_params = bool(
             self._compact_simple_params
@@ -664,7 +710,7 @@ class HystereticBatchRuntime:
             if self._compact_simple_params else TRANSVERSE_PARAM_SIZE
         )
         self._params = np.empty((n, parameter_count), dtype=np.float64)
-        # Keep the historical 33-column logical parameter interface while the
+        # Keep the historical full logical parameter interface while the
         # solver consumes the compact physical storage directly.
         self.params = _TransverseParameterView(self)
         self.committed = np.empty((n, 9), dtype=np.float64)
@@ -1050,11 +1096,28 @@ class HystereticBatchRuntime:
         # [overall value, record, kind, quad-only value, quad-only record].
         # C# convergence limits exclude interface spring displacements.
         self._max_u_cache = np.zeros(5, dtype=np.float64)
+        self._interface_resultants = np.zeros((len(self.records), 3), dtype=np.float32)
+        self._interface_resultants_valid = False
+        self._e1 = (
+            np.asarray([record.interface.reference_e1 for record in self.records], dtype=np.float32)
+            if self.records else np.empty((0, 3), dtype=np.float32)
+        )
+        self._e2 = (
+            np.asarray([record.interface.reference_e2 for record in self.records], dtype=np.float32)
+            if self.records else np.empty((0, 3), dtype=np.float32)
+        )
+        self._e3 = (
+            np.asarray([record.interface.reference_e3 for record in self.records], dtype=np.float32)
+            if self.records else np.empty((0, 3), dtype=np.float32)
+        )
         self._refresh_transverse_cache()
         self._refresh_full_force_cache()
         self._refresh_global_resisting_force_cache()
         self._refresh_max_u_cache()
         self._objects_trial_synced = True
+        self._pdelta_plan: PDeltaPlan | None = None
+        self._pdelta_line_load_plans: dict[tuple[int, int], PDeltaLineLoadPlan] = {}
+        self.interface_ids = frozenset(id(record.interface) for record in self.records)
 
     @staticmethod
     def _transverse_rejection_reason(spring: Any) -> str:
@@ -1068,7 +1131,7 @@ class HystereticBatchRuntime:
         }:
             return "unsupported_tensile_curve_type"
         if spring.compressive_curve_type not in {
-            "LinearHardening", "LinearSoftening", "Elastic"
+            "LinearHardening", "LinearSoftening", "Elastic", "Parabolic"
         }:
             return "unsupported_compressive_curve_type"
         return ""
@@ -1366,6 +1429,12 @@ class HystereticBatchRuntime:
                     dtype=np.float64,
                     count=group_count,
                 )
+            if not self._compact_simple_params:
+                self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = np.fromiter(
+                    (_extract_spring_compressive_curve_type(spring) for spring in group),
+                    dtype=np.float64,
+                    count=group_count,
+                )
             self._transverse_k[start:stop] = np.fromiter(
                 (spring.k for spring in group),
                 dtype=np.float64,
@@ -1402,6 +1471,10 @@ class HystereticBatchRuntime:
         )
         if not self._compact_linear_params:
             self._params[index, curve_col] = _extract_spring_curve_type(spring)
+        if not self._compact_simple_params:
+            self._params[index, COMPRESSIVE_CURVE_TYPE_PARAM] = (
+                _extract_spring_compressive_curve_type(spring)
+            )
         self._transverse_k[index] = float(spring.k)
         self.committed[index, :] = _extract_spring_committed(spring)
         self.trial[index, :] = _extract_spring_trial(spring)
@@ -1430,6 +1503,13 @@ class HystereticBatchRuntime:
                 and np.all(self._params[:, :8] == 0.0)
                 and np.all(self._params[:, 8] == 1.0)
                 and np.all(self._params[:, 9] == 0.0)
+                # The specialized zero-pinching kernel intentionally stores
+                # no compressive-envelope discriminator.  Parabolic
+                # compression therefore always uses the generic compiled
+                # state machine, even when its other parameters are simple.
+                and np.all(
+                    self._params[:, COMPRESSIVE_CURVE_TYPE_PARAM] == 0.0
+                )
             )
         # Diagnostic/correctness switch.  The specialized zero-pinching kernel
         # must remain bit-for-bit equivalent to the authoritative scalar state
@@ -1499,6 +1579,7 @@ class HystereticBatchRuntime:
                     self._compact_linear_params
                     and spring.tensile_curve_type == "Exponential"
                 )
+                or spring.compressive_curve_type == "Parabolic"
                 for spring in group
             ):
                 # The compact matrix omits pinching/damage/beta columns, but a
@@ -2134,6 +2215,7 @@ class HystereticBatchRuntime:
         return id(quad) in self.quad_ids
 
     def _refresh_full_force_cache(self) -> None:
+        self._interface_resultants_valid = False
         _assemble_full_interface_forces(
             self._local_forces, self.coulomb_state,
             self._slid_index, self._oop0_index, self._oop1_index,
@@ -2273,8 +2355,12 @@ class HystereticBatchRuntime:
                 spring.f = spring._tstress
                 spring.u = spring._tstrain
             else:
-                spring.f = float(row[6])
-                spring.u = float(row[7])
+                stress = float(row[6])
+                strain = float(row[7])
+                spring._tstress = stress
+                spring._tstrain = strain
+                spring.f = stress
+                spring.u = strain
                 spring.k_tang = float(row[9])
 
         record_index = self._record_by_id[id(interface)]
@@ -2295,6 +2381,240 @@ class HystereticBatchRuntime:
     def transverse_force_for(self, interface: Any) -> np.ndarray:
         return self._local_forces[self._record_by_id[id(interface)]]
 
+    def all_resultant_forces(self) -> np.ndarray:
+        """Return (N_interfaces, 3) float32 physical local resultant forces."""
+        if not self._interface_resultants_valid:
+            _batch_interface_resultants(
+                self._starts,
+                self._stops,
+                self.trial,
+                self._slid_index,
+                self._oop0_index,
+                self._oop1_index,
+                self.coulomb_state,
+                self._interface_resultants,
+            )
+            self._interface_resultants_valid = True
+        return self._interface_resultants
+
+    def compute_total_reaction_vector(self) -> np.ndarray:
+        """Compute the global sum of reaction forces on all constrained interfaces."""
+        if not np.any(self._constrained):
+            return np.zeros(3, dtype=np.float64)
+        res = self.all_resultant_forces()[self._constrained]
+        e1 = self._e1[self._constrained]
+        e2 = self._e2[self._constrained]
+        e3 = self._e3[self._constrained]
+        global_forces = (
+            e1 * res[:, 0:1] + e2 * res[:, 1:2] + e3 * res[:, 2:3]
+        )
+        return np.sum(global_forces, axis=0, dtype=np.float64)
+
+    def get_pdelta_plan(self) -> PDeltaPlan:
+        """Return cached PDeltaPlan precomputing static geometry and topology."""
+        if self._pdelta_plan is None:
+            self._pdelta_plan = self._build_pdelta_plan()
+        return self._pdelta_plan
+
+    def _build_pdelta_plan(self) -> PDeltaPlan:
+        quad_indices: list[int] = []
+        intf_indices: list[int] = []
+        r_list: list[np.ndarray] = []
+        R_list: list[np.ndarray] = []
+        collections = self.model.collections
+        managed_quad_indices = {id(q): i for i, q in enumerate(self.quad_records)}
+
+        for quad in collections.quads.values():
+            q_idx = managed_quad_indices.get(id(quad))
+            if q_idx is None:
+                continue
+            g_quad = np.asarray([quad.g.x, quad.g.y, quad.g.z], dtype=np.float32)
+            for face_intf_keys in quad.interface_keys[:4]:
+                for intf_key in face_intf_keys:
+                    intf = collections.interfaces.get(intf_key)
+                    if intf is None:
+                        continue
+                    intf_idx = self._record_by_id.get(id(intf))
+                    if intf_idx is None:
+                        continue
+                    sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
+                    e1 = np.array(intf.reference_e1, dtype=np.float64)
+                    e2 = np.array(intf.reference_e2, dtype=np.float64)
+                    e3 = np.array(intf.reference_e3, dtype=np.float64)
+                    R = sign * np.column_stack([e1, e2, e3])
+
+                    intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
+                    if intf_nodes:
+                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf_nodes], axis=0)
+                    elif getattr(intf, "vint3d", None):
+                        g_intf = np.mean([[p.x, p.y, p.z] for p in intf.vint3d], axis=0)
+                    else:
+                        continue
+
+                    r = np.asarray(g_intf, dtype=np.float32) - g_quad
+                    quad_indices.append(q_idx)
+                    intf_indices.append(intf_idx)
+                    r_list.append(r)
+                    R_list.append(R)
+
+        scatter_quad_idx: list[int] = []
+        scatter_comp: list[int] = []
+        scatter_dof: list[int] = []
+        scatter_alfa: list[float] = []
+        gdl = int(self.model.gdl)
+
+        scatter_offsets = [0]
+        for q_idx, quad in enumerate(self.quad_records):
+            for comp in range(3):
+                aff_idx = 3 + comp
+                if aff_idx < len(quad.aff):
+                    for entry in quad.aff[aff_idx]:
+                        dof = entry.gdl - 1
+                        if 0 <= dof < gdl:
+                            scatter_quad_idx.append(q_idx)
+                            scatter_comp.append(comp)
+                            scatter_dof.append(dof)
+                            scatter_alfa.append(float(entry.alfa))
+            scatter_offsets.append(len(scatter_dof))
+
+        return PDeltaPlan(
+            quad_indices=np.asarray(quad_indices, dtype=np.int32),
+            intf_indices=np.asarray(intf_indices, dtype=np.int32),
+            r_arr=(
+                np.asarray(r_list, dtype=np.float32)
+                if r_list
+                else np.empty((0, 3), dtype=np.float32)
+            ),
+            R_arr=(
+                np.asarray(R_list, dtype=np.float64)
+                if R_list
+                else np.empty((0, 3, 3), dtype=np.float64)
+            ),
+            scatter_quad_idx=np.asarray(scatter_quad_idx, dtype=np.int32),
+            scatter_comp=np.asarray(scatter_comp, dtype=np.int32),
+            scatter_dof=np.asarray(scatter_dof, dtype=np.int32),
+            scatter_alfa=np.asarray(scatter_alfa, dtype=np.float64),
+            scatter_offsets=np.asarray(scatter_offsets, dtype=np.int32),
+        )
+
+    def compute_pdelta_interface_moments(self, pq_global: np.ndarray) -> None:
+        """Accumulate macro-element P-Delta interface moments directly into ``pq_global``."""
+        plan = self.get_pdelta_plan()
+        if len(plan.quad_indices) == 0:
+            return
+        all_res = self.all_resultant_forces()
+        _eval_pdelta_interfaces_kernel(
+            self._quad_local_u,
+            all_res,
+            plan.quad_indices,
+            plan.intf_indices,
+            plan.r_arr,
+            plan.R_arr,
+            plan.scatter_quad_idx,
+            plan.scatter_comp,
+            plan.scatter_dof,
+            plan.scatter_alfa,
+            pq_global,
+        )
+
+    def _build_pdelta_line_load_plan(
+        self, analysis: Any, combination: int
+    ) -> PDeltaLineLoadPlan:
+        """Resolve static line-load vectors once for an analysis configuration."""
+        from histra.solver.load_assembly import _get_load_template_coefficient
+
+        collections = self.model.collections
+        managed_quad_indices = {id(quad): index for index, quad in enumerate(self.quad_records)}
+        load_quad_indices: list[int] = []
+        load_r: list[np.ndarray] = []
+        item_offsets = [0]
+        item_forces: list[np.ndarray] = []
+        seismic_direction = np.asarray(
+            (analysis.dir_x, analysis.dir_y, analysis.dir_z), dtype=np.float32
+        )
+        is_seismic = bool(getattr(analysis, "is_seismic", False))
+
+        for load in collections.line_loads.values():
+            if load.element_type != "Quad":
+                continue
+            quad = collections.quads.get(int(load.element_key))
+            if quad is None:
+                continue
+            quad_index = managed_quad_indices.get(id(quad))
+            if quad_index is None:
+                continue
+            template = collections.load_templates.get(load.load_template_key)
+            if template is None:
+                continue
+
+            point1 = np.asarray(load.point1, dtype=np.float32)
+            point2 = np.asarray(load.point2, dtype=np.float32)
+            length = np.float32(np.linalg.norm(point1 - point2))
+            midpoint = np.float32(0.5) * (point1 + point2)
+            g_quad = np.asarray((quad.g.x, quad.g.y, quad.g.z), dtype=np.float32)
+            load_quad_indices.append(quad_index)
+            load_r.append(midpoint - g_quad)
+            for item in template.items:
+                coefficient = np.float32(
+                    _get_load_template_coefficient(
+                        self.model,
+                        int(analysis.key),
+                        combination,
+                        int(item.load_condition_id),
+                        item,
+                    )
+                )
+                direction = seismic_direction if is_seismic else np.asarray(
+                    item.direction, dtype=np.float32
+                )
+                item_forces.append(
+                    (
+                        np.float32(item.load_value)
+                        * length
+                        * coefficient
+                        * direction
+                    ).astype(np.float32)
+                )
+            item_offsets.append(len(item_forces))
+
+        return PDeltaLineLoadPlan(
+            load_quad_indices=np.asarray(load_quad_indices, dtype=np.int32),
+            load_r_arr=(
+                np.asarray(load_r, dtype=np.float32)
+                if load_r else np.empty((0, 3), dtype=np.float32)
+            ),
+            item_offsets=np.asarray(item_offsets, dtype=np.int32),
+            item_forces=(
+                np.asarray(item_forces, dtype=np.float32)
+                if item_forces else np.empty((0, 3), dtype=np.float32)
+            ),
+        )
+
+    def compute_pdelta_line_load_moments(
+        self, pq_global: np.ndarray, analysis: Any, combination: int
+    ) -> None:
+        """Accumulate cached, compiled Quad line-load P-Delta moments."""
+        key = (int(analysis.key), int(combination))
+        plan = self._pdelta_line_load_plans.get(key)
+        if plan is None:
+            plan = self._build_pdelta_line_load_plan(analysis, combination)
+            self._pdelta_line_load_plans[key] = plan
+        if plan.load_quad_indices.size == 0:
+            return
+        scatter = self.get_pdelta_plan()
+        _eval_pdelta_line_loads_kernel(
+            self._quad_local_u,
+            plan.load_quad_indices,
+            plan.load_r_arr,
+            plan.item_offsets,
+            plan.item_forces,
+            scatter.scatter_offsets,
+            scatter.scatter_comp,
+            scatter.scatter_dof,
+            scatter.scatter_alfa,
+            pq_global,
+        )
+
     def resultant_force_for(self, interface: Any) -> np.ndarray:
         """Return C# ``Interface.Status.Forces`` from authoritative dense state.
 
@@ -2303,37 +2623,19 @@ class HystereticBatchRuntime:
         resisting-force vector stored in ``_local_forces``.
         """
         record_index = self._record_by_id[id(interface)]
-        start = int(self._starts[record_index])
-        stop = int(self._stops[record_index])
-        f32 = np.float32
-        force_y = f32(0.0)
-        for spring_index in range(start, stop):
-            force_y = f32(force_y + f32(self.trial[spring_index, 6]))
-        # Trasv_2 is outside the supported dense path (and is empty in the
-        # bridge benchmark), but retain the scalar C# accumulation fallback.
-        for spring in interface.trasv_2:
-            force_y = f32(force_y + f32(spring.get_force()))
-
-        force_x = f32(0.0)
-        slid_index = int(self._slid_index[record_index])
-        if slid_index >= 0:
-            force_x = f32(force_x - f32(self.coulomb_state[slid_index, CF]))
-        else:
-            for spring in interface.slid:
-                force_x = f32(force_x - f32(spring.get_force()))
-
-        force_z = f32(0.0)
-        for dense_index, spring in zip(
-            (int(self._oop0_index[record_index]), int(self._oop1_index[record_index])),
-            interface.slid_out_plan,
-        ):
-            value = (
-                self.coulomb_state[dense_index, CF]
-                if dense_index >= 0
-                else spring.get_force()
-            )
-            force_z = f32(force_z - f32(value))
-        return np.asarray((force_x, force_y, force_z), dtype=np.float32)
+        base = self.all_resultant_forces()[record_index]
+        if getattr(interface, "trasv_2", None) or (int(self._slid_index[record_index]) < 0 and interface.slid):
+            f32 = np.float32
+            fx = base[0]
+            fy = base[1]
+            fz = base[2]
+            for spring in interface.trasv_2:
+                fy = f32(fy + f32(spring.get_force()))
+            if int(self._slid_index[record_index]) < 0:
+                for spring in interface.slid:
+                    fx = f32(fx - f32(spring.get_force()))
+            return np.asarray((fx, fy, fz), dtype=np.float32)
+        return base
 
     def trial_stresses_for(self, interface: Any) -> np.ndarray:
         start, stop = interface._perf_hysteretic_slice

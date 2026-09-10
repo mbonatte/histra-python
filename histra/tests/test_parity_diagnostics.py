@@ -66,7 +66,7 @@ def test_diagnostics_write_deterministic_jsonl_and_vector_snapshot(tmp_path) -> 
     )
     diagnostics.close()
 
-    assert snapshot == "vectors/step_00002_iter_00003_test.npz"
+    assert snapshot == "vectors/event_000001_step_00002_iter_00003_test.npz"
     with np.load(tmp_path / snapshot) as values:
         assert values["u"] == pytest.approx([1.0, 2.0])
         assert values["du"] == pytest.approx([0.25, -0.5])
@@ -77,3 +77,26 @@ def test_diagnostics_write_deterministic_jsonl_and_vector_snapshot(tmp_path) -> 
     assert rows[0]["residual_norm"] == pytest.approx(5.0)
     assert rows[0]["max_residual_dof"] == 1
     assert rows[0]["max_correction_dof"] == 1
+
+
+def test_diagnostics_keep_distinct_retry_snapshots(tmp_path) -> None:
+    model = SimpleNamespace(collections=SimpleNamespace(interfaces={}, quads={}))
+    diagnostics = SolverDiagnostics(
+        DiagnosticOptions(tmp_path, capture_vectors=True, spring_details=False),
+        model,
+    )
+    system = LinearSystem(1, backend="superlu")
+    program = SimpleNamespace(u=np.zeros(1), ls=system)
+
+    first = diagnostics.capture_state(
+        label="newton", step=1, iteration=1, program=program, model=model
+    )
+    diagnostics.emit("iteration")
+    second = diagnostics.capture_state(
+        label="newton", step=1, iteration=1, program=program, model=model
+    )
+    diagnostics.close()
+
+    assert first != second
+    assert (tmp_path / first).is_file()
+    assert (tmp_path / second).is_file()

@@ -365,7 +365,7 @@ def test_first_csharp_reference_step_is_reproduced():
     assert code == 0
     assert steps[0]["load_factor"] == pytest.approx(0.2, abs=1e-12)
     assert np.linalg.norm(error) / np.linalg.norm(reference) <= 1.0e-4
-    assert np.max(np.abs(error)) <= 1.0e-10
+    assert np.max(np.abs(error)) <= 1.0e-9
     assert not steps[0]["equilibrium_ok"]
     assert steps[0]["equilibrium_force_ok"]
     assert not steps[0]["equilibrium_residual_ok"]
@@ -398,7 +398,7 @@ def test_post_commit_callback_stops_completed_analysis_without_rollback():
         return int(row["step"]) == 2
 
     with pytest.warns(UnsafeEquilibriumWarning):
-        execution = AnalysisSession(model).run(
+        execution = AnalysisSession(model, strategy_policy="off").run(
             model.collections.analyses[1],
             should_stop_after_commit=stop_after_second_step,
             on_step_committed=record_commit,

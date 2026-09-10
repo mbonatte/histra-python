@@ -332,14 +332,20 @@ def _solve_modal_analysis_impl(
         raise ModalAnalysisError(
             f"Unknown MassMatrixType={mass_matrix_type!r}; expected Lumped or Consistent."
         )
-
     readiness = inspect_solver_readiness(model)
-    if not readiness.is_ready and auto_prepare:
+    requires_python_prep = bool(getattr(model, "requires_python_preparation", False))
+    if (not readiness.is_ready or requires_python_prep) and auto_prepare:
         log(
-            "Preparing unlocked HRX computational model for modal analysis "
+            "Preparing brand-new computational model for modal analysis "
             f"({readiness.quad_count} Quads)..."
         )
-        ModelManager.prepare_model(model)
+        ModelManager.prepare_model(model, force=True)
+    elif requires_python_prep and not auto_prepare:
+        raise ModalAnalysisError(
+            "Cannot run modal analysis on serialized HRX mesh. Serialized HRX interfaces "
+            "and springs are reference-only for testing/comparison; you must prepare a "
+            "brand new Python computational model before solving."
+        )
     require_solver_ready(model)
     progress(0.05)
     raise_if_cancelled(should_cancel)

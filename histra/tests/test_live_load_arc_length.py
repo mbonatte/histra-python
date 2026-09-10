@@ -14,10 +14,14 @@ import scipy.sparse as sp
 
 from histra.io.hr_loader import load_model
 from histra.io.results_reader import read_analysis_metadata, read_global_displacements
-from histra.solver.arc_length import ArcLength
+from histra.solver.arc_length import ArcLength, ArcLengthLinear
 from histra.solver.assembler import assemble_load_vector
 from histra.solver.line_search import LineSearch
 from histra.solver.solve import solve_static_nonlinear
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.equilibrium.UnsafeEquilibriumWarning"
+)
 from histra.solver.nonlinear_step import _cutback_tangent_alfa
 from histra.solver.output_projection import model_point_displacement
 from histra.springs.coulomb03 import SpringCoulomb03
@@ -38,6 +42,49 @@ def test_direct_arc_length_integrator_rejects_unknown_procedure() -> None:
 
     with pytest.raises(ValueError, match="ArcLengthProcedure"):
         integrator._select_dofs(program, SimpleNamespace(), analysis)
+
+
+def test_arc_length_linear_uses_csharp_linearized_constraint(monkeypatch) -> None:
+    """ArcLengthLinear must not silently inherit the quadratic corrector."""
+
+    class FakeLinearSystem:
+        def __init__(self) -> None:
+            self.x = np.array([1.0, 2.0])
+            self.matrix_version = 4
+
+        def solve(self, rhs):
+            assert np.allclose(rhs, [4.0, 5.0])
+            self.x = np.array([4.0, 5.0])
+            return 0
+
+        def set_x_vector(self, values):
+            self.x = np.asarray(values, dtype=float).copy()
+
+    integrator = ArcLengthLinear()
+    integrator._phat = np.array([4.0, 5.0])
+    integrator._delta_u_step = np.array([2.0, 3.0])
+    integrator._delta_lambda_step = 0.5
+    integrator._current_lambda = 0.5
+    integrator._alpha2 = 0.2
+    integrator._dofs = np.array([0, 1])
+    integrator.u = np.zeros(2)
+    integrator.state.combination = 1
+    integrator.update_ptarget = lambda *args: False
+    integrator.apply_load_domain = lambda *args: None
+    system = FakeLinearSystem()
+    program = SimpleNamespace(ls=system)
+    monkeypatch.setattr(
+        "histra.solver.arc_length.ModelManager.update_domain", lambda *args: None
+    )
+
+    assert integrator.update(object(), program, SimpleNamespace()) == 0
+
+    # C# Vector + scalar adds alpha2 * deltaLambdaStep to every entry.
+    expected_lambda = -8.0 / (2.0 * 4.1 + 3.0 * 5.1)
+    expected_delta = np.array([1.0, 2.0]) + expected_lambda * np.array([4.0, 5.0])
+    assert integrator._last_delta_lambda == pytest.approx(expected_lambda)
+    assert system.x == pytest.approx(expected_delta)
+    assert integrator.u == pytest.approx(expected_delta)
 
 
 def test_live_model_entities_and_reference_steps_are_detected():
@@ -168,6 +215,15 @@ def test_arc_length_failed_step_cutback_is_opt_in_and_bounded():
     assert analysis.dr2 == pytest.approx(0.75**2)
     assert not ArcLength.cutback_step(analysis)
     assert analysis.dr2 == pytest.approx(0.75**2)
+
+    # When is_max_arc_length_ray is enabled, max_arc_length_ray is scaled alongside dr2
+    analysis.dr2 = 4.0
+    analysis.is_max_arc_length_ray = True
+    analysis.max_arc_length_ray = 0.01
+    assert ArcLength.cutback_step(analysis)
+    assert analysis.dr2 == pytest.approx(1.0)
+    assert analysis.max_arc_length_ray == pytest.approx(0.005)
+
 
 
 def test_arc_length_cutback_preserves_standard_or_modified_tangent_policy():

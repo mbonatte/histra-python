@@ -9,6 +9,10 @@ from histra.solver.cancellation import CANCELLED_EXIT_CODE
 from histra.solver.outcomes import AnalysisOutcome
 from histra.solver.session import AnalysisSession, AnalysisSessionError
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.strategy.SuboptimalSolverStrategyWarning"
+)
+
 
 def _model() -> SimpleNamespace:
     root = SimpleNamespace(key=1, name="Root", initial_analysis_key=-100, max_u=1.0)

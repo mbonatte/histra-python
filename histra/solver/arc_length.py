@@ -513,6 +513,8 @@ class ArcLength(StaticIntegrator):
         self._delta_lambda_step = delta_lambda
         self._current_lambda += delta_lambda
         self._delta_u = delta_lambda * self._delta_u_hat
+        self._last_delta_u = self._delta_u.copy()
+        self._last_delta_lambda = float(delta_lambda)
         self._delta_u_step[:] = self._delta_u
         ls.set_x_vector(self._delta_u)
         if self.u is not None:
@@ -567,6 +569,18 @@ class ArcLength(StaticIntegrator):
                 self.errors.append("ArcLength constraint has zero reference load and denominator")
                 return -10
             delta_lambda = -c / b
+        elif self._alpha2 == 0.0 and hat.size == 1:
+            # In 1D cylindrical arc-length, the spherical constraint on a single
+            # scalar coordinate is (s + delta_u)^2 = s^2.  Preserving the forward
+            # predictor branch (s * (s + delta_u) > 0) uniquely requires
+            # delta_u = 0, giving delta_lambda = -bar / hat.  Evaluating the
+            # general quadratic formula here is analytically redundant and
+            # catastrophically ill-conditioned when |bar| >> |s|.
+            denominator = float(hat[0])
+            if abs(denominator) < 1e-30:
+                self.errors.append("ArcLength reference-load displacement is zero")
+                return -10
+            delta_lambda = -float(bar[0]) / denominator
         else:
             discriminant = b * b - 4.0 * a * c
             if discriminant < 0.0:
@@ -578,7 +592,7 @@ class ArcLength(StaticIntegrator):
                     self.errors.append("ArcLength linearized constraint denominator is zero")
                     return -10
                 delta_lambda = -numerator / denominator
-                if self._phat is not None:
+                if self._projected_control_indices is None and self._phat is not None:
                     if delta_lambda * float(np.dot(hat, self._selected(self._phat))) < 0.0:
                         delta_lambda *= -1.0
             else:
@@ -590,6 +604,8 @@ class ArcLength(StaticIntegrator):
                 delta_lambda = dl1 if criterion1 > 0.0 else dl2
 
         self._delta_u = self._delta_u_bar + delta_lambda * self._delta_u_hat
+        self._last_delta_u = self._delta_u.copy()
+        self._last_delta_lambda = float(delta_lambda)
         self._delta_u_step += self._delta_u
         self._delta_lambda_step += delta_lambda
         self._current_lambda += delta_lambda
@@ -601,6 +617,32 @@ class ArcLength(StaticIntegrator):
             p, model, an, int(self.state.combination), self.iteration
         )
         self.apply_load_domain(model, delta_lambda)
+        return 0
+
+    def update_trial(
+        self,
+        model: Model,
+        p: Program,
+        an: Any,
+        delta_eta: float,
+        direction: np.ndarray,
+    ) -> int:
+        if abs(delta_eta) < 1e-30:
+            return 0
+        delta_u = delta_eta * direction
+        delta_lambda = delta_eta * getattr(self, "_last_delta_lambda", 0.0)
+        p.ls.set_x_vector(delta_u)
+        if self.u is not None:
+            self.u += delta_u
+        ModelManager.update_domain(model, p.ls, self.state)
+        self.apply_load_domain(model, delta_lambda)
+        self._current_lambda += delta_lambda
+        self._delta_lambda_step += delta_lambda
+        if self._delta_u_step is not None:
+            self._delta_u_step += delta_u
+        self.update_ptarget(
+            p, model, an, int(self.state.combination), self.iteration
+        )
         return 0
 
     def revert_failed_step(self, model: Model, ls: LinearSystem) -> None:
@@ -630,6 +672,10 @@ class ArcLength(StaticIntegrator):
         if reduced >= radius:
             return False
         an.dr2 = reduced * reduced
+        if bool(getattr(an, "is_max_arc_length_ray", False)):
+            max_ray = float(getattr(an, "max_arc_length_ray", 0.0))
+            if max_ray > 0.0:
+                an.max_arc_length_ray = max_ray * factor
         return True
 
     def commit(
@@ -670,4 +716,69 @@ class ArcLength(StaticIntegrator):
 
 
 class ArcLengthLinear(ArcLength):
-    """Linear arc-length variant using the same corrected constraint machinery."""
+    """C# ``ArcLength1`` linearized arc-length corrector.
+
+    ``ArcLengthLinear`` is not an alias for the quadratic ``ArcLength``
+    corrector.  The C# factory selects ``ArcLength1`` and its update solves a
+    linearized constraint using the current step displacement.  Keeping the
+    distinct update is required both for HRX compatibility and for strategy
+    selection near a turning point.
+    """
+
+    def update(self, model: Model, p: Program, an: Any) -> int:
+        """Apply C# ``ArcLength1.Update`` exactly in the Python state model."""
+
+        self.iteration += 1
+        ls = p.ls
+        self._delta_u_bar = ls.x.copy()
+        if self._phat is None or self._delta_u_step is None:
+            self.errors.append("ArcLengthLinear is not initialized")
+            return -10
+
+        # ArcLength1 explicitly resolves the reference load on every
+        # correction.  Do not reuse the quadratic integrator's cache here:
+        # the C# method overwrites LS.B with phat and calls Solve regardless
+        # of whether the tangent has changed.
+        try:
+            ls.solve(rhs=self._phat)
+        except LinearSolveError as exc:
+            self.errors.append(f"ArcLengthLinear reference-load solve failed: {exc}")
+            return -10
+        self._delta_u_hat = ls.x.copy()
+        self._delta_u_hat_matrix_version = ls.matrix_version
+        self._delta_u_hat_phat = self._phat.copy()
+        self._delta_u_hat_phat_id = id(self._phat)
+
+        hat = self._selected(self._delta_u_hat)
+        bar = self._selected(self._delta_u_bar)
+        step = self._selected(self._delta_u_step)
+        numerator = float(np.dot(step, bar))
+        # MatrixManager.Vector.operator +(Vector, double) adds the scalar to
+        # every selected component.  alpha2 is zero for the supplied static
+        # HRX models, but retaining this expression preserves ArcLength1's
+        # actual behavior for a nonzero alpha2 compatibility input.
+        denominator = float(
+            np.dot(step, hat + self._alpha2 * self._delta_lambda_step)
+        )
+        if abs(denominator) < 1.0e-30:
+            self.errors.append(
+                "ArcLengthLinear constraint has a zero reference-load denominator"
+            )
+            return -10
+        delta_lambda = -numerator / denominator
+
+        self._delta_u = self._delta_u_bar + delta_lambda * self._delta_u_hat
+        self._last_delta_u = self._delta_u.copy()
+        self._last_delta_lambda = float(delta_lambda)
+        self._delta_u_step += self._delta_u
+        self._delta_lambda_step += delta_lambda
+        self._current_lambda += delta_lambda
+        ls.set_x_vector(self._delta_u)
+        if self.u is not None:
+            self.u += self._delta_u
+        ModelManager.update_domain(model, ls, self.state)
+        self.update_ptarget(
+            p, model, an, int(self.state.combination), self.iteration
+        )
+        self.apply_load_domain(model, delta_lambda)
+        return 0

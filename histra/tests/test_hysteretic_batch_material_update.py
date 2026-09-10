@@ -437,10 +437,88 @@ def test_compact_runtime_preserves_legacy_logical_parameter_columns() -> None:
 
     expected = np.asarray(
         [float(getattr(promoted, name)) for name in batch._PARAM_NAMES]
-        + [float(batch.TENSILE_EXPONENTIAL)],
+        + [float(batch.TENSILE_EXPONENTIAL), 0.0],
         dtype=np.float64,
     )
     np.testing.assert_array_equal(runtime.params[0], expected)
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_parabolic_compression_uses_generic_compiled_state_machine_exactly() -> None:
+    """The compiled path must retain the scalar parabolic backbone and history."""
+    model = _model()
+    spring = model.collections.interfaces[1].trasv_1[0]
+    spring.tensile_curve_type = "LinearSoftening"
+    spring.compressive_curve_type = "Parabolic"
+    spring.rot1p, spring.mom1p = 0.01, 10.0
+    spring.rot2p, spring.mom2p = 0.03, 12.0
+    spring.rot3p, spring.mom3p = 0.05, 0.0
+    spring.rot1n, spring.mom1n = -0.01, -10.0
+    spring.rot2n, spring.mom2n = -0.05, -30.0
+    spring.rot3n, spring.mom3n = -0.08, 0.0
+    spring.e1p, spring.e1n = 1000.0, 1000.0
+    spring.e2p, spring.e2n = 100.0, -500.0
+    spring.e3p, spring.e3n = -600.0, 1000.0
+    spring.eup, spring.eun = 1000.0, 1000.0
+    spring.energy_a = 1.0
+    spring.revert_to_start()
+    spring.revert_to_last_commit()
+
+    runtime = batch.HystereticBatchRuntime(model)
+    assert runtime._compact_simple_params is False
+    assert runtime._simple_hysteretic is False
+    assert runtime.params[0, batch.COMPRESSIVE_CURVE_TYPE_PARAM] == batch.COMPRESSIVE_PARABOLIC
+
+    # Envelope, post-peak loading, compression unloading and a reversal all
+    # exercise the generic compiled state machine rather than only a formula.
+    for target in (-0.005, -0.02, -0.06, -0.03, 0.002):
+        spring.set_trial_strain(target)
+        runtime.targets[0] = target
+        runtime.evaluate()
+        expected_trial = np.asarray(
+            [
+                spring._trot_max,
+                spring._trot_min,
+                spring._trot_pu,
+                spring._trot_nu,
+                spring._tenergy_d,
+                spring._tload_indicator,
+                spring._tstress,
+                spring._tstrain,
+                spring.t_phase,
+                spring.k_tang,
+            ],
+            dtype=np.float64,
+        )
+        np.testing.assert_allclose(runtime.trial[0], expected_trial, rtol=0.0, atol=1.0e-12)
+        spring.commit()
+        runtime.committed[0, :] = runtime.trial[0, :9]
+
+
+@pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")
+def test_parabolic_material_update_promotes_compact_runtime_and_keeps_coverage() -> None:
+    incremental_model = _model()
+    rebuilt_model = deepcopy(incremental_model)
+    incremental = batch.HystereticBatchRuntime(incremental_model)
+    assert incremental._compact_simple_params is True
+
+    for model in (incremental_model, rebuilt_model):
+        for spring in model.collections.interfaces[1].trasv_1:
+            spring.compressive_curve_type = "Parabolic"
+
+    assert incremental.try_update_material_interfaces(
+        [incremental_model.collections.interfaces[1]]
+    ) is True
+    rebuilt = batch.HystereticBatchRuntime(rebuilt_model)
+
+    assert incremental._compact_simple_params is False
+    assert incremental._simple_hysteretic is False
+    np.testing.assert_array_equal(incremental.params, rebuilt.params)
+    np.testing.assert_array_equal(incremental.committed, rebuilt.committed)
+    assert np.all(
+        incremental.params[:4, batch.COMPRESSIVE_CURVE_TYPE_PARAM]
+        == batch.COMPRESSIVE_PARABOLIC
+    )
 
 
 @pytest.mark.skipif(batch.njit is None, reason="Numba is unavailable")

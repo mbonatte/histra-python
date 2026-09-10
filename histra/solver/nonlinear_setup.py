@@ -77,6 +77,7 @@ def _setup_nonlinear_analysis(
     equilibrium_force_absolute_tolerance: float = 1.0e-3,
     equilibrium_force_relative_tolerance: float = 1.0e-5,
     equilibrium_residual_tolerance: float | None = None,
+    performance_policy: str = "compiled",
 ) -> _NonlinearSetup:
     """Validate policy, prepare the model and build the C#-ordered initial state."""
     equilibrium_policy = normalize_equilibrium_policy(equilibrium_policy)
@@ -99,14 +100,42 @@ def _setup_nonlinear_analysis(
         raise ValueError("equilibrium_residual_tolerance must be non-negative")
     readiness = inspect_solver_readiness(model)
     raise_if_cancelled(should_cancel)
-    if not readiness.is_ready and auto_prepare:
+    requires_python_preparation = bool(
+        getattr(model, "requires_python_preparation", False)
+    )
+    if requires_python_preparation and results_path is None and not restart_from_current_state:
+        if auto_prepare:
+            if on_log is not None:
+                on_log(
+                    "Preparing brand-new Python computational model from HRX geometry/materials "
+                    f"({readiness.quad_count} Quads)..."
+                )
+            prep_started = time.perf_counter()
+            prep = ModelManager.prepare_model(model, force=True)
+            prepare_model_seconds = time.perf_counter() - prep_started
+            raise_if_cancelled(should_cancel)
+            if on_log is not None:
+                on_log(
+                    "PrepareModel completed: "
+                    f"GDL={prep.gdl}, interfaces={prep.interfaces}, "
+                    f"springs={prep.quad_springs + prep.transverse_springs + prep.sliding_springs + prep.out_of_plane_springs}"
+                )
+        else:
+            from histra.preprocessing.errors import ModelPreparationError
+
+            raise ModelPreparationError(
+                "Cannot solve model using serialized HRX mesh. Serialized HRX interfaces "
+                "and springs are reference-only for testing/comparison; you must prepare "
+                "a brand new Python computational model before solving (auto_prepare=True or ModelManager.prepare_model)."
+            )
+    elif not readiness.is_ready and auto_prepare:
         if on_log is not None:
             on_log(
-                "Preparing unlocked HRX computational model in Python "
+                "Preparing Python computational model from HRX geometry/materials "
                 f"({readiness.quad_count} Quads)..."
             )
         prep_started = time.perf_counter()
-        prep = ModelManager.prepare_model(model)
+        prep = ModelManager.prepare_model(model, force=True)
         prepare_model_seconds = time.perf_counter() - prep_started
         raise_if_cancelled(should_cancel)
         if on_log is not None:
@@ -117,6 +146,21 @@ def _setup_nonlinear_analysis(
             )
     require_solver_ready(model)
     raise_if_cancelled(should_cancel)
+
+    policy = str(performance_policy).strip().lower()
+    if policy == "compiled":
+        from histra.solver.backend_coverage import inspect_solver_backend
+
+        backend = inspect_solver_backend(
+            model, [analysis], linear_solver_backend=linear_solver_backend
+        )
+        backend.require_compiled()
+    elif policy == "diagnostic-scalar" and on_log is not None:
+        on_log(
+            "PERFORMANCE POLICY NOTICE: Running in 'diagnostic-scalar' mode. "
+            "This unmanaged/scalar execution is for diagnostics only and cannot support production release acceptance."
+        )
+
     n = int(model.gdl)
     diagnostic_writer = create_diagnostics(diagnostics, model)
     p = Program(
@@ -207,6 +251,21 @@ def _setup_nonlinear_analysis(
             f"norm={np.linalg.norm(initial_external_load):.6g}"
         )
     runtime = ModelManager.hysteretic_batch_for(model)
+    if policy == "compiled":
+        if runtime is None:
+            from histra.solver.backend_coverage import CompiledBackendRequiredError
+
+            err = ModelManager._hysteretic_batch_error or "runtime construction failed"
+            raise CompiledBackendRequiredError(
+                f"Compiled production execution is required for '{model.source_path or 'model'}', "
+                f"but runtime construction failed at execution boundary: {err}"
+            )
+        from histra.solver.backend_coverage import inspect_solver_backend
+
+        backend = inspect_solver_backend(
+            model, [analysis], linear_solver_backend=linear_solver_backend
+        )
+        backend.require_compiled()
     if runtime is not None:
         selected_threads = runtime.configure_numba_threads()
         if selected_threads is not None:

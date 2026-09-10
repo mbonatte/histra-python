@@ -58,6 +58,7 @@ def solve_static_nonlinear(
     equilibrium_force_absolute_tolerance: float = 1.0e-3,
     equilibrium_force_relative_tolerance: float = 1.0e-5,
     equilibrium_residual_tolerance: float | None = None,
+    performance_policy: str = "compiled",
 ) -> tuple[int, list[dict[str, Any]]]:
     """Execute a static nonlinear analysis with bounded snapshot GC overhead.
 
@@ -104,6 +105,7 @@ def solve_static_nonlinear(
                     equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
                     equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
                     equilibrium_residual_tolerance=equilibrium_residual_tolerance,
+                    performance_policy=performance_policy,
                 )
             finally:
                 try:
@@ -145,11 +147,19 @@ def _solve_static_nonlinear_impl(
     equilibrium_force_absolute_tolerance: float = 1.0e-3,
     equilibrium_force_relative_tolerance: float = 1.0e-5,
     equilibrium_residual_tolerance: float | None = None,
+    performance_policy: str = "compiled",
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     raise_if_cancelled(should_cancel)
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
+
+    policy = str(performance_policy).strip().lower()
+    if policy not in {"compiled", "diagnostic-scalar"}:
+        raise ValueError(
+            f"Unknown performance_policy {performance_policy!r}; "
+            "expected 'compiled' or 'diagnostic-scalar'."
+        )
 
     setup = _setup_nonlinear_analysis(
         model, analysis, combination,
@@ -162,6 +172,7 @@ def _solve_static_nonlinear_impl(
         equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
         equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
         equilibrium_residual_tolerance=equilibrium_residual_tolerance,
+        performance_policy=policy,
     )
     p = setup.p
     ls = setup.ls

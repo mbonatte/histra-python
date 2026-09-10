@@ -53,6 +53,7 @@ class AnalysisSession:
         equilibrium_force_relative_tolerance: float = 1.0e-5,
         equilibrium_residual_tolerance: float | None = None,
         strategy_policy: str = "warn",
+        performance_policy: str = "compiled",
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
@@ -69,6 +70,19 @@ class AnalysisSession:
         )
         self.equilibrium_residual_tolerance = equilibrium_residual_tolerance
         self.strategy_policy = normalize_strategy_policy(strategy_policy)
+        policy = str(performance_policy).strip().lower()
+        if policy not in {"compiled", "diagnostic-scalar"}:
+            raise ValueError(
+                f"Unknown performance_policy {performance_policy!r}; "
+                "expected 'compiled' or 'diagnostic-scalar'."
+            )
+        self.performance_policy = policy
+        self.backend_coverage: Any | None = None
+        if policy == "diagnostic-scalar" and self.on_log is not None:
+            self.on_log(
+                "PERFORMANCE POLICY NOTICE: Running in 'diagnostic-scalar' mode. "
+                "This unmanaged/scalar execution is for diagnostics only and cannot support production release acceptance."
+            )
         self._emitted_strategy_advisories: set[
             tuple[str, int, str, str, str]
         ] = set()
@@ -118,12 +132,54 @@ class AnalysisSession:
         preserve_committed_state: bool = True,
     ) -> InterfaceMaterialMutationReport:
         self._require_usable()
-        report = change_interface_materials(
-            self.model,
-            interface_keys,
-            material_key,
-            preserve_committed_state=preserve_committed_state,
-        )
+        keys = tuple(dict.fromkeys(int(key) for key in interface_keys))
+        if not keys:
+            return InterfaceMaterialMutationReport(int(material_key), ())
+
+        if self.model.collections is None:
+            from histra.solver.interface_material import InterfaceMaterialMutationError
+
+            raise InterfaceMaterialMutationError("Model.collections is not initialized.")
+
+        missing = [key for key in keys if key not in self.model.collections.interfaces]
+        if missing:
+            from histra.solver.interface_material import InterfaceMaterialMutationError
+
+            raise InterfaceMaterialMutationError(f"Unknown interface keys: {missing}.")
+
+        from histra.solver.interface_material import _backup_interface
+
+        backups = {
+            key: _backup_interface(self.model.collections.interfaces[key])
+            for key in keys
+        }
+
+        try:
+            report = change_interface_materials(
+                self.model,
+                keys,
+                material_key,
+                preserve_committed_state=preserve_committed_state,
+            )
+            if self.performance_policy == "compiled":
+                from histra.solver.backend_coverage import inspect_solver_backend
+
+                coverage = inspect_solver_backend(self.model)
+                self.backend_coverage = coverage
+                coverage.require_compiled()
+        except Exception:
+            try:
+                for key, backup in backups.items():
+                    self.model.collections.interfaces[key] = backup
+                from histra.solver.model_manager import ModelManager
+
+                ModelManager.clear_hysteretic_batch()
+            except Exception as rollback_exc:
+                self._tainted_reason = (
+                    f"change_interface_materials rollback failed: {rollback_exc}"
+                )
+            raise
+
         self.mutations.append(report)
         if self.on_log is not None:
             self.on_log(
@@ -142,8 +198,21 @@ class AnalysisSession:
         should_cancel: CancelCheck | None = None,
     ) -> AnalysisExecution:
         self._require_usable()
+        # A locked HRX carries C# serialized interfaces/springs for reference
+        # comparison only.  Regenerate the Python model before any capability,
+        # backend, or solver operation can observe those objects.
+        if bool(getattr(self.model, "requires_python_preparation", False)):
+            from histra.solver.model_manager import ModelManager
+
+            ModelManager.prepare_model(self.model, force=True)
         definition = copy.deepcopy(self.resolve_analysis(analysis))
         inspect_solver_capabilities(self.model, [definition]).require_supported()
+        if self.performance_policy == "compiled":
+            from histra.solver.backend_coverage import inspect_solver_backend
+
+            coverage = inspect_solver_backend(self.model, [definition])
+            self.backend_coverage = coverage
+            coverage.require_compiled()
         emit_strategy_advisories(
             definition,
             policy=self.strategy_policy,
@@ -214,6 +283,7 @@ class AnalysisSession:
                     equilibrium_residual_tolerance=(
                         self.equilibrium_residual_tolerance
                     ),
+                    performance_policy=self.performance_policy,
                     **kwargs,
                 )
         except Exception as exc:

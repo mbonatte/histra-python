@@ -19,6 +19,7 @@ import numpy as np
 
 from histra.springs.hysteretic import SpringHysteretic
 from histra.solver.hysteretic_kernels.transverse import (
+    COMPRESSIVE_PARABOLIC,
     SIMPLE_PARAM_NAMES,
     TENSILE_EXPONENTIAL,
     TENSILE_LINEAR,
@@ -152,3 +153,8 @@ def _extract_spring_curve_type(spring: Any) -> float:
         return float(TENSILE_EXPONENTIAL)
     return float(TENSILE_LINEAR)
 
+
+def _extract_spring_compressive_curve_type(spring: Any) -> float:
+    if isinstance(spring, SpringHysteretic) and spring.compressive_curve_type == "Parabolic":
+        return float(COMPRESSIVE_PARABOLIC)
+    return 0.0

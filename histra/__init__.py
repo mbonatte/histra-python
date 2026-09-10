@@ -26,6 +26,13 @@ from histra.solver.capabilities import (
     UnsupportedSolverCapability,
     inspect_solver_capabilities,
 )
+from histra.solver.backend_coverage import (
+    CompiledBackendError,
+    CompiledBackendRequiredError,
+    SolverBackendCoverageReport,
+    UnmanagedSolverObjectError,
+    inspect_solver_backend,
+)
 from histra.solver.strategy import (
     SolverStrategyAdvisory,
     SolverStrategyReport,
@@ -80,6 +87,11 @@ __all__ = [
     "SolverStrategyAdvisory",
     "SolverStrategyReport",
     "SuboptimalSolverStrategyWarning",
+    "CompiledBackendError",
+    "CompiledBackendRequiredError",
+    "UnmanagedSolverObjectError",
+    "SolverBackendCoverageReport",
+    "inspect_solver_backend",
     "inspect_solver_strategy",
     "OutputProjectionError",
     "UnsupportedOutputError",

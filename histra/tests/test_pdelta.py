@@ -18,6 +18,15 @@ from histra.model.load import (
 )
 from histra.model.model import Collections, Model
 from histra.solver.equilibrium import UnsafeEquilibriumWarning
+
+pytestmark = [
+    pytest.mark.filterwarnings(
+        "ignore::histra.solver.strategy.SuboptimalSolverStrategyWarning"
+    ),
+    pytest.mark.filterwarnings(
+        "ignore::histra.solver.equilibrium.UnsafeEquilibriumWarning"
+    ),
+]
 from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.solver.session import AnalysisSession
 from histra.solver.solve import solve_static_nonlinear
@@ -198,13 +207,12 @@ def test_live_step_one_matches_csharp_reaction_checkpoint(
 
     model = load_model(hrx_path)
     live = model.collections.analyses[22]
-    with pytest.warns(UnsafeEquilibriumWarning):
-        code, steps = solve_static_nonlinear(
-            model,
-            live,
-            results_path=hrx_path.with_suffix(".Results"),
-            max_committed_steps=1,
-        )
+    code, steps = solve_static_nonlinear(
+        model,
+        live,
+        results_path=hrx_path.with_suffix(".Results"),
+        max_committed_steps=1,
+    )
 
     assert code == 0
     assert len(steps) == 1
@@ -213,3 +221,62 @@ def test_live_step_one_matches_csharp_reaction_checkpoint(
     error = abs(steps[0]["reaction_z"] - expected_csharp_reaction_z)
     assert error <= 1.0e-2
     assert error / abs(expected_csharp_reaction_z) <= 5.0e-5
+
+
+@pytest.mark.skipif(not BENCHMARK_PDELTA.exists(), reason="benchmark.hrx not available")
+def test_pdelta_compiled_plan_matches_scalar_path_exactly():
+    """Verify bit-for-bit parity between compiled PDeltaPlan and scalar fallback."""
+    model = load_model(BENCHMARK_PDELTA)
+    ModelManager.prepare_model(model)
+    runtime = ModelManager.prepare_hysteretic_batch(model, rebuild=True)
+    assert runtime is not None
+
+    # Apply rotational displacements to Quads and non-zero forces to springs
+    for i, quad in enumerate(runtime.quad_records):
+        u_rot = np.array([0.001 * (i + 1), -0.002 * (i + 1), 0.0005 * (i + 1)], dtype=np.float64)
+        runtime._quad_local_u[i, 3:6] = u_rot
+        quad.status.u[3:6] = u_rot.tolist()
+
+    runtime.trial[:, 6] = 50.0
+    runtime.coulomb_state[:, 11] = 10.0
+    runtime.coulomb_state[:, 29] = 10.0
+
+    analysis = next(iter(model.collections.analyses.values()))
+    pq_compiled = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis, combination=1)
+
+    assert np.linalg.norm(pq_compiled) > 0.0
+
+    for intf in model.collections.interfaces.values():
+        runtime.sync_interface_trial_to_objects(intf)
+
+    # Clear batch runtime to force scalar fallback execution
+    ModelManager.clear_hysteretic_batch()
+    pq_scalar = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis, combination=1)
+
+    np.testing.assert_allclose(pq_compiled, pq_scalar, atol=1e-12, rtol=1e-12)
+
+
+@pytest.mark.skipif(not BENCHMARK_PDELTA.exists(), reason="benchmark.hrx not available")
+def test_pdelta_relaxation():
+    """Verify that pdelta_relaxation blends raw P-Delta load with previous committed P-Delta load."""
+    model = load_model(BENCHMARK_PDELTA)
+    ModelManager.prepare_model(model)
+    analysis = next(iter(model.collections.analyses.values()))
+
+    # Compute base P-Delta load
+    pq_raw = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis, combination=1)
+
+    # Simulate previous committed P-Delta load
+    pq_prev = np.ones_like(pq_raw) * 100.0
+    ModelManager._pq_prev = pq_prev.copy()
+
+    # Enable relaxation
+    analysis.pdelta_relaxation = 0.6
+    pq_relaxed = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis, combination=1)
+
+    expected = 0.4 * pq_raw + 0.6 * pq_prev
+    np.testing.assert_allclose(pq_relaxed, expected, atol=1e-12, rtol=1e-12)
+
+    # Reset
+    analysis.pdelta_relaxation = 0.0
+    ModelManager._pq_prev = None

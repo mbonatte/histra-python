@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+import numpy as np
+
 from histra.io.results_reader import (
     ResultsStateError,
     read_dynamic_vectors,
@@ -261,25 +263,6 @@ def restore_committed_analysis_state(
             f"missing_interfaces={sorted(missing_interfaces)}, extra_interfaces={sorted(extra_interfaces)}"
         )
 
-    u[:] = db_u
-    v[:] = db_v
-    ls.set_zero_displacement()
-
-    for key, record in qstates.items():
-        quad = model.collections.quads[key]
-        quad.status.u[:] = record.u
-        quad.status.k = record.k
-        quad.status.f = 0.0
-        quad.sigma_initial = 0.0
-    for key, record in istates.items():
-        intf = model.collections.interfaces[key]
-        intf.status.u[:] = record.u
-        intf.status.forces = record.forces
-        intf.status.bending_moments = record.bending_moments
-        intf.status.v[:] = [0.0] * len(intf.status.v)
-        intf.status.fd[:] = [0.0] * len(intf.status.fd)
-        intf.f[:] = [0.0] * len(intf.f)
-
     targets = dict(_spring_targets(model))
     if set(targets) != set(sstates):
         missing = sorted(set(targets) - set(sstates))
@@ -288,20 +271,104 @@ def restore_committed_analysis_state(
             f"HRX/database spring mismatch: missing={missing[:10]}, extra={extra[:10]}, "
             f"counts=({len(targets)},{len(sstates)})"
         )
+
+    # Validate spring existence, types, and law fields before mutating model or arrays
     for identity, spring in targets.items():
         if spring is None:
             raise ResultsStateError(f"Database spring {identity} maps to None in HRX")
-        values = dict(sstates[identity].values)
-        if isinstance(spring, SpringHysteretic):
-            _restore_hysteretic(spring, values)
-        elif isinstance(spring, SpringCoulomb03):
-            _restore_coulomb(spring, values)
-        elif isinstance(spring, SpringElastic):
-            _restore_elastic(spring, values)
-        else:
+        if not isinstance(spring, (SpringHysteretic, SpringCoulomb03, SpringElastic)):
             raise ResultsStateError(
                 f"Unsupported restart spring type {type(spring).__name__} for {identity}"
             )
+        if isinstance(spring, SpringCoulomb03):
+            values = sstates[identity].values
+            up1, up2 = _f(values, "Up1"), _f(values, "Up2")
+            if abs(up1 - up2) > 1.0e-12:
+                raise ResultsStateError(
+                    f"Coulomb03 restart has unequal Up1/Up2 ({up1}, {up2}); Python state is scalar"
+                )
+
+    u_orig = np.array(u, copy=True)
+    v_orig = np.array(v, copy=True)
+    q_backups = {
+        key: (
+            quad.status.u.copy(),
+            float(quad.status.k),
+            float(quad.status.f),
+            float(quad.sigma_initial),
+        )
+        for key, quad in model.collections.quads.items()
+    }
+    i_backups = {
+        key: (
+            intf.status.u.copy(),
+            list(intf.status.forces),
+            list(intf.status.bending_moments),
+            list(intf.status.v),
+            list(intf.status.fd),
+            list(intf.f),
+        )
+        for key, intf in model.collections.interfaces.items()
+    }
+    s_backups = {
+        identity: capture_committed_spring_state(spring)
+        for identity, spring in targets.items()
+    }
+
+    try:
+        u[:] = db_u
+        v[:] = db_v
+        ls.set_zero_displacement()
+
+        for key, record in qstates.items():
+            quad = model.collections.quads[key]
+            quad.status.u[:] = record.u
+            quad.status.k = record.k
+            quad.status.f = 0.0
+            quad.sigma_initial = 0.0
+        for key, record in istates.items():
+            intf = model.collections.interfaces[key]
+            intf.status.u[:] = record.u
+            intf.status.forces = record.forces
+            intf.status.bending_moments = record.bending_moments
+            intf.status.v[:] = [0.0] * len(intf.status.v)
+            intf.status.fd[:] = [0.0] * len(intf.status.fd)
+            intf.f[:] = [0.0] * len(intf.f)
+
+        for identity, spring in targets.items():
+            values = dict(sstates[identity].values)
+            if isinstance(spring, SpringHysteretic):
+                _restore_hysteretic(spring, values)
+            elif isinstance(spring, SpringCoulomb03):
+                _restore_coulomb(spring, values)
+            elif isinstance(spring, SpringElastic):
+                _restore_elastic(spring, values)
+    except Exception:
+        u[:] = u_orig
+        v[:] = v_orig
+        for key, (qu, qk, qf, qsig) in q_backups.items():
+            quad = model.collections.quads[key]
+            quad.status.u[:] = qu
+            quad.status.k = qk
+            quad.status.f = qf
+            quad.sigma_initial = qsig
+        for key, (iu, iforces, ibm, iv, ifd, intff) in i_backups.items():
+            intf = model.collections.interfaces[key]
+            intf.status.u[:] = iu
+            intf.status.forces = iforces
+            intf.status.bending_moments = ibm
+            intf.status.v[:] = iv
+            intf.status.fd[:] = ifd
+            intf.f[:] = intff
+        for identity, spring in targets.items():
+            vals = s_backups[identity]
+            if isinstance(spring, SpringHysteretic):
+                _restore_hysteretic(spring, vals)
+            elif isinstance(spring, SpringCoulomb03):
+                _restore_coulomb(spring, vals)
+            elif isinstance(spring, SpringElastic):
+                _restore_elastic(spring, vals)
+        raise
 
     return RestartSummary(
         analysis_key=int(analysis_key),

@@ -131,10 +131,29 @@ class IncrementalIntegrator(ABC):
             collection = getattr(model.collections, collection_name, {})
             for element in collection.values():
                 element.revert_to_last_commit(ls)
+        from histra.solver.model_manager import ModelManager
+        if ModelManager._pq_prev is not None and ModelManager._pq is not None:
+            ModelManager._pq[:] = ModelManager._pq_prev
 
     @abstractmethod
     def update(self, model: Any, p: Any, an: Any) -> int:
         raise NotImplementedError
+
+    def update_trial(
+        self,
+        model: Any,
+        p: Any,
+        an: Any,
+        delta_eta: float,
+        direction: np.ndarray,
+    ) -> int:
+        """Apply an incremental trial shift along the search direction during line search."""
+        del an
+        p.ls.set_x_vector(delta_eta * direction)
+        ModelManager.update_domain(model, p.ls, self.state)
+        if self.u is not None:
+            self.u += p.ls.x
+        return 0
 
     @abstractmethod
     def new_step(

@@ -17,6 +17,10 @@ from histra.solver.solve import solve_static_nonlinear
 from histra.tools.run_vert_live import _resolve_analysis
 from histra.types.linear_system import LinearSystem
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::histra.solver.equilibrium.UnsafeEquilibriumWarning"
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 HRX = ROOT / "model-live" / "model.hrx"
 RESULTS = ROOT / "model-live" / "model.Results"

@@ -37,7 +37,10 @@ def chain():
 
     model = load_model(HRX)
     prep = ModelManager.prepare_model(model)
-    session = AnalysisSession(model)
+    # This fixture deliberately reproduces the authored C# Work path.  Its
+    # known unsafe commits are verified by the release harness, not by these
+    # output-projection tests.
+    session = AnalysisSession(model, equilibrium_policy="off", strategy_policy="off")
 
     def capture() -> dict:
         runtime = ModelManager.hysteretic_batch_for(model)

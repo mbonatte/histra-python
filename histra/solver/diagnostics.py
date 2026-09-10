@@ -313,7 +313,16 @@ class SolverDiagnostics:
             or self.options.capture_element_states
         ):
             return None
-        path = self.vector_dir / f"step_{step:05d}_iter_{iteration:05d}_{label}.npz"
+        # A failed ArcLength step can retry the same ``step``/``iteration``
+        # coordinates after an initial-tangent retry and several cutbacks.
+        # The prior filename silently overwrote those decisive trial vectors.
+        # ``emit`` will use the next sequence number, so include it here to
+        # make the artifact identity stable and unique without changing the
+        # event schema that references this path.
+        event_sequence = self._sequence + 1
+        path = self.vector_dir / (
+            f"event_{event_sequence:06d}_step_{step:05d}_iter_{iteration:05d}_{label}.npz"
+        )
         values: dict[str, Any] = {}
         if self.options.capture_vectors:
             values.update({

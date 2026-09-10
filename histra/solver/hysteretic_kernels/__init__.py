@@ -25,6 +25,8 @@ from histra.solver.hysteretic_kernels.quad_takeda import (
     _evaluate_quad_takeda_batch,
 )
 from histra.solver.hysteretic_kernels.scatter import (
+    _batch_interface_resultants,
+    _eval_pdelta_interfaces_kernel,
     _refresh_global_resisting_force,
     _refresh_global_resisting_force_by_dof,
     _refresh_max_u_cache,
@@ -48,6 +50,8 @@ __all__ = [
     "_refresh_global_resisting_force_by_dof",
     "_refresh_max_u_cache",
     "_scatter_local_forces",
+    "_batch_interface_resultants",
+    "_eval_pdelta_interfaces_kernel",
     "_advance_and_evaluate_simple_linear_batch",
     "_advance_evaluate_and_finish_simple_linear_batch",
     "_advance_interface_coulomb_targets",

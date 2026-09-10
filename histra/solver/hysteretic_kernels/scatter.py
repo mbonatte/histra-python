@@ -109,6 +109,146 @@ if njit is not None:
         cache[3] = quad_value
         cache[4] = quad_index
 
+    @njit(cache=True, nogil=True)
+    def _batch_interface_resultants(
+        starts, stops, trial_stresses, slid_indices, oop0_indices, oop1_indices, coulomb_state, resultants
+    ):
+        n = starts.shape[0]
+        for r in range(n):
+            fy = np.float32(0.0)
+            st = starts[r]
+            sp = stops[r]
+            for s in range(st, sp):
+                fy = np.float32(fy + np.float32(trial_stresses[s, 6]))
+            resultants[r, 1] = fy
+
+            fx = np.float32(0.0)
+            idx_slid = slid_indices[r]
+            if idx_slid >= 0:
+                fx = np.float32(fx - np.float32(coulomb_state[idx_slid, 29]))
+            resultants[r, 0] = fx
+
+            fz = np.float32(0.0)
+            idx_oop0 = oop0_indices[r]
+            if idx_oop0 >= 0:
+                fz = np.float32(fz - np.float32(coulomb_state[idx_oop0, 29]))
+            idx_oop1 = oop1_indices[r]
+            if idx_oop1 >= 0:
+                fz = np.float32(fz - np.float32(coulomb_state[idx_oop1, 29]))
+            resultants[r, 2] = fz
+
+    @njit(cache=True, nogil=True)
+    def _eval_pdelta_interfaces_kernel(
+        quad_local_u,
+        all_res_forces,
+        quad_indices,
+        intf_indices,
+        r_arr,
+        R_arr,
+        scatter_quad_idx,
+        scatter_comp,
+        scatter_dof,
+        scatter_alfa,
+        pq_global,
+    ):
+        n_quads = quad_local_u.shape[0]
+        quad_moments = np.zeros((n_quads, 3), dtype=np.float64)
+        m_count = len(quad_indices)
+        for m in range(m_count):
+            q = quad_indices[m]
+            phi_x = np.float32(quad_local_u[q, 3])
+            phi_y = np.float32(quad_local_u[q, 4])
+            phi_z = np.float32(quad_local_u[q, 5])
+            if phi_x == 0.0 and phi_y == 0.0 and phi_z == 0.0:
+                continue
+            rx = r_arr[m, 0]
+            ry = r_arr[m, 1]
+            rz = r_arr[m, 2]
+
+            du_x = phi_y * rz - phi_z * ry
+            du_y = phi_z * rx - phi_x * rz
+            du_z = phi_x * ry - phi_y * rx
+
+            intf_idx = intf_indices[m]
+            fl_x = all_res_forces[intf_idx, 0]
+            fl_y = all_res_forces[intf_idx, 1]
+            fl_z = all_res_forces[intf_idx, 2]
+
+            fg_x = np.float32(R_arr[m, 0, 0] * fl_x + R_arr[m, 0, 1] * fl_y + R_arr[m, 0, 2] * fl_z)
+            fg_y = np.float32(R_arr[m, 1, 0] * fl_x + R_arr[m, 1, 1] * fl_y + R_arr[m, 1, 2] * fl_z)
+            fg_z = np.float32(R_arr[m, 2, 0] * fl_x + R_arr[m, 2, 1] * fl_y + R_arr[m, 2, 2] * fl_z)
+
+            mx = np.float64(du_y * fg_z - du_z * fg_y)
+            my = np.float64(du_z * fg_x - du_x * fg_z)
+            mz = np.float64(du_x * fg_y - du_y * fg_x)
+
+            quad_moments[q, 0] += mx
+            quad_moments[q, 1] += my
+            quad_moments[q, 2] += mz
+
+        s_count = len(scatter_dof)
+        for s in range(s_count):
+            q = scatter_quad_idx[s]
+            c = scatter_comp[s]
+            dof = scatter_dof[s]
+            alfa = scatter_alfa[s]
+            pq_global[dof] += quad_moments[q, c] * alfa
+
+    @njit(cache=True, nogil=True)
+    def _eval_pdelta_line_loads_kernel(
+        quad_local_u,
+        load_quad_indices,
+        load_r_arr,
+        item_offsets,
+        item_forces,
+        scatter_offsets,
+        scatter_comp,
+        scatter_dof,
+        scatter_alfa,
+        pq_global,
+    ):
+        """Accumulate cached Quad line-load P-Delta moments.
+
+        One row represents one ``LineLoadElement`` and its item range.  The
+        order deliberately mirrors the scalar C#-compatible path: sum all
+        template items for a line load, then scatter that line load through
+        the Quad rotational afferences before advancing to the next load.
+        """
+        for load_index in range(load_quad_indices.size):
+            q = load_quad_indices[load_index]
+            phi_x = np.float32(quad_local_u[q, 3])
+            phi_y = np.float32(quad_local_u[q, 4])
+            phi_z = np.float32(quad_local_u[q, 5])
+            if phi_x == 0.0 and phi_y == 0.0 and phi_z == 0.0:
+                continue
+
+            rx = load_r_arr[load_index, 0]
+            ry = load_r_arr[load_index, 1]
+            rz = load_r_arr[load_index, 2]
+            du_x = phi_y * rz - phi_z * ry
+            du_y = phi_z * rx - phi_x * rz
+            du_z = phi_x * ry - phi_y * rx
+
+            mx = np.float64(0.0)
+            my = np.float64(0.0)
+            mz = np.float64(0.0)
+            for item_index in range(item_offsets[load_index], item_offsets[load_index + 1]):
+                fx = item_forces[item_index, 0]
+                fy = item_forces[item_index, 1]
+                fz = item_forces[item_index, 2]
+                mx += np.float64(du_y * fz - du_z * fy)
+                my += np.float64(du_z * fx - du_x * fz)
+                mz += np.float64(du_x * fy - du_y * fx)
+
+            for scatter_index in range(scatter_offsets[q], scatter_offsets[q + 1]):
+                comp = scatter_comp[scatter_index]
+                if comp == 0:
+                    moment = mx
+                elif comp == 1:
+                    moment = my
+                else:
+                    moment = mz
+                pq_global[scatter_dof[scatter_index]] += moment * scatter_alfa[scatter_index]
 
 
 else:  # pragma: no cover - exercised when numba is unavailable
@@ -116,3 +256,104 @@ else:  # pragma: no cover - exercised when numba is unavailable
     _refresh_global_resisting_force = None
     _refresh_global_resisting_force_by_dof = None
     _refresh_max_u_cache = None
+
+    def _batch_interface_resultants(
+        starts, stops, trial_stresses, slid_indices, oop0_indices, oop1_indices, coulomb_state, resultants
+    ):
+        n = starts.shape[0]
+        for r in range(n):
+            fy = np.float32(0.0)
+            st = starts[r]
+            sp = stops[r]
+            for s in range(st, sp):
+                fy = np.float32(fy + np.float32(trial_stresses[s, 6]))
+            resultants[r, 1] = fy
+
+            fx = np.float32(0.0)
+            idx_slid = slid_indices[r]
+            if idx_slid >= 0:
+                fx = np.float32(fx - np.float32(coulomb_state[idx_slid, 29]))
+            resultants[r, 0] = fx
+
+            fz = np.float32(0.0)
+            idx_oop0 = oop0_indices[r]
+            if idx_oop0 >= 0:
+                fz = np.float32(fz - np.float32(coulomb_state[idx_oop0, 29]))
+            idx_oop1 = oop1_indices[r]
+            if idx_oop1 >= 0:
+                fz = np.float32(fz - np.float32(coulomb_state[idx_oop1, 29]))
+            resultants[r, 2] = fz
+
+    def _eval_pdelta_interfaces_kernel(
+        quad_local_u,
+        all_res_forces,
+        quad_indices,
+        intf_indices,
+        r_arr,
+        R_arr,
+        scatter_quad_idx,
+        scatter_comp,
+        scatter_dof,
+        scatter_alfa,
+        pq_global,
+    ):
+        n_quads = quad_local_u.shape[0]
+        quad_moments = np.zeros((n_quads, 3), dtype=np.float64)
+        m_count = len(quad_indices)
+        for m in range(m_count):
+            q = quad_indices[m]
+            phi_x = np.float32(quad_local_u[q, 3])
+            phi_y = np.float32(quad_local_u[q, 4])
+            phi_z = np.float32(quad_local_u[q, 5])
+            if phi_x == 0.0 and phi_y == 0.0 and phi_z == 0.0:
+                continue
+            rx = r_arr[m, 0]
+            ry = r_arr[m, 1]
+            rz = r_arr[m, 2]
+
+            du_x = phi_y * rz - phi_z * ry
+            du_y = phi_z * rx - phi_x * rz
+            du_z = phi_x * ry - phi_y * rx
+
+            intf_idx = intf_indices[m]
+            fl_x = all_res_forces[intf_idx, 0]
+            fl_y = all_res_forces[intf_idx, 1]
+            fl_z = all_res_forces[intf_idx, 2]
+
+            fg_x = np.float32(R_arr[m, 0, 0] * fl_x + R_arr[m, 0, 1] * fl_y + R_arr[m, 0, 2] * fl_z)
+            fg_y = np.float32(R_arr[m, 1, 0] * fl_x + R_arr[m, 1, 1] * fl_y + R_arr[m, 1, 2] * fl_z)
+            fg_z = np.float32(R_arr[m, 2, 0] * fl_x + R_arr[m, 2, 1] * fl_y + R_arr[m, 2, 2] * fl_z)
+
+            mx = np.float64(du_y * fg_z - du_z * fg_y)
+            my = np.float64(du_z * fg_x - du_x * fg_z)
+            mz = np.float64(du_x * fg_y - du_y * fg_x)
+
+            quad_moments[q, 0] += mx
+            quad_moments[q, 1] += my
+            quad_moments[q, 2] += mz
+
+        s_count = len(scatter_dof)
+        for s in range(s_count):
+            q = scatter_quad_idx[s]
+            c = scatter_comp[s]
+            dof = scatter_dof[s]
+            alfa = scatter_alfa[s]
+            pq_global[dof] += quad_moments[q, c] * alfa
+
+    def _eval_pdelta_line_loads_kernel(
+        quad_local_u, load_quad_indices, load_r_arr, item_offsets,
+        item_forces, scatter_offsets, scatter_comp, scatter_dof,
+        scatter_alfa, pq_global,
+    ):
+        for load_index, q in enumerate(load_quad_indices):
+            phi = np.asarray(quad_local_u[q, 3:6], dtype=np.float32)
+            if not np.any(phi):
+                continue
+            delta_u = np.cross(phi, load_r_arr[load_index]).astype(np.float32)
+            moment = np.zeros(3, dtype=np.float64)
+            for item_index in range(item_offsets[load_index], item_offsets[load_index + 1]):
+                moment += np.cross(delta_u, item_forces[item_index]).astype(np.float32)
+            for scatter_index in range(scatter_offsets[q], scatter_offsets[q + 1]):
+                pq_global[scatter_dof[scatter_index]] += (
+                    moment[scatter_comp[scatter_index]] * scatter_alfa[scatter_index]
+                )

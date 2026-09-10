@@ -47,7 +47,10 @@ RUPTURE_C = int(PhaseEnum.RuptureComp)
 TENSILE_LINEAR = 0
 TENSILE_EXPONENTIAL = 1
 TENSILE_CURVE_TYPE_PARAM = 32
-TRANSVERSE_PARAM_SIZE = 33
+COMPRESSIVE_LINEAR = 0
+COMPRESSIVE_PARABOLIC = 1
+COMPRESSIVE_CURVE_TYPE_PARAM = 33
+TRANSVERSE_PARAM_SIZE = 34
 
 
 _PARAM_NAMES = (
@@ -120,6 +123,29 @@ if njit is not None:
         return mom3n
 
     @njit(cache=True, inline="always")
+    def _neg_stress_typed(
+        curve_type, strain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n,
+        e1n, e2n, e3n,
+    ):
+        if curve_type == COMPRESSIVE_PARABOLIC:
+            if strain >= 0.0:
+                return 0.0
+            if strain >= rot1n:
+                return mom1n * strain / rot1n if rot1n != 0.0 else 0.0
+            if strain >= rot2n:
+                denominator = rot2n - rot1n
+                r = (strain - rot1n) / denominator if denominator != 0.0 else 0.0
+                return mom1n * (1.0 + 4.0 * r - 2.0 * r * r)
+            if strain >= rot3n:
+                denominator = rot3n - rot2n
+                r = (strain - rot2n) / denominator if denominator != 0.0 else 0.0
+                return mom2n * (1.0 - r * r)
+            return 0.0
+        return _neg_stress(
+            strain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n
+        )
+
+    @njit(cache=True, inline="always")
     def _pos_tangent(strain, rot1p, rot2p, rot3p, e1p, e2p, e3p):
         if strain < 0.0:
             return e1p * 1.0e-9, ELASTIC
@@ -160,6 +186,29 @@ if njit is not None:
         if strain >= rot3n or e3n > 0.0:
             return e3n, PLASTIC_C
         return e1n * 1.0e-9, RUPTURE_C
+
+    @njit(cache=True, inline="always")
+    def _neg_tangent_typed(
+        curve_type, strain, rot1n, rot2n, rot3n, e1n, e2n, e3n,
+        tstress, cstress, cstrain,
+    ):
+        if curve_type == COMPRESSIVE_PARABOLIC:
+            if strain > 0.0:
+                return e1n * 1.0e-9, ELASTIC
+            if strain >= rot1n:
+                return e1n, ELASTIC
+            if strain >= rot2n:
+                dstrain = strain - cstrain
+                if dstrain != 0.0:
+                    return (tstress - cstress) / dstrain, ELASTIC
+                return e1n, ELASTIC
+            if strain >= rot3n:
+                dstrain = strain - cstrain
+                if dstrain != 0.0:
+                    return (tstress - cstress) / dstrain, PLASTIC_C
+                return e1n, PLASTIC_C
+            return e1n * 1.0e-9, RUPTURE_C
+        return _neg_tangent(strain, rot1n, rot2n, rot3n, e1n, e2n, e3n)
 
     @njit(cache=True, inline="always")
     def _pos_rotlim(strain, rot1p, mom1p, rot2p, mom2p, e2p, e3p,
@@ -214,6 +263,21 @@ if njit is not None:
             return -np.inf
         return result
 
+    @njit(cache=True, inline="always")
+    def _neg_rotlim_typed(
+        curve_type, strain, mom1n, rot1n, rot2n, mom2n, e2n, e3n,
+        rot3n, mom3n, e1n,
+    ):
+        # C# ``negEnvlpRotlim`` uses only the linear envelope slopes.  The
+        # parabolic branch has no such zero-crossing slope and therefore keeps
+        # the historical -infinity limit.
+        if curve_type == COMPRESSIVE_PARABOLIC:
+            return -np.inf
+        return _neg_rotlim(
+            strain, mom1n, rot1n, rot2n, mom2n, e2n, e3n,
+            rot3n, mom3n, e1n,
+        )
+
     @njit(cache=True, nogil=True, parallel=True)
     def _evaluate_linear_batch(params, committed, trial, targets, enabled):
         n = targets.size
@@ -238,6 +302,9 @@ if njit is not None:
             tensile_curve_type = TENSILE_LINEAR
             if params.shape[1] > TENSILE_CURVE_TYPE_PARAM:
                 tensile_curve_type = int(params[i, TENSILE_CURVE_TYPE_PARAM])
+            compressive_curve_type = COMPRESSIVE_LINEAR
+            if params.shape[1] > COMPRESSIVE_CURVE_TYPE_PARAM:
+                compressive_curve_type = int(params[i, COMPRESSIVE_CURVE_TYPE_PARAM])
 
             umax_p, umax_n = committed[i, 0], committed[i, 1]
             trot_pu, trot_nu = committed[i, 2], committed[i, 3]
@@ -274,8 +341,8 @@ if njit is not None:
                 tload = 1
             elif tstrain <= umax_n:
                 trot_min = tstrain
-                tstress = _neg_stress(tstrain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
-                ktang, tphase = _neg_tangent(tstrain, rot1n, rot2n, rot3n, e1n, e2n, e3n)
+                tstress = _neg_stress_typed(compressive_curve_type, tstrain, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
+                ktang, tphase = _neg_tangent_typed(compressive_curve_type, tstrain, rot1n, rot2n, rot3n, e1n, e2n, e3n, tstress, cstress, cstrain)
                 tload = 2
             elif dstrain < 0.0:
                 tphase = UNLOAD_T if tstress > 0.0 else RELOAD_C
@@ -283,7 +350,7 @@ if njit is not None:
                 if num <= 1.0:
                     num = 1.0
                 else:
-                    env = _neg_stress(umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
+                    env = _neg_stress_typed(compressive_curve_type, umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
                     num = env / mom1n / num if num != 0.0 else 1.0
                 num2 = (umax_p / rot1p) ** betap if rot1p != 0.0 else 0.0
                 if num2 <= 1.0:
@@ -313,7 +380,7 @@ if njit is not None:
                 tload = 2
                 if trot_min > rot1n:
                     trot_min = rot1n
-                num5 = _neg_stress(trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
+                num5 = _neg_stress_typed(compressive_curve_type, trot_min, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
                 num6 = _pos_rotlim_typed(
                     tensile_curve_type, umax_p, rot1p, mom1p, rot2p, mom2p,
                     e2p, e3p, rot3p, mom3p, e1p,
@@ -363,7 +430,7 @@ if njit is not None:
                 if num <= 1.0:
                     num = 1.0
                 else:
-                    env = _neg_stress(umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
+                    env = _neg_stress_typed(compressive_curve_type, umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n)
                     num = env / mom1n / num if num != 0.0 else 1.0
                 num2 = (umax_p / rot1p) ** betap if rot1p != 0.0 else 0.0
                 if num2 <= 1.0:
@@ -379,7 +446,7 @@ if njit is not None:
                     if cstress <= 0.0:
                         denom = eun * num
                         trot_nu = cstrain - cstress / denom if denom != 0.0 else 0.0
-                        if _neg_stress(umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n) == 0.0:
+                        if _neg_stress_typed(compressive_curve_type, umax_n, mom1n, rot1n, rot2n, mom2n, rot3n, mom3n, e1n, e2n, e3n) == 0.0:
                             trot_nu = 0.0
                         num3 = cenergy - 0.5 * cstress / denom * cstress if denom != 0.0 else cenergy
                         num4 = 0.0
@@ -394,7 +461,7 @@ if njit is not None:
                     tensile_curve_type, trot_max, rot1p, mom1p, rot2p, mom2p,
                     rot3p, mom3p, e1p, e2p, e3p,
                 )
-                num6 = _neg_rotlim(umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n, rot3n, mom3n, e1n)
+                num6 = _neg_rotlim_typed(compressive_curve_type, umax_n, mom1n, rot1n, rot2n, mom2n, e2n, e3n, rot3n, mom3n, e1n)
                 num7 = num6 if num6 > trot_nu else trot_nu
                 denom = eup * num2
                 num8 = trot_max - (1.0 - pinch_yp) * num5 / denom if denom != 0.0 else trot_max
@@ -1317,6 +1384,9 @@ else:  # pragma: no cover - exercised when numba is unavailable
     _pos_stress_typed = None
     _pos_tangent_typed = None
     _pos_rotlim_typed = None
+    _neg_stress_typed = None
+    _neg_tangent_typed = None
+    _neg_rotlim_typed = None
     _evaluate_linear_batch = None
     _advance_transverse_targets = None
     _evaluate_simple_linear_batch = None
