@@ -34,10 +34,17 @@ from histra.solver.backend_coverage import (
     inspect_solver_backend,
 )
 from histra.solver.strategy import (
+    CertifiedCandidateEvidence,
+    ModelStrategyEvidence,
     SolverStrategyAdvisory,
     SolverStrategyReport,
     SuboptimalSolverStrategyWarning,
+    clear_registered_strategy_evidence,
+    find_model_strategy_evidence,
     inspect_solver_strategy,
+    is_analysis_certified,
+    load_strategy_evidence,
+    register_strategy_evidence,
 )
 from histra.solver.outcomes import AnalysisExecution, AnalysisOutcome, AnalysisStep
 from histra.solver.output_projection import (
@@ -56,6 +63,7 @@ from histra.solver.modal import (
     ModalMode,
     solve_modal_analysis,
 )
+
 
 try:
     __version__ = version("histra-python")
@@ -84,9 +92,16 @@ __all__ = [
     "SolverCapabilityReport",
     "UnsupportedSolverCapability",
     "inspect_solver_capabilities",
+    "CertifiedCandidateEvidence",
+    "ModelStrategyEvidence",
     "SolverStrategyAdvisory",
     "SolverStrategyReport",
     "SuboptimalSolverStrategyWarning",
+    "clear_registered_strategy_evidence",
+    "find_model_strategy_evidence",
+    "is_analysis_certified",
+    "load_strategy_evidence",
+    "register_strategy_evidence",
     "CompiledBackendError",
     "CompiledBackendRequiredError",
     "UnmanagedSolverObjectError",

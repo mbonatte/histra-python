@@ -166,3 +166,41 @@ Warnings are emitted once per analysis/configuration, contain a stable code and
 the selected configuration, and never mutate the HRX. The reproducible strategy
 benchmark matrix and measured results are release artifacts; until that matrix
 passes, the table above is qualified guidance rather than a release claim.
+
+### Model-qualified certified benchmark evidence (`HISTRA-STRATEGY-004`)
+
+When an analysis configuration passes safety heuristics but lacks traceable,
+model-qualified evidence, the advisor emits `HISTRA-STRATEGY-004`. This advisory
+must **never** be resolved by blindly disabling strategy checks (`strategy_policy="off"`).
+Instead, it is resolved when model-qualified benchmark evidence verifies that:
+
+1. **Strict equilibrium** passed with zero unsafe commits (`unsafe_steps == 0`).
+2. The analysis **completed** and covered the full reference range (`range_covered == true`).
+3. An **accepted reference response** with a traceable source and cryptographic SHA-256
+   is recorded (`reference_evidence.accepted == true`).
+4. Physical curve metrics (peak load, initial stiffness, RMSE, area) match the accepted
+   reference within established Article benchmark thresholds.
+
+#### Discovery hierarchy for benchmark evidence
+
+The strategy advisor searches for model-qualified evidence in the following order:
+
+1. **Explicit argument**: Passed directly via `strategy_evidence` to
+   `inspect_solver_strategy(model, ["Vert"], strategy_evidence=evidence)` or
+   `AnalysisSession(model, strategy_evidence=evidence)`.
+2. **Attached to model instance**: `model.strategy_evidence = evidence` or mapping.
+3. **Globally registered evidence**: Attached via `histra.register_strategy_evidence(...)`.
+4. **Environment variables**: `HISTRA_STRATEGY_EVIDENCE_PATH` pointing to a JSON evidence
+   file, or `HISTRA_STRATEGY_EVIDENCE_DIR` pointing to an evidence directory.
+5. **Companion files**: Located beside the model's `.hrx` file:
+   - `<model_name>.strategy_evidence.json`
+   - `strategy_evidence.json`
+   - `<model_name>_strategy.json`
+6. **Default release evidence**: Packaged in `release-evidence/strategy/*.json`.
+
+When qualifying evidence matches the model (verified by SHA-256 hash or model HRX path)
+and candidate configuration, `HISTRA-STRATEGY-004` is cleanly resolved, the analysis is
+recorded in `report.certified_analyses`, and `report.is_certified("Vert")` returns `True`.
+If unsafe options (such as `Work` criterion) are used, `HISTRA-STRATEGY-001` and
+`HISTRA-STRATEGY-004` remain active, preventing unsafe configurations from being masked.
+

@@ -53,6 +53,7 @@ class AnalysisSession:
         equilibrium_force_relative_tolerance: float = 1.0e-5,
         equilibrium_residual_tolerance: float | None = None,
         strategy_policy: str = "warn",
+        strategy_evidence: Any | None = None,
         performance_policy: str = "compiled",
     ) -> None:
         if model.collections is None:
@@ -70,6 +71,7 @@ class AnalysisSession:
         )
         self.equilibrium_residual_tolerance = equilibrium_residual_tolerance
         self.strategy_policy = normalize_strategy_policy(strategy_policy)
+        self.strategy_evidence = strategy_evidence
         policy = str(performance_policy).strip().lower()
         if policy not in {"compiled", "diagnostic-scalar"}:
             raise ValueError(
@@ -218,6 +220,8 @@ class AnalysisSession:
             policy=self.strategy_policy,
             on_log=self.on_log,
             emitted=self._emitted_strategy_advisories,
+            model=self.model,
+            strategy_evidence=self.strategy_evidence,
         )
         initial_key = int(getattr(definition, "initial_analysis_key", -100))
         kwargs: dict[str, Any] = {}

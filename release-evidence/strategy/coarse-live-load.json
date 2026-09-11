@@ -20,6 +20,15 @@
   "target": "Second",
   "baseline_id": "force-standard-bisection",
   "recommended_id": "force-standard-bisection",
+  "reference_evidence": {
+    "accepted": true,
+    "source": "C# Bridge_3.1_Coarse.Results; AnalysisKey=23, Combination=1",
+    "source_sha256": "0209e01970d5a80881c71697b03e5bb4494c844c9a3539c0bd8d8c805d2992f6"
+  },
+  "reference_results": {
+    "path": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.Results",
+    "sha256": "0209e01970d5a80881c71697b03e5bb4494c844c9a3539c0bd8d8c805d2992f6"
+  },
   "results": [
     {
       "id": "authored",
@@ -242,6 +251,7 @@
         },
         "within_curve_tolerance": true
       },
+      "reference_evidence_accepted": true,
       "qualifies": true
     },
     {

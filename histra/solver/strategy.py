@@ -10,6 +10,16 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 import warnings
 
+from histra.solver.strategy_evidence import (
+    CertifiedCandidateEvidence,
+    ModelStrategyEvidence,
+    clear_registered_strategy_evidence,
+    find_model_strategy_evidence,
+    is_analysis_certified,
+    load_strategy_evidence,
+    register_strategy_evidence,
+)
+
 
 STRATEGY_GUIDE = "docs/nonlinear_convergence_safety.md"
 
@@ -53,10 +63,15 @@ class SolverStrategyAdvisory:
 @dataclass(frozen=True)
 class SolverStrategyReport:
     advisories: tuple[SolverStrategyAdvisory, ...]
+    certified_analyses: tuple[str, ...] = ()
 
     @property
     def recommended(self) -> bool:
         return not self.advisories
+
+    def is_certified(self, analysis_name_or_key: str | int) -> bool:
+        target = str(analysis_name_or_key).casefold()
+        return any(item.casefold() == target for item in self.certified_analyses)
 
 
 def normalize_strategy_policy(value: str) -> str:
@@ -66,7 +81,11 @@ def normalize_strategy_policy(value: str) -> str:
     return normalized
 
 
-def _analysis_advisories(analysis: Any) -> tuple[SolverStrategyAdvisory, ...]:
+def _analysis_advisories(
+    analysis: Any,
+    model: Any | None = None,
+    strategy_evidence: Any | None = None,
+) -> tuple[SolverStrategyAdvisory, ...]:
     if int(getattr(analysis, "analysis_type", 2)) == 5:
         return ()
 
@@ -143,29 +162,30 @@ def _analysis_advisories(analysis: Any) -> tuple[SolverStrategyAdvisory, ...]:
             )
         )
 
-    # The public inspector has no access to a model's signed benchmark path,
-    # hardware profile, or accepted reference artifact.  A lack of one of the
-    # narrower safety advisories must therefore never be represented as a
-    # positive recommendation.  This warning is intentionally stable and
-    # explicit: qualification is evidence, not a default property of a method.
-    result.append(
-        SolverStrategyAdvisory(
-            code="HISTRA-STRATEGY-004",
-            analysis_key=key,
-            analysis_name=name,
-            integration_method=integration,
-            nonlinear_method=method,
-            convergence_criterion=criterion,
-            reason=(
-                "no signed full-range, model-qualified strategy evidence is attached "
-                "to this analysis configuration"
-            ),
-            recommendation=(
-                "run the strict strategy matrix against a traceable accepted response "
-                "before treating this configuration as recommended"
-            ),
-        )
+    # Check if a model-qualified certified benchmark evidence record exists
+    # that qualifies this analysis configuration.
+    certified = is_analysis_certified(
+        analysis, model=model, evidence=strategy_evidence
     )
+    if certified is None:
+        result.append(
+            SolverStrategyAdvisory(
+                code="HISTRA-STRATEGY-004",
+                analysis_key=key,
+                analysis_name=name,
+                integration_method=integration,
+                nonlinear_method=method,
+                convergence_criterion=criterion,
+                reason=(
+                    "no signed full-range, model-qualified strategy evidence is attached "
+                    "to this analysis configuration"
+                ),
+                recommendation=(
+                    "run the strict strategy matrix against a traceable accepted response "
+                    "before treating this configuration as recommended"
+                ),
+            )
+        )
 
     return tuple(result)
 
@@ -173,6 +193,8 @@ def _analysis_advisories(analysis: Any) -> tuple[SolverStrategyAdvisory, ...]:
 def inspect_solver_strategy(
     model: Any,
     analysis_names: Iterable[int | str | Any],
+    *,
+    strategy_evidence: Any | None = None,
 ) -> SolverStrategyReport:
     """Inspect named analyses without mutating the model."""
     collections = getattr(model, "collections", None)
@@ -203,12 +225,22 @@ def inspect_solver_strategy(
                 )
             selected.append(matches[0])
 
-    advisories = tuple(
-        advisory
-        for analysis in selected
-        for advisory in _analysis_advisories(analysis)
+    advisories: list[SolverStrategyAdvisory] = []
+    certified_list: list[str] = []
+    for analysis in selected:
+        adv = _analysis_advisories(
+            analysis, model=model, strategy_evidence=strategy_evidence
+        )
+        advisories.extend(adv)
+        if is_analysis_certified(analysis, model=model, evidence=strategy_evidence) is not None:
+            a_name = str(getattr(analysis, "name", getattr(analysis, "key", "")))
+            if a_name and a_name not in certified_list:
+                certified_list.append(a_name)
+
+    return SolverStrategyReport(
+        advisories=tuple(advisories),
+        certified_analyses=tuple(certified_list),
     )
-    return SolverStrategyReport(advisories=advisories)
 
 
 def emit_strategy_advisories(
@@ -217,13 +249,17 @@ def emit_strategy_advisories(
     policy: str,
     on_log: Any | None,
     emitted: set[tuple[str, int, str, str, str]] | None = None,
+    model: Any | None = None,
+    strategy_evidence: Any | None = None,
 ) -> tuple[SolverStrategyAdvisory, ...]:
     """Emit each advisory once through warnings and the solver log."""
     if normalize_strategy_policy(policy) == "off":
         return ()
     emitted_keys = emitted if emitted is not None else set()
     delivered: list[SolverStrategyAdvisory] = []
-    for advisory in _analysis_advisories(analysis):
+    for advisory in _analysis_advisories(
+        analysis, model=model, strategy_evidence=strategy_evidence
+    ):
         if advisory.identity in emitted_keys:
             continue
         emitted_keys.add(advisory.identity)
@@ -236,10 +272,17 @@ def emit_strategy_advisories(
 
 
 __all__ = [
+    "CertifiedCandidateEvidence",
+    "ModelStrategyEvidence",
     "SolverStrategyAdvisory",
     "SolverStrategyReport",
     "SuboptimalSolverStrategyWarning",
+    "clear_registered_strategy_evidence",
     "emit_strategy_advisories",
+    "find_model_strategy_evidence",
     "inspect_solver_strategy",
+    "is_analysis_certified",
+    "load_strategy_evidence",
     "normalize_strategy_policy",
+    "register_strategy_evidence",
 ]

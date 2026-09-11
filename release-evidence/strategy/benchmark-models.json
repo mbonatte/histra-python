@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "scenario": "benchmark model suite: Vert gravity and LiveLoad_1 pushover",
+  "environment": {
+    "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "packages": {
+      "histra-python": "1.0.0"
+    }
+  },
+  "hrx": {
+    "path": [
+      "histra/model-live/model.hrx",
+      "histra/model-benchmark/model.hrx",
+      "histra/model-chain/model.hrx",
+      "histra/model-output/model.hrx"
+    ],
+    "sha256": [
+      "15102d63808b31de4b3fedc9b4e54d50bbd01784c0c77e81814272e400bd8efd",
+      "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+      "5d653de1edbf15729d89940df2c13a7acedabea1a479ae09a4a91aadfce5c2ee",
+      "9b1e6d1cabda42a6852c165d5fad20176977533c69230c985aa0e9e8ee9af4fe"
+    ]
+  },
+  "reference_evidence": {
+    "accepted": true,
+    "source": "C# model.Results regression suite",
+    "source_sha256": "c4f67915a58f3b98c6fea4bcea2955c4bc5fdfb907fad31e06e8afcf0951d030"
+  },
+  "results": [
+    {
+      "id": "vert-modified-regula-falsi",
+      "target": "Vert",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "ModifiedRegulaFalsiLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None"
+        }
+      },
+      "completed": true,
+      "range_covered": true,
+      "unsafe_steps": 0,
+      "reference_evidence_accepted": true,
+      "qualifies": true
+    },
+    {
+      "id": "vert-standard-bisection",
+      "target": "Vert",
+      "configuration": {
+        "target": {
+          "integration_method": "LoadControl",
+          "method": "StandardBisectionLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None"
+        }
+      },
+      "completed": true,
+      "range_covered": true,
+      "unsafe_steps": 0,
+      "reference_evidence_accepted": true,
+      "qualifies": true
+    },
+    {
+      "id": "live-load-standard-bisection",
+      "target": "LiveLoad_1",
+      "configuration": {
+        "target": {
+          "integration_method": "ArcLength",
+          "method": "StandardBisectionLineSearch",
+          "adaptive_convergence_criteria": "ForceMoment",
+          "pdelta_effect": "None"
+        }
+      },
+      "completed": true,
+      "range_covered": true,
+      "unsafe_steps": 0,
+      "reference_evidence_accepted": true,
+      "qualifies": true
+    }
+  ]
+}
