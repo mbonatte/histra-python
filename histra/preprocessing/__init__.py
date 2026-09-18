@@ -3,6 +3,7 @@
 from .errors import ModelPreparationError
 from .prepare_model import (
     PreparationReport,
+    create_brand_new_model,
     prepare_model,
     rebuild_interface_springs,
 )
@@ -16,6 +17,7 @@ from .validation import (
 __all__ = [
     "ModelPreparationError",
     "PreparationReport",
+    "create_brand_new_model",
     "prepare_model",
     "rebuild_interface_springs",
     "ModelPreprocessingRequiredError",
