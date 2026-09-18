@@ -4,6 +4,12 @@
   "target": "Vert",
   "max_steps": 5,
   "baseline_id": "force-standard-bisection",
+  "reference_results": "my_model/Article_Models_Benchmark/Bridge_3.1_Coarse.Results",
+  "reference_evidence": {
+    "accepted": true,
+    "source": "C# Bridge_3.1_Coarse.Results; AnalysisKey=1, Combination=1",
+    "source_sha256": "0209e01970d5a80881c71697b03e5bb4494c844c9a3539c0bd8d8c805d2992f6"
+  },
   "warmup_policy": "fresh model and compiled-kernel preparation per candidate",
   "candidates": [
     {"id": "authored"},

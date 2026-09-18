@@ -31,7 +31,7 @@ from histra.solver.equilibrium import (
     normalize_equilibrium_policy,
 )
 from histra.solver.load_assembly import assemble_load_vector  # noqa: F401 (setup contract)
-from histra.solver.model_manager import ModelManager
+from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.solver.program import Program
 from histra.solver.restart import restore_committed_analysis_state
 from histra.solver.solution_algorithm import EquiSolnAlgo
@@ -212,6 +212,8 @@ def _setup_nonlinear_analysis(
         # equilibrium without a .Results DB.
         ModelManager.get_resisting_force(model, ls)
         initial_external_load = -ls.b.copy()
+        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)) and ModelManager._pq is not None:
+            initial_external_load -= ModelManager._pq
         p.log(
             "Restored chained baseline load from in-memory resisting forces: "
             f"norm={np.linalg.norm(initial_external_load):.6g}"
@@ -246,6 +248,8 @@ def _setup_nonlinear_analysis(
         # committed by a work criterion with a non-zero residual.
         ModelManager.get_resisting_force(model, ls)
         initial_external_load = -ls.b.copy()
+        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)) and ModelManager._pq is not None:
+            initial_external_load -= ModelManager._pq
         p.log(
             f"Restored chained baseline load from committed resisting forces: "
             f"norm={np.linalg.norm(initial_external_load):.6g}"
@@ -274,10 +278,11 @@ def _setup_nonlinear_analysis(
                 f"{selected_threads} Numba worker(s) for "
                 f"{len(runtime.records)} interfaces and {len(runtime.springs)} springs"
             )
+    incoming_pq = ModelManager._pq.copy() if ModelManager._pq is not None else np.zeros(n)
     ModelManager._ptarget = np.zeros(n)
     ModelManager._fext = initial_external_load.copy()
     ModelManager._pq = np.zeros(n)
-    ModelManager._pq_prev = np.zeros(n)
+    ModelManager._pq_prev = incoming_pq
     ModelManager._u_total = p.u
 
     if getattr(analysis, "load_function_key", 0) in model.collections.load_functions:
