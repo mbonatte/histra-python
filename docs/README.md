@@ -1,5 +1,16 @@
 # Documentation
 
+## Authoritative C# to Python Parity Audit Suite
+
+Comprehensive, line-by-line comparative audit of the `histra-python` Discrete Macro-Element Method (DMEM) implementation against the authoritative C# HiStrA structural engine (`C#_Original/`):
+
+- **[Executive Summary & Architecture Review](audit/00_executive_summary.md)**: High-level parity score (100% DMEM masonry parity), C# OOP vs. Python/Numba vectorized architecture comparison, multi-chapter synthesis, V1 release readiness certification, and strategic 5-phase expansion roadmap.
+- **[Chapter 01: Master Numerical Core File-by-File Coverage Matrix](audit/01_file_coverage_matrix.md)**: Exhaustive mapping of all 117 Python production files and 426 unique C# core files across `SolverRuntime`, `MatrixManager`, `ModelLibrary`, `ModelManagement`, `Objects`, `SectionBuilderCore`, and `AdapticIO`.
+- **[Chapter 02: Mathematical, Constitutive, and Algorithmic Parity of Elements, Springs, and Materials](audit/02_elements_and_materials_parity.md)**: Line-by-line mathematical audit of 7-DOF Quads, 12-DOF Interfaces, Mohr-Coulomb/Cacovic shear, axial hysteretic fiber springs, and unported element/material catalog.
+- **[Chapter 03: Solvers, Numerical Algorithms, and Eigenvalue Analysis](audit/03_solvers_and_algorithms_parity.md)**: Newton-Raphson tangent rebuild policies, Crisfield/Linearized Arc-Length continuation, Line Search root-finding, modal subspace iteration with Knuth PRNG seeding (MAC > 0.9999), and the independent dual-mode `EquilibriumAudit`.
+- **[Chapter 04: Mesh Preprocessing, Boundary Autonomy, and I/O Parity](audit/04_preprocessing_and_io_parity.md)**: Fresh model preparation boundary (`force=True`), 6-face coplanar contact detection, Sutherland-Hodgman polygon clipping, 2D Newton inverse bilinear mapping, streaming XML ingestion (`iterparse`), and SQLite output projections.
+- **[Chapter 05: Exhaustive Catalog of Unimplemented C# Features, Algorithms, and Models](audit/05_unimplemented_features_catalog.md)**: Exhaustive catalog of 248 unported C# core files across 5 functional domains (12 elements, 7 materials, 10 springs, transient dynamics, response spectra), 3-tier fail-closed preflight guards, and 5-phase expansion roadmap.
+
 ## Start here
 
 - [Project status](STATUS.md)
