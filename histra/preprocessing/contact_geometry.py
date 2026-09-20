@@ -7,6 +7,11 @@ from typing import Sequence
 
 import numpy as np
 
+try:
+    from numba import njit
+except Exception:  # pragma: no cover
+    njit = None
+
 from histra.elements.interface import Interface
 from histra.elements.quad import Quad
 from histra.model.model import Model
@@ -732,6 +737,158 @@ def _passes_csharp_lateral_area_filter(
     return abs(float(np.dot(normal, _unit(centre_delta, label="Quad centre direction")))) >= math.cos(math.radians(80.0))
 
 
+if njit is not None:
+    @njit(fastmath=True)
+    def _find_broad_pairs_nb(centres: np.ndarray, broad_radius: np.ndarray):
+        n = len(centres)
+        count_pairs = 0
+        for i in range(n - 1):
+            ci0 = centres[i, 0]
+            ci1 = centres[i, 1]
+            ci2 = centres[i, 2]
+            ri = broad_radius[i]
+            for j in range(i + 1, n):
+                r_sum = ri + broad_radius[j]
+                dx = ci0 - centres[j, 0]
+                dy = ci1 - centres[j, 1]
+                dz = ci2 - centres[j, 2]
+                if dx * dx + dy * dy + dz * dz < r_sum * r_sum:
+                    count_pairs += 1
+
+        pair_i = np.empty(count_pairs, dtype=np.int64)
+        pair_j = np.empty(count_pairs, dtype=np.int64)
+        idx = 0
+        for i in range(n - 1):
+            ci0 = centres[i, 0]
+            ci1 = centres[i, 1]
+            ci2 = centres[i, 2]
+            ri = broad_radius[i]
+            for j in range(i + 1, n):
+                r_sum = ri + broad_radius[j]
+                dx = ci0 - centres[j, 0]
+                dy = ci1 - centres[j, 1]
+                dz = ci2 - centres[j, 2]
+                if dx * dx + dy * dy + dz * dz < r_sum * r_sum:
+                    pair_i[idx] = i
+                    pair_j[idx] = j
+                    idx += 1
+        return pair_i, pair_j
+
+    @njit(fastmath=True)
+    def _find_face_candidates_nb(
+        first_indices: np.ndarray,
+        second_indices: np.ndarray,
+        face_min: np.ndarray,
+        face_max: np.ndarray,
+        face_center: np.ndarray,
+        face_normal: np.ndarray,
+        dist_tol: float,
+        angle_tol: float,
+    ):
+        n_pairs = len(first_indices)
+        count_cand = 0
+        for p in range(n_pairs):
+            q1 = first_indices[p]
+            q2 = second_indices[p]
+            for f1 in range(6):
+                f1_min_x = face_min[q1, f1, 0] - dist_tol
+                f1_min_y = face_min[q1, f1, 1] - dist_tol
+                f1_min_z = face_min[q1, f1, 2] - dist_tol
+                f1_max_x = face_max[q1, f1, 0] + dist_tol
+                f1_max_y = face_max[q1, f1, 1] + dist_tol
+                f1_max_z = face_max[q1, f1, 2] + dist_tol
+
+                n1_x = face_normal[q1, f1, 0]
+                n1_y = face_normal[q1, f1, 1]
+                n1_z = face_normal[q1, f1, 2]
+
+                c1_x = face_center[q1, f1, 0]
+                c1_y = face_center[q1, f1, 1]
+                c1_z = face_center[q1, f1, 2]
+
+                for f2 in range(6):
+                    if (
+                        face_max[q2, f2, 0] >= f1_min_x
+                        and f1_max_x >= face_min[q2, f2, 0]
+                        and face_max[q2, f2, 1] >= f1_min_y
+                        and f1_max_y >= face_min[q2, f2, 1]
+                        and face_max[q2, f2, 2] >= f1_min_z
+                        and f1_max_z >= face_min[q2, f2, 2]
+                    ):
+                        n2_x = face_normal[q2, f2, 0]
+                        n2_y = face_normal[q2, f2, 1]
+                        n2_z = face_normal[q2, f2, 2]
+
+                        cx = n1_y * n2_z - n1_z * n2_y
+                        cy = n1_z * n2_x - n1_x * n2_z
+                        cz = n1_x * n2_y - n1_y * n2_x
+                        cross_norm = (cx * cx + cy * cy + cz * cz) ** 0.5
+                        if cross_norm <= angle_tol:
+                            dc_x = face_center[q2, f2, 0] - c1_x
+                            dc_y = face_center[q2, f2, 1] - c1_y
+                            dc_z = face_center[q2, f2, 2] - c1_z
+                            plane_dist = abs(dc_x * n1_x + dc_y * n1_y + dc_z * n1_z)
+                            if plane_dist <= dist_tol:
+                                count_cand += 1
+
+        out_q1 = np.empty(count_cand, dtype=np.int64)
+        out_f1 = np.empty(count_cand, dtype=np.int64)
+        out_q2 = np.empty(count_cand, dtype=np.int64)
+        out_f2 = np.empty(count_cand, dtype=np.int64)
+        idx = 0
+        for p in range(n_pairs):
+            q1 = first_indices[p]
+            q2 = second_indices[p]
+            for f1 in range(6):
+                f1_min_x = face_min[q1, f1, 0] - dist_tol
+                f1_min_y = face_min[q1, f1, 1] - dist_tol
+                f1_min_z = face_min[q1, f1, 2] - dist_tol
+                f1_max_x = face_max[q1, f1, 0] + dist_tol
+                f1_max_y = face_max[q1, f1, 1] + dist_tol
+                f1_max_z = face_max[q1, f1, 2] + dist_tol
+
+                n1_x = face_normal[q1, f1, 0]
+                n1_y = face_normal[q1, f1, 1]
+                n1_z = face_normal[q1, f1, 2]
+
+                c1_x = face_center[q1, f1, 0]
+                c1_y = face_center[q1, f1, 1]
+                c1_z = face_center[q1, f1, 2]
+
+                for f2 in range(6):
+                    if (
+                        face_max[q2, f2, 0] >= f1_min_x
+                        and f1_max_x >= face_min[q2, f2, 0]
+                        and face_max[q2, f2, 1] >= f1_min_y
+                        and f1_max_y >= face_min[q2, f2, 1]
+                        and face_max[q2, f2, 2] >= f1_min_z
+                        and f1_max_z >= face_min[q2, f2, 2]
+                    ):
+                        n2_x = face_normal[q2, f2, 0]
+                        n2_y = face_normal[q2, f2, 1]
+                        n2_z = face_normal[q2, f2, 2]
+
+                        cx = n1_y * n2_z - n1_z * n2_y
+                        cy = n1_z * n2_x - n1_x * n2_z
+                        cz = n1_x * n2_y - n1_y * n2_x
+                        cross_norm = (cx * cx + cy * cy + cz * cz) ** 0.5
+                        if cross_norm <= angle_tol:
+                            dc_x = face_center[q2, f2, 0] - c1_x
+                            dc_y = face_center[q2, f2, 1] - c1_y
+                            dc_z = face_center[q2, f2, 2] - c1_z
+                            plane_dist = abs(dc_x * n1_x + dc_y * n1_y + dc_z * n1_z)
+                            if plane_dist <= dist_tol:
+                                out_q1[idx] = q1
+                                out_f1[idx] = f1
+                                out_q2[idx] = q2
+                                out_f2[idx] = f2
+                                idx += 1
+        return out_q1, out_f1, out_q2, out_f2
+else:
+    _find_broad_pairs_nb = None
+    _find_face_candidates_nb = None
+
+
 def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]]:
     """Port C# ``GIQuadQuadSerial`` for all six Quad surfaces.
 
@@ -757,57 +914,106 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
         max(quad.length) + max(quad.thickness) for quad in quads
     ], dtype=float)
 
-    pair_i: list[int] = []
-    pair_j: list[int] = []
-    for first in range(count-1):
-        delta = centres[first+1:] - centres[first]
-        distance = np.linalg.norm(delta, axis=1)
-        candidates = np.flatnonzero(
-            distance < broad_radius[first] + broad_radius[first+1:]
+    if _find_broad_pairs_nb is not None and _find_face_candidates_nb is not None:
+        first_indices, second_indices = _find_broad_pairs_nb(centres, broad_radius)
+        cq1, cf1, cq2, cf2 = _find_face_candidates_nb(
+            first_indices,
+            second_indices,
+            face_min,
+            face_max,
+            face_center,
+            face_normal,
+            _CONTACT_DISTANCE_TOLERANCE,
+            _CONTACT_ANGLE_TOLERANCE,
         )
-        pair_i.extend([first] * len(candidates))
-        pair_j.extend((first+1+candidates).tolist())
-    first_indices = np.asarray(pair_i, dtype=np.int64)
-    second_indices = np.asarray(pair_j, dtype=np.int64)
-
-    surface_candidates: list[tuple[int, int, int, int]] = []
-    for offset in range(0, len(first_indices), _CONTACT_BATCH_SIZE):
-        first = first_indices[offset:offset+_CONTACT_BATCH_SIZE]
-        second = second_indices[offset:offset+_CONTACT_BATCH_SIZE]
-        overlap = np.all(
-            (face_max[first, :, None, :] >= face_min[second, None, :, :] - _CONTACT_DISTANCE_TOLERANCE)
-            & (face_max[second, None, :, :] >= face_min[first, :, None, :] - _CONTACT_DISTANCE_TOLERANCE),
-            axis=3,
-        )
-        candidate, face1, face2 = np.nonzero(overlap)
-        normals1 = face_normal[first[candidate], face1]
-        normals2 = face_normal[second[candidate], face2]
-        parallel = np.linalg.norm(np.cross(normals1, normals2), axis=1) <= _CONTACT_ANGLE_TOLERANCE
-        candidate, face1, face2, normals1 = (
-            candidate[parallel], face1[parallel], face2[parallel], normals1[parallel]
-        )
-        plane_distance = np.abs(np.sum(
-            (face_center[second[candidate], face2] - face_center[first[candidate], face1]) * normals1,
-            axis=1,
-        ))
-        coplanar = plane_distance <= _CONTACT_DISTANCE_TOLERANCE
-        candidate = candidate[coplanar]
-        face1 = face1[coplanar]
-        face2 = face2[coplanar]
-        normals1 = normals1[coplanar]
-        if candidate.size:
-            first_faces = faces[first[candidate], face1]
-            second_faces = faces[second[candidate], face2]
+        if len(cq1):
+            first_faces = faces[cq1, cf1]
+            second_faces = faces[cq2, cf2]
+            normals1 = face_normal[cq1, cf1]
             overlap = _convex_quad_overlap_prefilter_batch(
                 first_faces, second_faces, normals1
             )
-            candidate = candidate[overlap]
-            face1 = face1[overlap]
-            face2 = face2[overlap]
-        surface_candidates.extend(zip(
-            first[candidate].tolist(), face1.tolist(),
-            second[candidate].tolist(), face2.tolist(),
-        ))
+            cq1 = cq1[overlap]
+            cf1 = cf1[overlap]
+            cq2 = cq2[overlap]
+            cf2 = cf2[overlap]
+        surface_candidates = list(
+            zip(cq1.tolist(), cf1.tolist(), cq2.tolist(), cf2.tolist())
+        )
+    else:
+        pair_i: list[int] = []
+        pair_j: list[int] = []
+        for first in range(count - 1):
+            delta = centres[first + 1 :] - centres[first]
+            distance = np.linalg.norm(delta, axis=1)
+            candidates = np.flatnonzero(
+                distance < broad_radius[first] + broad_radius[first + 1 :]
+            )
+            pair_i.extend([first] * len(candidates))
+            pair_j.extend((first + 1 + candidates).tolist())
+        first_indices = np.asarray(pair_i, dtype=np.int64)
+        second_indices = np.asarray(pair_j, dtype=np.int64)
+
+        surface_candidates = []
+        for offset in range(0, len(first_indices), _CONTACT_BATCH_SIZE):
+            first = first_indices[offset : offset + _CONTACT_BATCH_SIZE]
+            second = second_indices[offset : offset + _CONTACT_BATCH_SIZE]
+            overlap = np.all(
+                (
+                    face_max[first, :, None, :]
+                    >= face_min[second, None, :, :] - _CONTACT_DISTANCE_TOLERANCE
+                )
+                & (
+                    face_max[second, None, :, :]
+                    >= face_min[first, :, None, :] - _CONTACT_DISTANCE_TOLERANCE
+                ),
+                axis=3,
+            )
+            candidate, face1, face2 = np.nonzero(overlap)
+            normals1 = face_normal[first[candidate], face1]
+            normals2 = face_normal[second[candidate], face2]
+            parallel = (
+                np.linalg.norm(np.cross(normals1, normals2), axis=1)
+                <= _CONTACT_ANGLE_TOLERANCE
+            )
+            candidate, face1, face2, normals1 = (
+                candidate[parallel],
+                face1[parallel],
+                face2[parallel],
+                normals1[parallel],
+            )
+            plane_distance = np.abs(
+                np.sum(
+                    (
+                        face_center[second[candidate], face2]
+                        - face_center[first[candidate], face1]
+                    )
+                    * normals1,
+                    axis=1,
+                )
+            )
+            coplanar = plane_distance <= _CONTACT_DISTANCE_TOLERANCE
+            candidate = candidate[coplanar]
+            face1 = face1[coplanar]
+            face2 = face2[coplanar]
+            normals1 = normals1[coplanar]
+            if candidate.size:
+                first_faces = faces[first[candidate], face1]
+                second_faces = faces[second[candidate], face2]
+                overlap = _convex_quad_overlap_prefilter_batch(
+                    first_faces, second_faces, normals1
+                )
+                candidate = candidate[overlap]
+                face1 = face1[overlap]
+                face2 = face2[overlap]
+            surface_candidates.extend(
+                zip(
+                    first[candidate].tolist(),
+                    face1.tolist(),
+                    second[candidate].tolist(),
+                    face2.tolist(),
+                )
+            )
 
     surface_candidates.sort(key=lambda item: (item[0], item[2], item[1], item[3]))
     contacts: list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]] = []

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(slots=True)
 class AfferenceEntry:
     """Afference coefficient linking a local DOF to a global DOF.
 

@@ -179,9 +179,13 @@ def _point_afference(
         if cached is None or (cached[1] is None and warping is not None):
             _point_cache[cache_key] = (r, warping)
 
-    direction_f = np.asarray(direction, dtype=np.float32)
+    direction_f = (
+        direction
+        if isinstance(direction, np.ndarray) and direction.dtype == np.float32
+        else np.asarray(direction, dtype=np.float32)
+    )
     dx, dy, dz = direction_f
-    rx, ry, rz = np.asarray(r, dtype=np.float32)
+    rx, ry, rz = float(r[0]), float(r[1]), float(r[2])
     shear = _f32(0.0) if face > 3 else _dot3_f32(warping, direction_f)
     coeff = (
         float(dx),
@@ -228,9 +232,9 @@ def _assign_interface_afference(model: Model) -> None:
     ] = {}
     for intf in c.interfaces.values():
         intf.aff = [[] for _ in range(12)]
-        e1 = np.asarray(intf.reference_e1, dtype=float)
-        e2 = np.asarray(intf.reference_e2, dtype=float)
-        e3 = np.asarray(intf.reference_e3, dtype=float)
+        e1 = np.asarray(intf.reference_e1, dtype=np.float32)
+        e2 = np.asarray(intf.reference_e2, dtype=np.float32)
+        e3 = np.asarray(intf.reference_e3, dtype=np.float32)
         points = [_v(c.nodes[k].point) for k in intf.node_keys]
         parents = [
             (intf.parent_type_element1, intf.parent_element_key1, 0),

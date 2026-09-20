@@ -106,6 +106,97 @@ class SpringHysteretic(Spring):
     phase: int = 0      # committed PhaseEnum value
     t_phase: int = 0    # trial PhaseEnum value
 
+    def __copy__(self) -> SpringHysteretic:
+        cls = self.__class__
+        out = cls.__new__(cls)
+        # Copy base slots
+        out.type_of = self.type_of
+        out.extra = self.extra.copy()
+        out.key = self.key
+        out.parent_key = self.parent_key
+        out.parent_type = self.parent_type
+        out.spring_purpose = self.spring_purpose
+        out.type_name = self.type_name
+        out.area = self.area
+        out.length = self.length
+        out.k = self.k
+        out.k_tang = self.k_tang
+        out.f = self.f
+        out.u = self.u
+        out.is_on = self.is_on
+        out.phase = self.phase
+        out.t_phase = self.t_phase
+        out._histra_batch_managed = self._histra_batch_managed
+
+        # Copy SpringHysteretic slots
+        out.pinch_xp = self.pinch_xp
+        out.pinch_yp = self.pinch_yp
+        out.pinch_xn = self.pinch_xn
+        out.pinch_yn = self.pinch_yn
+        out.damfc1p = self.damfc1p
+        out.damfc2p = self.damfc2p
+        out.damfc1n = self.damfc1n
+        out.damfc2n = self.damfc2n
+        out.betap = self.betap
+        out.betan = self.betan
+
+        out.rot1p = self.rot1p
+        out.mom1p = self.mom1p
+        out.rot2p = self.rot2p
+        out.mom2p = self.mom2p
+        out.rot3p = self.rot3p
+        out.mom3p = self.mom3p
+        out.mom1n = self.mom1n
+        out.rot1n = self.rot1n
+        out.rot2n = self.rot2n
+        out.mom2n = self.mom2n
+        out.rot3n = self.rot3n
+        out.mom3n = self.mom3n
+
+        out.e1n = self.e1n
+        out.e1p = self.e1p
+        out.e2n = self.e2n
+        out.e2p = self.e2p
+        out.e3n = self.e3n
+        out.e3p = self.e3p
+        out.eun = self.eun
+        out.eup = self.eup
+        out.energy_a = self.energy_a
+
+        out.tensile_curve_type = self.tensile_curve_type
+        out.compressive_curve_type = self.compressive_curve_type
+
+        out.fy = self.fy.copy()
+        out.kt = self.kt.copy()
+        out.ur = self.ur.copy()
+        out.alfau = self.alfau.copy()
+        out.alfar = self.alfar.copy()
+        out.umax = self.umax.copy()
+        out.uy_corr = self.uy_corr.copy()
+
+        out.f0 = self.f0
+        out.f0_target = self.f0_target
+        out.kstrain = self.kstrain
+        out.cenergy_d = self.cenergy_d
+        out.k_tang_committed = self.k_tang_committed
+
+        out._crot_pu = self._crot_pu
+        out._crot_nu = self._crot_nu
+        out._cload_indicator = self._cload_indicator
+        out._cstress = self._cstress
+        out._cstrain = self._cstrain
+
+        out._trot_max = self._trot_max
+        out._trot_min = self._trot_min
+        out._trot_pu = self._trot_pu
+        out._trot_nu = self._trot_nu
+        out._tenergy_d = self._tenergy_d
+        out._tload_indicator = self._tload_indicator
+        out._tstress = self._tstress
+        out._tstrain = self._tstrain
+        return out
+
+
     # ===================================================================
     # XML construction
     # ===================================================================
