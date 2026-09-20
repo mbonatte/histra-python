@@ -37,9 +37,11 @@ def _csharp_dot(left: np.ndarray, right: np.ndarray) -> float:
 
 
 def _check_cancelled(program: Any) -> None:
-    callback = getattr(program, "check_cancelled", None)
-    if callback is not None:
-        callback()
+    if program is not None:
+        try:
+            program.check_cancelled()
+        except AttributeError:
+            pass
 
 
 class LineSearch:
@@ -96,7 +98,9 @@ class LineSearch:
         """
         _check_cancelled(p)
         delta_eta = eta - eta_previous
-        if not getattr(an, "csharp_line_search_compatibility", True) and hasattr(integrator, "update_trial"):
+        if (
+            not getattr(an, "csharp_line_search_compatibility", True)
+        ) and hasattr(integrator, "update_trial"):
             code = integrator.update_trial(model, p, an, delta_eta, direction)
         else:
             ls.set_x_vector(delta_eta * direction)
@@ -144,6 +148,10 @@ class RegulaFalsiLineSearch(LineSearch):
         stopped = False
 
         iterations = 0
+        use_update_trial = (
+            not getattr(an, "csharp_line_search_compatibility", True)
+        ) and hasattr(integrator, "update_trial")
+
         while ratio > self.tolerance and iterations < self.max_iter and not stopped:
             _check_cancelled(p)
             iterations += 1
@@ -161,7 +169,7 @@ class RegulaFalsiLineSearch(LineSearch):
                 eta = self.min_eta
 
             delta_eta = eta - eta_previous
-            if not getattr(an, "csharp_line_search_compatibility", True) and hasattr(integrator, "update_trial"):
+            if use_update_trial:
                 code = integrator.update_trial(model, p, an, delta_eta, dx0)
             else:
                 ls.set_x_vector(delta_eta * dx0)

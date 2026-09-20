@@ -86,6 +86,10 @@ class NewtonLineSearch(EquiSolnAlgo):
                 self.the_integrator.form_unbalance(p, model, an)
         result = -1
         previous_error = 1.0
+        updates_tangent = _updates_tangent_each_iteration(an)
+        csharp_line_search_compatibility = bool(
+            getattr(an, "csharp_line_search_compatibility", True)
+        )
 
         while result == -1:
             p.check_cancelled()
@@ -96,7 +100,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             # after any failed/cancelled step (including ALS and ArcLength
             # retries), so an additional per-iteration copy is redundant.
             residual0 = ls.b.copy()
-            if _updates_tangent_each_iteration(an) and alfa != 0.0:
+            if updates_tangent and alfa != 0.0:
                 if diagnostics is None:
                     self.the_integrator.update_k(p, model, alfa)
                 else:
@@ -133,9 +137,6 @@ class NewtonLineSearch(EquiSolnAlgo):
             # different direction from C# and could produce runaway load
             # factors after an otherwise safe predecessor stage.
             line_search_direction = ls.x.copy()
-            csharp_line_search_compatibility = bool(
-                getattr(an, "csharp_line_search_compatibility", True)
-            )
             if not csharp_line_search_compatibility:
                 # Production-safe ArcLength mode uses one physical search
                 # direction for both endpoint projections and every trial.

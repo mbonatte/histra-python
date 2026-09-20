@@ -40,13 +40,14 @@ class NewtonRaphson(EquiSolnAlgo):
         self.the_test.start()
         result = -1
         previous_error = 1.0
+        is_standard = _is_standard_method(an)
 
         while result == -1:
             p.check_cancelled()
             iteration_snapshot = SolverStateSnapshot.capture(
                 model, p, ls, self.the_integrator, self.the_test, self.the_line_search
             )
-            if _is_standard_method(an) and alfa != 0.0:
+            if is_standard and alfa != 0.0:
                 if diagnostics is None:
                     self.the_integrator.update_k(p, model, alfa)
                 else:
