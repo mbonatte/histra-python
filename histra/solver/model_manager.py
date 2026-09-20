@@ -219,9 +219,9 @@ class ModelManager:
     def compute_ktang(cls, model: Model, ls: LinearSystem, alfa: float) -> int:
         runtime = cls.hysteretic_batch_for(model)
         if runtime is not None and alfa != 0.0:
-            # Updated-tangent methods still use the object-level ComputeK port.
-            # Publish dense trial tangents only when that path is requested.
-            runtime.sync_all_to_objects()
+            # Updated-tangent methods need only the active tangent stiffnesses
+            # to assemble K. Avoid expensive full-state object synchronizations.
+            runtime.sync_tangents_to_objects()
         cls.compute_k(model, alfa)
         cls.assemble_k(
             model, ls, alfa=alfa, set_zero=True, recompute_elements=False

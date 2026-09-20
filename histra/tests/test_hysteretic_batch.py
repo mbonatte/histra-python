@@ -269,3 +269,40 @@ def test_compiled_hysteretic_batch_can_be_disabled(monkeypatch):
     monkeypatch.setenv("HISTRA_DISABLE_COMPILED_SPRINGS", "1")
     model = load_model(MODEL)
     assert build_hysteretic_batch(model) is None
+
+
+def test_sync_tangents_to_objects_matches_sync_all_to_objects():
+    model = load_model(MODEL)
+    ModelManager.prepare_model(model)
+    runtime = build_hysteretic_batch(model)
+    assert runtime is not None
+
+    # Apply displacement to drive trial states
+    x = np.linspace(-1.0e-5, 1.0e-5, int(model.gdl), dtype=np.float64)
+    runtime.update_domain(x, type("State", (), {"step": 1})())
+
+    # Call sync_tangents_to_objects
+    runtime.sync_tangents_to_objects()
+    tangent_k_transverse = [s.k_tang for s in runtime.springs]
+    tangent_k_coulomb = [s.k_tang for s in runtime.coulomb_springs]
+    tangent_k_quad = [q.spring.k_tang for q in runtime.quad_records if q.spring is not None]
+
+    # Reset all k_tang to zero
+    for s in runtime.springs:
+        s.k_tang = 0.0
+    for s in runtime.coulomb_springs:
+        s.k_tang = 0.0
+    for q in runtime.quad_records:
+        if q.spring is not None:
+            q.spring.k_tang = 0.0
+
+    # Call sync_all_to_objects
+    runtime.sync_all_to_objects()
+    all_k_transverse = [s.k_tang for s in runtime.springs]
+    all_k_coulomb = [s.k_tang for s in runtime.coulomb_springs]
+    all_k_quad = [q.spring.k_tang for q in runtime.quad_records if q.spring is not None]
+
+    assert tangent_k_transverse == all_k_transverse
+    assert tangent_k_coulomb == all_k_coulomb
+    assert tangent_k_quad == all_k_quad
+

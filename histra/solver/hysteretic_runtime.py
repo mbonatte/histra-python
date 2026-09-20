@@ -2648,6 +2648,20 @@ class HystereticBatchRuntime:
             self.sync_interface_trial_to_objects(record.interface)
         self._objects_trial_synced = True
 
+    def sync_tangents_to_objects(self) -> None:
+        """Publish only the tangent stiffness needed for element stiffness assembly."""
+        k_tang = self.trial[:, 9]
+        for i, spring in enumerate(self.springs):
+            spring.k_tang = float(k_tang[i])
+        for i, spring in enumerate(self.coulomb_springs):
+            spring.k_tang = float(self.coulomb_state[i, CKTANG])
+        for i, quad in enumerate(self.quad_records):
+            if quad.spring is not None:
+                if isinstance(quad.spring, SpringElastic):
+                    quad.spring.k_tang = float(quad.spring.k)
+                else:
+                    quad.spring.k_tang = float(self.quad_state[i, QKTANG])
+
     def sync_all_to_objects(self) -> None:
         """Publish the authoritative dense state to the compatibility objects."""
         for i, spring in enumerate(self.springs):
