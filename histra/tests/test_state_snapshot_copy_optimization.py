@@ -174,3 +174,26 @@ def test_slotted_spring_object_state_roundtrip_is_lossless() -> None:
     spring.custom_probe["history"][0] = 500.0
     assert saved["fy"][0] == 6.25
     assert saved["custom_probe"]["history"][0] == 1.0
+
+
+def test_solver_state_snapshot_unmanaged_spring_filtering() -> None:
+    from histra.solver.state_snapshot import SolverStateSnapshot
+    from histra.types.linear_system import LinearSystem
+    from histra.solver.program import Program
+    from histra.solver.load_control import LoadControl
+
+    # Create dummy model with no unmanaged springs and a batch runtime stub
+    model = SimpleNamespace(
+        collections=SimpleNamespace(
+            quads={},
+            interfaces={},
+        )
+    )
+    p = Program()
+    ls = LinearSystem(1, backend="superlu")
+    integrator = LoadControl()
+    integrator.state = SimpleNamespace()
+
+    snapshot = SolverStateSnapshot.capture(model, p, ls, integrator)
+    assert snapshot.spring_state == []
+

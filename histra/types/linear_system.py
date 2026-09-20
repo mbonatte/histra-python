@@ -220,7 +220,10 @@ class LinearSystem:
                 self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
                 self._factor_matrix_version = self._matrix_version
-            solution = self._factorization.solve(vector)
+            if self.backend == "umfpack":
+                solution = self._factorization.solve(vector, out=self.x)
+            else:
+                solution = self._factorization.solve(vector)
             self.solve_count += 1
         except (
             MatrixRankWarning, RuntimeError, ValueError,
@@ -231,11 +234,15 @@ class LinearSystem:
                 f"Unable to solve stiffness system with {self.backend}: {exc}"
             ) from exc
 
-        solution = np.asarray(solution, dtype=np.float64).reshape(-1)
-        if solution.shape != (self.n,) or not np.all(np.isfinite(solution)):
+        if solution is not self.x:
+            solution = np.asarray(solution, dtype=np.float64).reshape(-1)
+            if solution.shape != (self.n,) or not np.all(np.isfinite(solution)):
+                raise LinearSolveError(
+                    "Sparse solve returned a singular or non-finite displacement vector"
+                )
+            self.x[:] = solution
+        elif not np.all(np.isfinite(self.x)):
             raise LinearSolveError(
                 "Sparse solve returned a singular or non-finite displacement vector"
             )
-
-        self.x[:] = solution
         return 0

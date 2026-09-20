@@ -358,14 +358,27 @@ class SolverStateSnapshot:
                 "status": _copy_state_dict(intf.status.__dict__),
                 "f": _copy_array(intf.f),
             }))
+        if runtime is not None:
+            sliding_interfaces = (
+                tuple(
+                    runtime.records[int(idx)].interface
+                    for idx in runtime._unmanaged_sliding_record_indices
+                )
+                if runtime._unmanaged_sliding_record_indices.size
+                else ()
+            )
+            quad_spring_sources = runtime.unmanaged_quads
+            interface_spring_sources = (*runtime.unmanaged_interfaces, *sliding_interfaces)
+        else:
+            quad_spring_sources = model.collections.quads.values()
+            interface_spring_sources = model.collections.interfaces.values()
+
         springs = [
             (spring, _copy_object_state(spring))
             for spring in _iter_springs(
-                # Managed interfaces can still contain scalar sliding springs
-                # outside the dense transverse/Coulomb state.
                 model,
-                quads=model.collections.quads.values(),
-                interfaces=model.collections.interfaces.values(),
+                quads=quad_spring_sources,
+                interfaces=interface_spring_sources,
             )
         ]
         batch_state = runtime.snapshot() if runtime is not None else None

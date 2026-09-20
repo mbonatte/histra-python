@@ -161,6 +161,25 @@ class TestLinearSystem(unittest.TestCase):
         self.assertEqual(ls.solve_count, 3)
         self.assertEqual(ls.factorization_count, 2)
 
+    def test_umfpack_solve_in_place(self):
+        from histra.types.umfpack import find_umfpack_library
+        if find_umfpack_library() is None:
+            self.skipTest("UMFPACK library not available")
+        ls = LinearSystem(2, backend="umfpack")
+        ls.set_k(0, 0, 2.0)
+        ls.set_k(1, 1, 4.0)
+
+        ls.solve(np.array([2.0, 8.0]))
+        np.testing.assert_allclose(ls.x, [1.0, 2.0])
+        self.assertEqual(ls.solve_count, 1)
+        self.assertEqual(ls.factorization_count, 1)
+
+        # Ensure pointers are cached and in-place solve is exact
+        ls.solve(np.array([4.0, 4.0]))
+        np.testing.assert_allclose(ls.x, [2.0, 1.0])
+        self.assertEqual(ls.solve_count, 2)
+        self.assertEqual(ls.factorization_count, 1)
+
 
 class TestIntegratorState(unittest.TestCase):
     def test_defaults(self):

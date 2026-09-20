@@ -104,7 +104,13 @@ class UmfpackFactorization:
         self.control = np.zeros(_UMFPACK_CONTROL, dtype=np.float64)
         self.info = np.zeros(_UMFPACK_INFO, dtype=np.float64)
 
-        self._lib.umfpack_di_defaults(self._double_ptr(self.control))
+        self._ap_ptr = self._int_ptr(self.ap)
+        self._ai_ptr = self._int_ptr(self.ai)
+        self._ax_ptr = self._double_ptr(self.ax)
+        self._control_ptr = self._double_ptr(self.control)
+        self._info_ptr = self._double_ptr(self.info)
+
+        self._lib.umfpack_di_defaults(self._control_ptr)
         # Exact override in MatrixManager.SparseMatrix.InitializeControl().
         self.control[_UMFPACK_STRATEGY] = _UMFPACK_STRATEGY_SYMMETRIC
 
@@ -118,22 +124,22 @@ class UmfpackFactorization:
         status = self._lib.umfpack_di_symbolic(
             self.n,
             self.n,
-            self._int_ptr(self.ap),
-            self._int_ptr(self.ai),
+            self._ap_ptr,
+            self._ai_ptr,
             self._double_ptr(symbolic_ax),
             ctypes.byref(self._symbolic),
-            self._double_ptr(self.control),
-            self._double_ptr(self.info),
+            self._control_ptr,
+            self._info_ptr,
         )
         self._require_ok(status, "symbolic factorization")
         status = self._lib.umfpack_di_numeric(
-            self._int_ptr(self.ap),
-            self._int_ptr(self.ai),
-            self._double_ptr(self.ax),
+            self._ap_ptr,
+            self._ai_ptr,
+            self._ax_ptr,
             self._symbolic,
             ctypes.byref(self._numeric),
-            self._double_ptr(self.control),
-            self._double_ptr(self.info),
+            self._control_ptr,
+            self._info_ptr,
         )
         self._require_ok(status, "numeric factorization")
 
@@ -178,23 +184,33 @@ class UmfpackFactorization:
                 f"(Info[0]={self.info[0] if self.info.size else float('nan')})."
             )
 
-    def solve(self, rhs: np.ndarray) -> np.ndarray:
+    def solve(self, rhs: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
         if self._closed or not self._numeric:
             raise UmfpackError("UMFPACK factorization is already closed")
         b = np.ascontiguousarray(rhs, dtype=np.float64)
         if b.shape != (self.n,):
             raise ValueError(f"Expected right-hand side shape {(self.n,)}, got {b.shape}")
-        x = np.zeros(self.n, dtype=np.float64)
+        if out is None:
+            x = np.zeros(self.n, dtype=np.float64)
+        else:
+            if out.shape != (self.n,) or out.dtype != np.float64:
+                raise ValueError(
+                    f"Expected out shape {(self.n,)} float64, got {out.shape} {out.dtype}"
+                )
+            if not out.flags.c_contiguous:
+                raise ValueError("Expected out to be C-contiguous")
+            x = out
+
         status = self._lib.umfpack_di_solve(
             _UMFPACK_A,
-            self._int_ptr(self.ap),
-            self._int_ptr(self.ai),
-            self._double_ptr(self.ax),
+            self._ap_ptr,
+            self._ai_ptr,
+            self._ax_ptr,
             self._double_ptr(x),
             self._double_ptr(b),
             self._numeric,
-            self._double_ptr(self.control),
-            self._double_ptr(self.info),
+            self._control_ptr,
+            self._info_ptr,
         )
         self._require_ok(status, "solve")
         return x
