@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 - 2026-09-21
+
+Fast linear solve acceleration, configurable UMFPACK iterative refinement, and non-linear solver performance optimizations.
+
+### Performance & Solver Optimization
+
+- **Default Fast Linear Solve Mode (`linear_solver_precision="fast"`)**: Configured UMFPACK `IRSTEP=0` by default, skipping iterative refinement and accelerating sparse back-substitutions by up to 3.24x while preserving $< 10^{-11}$ accuracy.
+- **Strict C# Parity Opt-In**: Provided `linear_solver_precision="strict"` (and `HISTRA_LINEAR_SOLVER_PRECISION=strict`) to retain `IRSTEP=2` for bit-exact reference verification.
+- **Vectorized Line-Search Dot Products**: Line search now uses vectorized BLAS (`np.dot`) when `csharp_line_search_compatibility=False` or `linear_solver_precision="fast"`.
+- **Adaptive Tangent Refresh Architecture**: Added configurable periodic and stall-triggered tangent refreshment options in `NewtonLineSearch` and `NewtonRaphson`.
+
 ## 1.1.0 - 2026-09-21
 
 Comprehensive performance optimization, solver acceleration, compiled backend pre-warming, and analytical C# parity documentation release.
