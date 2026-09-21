@@ -40,6 +40,10 @@ def test_linear_system_precision_strict_vs_fast():
 
 
 def test_linear_system_irstep_override():
+    ls_default = LinearSystem(50)
+    assert ls_default.precision == "fast"
+    assert ls_default.irstep == 0
+
     ls = LinearSystem(50, irstep=1)
     assert ls.irstep == 1
 

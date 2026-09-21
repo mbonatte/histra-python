@@ -56,7 +56,7 @@ class AnalysisSession:
         strategy_evidence: Any | None = None,
         performance_policy: str = "compiled",
         linear_solver_backend: str | None = None,
-        linear_solver_precision: str = "strict",
+        linear_solver_precision: str = "fast",
         umfpack_irstep: int | None = None,
         adaptive_tangent_refresh: bool | int | None = None,
         tangent_refresh_cadence: int | None = None,

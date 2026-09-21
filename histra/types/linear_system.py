@@ -33,7 +33,7 @@ class LinearSystem:
         n: int,
         *,
         backend: str | None = None,
-        precision: str = "strict",
+        precision: str = "fast",
         irstep: int | None = None,
     ):
         self.n = int(n)
