@@ -8,9 +8,10 @@ from typing import Sequence
 import numpy as np
 
 try:
-    from numba import njit
+    from numba import njit, prange
 except Exception:  # pragma: no cover
     njit = None
+    prange = range
 
 from histra.elements.interface import Interface
 from histra.elements.quad import Quad
@@ -797,31 +798,39 @@ def _passes_csharp_lateral_area_filter(
 
 
 if njit is not None:
-    @njit(fastmath=True, cache=True)
+    @njit(fastmath=True, cache=True, parallel=True)
     def _find_broad_pairs_nb(centres: np.ndarray, broad_radius: np.ndarray):
         n = len(centres)
-        count_pairs = 0
-        for i in range(n - 1):
+        counts = np.zeros(n, dtype=np.int64)
+        for i in prange(n - 1):
             ci0 = centres[i, 0]
             ci1 = centres[i, 1]
             ci2 = centres[i, 2]
             ri = broad_radius[i]
+            cnt = 0
             for j in range(i + 1, n):
                 r_sum = ri + broad_radius[j]
                 dx = ci0 - centres[j, 0]
                 dy = ci1 - centres[j, 1]
                 dz = ci2 - centres[j, 2]
                 if dx * dx + dy * dy + dz * dz < r_sum * r_sum:
-                    count_pairs += 1
+                    cnt += 1
+            counts[i] = cnt
 
-        pair_i = np.empty(count_pairs, dtype=np.int64)
-        pair_j = np.empty(count_pairs, dtype=np.int64)
-        idx = 0
-        for i in range(n - 1):
+        offsets = np.zeros(n, dtype=np.int64)
+        tot = 0
+        for i in range(n):
+            offsets[i] = tot
+            tot += counts[i]
+
+        pair_i = np.empty(tot, dtype=np.int64)
+        pair_j = np.empty(tot, dtype=np.int64)
+        for i in prange(n - 1):
             ci0 = centres[i, 0]
             ci1 = centres[i, 1]
             ci2 = centres[i, 2]
             ri = broad_radius[i]
+            idx = offsets[i]
             for j in range(i + 1, n):
                 r_sum = ri + broad_radius[j]
                 dx = ci0 - centres[j, 0]
@@ -833,7 +842,7 @@ if njit is not None:
                     idx += 1
         return pair_i, pair_j
 
-    @njit(fastmath=True, cache=True)
+    @njit(fastmath=True, cache=True, parallel=True)
     def _find_face_candidates_nb(
         first_indices: np.ndarray,
         second_indices: np.ndarray,
@@ -845,10 +854,11 @@ if njit is not None:
         angle_tol: float,
     ):
         n_pairs = len(first_indices)
-        count_cand = 0
-        for p in range(n_pairs):
+        counts = np.zeros(n_pairs, dtype=np.int64)
+        for p in prange(n_pairs):
             q1 = first_indices[p]
             q2 = second_indices[p]
+            cnt = 0
             for f1 in range(6):
                 f1_min_x = face_min[q1, f1, 0] - dist_tol
                 f1_min_y = face_min[q1, f1, 1] - dist_tol
@@ -888,16 +898,24 @@ if njit is not None:
                             dc_z = face_center[q2, f2, 2] - c1_z
                             plane_dist = abs(dc_x * n1_x + dc_y * n1_y + dc_z * n1_z)
                             if plane_dist <= dist_tol:
-                                count_cand += 1
+                                cnt += 1
+            counts[p] = cnt
 
-        out_q1 = np.empty(count_cand, dtype=np.int64)
-        out_f1 = np.empty(count_cand, dtype=np.int64)
-        out_q2 = np.empty(count_cand, dtype=np.int64)
-        out_f2 = np.empty(count_cand, dtype=np.int64)
-        idx = 0
+        offsets = np.zeros(n_pairs, dtype=np.int64)
+        tot = 0
         for p in range(n_pairs):
+            offsets[p] = tot
+            tot += counts[p]
+
+        out_q1 = np.empty(tot, dtype=np.int64)
+        out_f1 = np.empty(tot, dtype=np.int64)
+        out_q2 = np.empty(tot, dtype=np.int64)
+        out_f2 = np.empty(tot, dtype=np.int64)
+
+        for p in prange(n_pairs):
             q1 = first_indices[p]
             q2 = second_indices[p]
+            idx = offsets[p]
             for f1 in range(6):
                 f1_min_x = face_min[q1, f1, 0] - dist_tol
                 f1_min_y = face_min[q1, f1, 1] - dist_tol

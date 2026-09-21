@@ -511,41 +511,46 @@ def _configure_combined_hysteretic_batch(
     if n == 0:
         return []
 
-    # Preserve the scalar validation/error order:
-    # cell -> side1(K,area,length) -> side2(K,area,length).
-    invalid = np.column_stack((
-        (~np.isfinite(p1[:, 0])) | (p1[:, 0] <= 0.0),
-        (~np.isfinite(p1[:, 1])) | (p1[:, 1] <= 0.0),
-        (~np.isfinite(p1[:, 2])) | (p1[:, 2] <= 0.0),
-        (~np.isfinite(p2[:, 0])) | (p2[:, 0] <= 0.0),
-        (~np.isfinite(p2[:, 1])) | (p2[:, 1] <= 0.0),
-        (~np.isfinite(p2[:, 2])) | (p2[:, 2] <= 0.0),
-    ))
-    bad = np.flatnonzero(invalid)
-    if bad.size:
-        flat = int(bad[0])
-        index, field = divmod(flat, 6)
-        side = p1 if field < 3 else p2
-        component = field if field < 3 else field - 3
-        value = side[index, component]
-        if component == 0:
-            detail = (
-                "Cannot create a transverse hysteretic spring with "
-                f"stiffness K={value!r}."
+    # Fast path: skip expensive column_stack and flatnonzero if all properties are positive and finite.
+    if not (
+        np.all(p1 > 0.0)
+        and np.all(np.isfinite(p1))
+        and np.all(p2 > 0.0)
+        and np.all(np.isfinite(p2))
+    ):
+        invalid = np.column_stack((
+            (~np.isfinite(p1[:, 0])) | (p1[:, 0] <= 0.0),
+            (~np.isfinite(p1[:, 1])) | (p1[:, 1] <= 0.0),
+            (~np.isfinite(p1[:, 2])) | (p1[:, 2] <= 0.0),
+            (~np.isfinite(p2[:, 0])) | (p2[:, 0] <= 0.0),
+            (~np.isfinite(p2[:, 1])) | (p2[:, 1] <= 0.0),
+            (~np.isfinite(p2[:, 2])) | (p2[:, 2] <= 0.0),
+        ))
+        bad = np.flatnonzero(invalid)
+        if bad.size:
+            flat = int(bad[0])
+            index, field = divmod(flat, 6)
+            side = p1 if field < 3 else p2
+            component = field if field < 3 else field - 3
+            value = side[index, component]
+            if component == 0:
+                detail = (
+                    "Cannot create a transverse hysteretic spring with "
+                    f"stiffness K={value!r}."
+                )
+            elif component == 1:
+                detail = (
+                    "Cannot create a transverse hysteretic spring with "
+                    f"area={value!r}."
+                )
+            else:
+                detail = (
+                    "Cannot create a transverse hysteretic spring with "
+                    f"length={value!r}."
+                )
+            raise ModelPreparationError(
+                f"Interface {interface_key}, transverse cell {index}: {detail}"
             )
-        elif component == 1:
-            detail = (
-                "Cannot create a transverse hysteretic spring with "
-                f"area={value!r}."
-            )
-        else:
-            detail = (
-                "Cannot create a transverse hysteretic spring with "
-                f"length={value!r}."
-            )
-        raise ModelPreparationError(
-            f"Interface {interface_key}, transverse cell {index}: {detail}"
-        )
 
     k1, area1, length1 = p1[:, 0], p1[:, 1], p1[:, 2]
     k2, area2, length2 = p2[:, 0], p2[:, 1], p2[:, 2]
@@ -564,36 +569,47 @@ def _configure_combined_hysteretic_batch(
     area = np.where(compression_area_from_2, area2, area1)
     compression_curve_1 = fy1_c >= fy2_c
 
-    tensile_linear_softening = np.where(
-        tension_curve_1,
-        law1.tensile_curve == "LinearSoftening",
-        law2.tensile_curve == "LinearSoftening",
-    )
-    tensile_exponential = np.where(
-        tension_curve_1,
-        law1.tensile_curve == "Exponential",
-        law2.tensile_curve == "Exponential",
-    )
-    tensile_elastic = np.where(
-        tension_curve_1,
-        law1.tensile_curve == "Elastic",
-        law2.tensile_curve == "Elastic",
-    )
-    compressive_linear_softening = np.where(
-        compression_curve_1,
-        law1.compressive_curve == "LinearSoftening",
-        law2.compressive_curve == "LinearSoftening",
-    )
-    compressive_parabolic = np.where(
-        compression_curve_1,
-        law1.compressive_curve == "Parabolic",
-        law2.compressive_curve == "Parabolic",
-    )
-    compressive_elastic = np.where(
-        compression_curve_1,
-        law1.compressive_curve == "Elastic",
-        law2.compressive_curve == "Elastic",
-    )
+    if law1.tensile_curve == law2.tensile_curve:
+        tensile_linear_softening = (law1.tensile_curve == "LinearSoftening")
+        tensile_exponential = (law1.tensile_curve == "Exponential")
+        tensile_elastic = (law1.tensile_curve == "Elastic")
+    else:
+        tensile_linear_softening = np.where(
+            tension_curve_1,
+            law1.tensile_curve == "LinearSoftening",
+            law2.tensile_curve == "LinearSoftening",
+        )
+        tensile_exponential = np.where(
+            tension_curve_1,
+            law1.tensile_curve == "Exponential",
+            law2.tensile_curve == "Exponential",
+        )
+        tensile_elastic = np.where(
+            tension_curve_1,
+            law1.tensile_curve == "Elastic",
+            law2.tensile_curve == "Elastic",
+        )
+
+    if law1.compressive_curve == law2.compressive_curve:
+        compressive_linear_softening = (law1.compressive_curve == "LinearSoftening")
+        compressive_parabolic = (law1.compressive_curve == "Parabolic")
+        compressive_elastic = (law1.compressive_curve == "Elastic")
+    else:
+        compressive_linear_softening = np.where(
+            compression_curve_1,
+            law1.compressive_curve == "LinearSoftening",
+            law2.compressive_curve == "LinearSoftening",
+        )
+        compressive_parabolic = np.where(
+            compression_curve_1,
+            law1.compressive_curve == "Parabolic",
+            law2.compressive_curve == "Parabolic",
+        )
+        compressive_elastic = np.where(
+            compression_curve_1,
+            law1.compressive_curve == "Elastic",
+            law2.compressive_curve == "Elastic",
+        )
 
     series_kt_t = _series_array(kt1_t, kt2_t)
     series_kt_c = _series_array(kt1_c, kt2_c)
