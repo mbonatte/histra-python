@@ -110,6 +110,14 @@ class UmfpackFactorization:
         self._control_ptr = self._double_ptr(self.control)
         self._info_ptr = self._double_ptr(self.info)
 
+        # Pre-bind raw memory addresses for direct zero-copy C ABI calls
+        self._ap_data = self.ap.ctypes.data
+        self._ai_data = self.ai.ctypes.data
+        self._ax_data = self.ax.ctypes.data
+        self._control_data = self.control.ctypes.data
+        self._info_data = self.info.ctypes.data
+        self._solve_fn = self._lib.umfpack_di_solve
+
         self._lib.umfpack_di_defaults(self._control_ptr)
         # Exact override in MatrixManager.SparseMatrix.InitializeControl().
         self.control[_UMFPACK_STRATEGY] = _UMFPACK_STRATEGY_SYMMETRIC
@@ -166,9 +174,10 @@ class UmfpackFactorization:
             int_p, int_p, double_p, ctypes.c_void_p, void_pp, double_p, double_p,
         ]
         self._lib.umfpack_di_numeric.restype = ctypes.c_int
+        void_p = ctypes.c_void_p
         self._lib.umfpack_di_solve.argtypes = [
-            ctypes.c_int, int_p, int_p, double_p, double_p, double_p,
-            ctypes.c_void_p, double_p, double_p,
+            ctypes.c_int, void_p, void_p, void_p, void_p, void_p,
+            void_p, void_p, void_p,
         ]
         self._lib.umfpack_di_solve.restype = ctypes.c_int
         self._lib.umfpack_di_free_symbolic.argtypes = [void_pp]
@@ -201,16 +210,16 @@ class UmfpackFactorization:
                 raise ValueError("Expected out to be C-contiguous")
             x = out
 
-        status = self._lib.umfpack_di_solve(
+        status = self._solve_fn(
             _UMFPACK_A,
-            self._ap_ptr,
-            self._ai_ptr,
-            self._ax_ptr,
-            self._double_ptr(x),
-            self._double_ptr(b),
+            self._ap_data,
+            self._ai_data,
+            self._ax_data,
+            x.ctypes.data,
+            b.ctypes.data,
             self._numeric,
-            self._control_ptr,
-            self._info_ptr,
+            self._control_data,
+            self._info_data,
         )
         self._require_ok(status, "solve")
         return x

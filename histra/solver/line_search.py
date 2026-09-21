@@ -56,8 +56,7 @@ class LineSearch:
         self._direction: np.ndarray | None = None
 
     def new_step(self, p: Any, ls: Any) -> None:
-        del p
-        self._direction = ls.x.copy()
+        del p, ls
 
     def search(
         self,

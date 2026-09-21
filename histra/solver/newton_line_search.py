@@ -61,6 +61,12 @@ def _updates_tangent_each_iteration(an: Any) -> bool:
 class NewtonLineSearch(EquiSolnAlgo):
     """Newton-Raphson with the C# line-search call sequence."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._scratch_residual0: np.ndarray | None = None
+        self._scratch_dx0: np.ndarray | None = None
+        self._scratch_direction: np.ndarray | None = None
+
     def solve_current_step(
         self,
         p: Program,
@@ -91,6 +97,18 @@ class NewtonLineSearch(EquiSolnAlgo):
             getattr(an, "csharp_line_search_compatibility", True)
         )
 
+        if (
+            self._scratch_residual0 is None
+            or self._scratch_residual0.shape != (ls.n,)
+        ):
+            self._scratch_residual0 = np.empty(ls.n, dtype=np.float64)
+            self._scratch_dx0 = np.empty(ls.n, dtype=np.float64)
+            self._scratch_direction = np.empty(ls.n, dtype=np.float64)
+
+        residual0 = self._scratch_residual0
+        dx0 = self._scratch_dx0
+        line_search_direction = self._scratch_direction
+
         while result == -1:
             p.check_cancelled()
             # Match the C# NewtonLineSearch sequence: line-search points are
@@ -99,7 +117,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             # solve.py owns the complete pre-step checkpoint and restores it
             # after any failed/cancelled step (including ALS and ArcLength
             # retries), so an additional per-iteration copy is redundant.
-            residual0 = ls.b.copy()
+            np.copyto(residual0, ls.b)
             if updates_tangent and alfa != 0.0:
                 if diagnostics is None:
                     self.the_integrator.update_k(p, model, alfa)
@@ -117,7 +135,7 @@ class NewtonLineSearch(EquiSolnAlgo):
                 p.log(f"Stiffness matrix is singular at step {step}: {exc}")
                 return -3
 
-            dx0 = ls.x.copy()
+            np.copyto(dx0, ls.x)
             self.the_line_search.new_step(p, ls)
             s0 = -_csharp_dot(dx0, residual0)
 
@@ -136,7 +154,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             # pre-update vector here made ArcLength line searches move along a
             # different direction from C# and could produce runaway load
             # factors after an otherwise safe predecessor stage.
-            line_search_direction = ls.x.copy()
+            np.copyto(line_search_direction, ls.x)
             if not csharp_line_search_compatibility:
                 # Production-safe ArcLength mode uses one physical search
                 # direction for both endpoint projections and every trial.
