@@ -484,27 +484,57 @@ def _clip_convex_quad_2d(
     subject: list[tuple[float, float]], clipper: list[tuple[float, float]],
 ) -> list[tuple[float, float]]:
     """Sutherland-Hodgman clipping while preserving parent-1 vertex order."""
-    # FindIntersectionBetweenQuadrilaters preserves the first face's cyclic
-    # order. Only the clip polygon is normalized for the inside test.
     clip = list(clipper)
-    if _polygon_area_2d(clip) < 0.0:
+    # Fast 4-vertex polygon orientation check
+    if len(clip) == 4:
+        c0, c1, c2, c3 = clip[0], clip[1], clip[2], clip[3]
+        if (
+            (c0[0] * c1[1] - c0[1] * c1[0])
+            + (c1[0] * c2[1] - c1[1] * c2[0])
+            + (c2[0] * c3[1] - c2[1] * c3[0])
+            + (c3[0] * c0[1] - c3[1] * c0[0])
+        ) < 0.0:
+            clip = [c3, c2, c1, c0]
+    elif _polygon_area_2d(clip) < 0.0:
         clip.reverse()
+
     output = list(subject)
-    for clip_start, clip_end in zip(clip, (*clip[1:], clip[0])):
+    n_clip = len(clip)
+    for i in range(n_clip):
+        clip_start = clip[i]
+        clip_end = clip[(i + 1) % n_clip]
+        cx, cy = clip_start[0], clip_start[1]
+        edx = clip_end[0] - cx
+        edy = clip_end[1] - cy
+
         input_vertices = output
         output = []
         if not input_vertices:
             break
         start = input_vertices[-1]
-        start_inside = _cross_2d(clip_start, clip_end, start) >= -_CONTACT_DISTANCE_TOLERANCE
+        start_inside = (edx * (start[1] - cy) - edy * (start[0] - cx)) >= -_CONTACT_DISTANCE_TOLERANCE
         for end in input_vertices:
-            end_inside = _cross_2d(clip_start, clip_end, end) >= -_CONTACT_DISTANCE_TOLERANCE
+            end_inside = (edx * (end[1] - cy) - edy * (end[0] - cx)) >= -_CONTACT_DISTANCE_TOLERANCE
             if end_inside:
                 if not start_inside:
-                    output.append(_line_intersection_2d(start, end, clip_start, clip_end))
+                    dx = end[0] - start[0]
+                    dy = end[1] - start[1]
+                    denom = dx * edy - dy * edx
+                    if abs(denom) <= 1.0e-15:
+                        output.append((0.5 * (start[0] + end[0]), 0.5 * (start[1] + end[1])))
+                    else:
+                        t = ((cx - start[0]) * edy - (cy - start[1]) * edx) / denom
+                        output.append((start[0] + t * dx, start[1] + t * dy))
                 output.append(end)
             elif start_inside:
-                output.append(_line_intersection_2d(start, end, clip_start, clip_end))
+                dx = end[0] - start[0]
+                dy = end[1] - start[1]
+                denom = dx * edy - dy * edx
+                if abs(denom) <= 1.0e-15:
+                    output.append((0.5 * (start[0] + end[0]), 0.5 * (start[1] + end[1])))
+                else:
+                    t = ((cx - start[0]) * edy - (cy - start[1]) * edx) / denom
+                    output.append((start[0] + t * dx, start[1] + t * dy))
             start, start_inside = end, end_inside
     return _clean_clipped_polygon(output)
 
@@ -581,15 +611,40 @@ def _coplanar_quad_intersection_prechecked(
     first: np.ndarray, second: np.ndarray, normal_first: np.ndarray,
 ) -> list[np.ndarray] | None:
     """Clip two faces after the vectorized broad phase proved coplanarity."""
-    drop = int(np.argmax(np.abs(normal_first)))
-    keep = [axis for axis in range(3) if axis != drop]
-    subject = [(float(point[keep[0]]), float(point[keep[1]])) for point in first]
-    clipper = [(float(point[keep[0]]), float(point[keep[1]])) for point in second]
+    nx = abs(float(normal_first[0]))
+    ny = abs(float(normal_first[1]))
+    nz = abs(float(normal_first[2]))
+    if nx >= ny and nx >= nz:
+        drop, k0, k1 = 0, 1, 2
+    elif ny >= nz:
+        drop, k0, k1 = 1, 0, 2
+    else:
+        drop, k0, k1 = 2, 0, 1
+
+    subject = [
+        (float(first[0, k0]), float(first[0, k1])),
+        (float(first[1, k0]), float(first[1, k1])),
+        (float(first[2, k0]), float(first[2, k1])),
+        (float(first[3, k0]), float(first[3, k1])),
+    ]
+    clipper = [
+        (float(second[0, k0]), float(second[0, k1])),
+        (float(second[1, k0]), float(second[1, k1])),
+        (float(second[2, k0]), float(second[2, k1])),
+        (float(second[3, k0]), float(second[3, k1])),
+    ]
     clipped = _clip_convex_quad_2d(subject, clipper)
-    # C# GIQuadQuad accepts only four-point surface intersections. Point/line
-    # contacts and higher-order polygons are deliberately not interfaces.
-    area = abs(_polygon_area_2d(clipped)) if len(clipped) == 4 else 0.0
-    if len(clipped) != 4 or area <= _CONTACT_AREA_TOLERANCE:
+    if len(clipped) != 4:
+        return None
+
+    p0, p1, p2, p3 = clipped[0], clipped[1], clipped[2], clipped[3]
+    area = 0.5 * abs(
+        (p0[0] * p1[1] - p0[1] * p1[0])
+        + (p1[0] * p2[1] - p1[1] * p2[0])
+        + (p2[0] * p3[1] - p2[1] * p3[0])
+        + (p3[0] * p0[1] - p3[1] * p0[0])
+    )
+    if area <= _CONTACT_AREA_TOLERANCE:
         return None
 
     # The C# intersection path does not emit finite interfaces for contacts
@@ -597,23 +652,27 @@ def _coplanar_quad_intersection_prechecked(
     # vectorized Python broad phase intentionally uses a 2e-4 distance
     # tolerance, so clipping can otherwise turn a 3e-5 gap into a very thin
     # quadrilateral.  Reject these slivers by their area/longest-edge width.
-    edge_lengths = [
-        math.hypot(float(end[0])-float(start[0]), float(end[1])-float(start[1]))
-        for start, end in zip(clipped, (*clipped[1:], clipped[0]))
-    ]
-    longest_edge = max(edge_lengths, default=0.0)
+    e0 = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+    e1 = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+    e2 = math.hypot(p3[0] - p2[0], p3[1] - p2[1])
+    e3 = math.hypot(p0[0] - p3[0], p0[1] - p3[1])
+    longest_edge = max(e0, e1, e2, e3)
     if longest_edge <= 0.0 or area / longest_edge <= _CONTACT_DISTANCE_TOLERANCE:
         return None
 
     plane_origin = first[0]
+    pod = plane_origin[drop]
+    pok0 = plane_origin[k0]
+    pok1 = plane_origin[k1]
+    nfd = normal_first[drop]
+    nfk0 = normal_first[k0]
+    nfk1 = normal_first[k1]
+
     result: list[np.ndarray] = []
     for x, y in clipped:
         point = np.zeros(3, dtype=float)
-        point[keep[0]], point[keep[1]] = x, y
-        point[drop] = plane_origin[drop] - (
-            normal_first[keep[0]] * (x-plane_origin[keep[0]])
-            + normal_first[keep[1]] * (y-plane_origin[keep[1]])
-        ) / normal_first[drop]
+        point[k0], point[k1] = x, y
+        point[drop] = pod - (nfk0 * (x - pok0) + nfk1 * (y - pok1)) / nfd
         result.append(point)
     return result
 
