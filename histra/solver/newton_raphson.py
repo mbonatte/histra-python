@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from typing import Any
 
 from histra.model.model import Model
@@ -40,19 +41,55 @@ class NewtonRaphson(EquiSolnAlgo):
         self.the_test.start()
         result = -1
         previous_error = 1.0
+        error = 1.0
         is_standard = _is_standard_method(an)
+        adaptive_tangent_refresh = getattr(an, "adaptive_tangent_refresh", None)
+        if adaptive_tangent_refresh is None:
+            env_val = os.environ.get("HISTRA_ADAPTIVE_TANGENT_REFRESH", "").strip().lower()
+            if env_val in {"1", "true", "yes", "on", "adaptive"}:
+                adaptive_tangent_refresh = True
+            elif env_val in {"0", "false", "no", "off"}:
+                adaptive_tangent_refresh = False
+            elif env_val.isdigit():
+                adaptive_tangent_refresh = int(env_val)
+            else:
+                adaptive_tangent_refresh = False
+        tangent_refresh_cadence = getattr(an, "tangent_refresh_cadence", None)
+        if tangent_refresh_cadence is None:
+            env_cadence = os.environ.get("HISTRA_TANGENT_REFRESH_CADENCE")
+            if env_cadence is not None and env_cadence.isdigit():
+                tangent_refresh_cadence = int(env_cadence)
 
         while result == -1:
             p.check_cancelled()
             iteration_snapshot = SolverStateSnapshot.capture(
                 model, p, ls, self.the_integrator, self.the_test, self.the_line_search
             )
+            current_it = self.the_test.current_iter
+
+            refresh_tangent = False
             if is_standard and alfa != 0.0:
+                refresh_tangent = True
+            elif adaptive_tangent_refresh and not is_standard:
+                if tangent_refresh_cadence is not None and tangent_refresh_cadence > 0:
+                    if current_it == 1 or (current_it % tangent_refresh_cadence == 0):
+                        refresh_tangent = True
+                elif isinstance(adaptive_tangent_refresh, int) and adaptive_tangent_refresh > 0:
+                    if current_it == 1 or (current_it % adaptive_tangent_refresh == 0):
+                        refresh_tangent = True
+                elif adaptive_tangent_refresh is True or str(adaptive_tangent_refresh).lower() in {"true", "adaptive"}:
+                    if current_it == 1 and step > 1:
+                        refresh_tangent = True
+                    elif current_it >= 4 and (error > 0.7 * previous_error or current_it % 5 == 0):
+                        refresh_tangent = True
+
+            if refresh_tangent:
+                refresh_alfa = alfa if (is_standard and alfa != 0.0) else 1.0
                 if diagnostics is None:
-                    self.the_integrator.update_k(p, model, alfa)
+                    self.the_integrator.update_k(p, model, refresh_alfa)
                 else:
                     with diagnostics.timed("tangent_assembly"):
-                        self.the_integrator.update_k(p, model, alfa)
+                        self.the_integrator.update_k(p, model, refresh_alfa)
 
             try:
                 if diagnostics is None:

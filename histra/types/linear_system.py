@@ -28,8 +28,25 @@ class LinearSystem:
     ``K`` *after* the residual has already been assembled in ``b``.
     """
 
-    def __init__(self, n: int, *, backend: str | None = None):
+    def __init__(
+        self,
+        n: int,
+        *,
+        backend: str | None = None,
+        precision: str = "strict",
+        irstep: int | None = None,
+    ):
         self.n = int(n)
+        self.precision = str(
+            os.environ.get("HISTRA_LINEAR_SOLVER_PRECISION", precision)
+        ).strip().lower()
+        if irstep is not None:
+            self.irstep = int(irstep)
+        elif self.precision == "fast":
+            self.irstep = 0
+        else:
+            env_irstep = os.environ.get("HISTRA_UMFPACK_IRSTEP")
+            self.irstep = int(env_irstep) if env_irstep is not None else 2
         requested = (
             backend or os.environ.get("HISTRA_LINEAR_SOLVER", "auto")
         ).strip().lower()
@@ -222,7 +239,9 @@ class LinearSystem:
                 if not refactored:
                     self._invalidate_factorization()
                     if self.backend == "umfpack":
-                        self._factorization = UmfpackFactorization(matrix)
+                        self._factorization = UmfpackFactorization(
+                            matrix, irstep=self.irstep
+                        )
                     else:
                         with warnings.catch_warnings():
                             warnings.simplefilter("error", MatrixRankWarning)

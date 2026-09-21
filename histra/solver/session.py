@@ -55,6 +55,11 @@ class AnalysisSession:
         strategy_policy: str = "warn",
         strategy_evidence: Any | None = None,
         performance_policy: str = "compiled",
+        linear_solver_backend: str | None = None,
+        linear_solver_precision: str = "strict",
+        umfpack_irstep: int | None = None,
+        adaptive_tangent_refresh: bool | int | None = None,
+        tangent_refresh_cadence: int | None = None,
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
@@ -79,6 +84,11 @@ class AnalysisSession:
                 "expected 'compiled' or 'diagnostic-scalar'."
             )
         self.performance_policy = policy
+        self.linear_solver_backend = linear_solver_backend
+        self.linear_solver_precision = linear_solver_precision
+        self.umfpack_irstep = umfpack_irstep
+        self.adaptive_tangent_refresh = adaptive_tangent_refresh
+        self.tangent_refresh_cadence = tangent_refresh_cadence
         self.backend_coverage: Any | None = None
         if policy == "diagnostic-scalar" and self.on_log is not None:
             self.on_log(
@@ -277,6 +287,21 @@ class AnalysisSession:
                     should_stop_after_commit=should_stop_after_commit,
                     on_step_committed=on_step_committed,
                     should_cancel=should_cancel,
+                    linear_solver_backend=getattr(
+                        definition, "linear_solver_backend", self.linear_solver_backend
+                    ),
+                    linear_solver_precision=getattr(
+                        definition, "linear_solver_precision", self.linear_solver_precision
+                    ),
+                    umfpack_irstep=getattr(
+                        definition, "umfpack_irstep", self.umfpack_irstep
+                    ),
+                    adaptive_tangent_refresh=getattr(
+                        definition, "adaptive_tangent_refresh", self.adaptive_tangent_refresh
+                    ),
+                    tangent_refresh_cadence=getattr(
+                        definition, "tangent_refresh_cadence", self.tangent_refresh_cadence
+                    ),
                     equilibrium_policy=self.equilibrium_policy,
                     equilibrium_force_absolute_tolerance=(
                         self.equilibrium_force_absolute_tolerance

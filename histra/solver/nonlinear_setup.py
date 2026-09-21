@@ -73,6 +73,10 @@ def _setup_nonlinear_analysis(
     auto_prepare: bool = True,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
+    linear_solver_precision: str = "strict",
+    umfpack_irstep: int | None = None,
+    adaptive_tangent_refresh: bool | int | None = None,
+    tangent_refresh_cadence: int | None = None,
     equilibrium_policy: str = "warn",
     equilibrium_force_absolute_tolerance: float = 1.0e-3,
     equilibrium_force_relative_tolerance: float = 1.0e-5,
@@ -167,7 +171,24 @@ def _setup_nonlinear_analysis(
         gdl=n, on_log=on_log, on_progress=on_progress, should_cancel=should_cancel,
         diagnostics=diagnostic_writer,
     )
-    ls = LinearSystem(n, backend=linear_solver_backend)
+    effective_precision = getattr(
+        analysis, "linear_solver_precision", linear_solver_precision
+    )
+    effective_irstep = getattr(analysis, "umfpack_irstep", umfpack_irstep)
+    ls = LinearSystem(
+        n,
+        backend=linear_solver_backend,
+        precision=effective_precision,
+        irstep=effective_irstep,
+    )
+    if adaptive_tangent_refresh is not None and not hasattr(
+        analysis, "adaptive_tangent_refresh"
+    ):
+        setattr(analysis, "adaptive_tangent_refresh", adaptive_tangent_refresh)
+    if tangent_refresh_cadence is not None and not hasattr(
+        analysis, "tangent_refresh_cadence"
+    ):
+        setattr(analysis, "tangent_refresh_cadence", tangent_refresh_cadence)
     p.ls = ls
     p.u = np.zeros(n)
     p.v = np.zeros(n)

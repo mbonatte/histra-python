@@ -32,6 +32,7 @@ _UMFPACK_CONTROL = 20
 _UMFPACK_INFO = 90
 _UMFPACK_STRATEGY = 5
 _UMFPACK_STRATEGY_SYMMETRIC = 3.0
+_UMFPACK_IRSTEP = 7
 
 
 def _candidate_names(explicit: str | os.PathLike[str] | None = None) -> Iterable[str]:
@@ -73,6 +74,7 @@ class UmfpackFactorization:
         matrix: sp.spmatrix,
         *,
         library: str | os.PathLike[str] | None = None,
+        irstep: int | None = None,
     ) -> None:
         candidate = find_umfpack_library(library)
         if candidate is None:
@@ -112,6 +114,17 @@ class UmfpackFactorization:
         self.control = np.zeros(_UMFPACK_CONTROL, dtype=np.float64)
         self.info = np.zeros(_UMFPACK_INFO, dtype=np.float64)
 
+        if irstep is None:
+            env_irstep = os.environ.get("HISTRA_UMFPACK_IRSTEP")
+            if env_irstep is not None:
+                try:
+                    irstep = int(env_irstep)
+                except ValueError:
+                    irstep = 2
+            else:
+                irstep = 2
+        self.irstep = int(irstep)
+
         self._ap_ptr = self._int_ptr(self.ap)
         self._ai_ptr = self._int_ptr(self.ai)
         self._ax_ptr = self._double_ptr(self.ax)
@@ -129,6 +142,7 @@ class UmfpackFactorization:
         self._lib.umfpack_di_defaults(self._control_ptr)
         # Exact override in MatrixManager.SparseMatrix.InitializeControl().
         self.control[_UMFPACK_STRATEGY] = _UMFPACK_STRATEGY_SYMMETRIC
+        self.control[_UMFPACK_IRSTEP] = float(self.irstep)
 
         # SolverRuntime.ModelManager.PrepareMatrices() maps the sparse pattern
         # and performs UMFPACK's symbolic factorization before PrepareK() has

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from typing import Any
 
 import numpy as np
@@ -92,10 +93,27 @@ class NewtonLineSearch(EquiSolnAlgo):
                 self.the_integrator.form_unbalance(p, model, an)
         result = -1
         previous_error = 1.0
+        error = 1.0
         updates_tangent = _updates_tangent_each_iteration(an)
         csharp_line_search_compatibility = bool(
             getattr(an, "csharp_line_search_compatibility", True)
         )
+        adaptive_tangent_refresh = getattr(an, "adaptive_tangent_refresh", None)
+        if adaptive_tangent_refresh is None:
+            env_val = os.environ.get("HISTRA_ADAPTIVE_TANGENT_REFRESH", "").strip().lower()
+            if env_val in {"1", "true", "yes", "on", "adaptive"}:
+                adaptive_tangent_refresh = True
+            elif env_val in {"0", "false", "no", "off"}:
+                adaptive_tangent_refresh = False
+            elif env_val.isdigit():
+                adaptive_tangent_refresh = int(env_val)
+            else:
+                adaptive_tangent_refresh = False
+        tangent_refresh_cadence = getattr(an, "tangent_refresh_cadence", None)
+        if tangent_refresh_cadence is None:
+            env_cadence = os.environ.get("HISTRA_TANGENT_REFRESH_CADENCE")
+            if env_cadence is not None and env_cadence.isdigit():
+                tangent_refresh_cadence = int(env_cadence)
 
         if (
             self._scratch_residual0 is None
@@ -108,6 +126,7 @@ class NewtonLineSearch(EquiSolnAlgo):
         residual0 = self._scratch_residual0
         dx0 = self._scratch_dx0
         line_search_direction = self._scratch_direction
+        dot_fn = _csharp_dot if csharp_line_search_compatibility else np.dot
 
         while result == -1:
             p.check_cancelled()
@@ -118,12 +137,31 @@ class NewtonLineSearch(EquiSolnAlgo):
             # after any failed/cancelled step (including ALS and ArcLength
             # retries), so an additional per-iteration copy is redundant.
             np.copyto(residual0, ls.b)
+            current_it = self.the_test.current_iter
+
+            refresh_tangent = False
             if updates_tangent and alfa != 0.0:
+                refresh_tangent = True
+            elif adaptive_tangent_refresh and not updates_tangent:
+                if tangent_refresh_cadence is not None and tangent_refresh_cadence > 0:
+                    if current_it == 1 or (current_it % tangent_refresh_cadence == 0):
+                        refresh_tangent = True
+                elif isinstance(adaptive_tangent_refresh, int) and adaptive_tangent_refresh > 0:
+                    if current_it == 1 or (current_it % adaptive_tangent_refresh == 0):
+                        refresh_tangent = True
+                elif adaptive_tangent_refresh is True or str(adaptive_tangent_refresh).lower() in {"true", "adaptive"}:
+                    if current_it == 1 and step > 1:
+                        refresh_tangent = True
+                    elif current_it >= 4 and (error > 0.7 * previous_error or current_it % 5 == 0):
+                        refresh_tangent = True
+
+            if refresh_tangent:
+                refresh_alfa = alfa if (updates_tangent and alfa != 0.0) else 1.0
                 if diagnostics is None:
-                    self.the_integrator.update_k(p, model, alfa)
+                    self.the_integrator.update_k(p, model, refresh_alfa)
                 else:
                     with diagnostics.timed("tangent_assembly"):
-                        self.the_integrator.update_k(p, model, alfa)
+                        self.the_integrator.update_k(p, model, refresh_alfa)
 
             try:
                 if diagnostics is None:
@@ -137,7 +175,7 @@ class NewtonLineSearch(EquiSolnAlgo):
 
             np.copyto(dx0, ls.x)
             self.the_line_search.new_step(p, ls)
-            s0 = -_csharp_dot(dx0, residual0)
+            s0 = -float(dot_fn(dx0, residual0))
 
             if diagnostics is None:
                 update_code = self.the_integrator.update(model, p, an)
@@ -161,7 +199,7 @@ class NewtonLineSearch(EquiSolnAlgo):
                 # The C# path projects s0/s1 with delta_u_bar while searching
                 # along the combined constrained correction; retain that only
                 # when compatibility was explicitly selected/defaulted.
-                s0 = -_csharp_dot(line_search_direction, residual0)
+                s0 = -float(dot_fn(line_search_direction, residual0))
 
             if diagnostics is None:
                 self.the_integrator.form_unbalance(p, model, an)
@@ -173,7 +211,7 @@ class NewtonLineSearch(EquiSolnAlgo):
                 if csharp_line_search_compatibility
                 else line_search_direction
             )
-            s1 = -_csharp_dot(projection_direction, ls.b)
+            s1 = -float(dot_fn(projection_direction, ls.b))
             if diagnostics is None:
                 eta = self.the_line_search.search(
                     model, p, ls, self.the_integrator, an,

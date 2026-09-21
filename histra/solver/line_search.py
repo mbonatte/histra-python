@@ -110,7 +110,12 @@ class LineSearch:
         # Fix an original C# inconsistency: s0/s1 use -dU·R, whereas trial
         # values used +dU·R.  A single sign convention is required for valid
         # secant/bracketing logic.
-        return 0, -_csharp_dot(direction, ls.b)
+        dot_fn = (
+            _csharp_dot
+            if getattr(an, "csharp_line_search_compatibility", True)
+            else np.dot
+        )
+        return 0, -float(dot_fn(direction, ls.b))
 
     @staticmethod
     def _ratio(s: float, s0: float) -> float:
@@ -177,9 +182,12 @@ class RegulaFalsiLineSearch(LineSearch):
                 return -1.0
             integrator.form_unbalance(p, model, an)
 
-            # Deliberately preserve C# sign behavior: trial values use +dU.R
-            # while s0/s1 were formed as -dU.R.
-            s_eta = _csharp_dot(dx0, ls.b)
+            dot_fn = (
+                _csharp_dot
+                if getattr(an, "csharp_line_search_compatibility", True)
+                else np.dot
+            )
+            s_eta = float(dot_fn(dx0, ls.b))
             ratio = self._ratio(s_eta, s0)
 
             # Do not collapse the C# endpoint cycle.  Although all supported
