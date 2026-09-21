@@ -192,8 +192,6 @@ class _StiffnessAssemblyPlan:
     alpha_i: np.ndarray
     alpha_j: np.ndarray
     term_count: int
-    quad_statuses: tuple[Any, ...] = ()
-    interface_statuses: tuple[Any, ...] = ()
 
     def compatible(self, model: Model) -> bool:
         if int(model.gdl) != self.n or model.collections is None:
@@ -544,18 +542,6 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
         row_arr, col_arr, indptr, indices,
     )
 
-    quad_statuses = tuple(q.status for q, _ in quad_terms)
-    interface_statuses = tuple(
-        (
-            layout.interface.status,
-            layout.d0,
-            layout.d1,
-            layout.d2,
-            layout.has_slid,
-            layout.has_out_of_plane,
-        )
-        for layout in interface_layouts
-    )
     return _StiffnessAssemblyPlan(
         n=n,
         all_quads=all_quads,
@@ -568,91 +554,65 @@ def _build_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:
         alpha_i=alpha_i,
         alpha_j=alpha_j,
         term_count=term_index,
-        quad_statuses=quad_statuses,
-        interface_statuses=interface_statuses,
     )
 
 def _fill_stiffness_terms(plan: _StiffnessAssemblyPlan) -> np.ndarray:
     terms = np.empty(plan.term_count, dtype=np.float64)
     index = 0
-    quad_statuses = plan.quad_statuses
-    if quad_statuses:
-        for s in quad_statuses:
-            terms[index] = float(s.k)
-            index += 1
-    else:
-        for quad, _aff6 in plan.quad_terms:
-            terms[index] = float(quad.status.k)
-            index += 1
+    for quad, _aff6 in plan.quad_terms:
+        terms[index] = float(quad.status.k)
+        index += 1
 
-    interface_statuses = plan.interface_statuses
-    if interface_statuses:
-        for st, d0, d1, d2, has_slid, has_oop in interface_statuses:
-            k = st.k
-            if d0 == 6:
-                r0 = k[0]; r1 = k[1]; r2 = k[2]; r3 = k[3]; r4 = k[4]; r5 = k[5]
-                terms[index:index+21] = (
-                    r0[0], r0[1], r0[2], r0[3], r0[4], r0[5],
-                    r1[1], r1[2], r1[3], r1[4], r1[5],
-                    r2[2], r2[3], r2[4], r2[5],
-                    r3[3], r3[4], r3[5],
-                    r4[4], r4[5],
-                    r5[5]
-                )
-                index += 21
-            else:
-                for i in range(d0):
-                    row = k[i]
-                    for j in range(i, d0):
-                        terms[index] = float(row[j])
-                        index += 1
-            if has_slid:
-                ks = st.kslid
-                if d1 == 2:
-                    r0 = ks[0]; r1 = ks[1]
-                    terms[index:index+3] = (r0[0], r0[1], r1[1])
-                    index += 3
-                else:
-                    for i in range(d1):
-                        row = ks[i]
-                        for j in range(i, d1):
-                            terms[index] = float(row[j])
-                            index += 1
-            if has_oop:
-                ko = st.kslid_out_plan
-                if d2 == 4:
-                    r0 = ko[0]; r1 = ko[1]; r2 = ko[2]; r3 = ko[3]
-                    terms[index:index+10] = (
-                        r0[0], r0[1], r0[2], r0[3],
-                        r1[1], r1[2], r1[3],
-                        r2[2], r2[3],
-                        r3[3]
-                    )
-                    index += 10
-                else:
-                    for i in range(d2):
-                        row = ko[i]
-                        for j in range(i, d2):
-                            terms[index] = float(row[j])
-                            index += 1
-    else:
-        for layout in plan.interfaces:
-            intf = layout.interface
-            for i in range(layout.d0):
-                row = intf.status.k[i]
-                for j in range(i, layout.d0):
+    for layout in plan.interfaces:
+        st = layout.interface.status
+        k = st.k
+        d0 = layout.d0
+        if d0 == 6:
+            r0 = k[0]; r1 = k[1]; r2 = k[2]; r3 = k[3]; r4 = k[4]; r5 = k[5]
+            terms[index:index+21] = (
+                r0[0], r0[1], r0[2], r0[3], r0[4], r0[5],
+                r1[1], r1[2], r1[3], r1[4], r1[5],
+                r2[2], r2[3], r2[4], r2[5],
+                r3[3], r3[4], r3[5],
+                r4[4], r4[5],
+                r5[5]
+            )
+            index += 21
+        else:
+            for i in range(d0):
+                row = k[i]
+                for j in range(i, d0):
                     terms[index] = float(row[j])
                     index += 1
-            if layout.has_slid:
-                for i in range(layout.d1):
-                    row = intf.status.kslid[i]
-                    for j in range(i, layout.d1):
+        if layout.has_slid:
+            ks = st.kslid
+            d1 = layout.d1
+            if d1 == 2:
+                r0 = ks[0]; r1 = ks[1]
+                terms[index:index+3] = (r0[0], r0[1], r1[1])
+                index += 3
+            else:
+                for i in range(d1):
+                    row = ks[i]
+                    for j in range(i, d1):
                         terms[index] = float(row[j])
                         index += 1
-            if layout.has_out_of_plane:
-                for i in range(layout.d2):
-                    row = intf.status.kslid_out_plan[i]
-                    for j in range(i, layout.d2):
+        if layout.has_out_of_plane:
+            ko = st.kslid_out_plan
+            d2 = layout.d2
+            if d2 == 4:
+                r0 = ko[0]; r1 = ko[1]; r2 = ko[2]; r3 = ko[3]
+                terms[index:index+10] = (
+                    r0[0], r0[1], r0[2], r0[3],
+                    r1[1], r1[2], r1[3],
+                    r2[2], r2[3],
+                    r3[3]
+                )
+                index += 10
+            else:
+                for i in range(d2):
+                    row = ko[i]
+                    for j in range(i, d2):
                         terms[index] = float(row[j])
                         index += 1
     if index != plan.term_count:
