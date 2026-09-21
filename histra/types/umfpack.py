@@ -89,9 +89,17 @@ class UmfpackFactorization:
         self._numeric = ctypes.c_void_p()
         self._closed = False
 
-        csc = sp.csc_matrix(matrix, dtype=np.float64, copy=True)
-        csc.sum_duplicates()
-        csc.sort_indices()
+        if (
+            isinstance(matrix, sp.csc_matrix)
+            and getattr(matrix, "has_canonical_format", False)
+            and getattr(matrix, "has_sorted_indices", False)
+            and matrix.dtype == np.float64
+        ):
+            csc = matrix
+        else:
+            csc = sp.csc_matrix(matrix, dtype=np.float64, copy=True)
+            csc.sum_duplicates()
+            csc.sort_indices()
         if csc.shape[0] != csc.shape[1]:
             raise ValueError(f"UMFPACK requires a square matrix, received {csc.shape}")
         if csc.shape[0] > np.iinfo(np.int32).max or csc.nnz > np.iinfo(np.int32).max:
@@ -223,6 +231,48 @@ class UmfpackFactorization:
         )
         self._require_ok(status, "solve")
         return x
+
+    def can_refactor_numeric(self, matrix: sp.spmatrix) -> bool:
+        """Check whether matrix shares the exact sparsity pattern of current factorization."""
+        if self._closed or not self._symbolic:
+            return False
+        if getattr(matrix, "shape", None) != (self.n, self.n):
+            return False
+        if getattr(matrix, "format", None) != "csc":
+            return False
+        data = getattr(matrix, "data", None)
+        if data is None or len(data) != len(self.ax):
+            return False
+        indptr = getattr(matrix, "indptr", None)
+        indices = getattr(matrix, "indices", None)
+        if indptr is None or indices is None:
+            return False
+        if indptr is self.ap and indices is self.ai:
+            return True
+        if len(indptr) == len(self.ap) and len(indices) == len(self.ai):
+            if np.array_equal(indptr, self.ap) and np.array_equal(indices, self.ai):
+                return True
+        return False
+
+    def refactor_numeric(self, matrix: sp.spmatrix) -> bool:
+        """Reuse existing symbolic factorization and compute a new numeric factorization."""
+        if not self.can_refactor_numeric(matrix):
+            return False
+        np.copyto(self.ax, matrix.data)
+        if self._numeric:
+            self._lib.umfpack_di_free_numeric(ctypes.byref(self._numeric))
+            self._numeric = ctypes.c_void_p()
+        status = self._lib.umfpack_di_numeric(
+            self._ap_ptr,
+            self._ai_ptr,
+            self._ax_ptr,
+            self._symbolic,
+            ctypes.byref(self._numeric),
+            self._control_ptr,
+            self._info_ptr,
+        )
+        self._require_ok(status, "numeric factorization")
+        return True
 
     def close(self) -> None:
         if getattr(self, "_closed", True):

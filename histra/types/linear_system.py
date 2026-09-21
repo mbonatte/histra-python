@@ -190,7 +190,7 @@ class LinearSystem:
                 f"received {vector.shape}"
             )
 
-        matrix = self.k.tocsc()
+        matrix = self.k if isinstance(self.k, sp.csc_matrix) else self.k.tocsc()
         if matrix.shape != (self.n, self.n):
             raise LinearSolveError(
                 f"Stiffness matrix has shape {matrix.shape}; "
@@ -209,13 +209,24 @@ class LinearSystem:
         )
         try:
             if not same_matrix:
-                self._invalidate_factorization()
-                if self.backend == "umfpack":
-                    self._factorization = UmfpackFactorization(matrix)
-                else:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("error", MatrixRankWarning)
-                        self._factorization = splu(matrix)
+                refactored = False
+                if (
+                    self.backend == "umfpack"
+                    and isinstance(self._factorization, UmfpackFactorization)
+                    and self._factor_backend == "umfpack"
+                ):
+                    try:
+                        refactored = self._factorization.refactor_numeric(matrix)
+                    except Exception:
+                        refactored = False
+                if not refactored:
+                    self._invalidate_factorization()
+                    if self.backend == "umfpack":
+                        self._factorization = UmfpackFactorization(matrix)
+                    else:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", MatrixRankWarning)
+                            self._factorization = splu(matrix)
                 self.factorization_count += 1
                 self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
