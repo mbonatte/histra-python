@@ -4,4 +4,4 @@ import histra
 
 
 def test_public_version_comes_from_distribution_metadata() -> None:
-    assert histra.__version__ == version("histra-python") == "1.0.0"
+    assert histra.__version__ == version("histra-python") == "1.1.0"
