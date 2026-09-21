@@ -57,6 +57,7 @@ from histra.solver.output_projection import (
     project_reactions,
 )
 from histra.solver.session import AnalysisSession, AnalysisSessionError
+from histra.solver.warmup import warmup_compiled_backends
 from histra.solver.modal import (
     ModalAnalysisError,
     ModalAnalysisResult,
@@ -122,4 +123,5 @@ __all__ = [
     "PythonSolverJobResult",
     "PythonSolverTimeout",
     "run_python_solver_job",
+    "warmup_compiled_backends",
 ]

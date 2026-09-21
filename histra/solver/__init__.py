@@ -85,6 +85,7 @@ from histra.solver.strategy import (
     SuboptimalSolverStrategyWarning,
     inspect_solver_strategy,
 )
+from histra.solver.warmup import warmup_compiled_backends
 
 __all__ = [
     "ConvergenceTest",
@@ -158,4 +159,5 @@ __all__ = [
     "PythonSolverJobResult",
     "PythonSolverTimeout",
     "run_python_solver_job",
+    "warmup_compiled_backends",
 ]

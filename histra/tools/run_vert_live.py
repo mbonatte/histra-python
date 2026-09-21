@@ -381,6 +381,8 @@ def run_vert_live(
             print(message, flush=True)
 
     _write_output_readme(output_dir / "OUTPUT_README.txt")
+    from histra.solver.warmup import warmup_compiled_backends
+    warmup_compiled_backends()
     started = time.perf_counter()
     log(f"Model: {hrx.resolve()}")
     log(f"Running Vert {vert.key}:{vert.name} from virgin HRX state")

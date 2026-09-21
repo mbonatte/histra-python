@@ -738,7 +738,7 @@ def _passes_csharp_lateral_area_filter(
 
 
 if njit is not None:
-    @njit(fastmath=True)
+    @njit(fastmath=True, cache=True)
     def _find_broad_pairs_nb(centres: np.ndarray, broad_radius: np.ndarray):
         n = len(centres)
         count_pairs = 0
@@ -774,7 +774,7 @@ if njit is not None:
                     idx += 1
         return pair_i, pair_j
 
-    @njit(fastmath=True)
+    @njit(fastmath=True, cache=True)
     def _find_face_candidates_nb(
         first_indices: np.ndarray,
         second_indices: np.ndarray,
