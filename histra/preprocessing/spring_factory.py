@@ -492,6 +492,7 @@ def _configure_combined_hysteretic_batch(
     law2: _HystereticLaw,
     *,
     interface_key: int,
+    interface: Any | None = None,
 ) -> list[SpringHysteretic]:
     """Create all Quad/Quad transverse springs for one interface numerically.
 
@@ -656,41 +657,277 @@ def _configure_combined_hysteretic_batch(
     alfar_c = max(float(law1.alfa_r_c), float(law2.alfa_r_c))
     total_length = length1 + length2
 
+    if law1.tensile_curve == law2.tensile_curve:
+        t_uniform = law1.tensile_curve
+        is_t_elastic = (t_uniform == "Elastic")
+        is_t_linear = (t_uniform in ("LinearHardening", "LinearSoftening"))
+        is_t_expo = (t_uniform == "Exponential")
+    else:
+        t_uniform = None
+        t_curve_arr = np.where(tension_curve_1, law1.tensile_curve, law2.tensile_curve)
+        is_t_elastic = (t_curve_arr == "Elastic")
+        is_t_linear = np.isin(t_curve_arr, ("LinearHardening", "LinearSoftening"))
+        is_t_expo = (t_curve_arr == "Exponential")
+
+    if law1.compressive_curve == law2.compressive_curve:
+        c_uniform = law1.compressive_curve
+        is_c_elastic = (c_uniform == "Elastic")
+        is_c_linear = (c_uniform in ("LinearHardening", "LinearSoftening"))
+        is_c_para = (c_uniform == "Parabolic")
+    else:
+        c_uniform = None
+        c_curve_arr = np.where(compression_curve_1, law1.compressive_curve, law2.compressive_curve)
+        is_c_elastic = (c_curve_arr == "Elastic")
+        is_c_linear = np.isin(c_curve_arr, ("LinearHardening", "LinearSoftening"))
+        is_c_para = (c_curve_arr == "Parabolic")
+
+    mom1p = np.zeros(n, dtype=np.float64)
+    rot1p = np.zeros(n, dtype=np.float64)
+    mom2p = np.zeros(n, dtype=np.float64)
+    rot2p = np.zeros(n, dtype=np.float64)
+    mom3p = np.zeros(n, dtype=np.float64)
+    rot3p = np.zeros(n, dtype=np.float64)
+    e1p = np.zeros(n, dtype=np.float64)
+    e2p = np.zeros(n, dtype=np.float64)
+    e3p = np.zeros(n, dtype=np.float64)
+
+    mom1n = np.zeros(n, dtype=np.float64)
+    rot1n = np.zeros(n, dtype=np.float64)
+    mom2n = np.zeros(n, dtype=np.float64)
+    rot2n = np.zeros(n, dtype=np.float64)
+    mom3n = np.zeros(n, dtype=np.float64)
+    rot3n = np.zeros(n, dtype=np.float64)
+    e1n = np.zeros(n, dtype=np.float64)
+    e2n = np.zeros(n, dtype=np.float64)
+    e3n = np.zeros(n, dtype=np.float64)
+
+    if np.any(is_t_elastic):
+        m = is_t_elastic
+        mom1p[m] = 1e19 * fy_t[m]
+        rot1p[m] = np.where(k[m] != 0.0, mom1p[m] / k[m], 0.0)
+        rot2p[m] = rot1p[m]
+        rot3p[m] = rot1p[m]
+        mom2p[m] = mom1p[m]
+        mom3p[m] = mom1p[m]
+        rot_nonzero = (rot1p[m] != 0.0)
+        e1p_m = k[m].copy()
+        np.divide(mom1p[m], rot1p[m], out=e1p_m, where=rot_nonzero)
+        e1p[m] = e1p_m
+
+    if np.any(is_t_linear):
+        m = is_t_linear
+        mom1p[m] = fy_t[m]
+        rot1p[m] = np.where(k[m] != 0.0, fy_t[m] / k[m], 0.0)
+        mom2p[m] = mom1p[m] + (ur_t[m] - rot1p[m]) * kt_t[m]
+        rot2p[m] = ur_t[m]
+        mom3p[m] = 0.0
+        rot3p[m] = ur_t[m] * 1.01
+        rot_nonzero = (rot1p[m] != 0.0)
+        e1p_m = k[m].copy()
+        np.divide(mom1p[m], rot1p[m], out=e1p_m, where=rot_nonzero)
+        e1p[m] = e1p_m
+        denom2 = rot2p[m] - rot1p[m]
+        denom2_nonzero = (denom2 != 0.0)
+        e2p_m = np.zeros_like(denom2)
+        np.divide(mom2p[m] - mom1p[m], denom2, out=e2p_m, where=denom2_nonzero)
+        e2p[m] = e2p_m
+        denom3 = rot3p[m] - rot2p[m]
+        denom3_nonzero = (denom3 != 0.0)
+        e3p_m = np.zeros_like(denom3)
+        np.divide(mom3p[m] - mom2p[m], denom3, out=e3p_m, where=denom3_nonzero)
+        e3p[m] = e3p_m
+
+    if np.any(is_t_expo):
+        m = is_t_expo
+        mom1p[m] = fy_t[m]
+        rot1p[m] = np.where(k[m] != 0.0, fy_t[m] / k[m], 0.0)
+        rot2p[m] = ur_t[m]
+        rot_nonzero = (rot1p[m] != 0.0)
+        e1p_m = k[m].copy()
+        np.divide(mom1p[m], rot1p[m], out=e1p_m, where=rot_nonzero)
+        e1p[m] = e1p_m
+
+    if np.any(is_c_elastic):
+        m = is_c_elastic
+        mom1n[m] = 1e19 * fy_c[m]
+        rot1n[m] = np.where(k[m] != 0.0, mom1n[m] / k[m], 0.0)
+        rot_nonzero = (rot1n[m] != 0.0)
+        e1n_m = k[m].copy()
+        np.divide(mom1n[m], rot1n[m], out=e1n_m, where=rot_nonzero)
+        e1n[m] = e1n_m
+
+    if np.any(is_c_linear):
+        m = is_c_linear
+        mom1n[m] = fy_c[m]
+        rot1n[m] = np.where(k[m] != 0.0, fy_c[m] / k[m], 0.0)
+        mom2n[m] = mom1n[m] + (ur_c[m] - rot1n[m]) * kt_c[m]
+        rot2n[m] = ur_c[m]
+        mom3n[m] = 0.0
+        rot3n[m] = ur_c[m] * 1.01
+        rot_nonzero = (rot1n[m] != 0.0)
+        e1n_m = k[m].copy()
+        np.divide(mom1n[m], rot1n[m], out=e1n_m, where=rot_nonzero)
+        e1n[m] = e1n_m
+        denom2 = rot2n[m] - rot1n[m]
+        denom2_nonzero = (denom2 != 0.0)
+        e2n_m = np.zeros_like(denom2)
+        np.divide(mom2n[m] - mom1n[m], denom2, out=e2n_m, where=denom2_nonzero)
+        e2n[m] = e2n_m
+        denom3 = rot3n[m] - rot2n[m]
+        denom3_nonzero = (denom3 != 0.0)
+        e3n_m = np.zeros_like(denom3)
+        np.divide(mom3n[m] - mom2n[m], denom3, out=e3n_m, where=denom3_nonzero)
+        e3n[m] = e3n_m
+
+    if np.any(is_c_para):
+        m = is_c_para
+        mom1n[m] = fy_c[m] / 3.0
+        rot1n[m] = np.where(k[m] != 0.0, fy_c[m] / (3.0 * k[m]), 0.0)
+        mom2n[m] = fy_c[m]
+        rot2n[m] = np.where(k[m] != 0.0, 5.0 * fy_c[m] / (3.0 * k[m]), 0.0)
+        mom3n[m] = 0.0
+        rot3n[m] = ur_c[m]
+        rot_nonzero = (rot1n[m] != 0.0)
+        e1n_m = k[m].copy()
+        np.divide(mom1n[m], rot1n[m], out=e1n_m, where=rot_nonzero)
+        e1n[m] = e1n_m
+
+    eup = np.maximum(np.maximum(e1p, e2p), e3p)
+    eun = np.maximum(np.maximum(e1n, e2n), e3n)
+
+    energy_a = 0.5 * (
+        rot1p * mom1p
+        + (rot2p - rot1p) * (mom2p + mom1p)
+        + (rot3p - rot2p) * (mom3p + mom2p)
+        + rot1n * mom1n
+        + (rot2n - rot1n) * (mom2n + mom1n)
+        + (rot3n - rot2n) * (mom3n + mom2n)
+    )
+
+    batch_params = np.empty((n, 20), dtype=np.float64)
+    batch_params[:, 0] = rot1p
+    batch_params[:, 1] = mom1p
+    batch_params[:, 2] = rot2p
+    batch_params[:, 3] = mom2p
+    batch_params[:, 4] = rot3p
+    batch_params[:, 5] = mom3p
+    batch_params[:, 6] = mom1n
+    batch_params[:, 7] = rot1n
+    batch_params[:, 8] = rot2n
+    batch_params[:, 9] = mom2n
+    batch_params[:, 10] = rot3n
+    batch_params[:, 11] = mom3n
+    batch_params[:, 12] = e1n
+    batch_params[:, 13] = e1p
+    batch_params[:, 14] = e2n
+    batch_params[:, 15] = e2p
+    batch_params[:, 16] = e3n
+    batch_params[:, 17] = e3p
+    batch_params[:, 18] = eun
+    batch_params[:, 19] = eup
+
+    if interface is not None:
+        interface._transverse_batch_params = batch_params
+        interface._transverse_k = k
+
     springs: list[SpringHysteretic] = []
     append = springs.append
-    initialize = SpringHysteretic.initialize
     spring_type = "HiStrA.Objects.SpringHysteretic"
     for index in range(n):
-        # Supplying the five two-value parameter lists directly avoids creating
-        # and immediately discarding their dataclass default-factory lists for
-        # every generated fibre. The authoritative scalar initialize() remains
-        # unchanged.
-        out = SpringHysteretic(
-            type_of=spring_type,
-            key=index,
-            parent_key=interface_key,
-            parent_type="Interface",
-            spring_purpose="Transversal1",
-            area=float(area[index]),
-            # C# interface fibres publish zero effective length after combination.
-            length=0.0,
-            k=float(k[index]),
-            tensile_curve_type=(
-                law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve
-            ),
-            compressive_curve_type=(
-                law1.compressive_curve
-                if compression_curve_1[index]
-                else law2.compressive_curve
-            ),
-            fy=[float(fy_t[index]), float(fy_c[index])],
-            kt=[float(kt_t[index]), float(kt_c[index])],
-            ur=[float(ur_t[index]), float(ur_c[index])],
-            alfau=[alfau_t, alfau_c],
-            alfar=[alfar_t, alfar_c],
+        sp = SpringHysteretic.__new__(SpringHysteretic)
+        sp.type_of = spring_type
+        sp.extra = {}
+        sp.key = index
+        sp.parent_key = interface_key
+        sp.parent_type = "Interface"
+        sp.spring_purpose = "Transversal1"
+        sp.type_name = ""
+        sp.area = float(area[index])
+        sp.length = 0.0
+        sp.k = float(k[index])
+        k_t = float(e1p[index]) if e1p[index] != 0.0 else sp.k
+        sp.k_tang = k_t
+        sp.f = 0.0
+        sp.u = 0.0
+        sp.is_on = True
+        sp.phase = 0
+        sp.t_phase = 0
+        sp._histra_batch_managed = False
+
+        sp.pinch_xp = 0.0
+        sp.pinch_yp = 0.0
+        sp.pinch_xn = 0.0
+        sp.pinch_yn = 0.0
+        sp.damfc1p = 0.0
+        sp.damfc2p = 0.0
+        sp.damfc1n = 0.0
+        sp.damfc2n = 0.0
+        sp.betap = alfau_t
+        sp.betan = alfau_c
+
+        sp.rot1p = float(rot1p[index])
+        sp.mom1p = float(mom1p[index])
+        sp.rot2p = float(rot2p[index])
+        sp.mom2p = float(mom2p[index])
+        sp.rot3p = float(rot3p[index])
+        sp.mom3p = float(mom3p[index])
+
+        sp.mom1n = float(mom1n[index])
+        sp.rot1n = float(rot1n[index])
+        sp.rot2n = float(rot2n[index])
+        sp.mom2n = float(mom2n[index])
+        sp.rot3n = float(rot3n[index])
+        sp.mom3n = float(mom3n[index])
+
+        sp.e1n = float(e1n[index])
+        sp.e1p = float(e1p[index])
+        sp.e2n = float(e2n[index])
+        sp.e2p = float(e2p[index])
+        sp.e3n = float(e3n[index])
+        sp.e3p = float(e3p[index])
+        sp.eun = float(eun[index])
+        sp.eup = float(eup[index])
+
+        sp.energy_a = float(energy_a[index])
+        sp.tensile_curve_type = (
+            t_uniform if t_uniform is not None
+            else (law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve)
         )
-        initialize(out)
-        append(out)
+        sp.compressive_curve_type = (
+            c_uniform if c_uniform is not None
+            else (law1.compressive_curve if compression_curve_1[index] else law2.compressive_curve)
+        )
+
+        sp.fy = [float(fy_t[index]), float(fy_c[index])]
+        sp.kt = [float(kt_t[index]), float(kt_c[index])]
+        sp.ur = [float(ur_t[index]), float(ur_c[index])]
+        sp.alfau = [alfau_t, alfau_c]
+        sp.alfar = [alfar_t, alfar_c]
+        sp.umax = [0.0, 0.0]
+        sp.uy_corr = [0.0, 0.0]
+
+        sp.f0 = 0.0
+        sp.f0_target = 0.0
+        sp.kstrain = 0.0
+        sp.cenergy_d = 0.0
+        sp.k_tang_committed = k_t
+
+        sp._crot_pu = 0.0
+        sp._crot_nu = 0.0
+        sp._cload_indicator = 0
+        sp._cstress = 0.0
+        sp._cstrain = 0.0
+
+        sp._trot_max = 0.0
+        sp._trot_min = 0.0
+        sp._trot_pu = 0.0
+        sp._trot_nu = 0.0
+        sp._tenergy_d = 0.0
+        sp._tload_indicator = 0
+        sp._tstress = 0.0
+        sp._tstrain = 0.0
+
+        append(sp)
     return springs
 
 def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:

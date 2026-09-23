@@ -664,6 +664,9 @@ class HystereticBatchRuntime:
         self.records: list[_InterfaceSlice] = []
         self.interface_rejection_reasons: Counter[str] = Counter()
         springs: list[Any] = []
+        all_simple_params = True
+        all_non_parabolic = True
+        all_non_exponential = True
         for interface in model.collections.interfaces.values():
             group = list(interface.trasv_1)
             if not group:
@@ -686,22 +689,34 @@ class HystereticBatchRuntime:
             for spring in group:
                 spring._histra_batch_managed = True
 
+            if all_simple_params:
+                for spring in group:
+                    if not _uses_simple_hysteretic_parameters(spring):
+                        all_simple_params = False
+                        break
+            if all_non_parabolic:
+                for spring in group:
+                    if isinstance(spring, SpringHysteretic) and spring.compressive_curve_type == "Parabolic":
+                        all_non_parabolic = False
+                        break
+            if all_non_exponential:
+                for spring in group:
+                    if getattr(spring, "tensile_curve_type", "") == "Exponential":
+                        all_non_exponential = False
+                        break
+
         self.springs = springs
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
         n = len(springs)
         self._compact_simple_params = bool(
             n
             and not _force_general_hysteretic_batch()
-            and all(_uses_simple_hysteretic_parameters(spring) for spring in springs)
-            and all(
-                not isinstance(spring, SpringHysteretic)
-                or spring.compressive_curve_type != "Parabolic"
-                for spring in springs
-            )
+            and all_simple_params
+            and all_non_parabolic
         )
         self._compact_linear_params = bool(
             self._compact_simple_params
-            and all(getattr(spring, "tensile_curve_type", "") != "Exponential" for spring in springs)
+            and all_non_exponential
         )
         parameter_count = (
             LINEAR_SIMPLE_TRANSVERSE_PARAM_SIZE
@@ -1118,6 +1133,7 @@ class HystereticBatchRuntime:
         self._pdelta_plan: PDeltaPlan | None = None
         self._pdelta_line_load_plans: dict[tuple[int, int], PDeltaLineLoadPlan] = {}
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
+        self._initial_state_snapshot = self.snapshot()
 
     @staticmethod
     def _transverse_rejection_reason(spring: Any) -> str:
@@ -1414,50 +1430,74 @@ class HystereticBatchRuntime:
             else TENSILE_CURVE_TYPE_PARAM
         )
 
-        for start in range(0, count, chunk_size):
-            stop = min(start + chunk_size, count)
-            group = springs[start:stop]
+        for record in self.records:
+            intf = record.interface
+            start, stop = record.start, record.stop
             group_count = stop - start
+            group = intf.trasv_1
 
-            self._params[start:stop, :fixed_parameter_count] = np.asarray(
-                [_extract_spring_params(spring, self._compact_simple_params) for spring in group],
-                dtype=np.float64,
-            )
-            if not self._compact_linear_params:
-                self._params[start:stop, curve_column] = np.fromiter(
-                    (_extract_spring_curve_type(spring) for spring in group),
+            if (
+                self._compact_simple_params
+                and getattr(intf, "_transverse_batch_params", None) is not None
+                and intf._transverse_batch_params.shape == (group_count, fixed_parameter_count)
+            ):
+                self._params[start:stop, :fixed_parameter_count] = intf._transverse_batch_params
+                self._transverse_k[start:stop] = intf._transverse_k
+            else:
+                self._params[start:stop, :fixed_parameter_count] = np.asarray(
+                    [_extract_spring_params(spring, self._compact_simple_params) for spring in group],
+                    dtype=np.float64,
+                )
+                if not self._compact_linear_params:
+                    self._params[start:stop, curve_column] = np.fromiter(
+                        (_extract_spring_curve_type(spring) for spring in group),
+                        dtype=np.float64,
+                        count=group_count,
+                    )
+                if not self._compact_simple_params:
+                    self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = np.fromiter(
+                        (_extract_spring_compressive_curve_type(spring) for spring in group),
+                        dtype=np.float64,
+                        count=group_count,
+                    )
+                self._transverse_k[start:stop] = np.fromiter(
+                    (spring.k for spring in group),
                     dtype=np.float64,
                     count=group_count,
                 )
-            if not self._compact_simple_params:
-                self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = np.fromiter(
-                    (_extract_spring_compressive_curve_type(spring) for spring in group),
+
+            is_dirty = any(
+                getattr(s, "_cstrain", 0.0) != 0.0
+                or getattr(s, "_tstrain", 0.0) != 0.0
+                or getattr(s, "phase", 0) != 0
+                for s in group
+            )
+            if not is_dirty:
+                self.committed[start:stop, :].fill(0.0)
+                self.trial[start:stop, :].fill(0.0)
+                self.trial[start:stop, 9] = self._transverse_k[start:stop]
+                self.targets[start:stop].fill(0.0)
+                self.enabled[start:stop].fill(True)
+            else:
+                self.committed[start:stop, :] = np.asarray(
+                    [_extract_spring_committed(spring) for spring in group],
+                    dtype=np.float64,
+                )
+                self.trial[start:stop, :] = np.asarray(
+                    [_extract_spring_trial(spring) for spring in group],
+                    dtype=np.float64,
+                )
+                self.targets[start:stop] = np.fromiter(
+                    (_extract_spring_target(spring) for spring in group),
                     dtype=np.float64,
                     count=group_count,
                 )
-            self._transverse_k[start:stop] = np.fromiter(
-                (spring.k for spring in group),
-                dtype=np.float64,
-                count=group_count,
-            )
-            self.committed[start:stop, :] = np.asarray(
-                [_extract_spring_committed(spring) for spring in group],
-                dtype=np.float64,
-            )
-            self.trial[start:stop, :] = np.asarray(
-                [_extract_spring_trial(spring) for spring in group],
-                dtype=np.float64,
-            )
-            self.targets[start:stop] = np.fromiter(
-                (_extract_spring_target(spring) for spring in group),
-                dtype=np.float64,
-                count=group_count,
-            )
-            self.enabled[start:stop] = np.fromiter(
-                (spring.is_on for spring in group),
-                dtype=np.bool_,
-                count=group_count,
-            )
+                self.enabled[start:stop] = np.fromiter(
+                    (spring.is_on for spring in group),
+                    dtype=np.bool_,
+                    count=group_count,
+                )
+
 
     def _read_transverse_object(self, index: int, spring: Any) -> None:
         fixed_count = len(SIMPLE_PARAM_NAMES) if self._compact_simple_params else len(_PARAM_NAMES)
@@ -2780,6 +2820,10 @@ class HystereticBatchRuntime:
         self._refresh_full_force_cache()
         self._refresh_global_resisting_force_cache()
         self._refresh_max_u_cache()
+
+    def reset_to_initial_state(self) -> None:
+        """Reset runtime state arrays to the initial virgin state."""
+        self.restore(self._initial_state_snapshot)
 
     def revert_quad(self, quad: Any) -> None:
         index = int(quad.spring._histra_quad_batch_index)

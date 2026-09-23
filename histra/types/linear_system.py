@@ -182,7 +182,23 @@ class LinearSystem:
     def set_zero(self) -> None:
         """Clear only stiffness coefficients, matching C# ``K.SetZero()``."""
         self.k = sp.csc_matrix((self.n, self.n), dtype=np.float64)
+        self._matrix_version += 1
+
+    def close(self) -> None:
+        """Release native factorization resources."""
         self._invalidate_factorization()
+
+    def __enter__(self) -> "LinearSystem":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def solve(self, rhs: np.ndarray | None = None) -> int:
         """Solve ``K x = rhs`` and store the result in ``x``.

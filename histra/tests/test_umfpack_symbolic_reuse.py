@@ -73,3 +73,46 @@ def test_linear_system_symbolic_reuse() -> None:
     # Factorization object and symbolic pointer must be preserved!
     assert ls._factorization is orig_fac
     assert orig_fac._symbolic.value == orig_sym_ptr
+
+    # set_zero followed by new matrix (simulates assemble_k with set_zero=True)
+    ls.set_zero()
+    ls.k = sp.csc_matrix((data1, indices, indptr), shape=(2, 2))
+    ls.b[:] = [1.0, 2.0]
+    ls.solve()
+    assert np.allclose(ls.x, sp.linalg.spsolve(ls.k, ls.b))
+    assert ls.factorization_count == 3
+    assert ls._factorization is orig_fac
+    assert orig_fac._symbolic.value == orig_sym_ptr
+
+
+def test_model_manager_assemble_k_symbolic_reuse() -> None:
+    if find_umfpack_library() is None:
+        return
+    from pathlib import Path
+    from histra.io.hr_loader import load_model
+    from histra.solver.model_manager import ModelManager
+
+    model_path = Path(__file__).resolve().parents[1] / "model-live" / "model.hrx"
+    if not model_path.exists():
+        return
+    model = load_model(model_path)
+    ModelManager.prepare_model(model, force=True)
+
+    ls = LinearSystem(model.gdl, backend="umfpack")
+    ModelManager.compute_ktang(model, ls, 0.0)
+    ls.b[:] = np.ones(model.gdl)
+    ls.solve()
+
+    orig_fac = ls._factorization
+    assert isinstance(orig_fac, UmfpackFactorization)
+    orig_sym_ptr = orig_fac._symbolic.value
+    assert ls.factorization_count == 1
+
+    # Re-assemble tangent stiffness matrix with alfa=1.0 (tangent refresh)
+    ModelManager.compute_ktang(model, ls, 1.0)
+    ls.b[:] = np.ones(model.gdl)
+    ls.solve()
+
+    assert ls.factorization_count == 2
+    assert ls._factorization is orig_fac
+    assert orig_fac._symbolic.value == orig_sym_ptr

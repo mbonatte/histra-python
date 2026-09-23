@@ -336,7 +336,7 @@ def _create_interface_springs(
 
     if not restrained:
         intf.trasv_1 = _configure_combined_hysteretic_batch(
-            props1, law1, props2, law2, interface_key=intf.key
+            props1, law1, props2, law2, interface_key=intf.key, interface=intf
         )
     else:
         intf.trasv_1 = []
