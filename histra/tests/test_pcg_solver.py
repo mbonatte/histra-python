@@ -44,6 +44,13 @@ def test_pcg_solve_jacobi_and_ssor():
     assert res_none.converged is True
     np.testing.assert_allclose(res_none.x, x_direct, rtol=1e-5, atol=1e-5)
 
+    # AMG preconditioner (via PyAMG)
+    res_amg = pcg_solve(k, b, tol=1e-7, maxiter=200, preconditioner="amg")
+    assert res_amg.converged is True
+    assert res_amg.residual_norm <= 1e-7
+    np.testing.assert_allclose(res_amg.x, x_direct, rtol=1e-5, atol=1e-5)
+
+
 
 def test_pcg_zero_rhs():
     n = 10

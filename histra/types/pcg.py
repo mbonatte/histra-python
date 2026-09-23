@@ -75,7 +75,18 @@ def _build_preconditioner(
 
         return apply_ssor
 
-    raise ValueError(f"Unknown preconditioner type: {preconditioner!r}; expected 'ssor', 'jacobi', or 'none'")
+    if precon_type in ("amg", "pyamg", "algebraic_multigrid"):
+        try:
+            import pyamg
+            csr = A if isinstance(A, sp.csr_matrix) else A.tocsr()
+            ml = pyamg.smoothed_aggregation_solver(csr)
+            M = ml.aspreconditioner(cycle="V")
+            return lambda v: M.matvec(v)
+        except Exception as exc:
+            logger.debug("PyAMG preconditioner setup failed: %s; falling back to SSOR", exc)
+            return _build_preconditioner(A, preconditioner="ssor", omega=omega)
+
+    raise ValueError(f"Unknown preconditioner type: {preconditioner!r}; expected 'ssor', 'jacobi', 'amg', or 'none'")
 
 
 def pcg_solve(
