@@ -26,6 +26,13 @@ _INITIAL_INTERPOLATED_METHODS = {
     "StandardInitialInterpolatedLineSearch",
     "ModifiedInitialInterpolatedLineSearch",
 }
+_BFGS_METHODS = {
+    "BFGS",
+    "QuasiNewton",
+    "BFGSLineSearch",
+    "StandardBFGS",
+    "StandardBFGSLineSearch",
+}
 _LINE_SEARCH_METHODS = set(_LINE_SEARCH_TYPES) | _INITIAL_INTERPOLATED_METHODS
 
 
@@ -43,6 +50,8 @@ def _new_line_search(an: Any) -> LineSearch:
         search = LineSearch()
     elif method in _NEWTON_METHODS:
         search = LineSearch()
+    elif method in _BFGS_METHODS:
+        search = BisectionLineSearch()
     else:
         raise ValueError(f"Unsupported nonlinear solution method: {method}")
 
@@ -86,6 +95,10 @@ class EquiSolnAlgo(SolutionAlgorithm):
             algo: EquiSolnAlgo = NewtonRaphson()
         elif method in _LINE_SEARCH_METHODS:
             algo = NewtonLineSearch()
+        elif method in _BFGS_METHODS:
+            from histra.solver.bfgs import BFGSSolnAlgo
+            max_hist = int(getattr(an, "quasi_newton_history_size", 15))
+            algo = BFGSSolnAlgo(max_history=max_hist)
         else:
             raise ValueError(f"Unsupported nonlinear solution method: {method}")
 
