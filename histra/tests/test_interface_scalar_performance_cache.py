@@ -346,3 +346,35 @@ def test_stiffness_geometry_cache_is_bitwise_equal_to_geometry_helpers() -> None
         np.testing.assert_array_equal(interface._perf_di, expected_di)
         np.testing.assert_array_equal(interface._perf_dj, expected_dj)
         np.testing.assert_array_equal(interface._perf_ecc, expected_ecc)
+
+
+def test_compute_kfless_uniform_fast_path_matches_non_uniform() -> None:
+    """The uniform stiffness fast-path must match the non-uniform loop to machine precision."""
+    from histra.springs.base import Spring
+    from histra.types.point import Point
+
+    points = [
+        Point(x=0.0, y=0.0),
+        Point(x=100.0, y=0.0),
+        Point(x=100.0, y=50.0),
+        Point(x=0.0, y=50.0),
+    ]
+
+    for constrained in (False, True):
+        interface1 = Interface(length=100.0, nrow=3, ncol=4, nspring=12)
+        interface1.vint2d = deepcopy(points)
+        interface1.interfaccia_vincolata = constrained
+        interface1.dim_aff = [6, 2, 4]
+        interface1.trasv_1 = [Spring(k=500.0) for _ in range(12)]
+
+        interface2 = deepcopy(interface1)
+        # Interface 1 uses uniform fast-path
+        interface1._compute_kfless(0.5)
+
+        # Interface 2 is forced into non-uniform branch by slightly varying one spring's stiffness
+        interface2.trasv_1[-1].k = 500.0 + 1e-12
+        interface2._compute_kfless(0.5)
+
+        k1 = np.array(interface1.status.k)
+        k2 = np.array(interface2.status.k)
+        np.testing.assert_allclose(k1, k2, rtol=1e-7, atol=1e-7)

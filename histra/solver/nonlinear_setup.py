@@ -74,6 +74,7 @@ def _setup_nonlinear_analysis(
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
     linear_solver_precision: str = "fast",
+    linear_solver_ordering: str | None = None,
     umfpack_irstep: int | None = None,
     adaptive_tangent_refresh: bool | int | None = None,
     tangent_refresh_cadence: int | None = None,
@@ -84,6 +85,11 @@ def _setup_nonlinear_analysis(
     performance_policy: str = "compiled",
 ) -> _NonlinearSetup:
     """Validate policy, prepare the model and build the C#-ordered initial state."""
+    if isinstance(analysis, (int, str)) and model.collections is not None:
+        if analysis in model.collections.analyses:
+            analysis = model.collections.analyses[analysis]
+        elif isinstance(analysis, str) and analysis.isdigit() and int(analysis) in model.collections.analyses:
+            analysis = model.collections.analyses[int(analysis)]
     equilibrium_policy = normalize_equilibrium_policy(equilibrium_policy)
     equilibrium_force_absolute_tolerance = float(
         equilibrium_force_absolute_tolerance
@@ -175,11 +181,15 @@ def _setup_nonlinear_analysis(
         analysis, "linear_solver_precision", linear_solver_precision
     )
     effective_irstep = getattr(analysis, "umfpack_irstep", umfpack_irstep)
+    effective_ordering = getattr(
+        analysis, "linear_solver_ordering", linear_solver_ordering
+    )
     ls = LinearSystem(
         n,
         backend=linear_solver_backend,
         precision=effective_precision,
         irstep=effective_irstep,
+        ordering=effective_ordering,
     )
     if adaptive_tangent_refresh is not None and not hasattr(
         analysis, "adaptive_tangent_refresh"

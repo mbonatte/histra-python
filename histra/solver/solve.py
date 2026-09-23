@@ -55,6 +55,7 @@ def solve_static_nonlinear(
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
     linear_solver_precision: str = "fast",
+    linear_solver_ordering: str | None = None,
     umfpack_irstep: int | None = None,
     adaptive_tangent_refresh: bool | int | None = None,
     tangent_refresh_cadence: int | None = None,
@@ -106,6 +107,7 @@ def solve_static_nonlinear(
                     diagnostics=diagnostics,
                     linear_solver_backend=linear_solver_backend,
                     linear_solver_precision=linear_solver_precision,
+                    linear_solver_ordering=linear_solver_ordering,
                     umfpack_irstep=umfpack_irstep,
                     adaptive_tangent_refresh=adaptive_tangent_refresh,
                     tangent_refresh_cadence=tangent_refresh_cadence,
@@ -152,6 +154,7 @@ def _solve_static_nonlinear_impl(
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
     linear_solver_precision: str = "fast",
+    linear_solver_ordering: str | None = None,
     umfpack_irstep: int | None = None,
     adaptive_tangent_refresh: bool | int | None = None,
     tangent_refresh_cadence: int | None = None,
@@ -165,6 +168,12 @@ def _solve_static_nonlinear_impl(
     raise_if_cancelled(should_cancel)
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
+
+    if isinstance(analysis, (int, str)):
+        if analysis in model.collections.analyses:
+            analysis = model.collections.analyses[analysis]
+        elif isinstance(analysis, str) and analysis.isdigit() and int(analysis) in model.collections.analyses:
+            analysis = model.collections.analyses[int(analysis)]
 
     policy = str(performance_policy).strip().lower()
     if policy not in {"compiled", "diagnostic-scalar"}:
@@ -181,6 +190,7 @@ def _solve_static_nonlinear_impl(
         auto_prepare=auto_prepare, diagnostics=diagnostics,
         linear_solver_backend=linear_solver_backend,
         linear_solver_precision=linear_solver_precision,
+        linear_solver_ordering=linear_solver_ordering,
         umfpack_irstep=umfpack_irstep,
         adaptive_tangent_refresh=adaptive_tangent_refresh,
         tangent_refresh_cadence=tangent_refresh_cadence,

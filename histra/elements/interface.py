@@ -98,6 +98,14 @@ class Interface:
     _perf_d1: int | None = field(default=None, init=False, repr=False, compare=False)
     _perf_custom_force_access: tuple[bool, ...] | None = field(default=None, init=False, repr=False, compare=False)
     _perf_has_custom_force_access: bool | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_di2: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_dj2: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_didj: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_ecc2: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_djecc: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_diecc: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_dm: float | None = field(default=None, init=False, repr=False, compare=False)
+    _perf_sum_dm2: float | None = field(default=None, init=False, repr=False, compare=False)
 
     def area(self) -> float:
         """Return the cached C# ``Operations.Area(VInt2D)`` polygon area."""
@@ -218,6 +226,7 @@ class Interface:
             self._perf_di is not None
             and self._perf_dj is not None
             and self._perf_ecc is not None
+            and self._perf_sum_di2 is not None
             and len(self._perf_di) == count
             and len(self._perf_dj) == count
             and len(self._perf_ecc) == count
@@ -242,9 +251,21 @@ class Interface:
             + ((v2.y * one_plus_xi) * one_plus_eta) / 4.0
             + ((v3.y * one_minus_xi) * one_plus_eta) / 4.0
         )
+        dj_values = self.length - di_values
         self._perf_di = tuple(di_values.tolist())
-        self._perf_dj = tuple((self.length - di_values).tolist())
+        self._perf_dj = tuple(dj_values.tolist())
         self._perf_ecc = tuple(ecc_values.tolist())
+
+        self._perf_sum_di2 = float(np.sum(di_values * di_values))
+        self._perf_sum_dj2 = float(np.sum(dj_values * dj_values))
+        self._perf_sum_didj = float(np.sum(di_values * dj_values))
+        self._perf_sum_ecc2 = float(np.sum(ecc_values * ecc_values))
+        self._perf_sum_djecc = float(np.sum(dj_values * ecc_values))
+        self._perf_sum_diecc = float(np.sum(di_values * ecc_values))
+
+        dm_values = 0.5 * self.length - di_values
+        self._perf_sum_dm = float(np.sum(dm_values))
+        self._perf_sum_dm2 = float(np.sum(dm_values * dm_values))
 
     def _ensure_performance_cache(self) -> None:
         """Build immutable geometry and afference tuples once per interface."""
@@ -370,44 +391,89 @@ class Interface:
         ecc_cache = I._perf_ecc
 
         spring_count = min(nrow * ncol, len(I.trasv_1))
-        spring_k = [I.trasv_1[index].get_k(alfa) for index in range(spring_count)]
+        if spring_count == 0:
+            self.status.k = K
+            return
 
-        num = num2 = num3 = 0.0
-        for i in range(nrow):
-            row_offset = i * ncol
-            for j in range(ncol):
-                idx_ = row_offset + j
-                if idx_ >= spring_count:
-                    continue
-                di = di_cache[idx_]
-                dj = dj_cache[idx_]
-                k = spring_k[idx_]
-                num += k * di * di
-                num3 += k * di * dj
-                num2 += k * dj * dj
+        k0 = I.trasv_1[0].get_k(alfa)
+        uniform = True
+        spring_k = [k0]
+        for index in range(1, spring_count):
+            kval = I.trasv_1[index].get_k(alfa)
+            spring_k.append(kval)
+            if kval != k0:
+                uniform = False
 
         L = I.length
         L2 = L * L
+        constrained = I.interfaccia_vincolata_computed()
+        d2 = I.dim_aff[2] if len(I.dim_aff) > 2 else 4
+
+        out_of_plane_diag = 0.0
+        num7 = 0.0
+        num8 = 0.0
+
+        if uniform and I._perf_sum_di2 is not None:
+            num = k0 * I._perf_sum_di2
+            num2 = k0 * I._perf_sum_dj2
+            num3 = k0 * I._perf_sum_didj
+            if constrained:
+                num4 = k0 * spring_count
+                num5 = -k0 * I._perf_sum_dm
+                num6 = k0 * I._perf_sum_dm2
+            if d2 > 0:
+                out_of_plane_diag = k0 * I._perf_sum_ecc2
+                num7 = k0 * I._perf_sum_djecc
+                num8 = k0 * I._perf_sum_diecc
+        else:
+            num = num2 = num3 = 0.0
+            for i in range(nrow):
+                row_offset = i * ncol
+                for j in range(ncol):
+                    idx_ = row_offset + j
+                    if idx_ >= spring_count:
+                        continue
+                    di = di_cache[idx_]
+                    dj = dj_cache[idx_]
+                    k = spring_k[idx_]
+                    num += k * di * di
+                    num3 += k * di * dj
+                    num2 += k * dj * dj
+
+            if constrained:
+                num4 = num5 = num6 = 0.0
+                for i_ in range(ncol):
+                    for j_ in range(nrow):
+                        idx_ = j_ * ncol + i_
+                        if idx_ >= spring_count:
+                            continue
+                        di = di_cache[idx_]
+                        dm = 0.5 * I.length - di
+                        k = spring_k[idx_]
+                        num4 += k
+                        num5 -= k * dm
+                        num6 += k * dm * dm
+
+            if d2 > 0:
+                for i_ in range(ncol):
+                    for j_ in range(nrow):
+                        idx_ = j_ * ncol + i_
+                        if idx_ >= spring_count:
+                            continue
+                        k = spring_k[idx_]
+                        di = di_cache[idx_]
+                        dj = dj_cache[idx_]
+                        ecc = ecc_cache[idx_]
+                        out_of_plane_diag += k * ecc * ecc
+                        num7 += k * dj * ecc
+                        num8 += k * di * ecc
+
         if L2 > 1e-30:
             num /= L2
             num3 /= L2
             num2 /= L2
 
-        constrained = I.interfaccia_vincolata_computed()
-
         if constrained:
-            num4 = num5 = num6 = 0.0
-            for i_ in range(ncol):
-                for j_ in range(nrow):
-                    idx_ = j_ * ncol + i_
-                    if idx_ >= spring_count:
-                        continue
-                    di = di_cache[idx_]
-                    dm = 0.5 * I.length - di
-                    k = spring_k[idx_]
-                    num4 += k
-                    num5 -= k * dm
-                    num6 += k * dm * dm
             K[0][0] = num4
             K[0][1] = num5
             K[1][1] = num6
@@ -435,28 +501,12 @@ class Interface:
             for j_ in range(i_ + 1, 4):
                 K[j_][i_] = K[i_][j_]
 
-        d2 = I.dim_aff[2] if len(I.dim_aff) > 2 else 4
         if d2 <= 0:
             # Store and return
             self.status.k = K
             return
 
         # ── Out-of-plane coupling (DOFs 4,5) ────────────────────────────────
-        out_of_plane_diag = 0.0
-        num7 = 0.0
-        num8 = 0.0
-        for i_ in range(ncol):
-            for j_ in range(nrow):
-                idx_ = j_ * ncol + i_
-                if idx_ >= spring_count:
-                    continue
-                k = spring_k[idx_]
-                di = di_cache[idx_]
-                dj = dj_cache[idx_]
-                ecc = ecc_cache[idx_]
-                out_of_plane_diag += k * ecc * ecc
-                num7 += k * dj * ecc
-                num8 += k * di * ecc
 
         K[4][4] = out_of_plane_diag
         K[5][5] = out_of_plane_diag

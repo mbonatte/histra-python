@@ -35,8 +35,10 @@ class LinearSystem:
         backend: str | None = None,
         precision: str = "fast",
         irstep: int | None = None,
+        ordering: str | None = None,
     ):
         self.n = int(n)
+        self.ordering = ordering
         self.precision = str(
             os.environ.get("HISTRA_LINEAR_SOLVER_PRECISION", precision)
         ).strip().lower()
@@ -256,7 +258,7 @@ class LinearSystem:
                     self._invalidate_factorization()
                     if self.backend == "umfpack":
                         self._factorization = UmfpackFactorization(
-                            matrix, irstep=self.irstep
+                            matrix, irstep=self.irstep, ordering=self.ordering
                         )
                     else:
                         with warnings.catch_warnings():

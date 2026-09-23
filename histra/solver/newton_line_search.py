@@ -92,8 +92,9 @@ class NewtonLineSearch(EquiSolnAlgo):
             with diagnostics.timed("residual_assembly"):
                 self.the_integrator.form_unbalance(p, model, an)
         result = -1
-        previous_error = 1.0
         error = 1.0
+        last_error: float | None = None
+        last_contraction: float = 1.0
         updates_tangent = _updates_tangent_each_iteration(an)
         csharp_line_search_compatibility = bool(
             getattr(an, "csharp_line_search_compatibility", True)
@@ -141,7 +142,17 @@ class NewtonLineSearch(EquiSolnAlgo):
 
             refresh_tangent = False
             if updates_tangent and alfa != 0.0:
-                refresh_tangent = True
+                if adaptive_tangent_refresh in {True, "adaptive"} or str(adaptive_tangent_refresh).lower() == "true":
+                    cadence = tangent_refresh_cadence if (tangent_refresh_cadence is not None and tangent_refresh_cadence > 0) else 4
+                    if current_it == 1 or (current_it % cadence == 0):
+                        refresh_tangent = True
+                    elif current_it >= 2 and last_contraction > 0.7:
+                        refresh_tangent = True
+                elif tangent_refresh_cadence is not None and tangent_refresh_cadence > 0:
+                    if current_it == 1 or (current_it % tangent_refresh_cadence == 0):
+                        refresh_tangent = True
+                else:
+                    refresh_tangent = True
             elif adaptive_tangent_refresh and not updates_tangent:
                 if tangent_refresh_cadence is not None and tangent_refresh_cadence > 0:
                     if current_it == 1 or (current_it % tangent_refresh_cadence == 0):
@@ -271,10 +282,11 @@ class NewtonLineSearch(EquiSolnAlgo):
 
             iteration = max(1, self.the_test.current_iter)
             estimate = max(iteration + 1.0, float(self.the_test.max_iter))
-            if error < previous_error:
-                estimate = max(iteration + 1.0, iteration / max(1e-6, 1.0 - error / max(previous_error, 1e-30)))
-            p.progress(min(90.0, iteration / estimate * 100.0))
-            previous_error = error
+            if last_error is not None and error < last_error:
+                estimate = max(iteration + 1.0, iteration / max(1e-6, 1.0 - error / max(last_error, 1e-30)))
+            if last_error is not None and last_error > 0.0:
+                last_contraction = error / last_error
+            last_error = error
 
             if p.to_stop:
                 return -4

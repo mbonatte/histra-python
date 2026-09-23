@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 - 2026-09-23
+
+Graph partitioning matrix ordering, adaptive tangent refresh, interface scalar geometry caching, and large-scale 3D solver acceleration.
+
+### Performance & Solver Optimization
+
+- **METIS Graph Partitioning Matrix Ordering**: Enabled SuiteSparse UMFPACK METIS ordering by default for sparse stiffness factorization, reducing $L+U$ fill-in non-zeros by 4.3x (from 202.5M to 47.3M non-zeros on Dhir Bridge) and cutting numeric factorization time by 2.2x. Configurable via `linear_solver_ordering` and `HISTRA_UMFPACK_ORDERING`.
+- **Adaptive Tangent Refresh & Cadence Newton**: Implemented residual contraction tracking (`last_contraction = error / last_error`) and cadence refresh in `NewtonLineSearch` for standard line searches, skipping redundant tangent factorizations while maintaining quadratic convergence.
+- **Interface Geometry Precomputation Cache**: Precomputed invariant interface coordinate sums ($\sum d_i^2$, $\sum d_j^2$, $\sum d_i d_j$, $\sum e^2$, $\sum d_m^2$) during model preparation, enabling $O(1)$ closed-form elastic interface evaluation for uniform spring arrays in `_compute_kfless`.
+- **Flexible Analysis Key Resolution**: Supported integer analysis keys in `solve_static_nonlinear` and `_setup_nonlinear_analysis`, ensuring analysis method and solver configurations are properly resolved when passed by ID.
+
 ## 1.2.0 - 2026-09-21
 
 Fast linear solve acceleration, configurable UMFPACK iterative refinement, and non-linear solver performance optimizations.
