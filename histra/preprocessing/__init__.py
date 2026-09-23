@@ -1,5 +1,11 @@
 """Model preparation and readiness validation."""
 
+from .cache import (
+    get_model_cache_path,
+    is_cache_enabled,
+    load_prepared_cache,
+    save_prepared_cache,
+)
 from .errors import ModelPreparationError
 from .prepare_model import (
     PreparationReport,
@@ -24,4 +30,9 @@ __all__ = [
     "ModelReadinessReport",
     "inspect_solver_readiness",
     "require_solver_ready",
+    "get_model_cache_path",
+    "is_cache_enabled",
+    "load_prepared_cache",
+    "save_prepared_cache",
 ]
+

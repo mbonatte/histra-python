@@ -256,6 +256,7 @@ def _resolve_linear_solver_backend(
     requested: str | None,
 ) -> tuple[str, str, bool, str | None]:
     """Resolve the same sparse backend the forthcoming ``LinearSystem`` uses."""
+    from histra.types.cholmod import find_cholmod_library
     from histra.types.linear_system import LinearSystem
     from histra.types.umfpack import find_umfpack_library
 
@@ -272,6 +273,14 @@ def _resolve_linear_solver_backend(
             False,
             "UMFPACK was requested but no native library was found; set "
             "HISTRA_UMFPACK_LIBRARY or select SuperLU.",
+        )
+    if system.backend == "cholmod" and find_cholmod_library() is None:
+        return (
+            system.requested_backend,
+            system.backend,
+            False,
+            "CHOLMOD was requested but no native library was found; set "
+            "HISTRA_CHOLMOD_LIBRARY or select another backend.",
         )
     return system.requested_backend, system.backend, True, None
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.2 - 2026-09-23
+
+Native CHOLMOD supernodal Cholesky backend, preprocessing mesh & topology disk caching, Preconditioned Conjugate Gradient (PCG) iterative solver, and Quasi-Newton (BFGS) solver architecture.
+
+### Performance & Solver Optimization
+
+- **Native CHOLMOD Supernodal Backend (`histra.types.cholmod`)**: Direct ctypes binding to SuiteSparse `libcholmod.so.5` with zero-copy memory arrays and supernodal Cholesky factorization (`backend="cholmod"`). Slashes symbolic analysis time by 9.5x (from 6.70s to 0.70s) and numeric factorization time by 2.3x (from 5.89s to 2.55s) on large 3D models.
+- **Preprocessing Mesh & Topology Caching (`histra.preprocessing.cache`)**: Transparent atomic disk and memory caching keyed by SHA-256 fingerprint of the source HRX file and code revision. Reduces model preparation time on Dhir Bridge from 30.40s down to 8.36s (3.6x speedup) while preserving fresh Python preprocessing parity rules.
+- **Preconditioned Conjugate Gradient Solver (`histra.types.pcg`)**: Matrix-free iterative solver supporting Symmetric Successive Over-Relaxation (SSOR) and Jacobi (diagonal scaling) preconditioning with automatic fail-safe fallback to direct solvers (`backend="pcg"`).
+- **Quasi-Newton (BFGS) Architecture (`histra.solver.bfgs`)**: Implemented Matthies & Strang (1979) two-loop recursion with Powell curvature safeguards (`curv > 1e-8 * norm_s * norm_y`), bounded memory history, and automatic tangent refresh upon stall detection (`method="BFGS"`). Combined with CHOLMOD, cuts 2-step Dhir Bridge runtime from >400s down to 46.45s with exact physical equilibrium ($1.19 \times 10^{-9}$).
+
 ## 1.2.1 - 2026-09-23
 
 Graph partitioning matrix ordering, adaptive tangent refresh, interface scalar geometry caching, and large-scale 3D solver acceleration.

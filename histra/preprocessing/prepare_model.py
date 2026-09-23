@@ -244,7 +244,9 @@ def create_brand_new_model(source: Model) -> Model:
     return new_model
 
 
-def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
+def prepare_model(
+    model: Model, *, force: bool = False, use_cache: bool | None = None
+) -> PreparationReport:
     """Prepare an unlocked Quad/Restraint HRX for the nonlinear solver.
 
     The operation is idempotent for an already prepared model unless ``force``
@@ -253,6 +255,22 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
     """
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
+
+    from .cache import is_cache_enabled, load_prepared_cache, save_prepared_cache
+
+    cache_active = is_cache_enabled(use_cache)
+    source_path = getattr(model, "source_path", None)
+
+    if cache_active and source_path:
+        cached = load_prepared_cache(source_path)
+        if cached is not None:
+            cached_model, report = cached
+            model.collections = cached_model.collections
+            model.gdl = cached_model.gdl
+            model.is_locked = True
+            model.requires_python_preparation = False
+            return report
+
     # Serialized HRX interface/spring objects belong to the C# reference, not
     # to a Python computational model.  Do not let the usual idempotent-ready
     # shortcut preserve them.  This is intentionally enforced here (rather
@@ -311,7 +329,7 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
             "Python PrepareModel produced an incomplete model: " + "; ".join(report.missing)
         )
     model.requires_python_preparation = False
-    return PreparationReport(
+    report = PreparationReport(
         prepared=True, gdl=model.gdl, quads=len(c.quads),
         quad_springs=sum(q.spring is not None for q in c.quads.values()),
         interfaces=len(c.interfaces), quad_quad_interfaces=qq, restraint_interfaces=qr,
@@ -319,3 +337,7 @@ def prepare_model(model: Model, *, force: bool = False) -> PreparationReport:
         sliding_springs=sum(len(i.slid) for i in c.interfaces.values()),
         out_of_plane_springs=sum(len(i.slid_out_plan) for i in c.interfaces.values()),
     )
+    if cache_active and source_path:
+        save_prepared_cache(model, report, source_path)
+    return report
+

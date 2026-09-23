@@ -7,12 +7,23 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import MatrixRankWarning, splu
 
+from histra.types.cholmod import (
+    CholmodError,
+    CholmodFactorization,
+    CholmodUnavailable,
+    find_cholmod_library,
+)
+from histra.types.pcg import (
+    PCGConvergenceError,
+    PCGFactorization,
+)
 from histra.types.umfpack import (
     UmfpackError,
     UmfpackFactorization,
     UmfpackUnavailable,
     find_umfpack_library,
 )
+
 
 
 class LinearSolveError(RuntimeError):
@@ -56,11 +67,14 @@ class LinearSystem:
             "suite_sparse": "umfpack",
             "suitesparse": "umfpack",
             "super_lu": "superlu",
+            "suitesparse_cholmod": "cholmod",
+            "conjugate_gradient": "pcg",
+            "preconditioned_conjugate_gradient": "pcg",
         }
         requested = aliases.get(requested, requested)
-        if requested not in {"auto", "umfpack", "superlu"}:
+        if requested not in {"auto", "umfpack", "superlu", "cholmod", "pcg"}:
             raise ValueError(
-                "linear solver backend must be one of: auto, umfpack, superlu; "
+                "linear solver backend must be one of: auto, umfpack, superlu, cholmod, pcg; "
                 f"received {requested!r}"
             )
         self.requested_backend = requested
@@ -246,6 +260,24 @@ class LinearSystem:
             if not same_matrix:
                 refactored = False
                 if (
+                    self.backend == "pcg"
+                    and isinstance(self._factorization, PCGFactorization)
+                    and self._factor_backend == "pcg"
+                ):
+                    try:
+                        refactored = self._factorization.refactor_numeric(matrix)
+                    except Exception:
+                        refactored = False
+                elif (
+                    self.backend == "cholmod"
+                    and isinstance(self._factorization, CholmodFactorization)
+                    and self._factor_backend == "cholmod"
+                ):
+                    try:
+                        refactored = self._factorization.refactor_numeric(matrix)
+                    except Exception:
+                        refactored = False
+                elif (
                     self.backend == "umfpack"
                     and isinstance(self._factorization, UmfpackFactorization)
                     and self._factor_backend == "umfpack"
@@ -256,7 +288,11 @@ class LinearSystem:
                         refactored = False
                 if not refactored:
                     self._invalidate_factorization()
-                    if self.backend == "umfpack":
+                    if self.backend == "pcg":
+                        self._factorization = PCGFactorization(matrix)
+                    elif self.backend == "cholmod":
+                        self._factorization = CholmodFactorization(matrix)
+                    elif self.backend == "umfpack":
                         self._factorization = UmfpackFactorization(
                             matrix, irstep=self.irstep, ordering=self.ordering
                         )
@@ -268,7 +304,7 @@ class LinearSystem:
                 self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
                 self._factor_matrix_version = self._matrix_version
-            if self.backend == "umfpack":
+            if self.backend in ("umfpack", "cholmod", "pcg"):
                 solution = self._factorization.solve(vector, out=self.x)
             else:
                 solution = self._factorization.solve(vector)
@@ -276,6 +312,8 @@ class LinearSystem:
         except (
             MatrixRankWarning, RuntimeError, ValueError,
             UmfpackUnavailable, UmfpackError,
+            CholmodUnavailable, CholmodError,
+            PCGConvergenceError,
         ) as exc:
             self._invalidate_factorization()
             raise LinearSolveError(

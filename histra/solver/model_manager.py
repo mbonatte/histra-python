@@ -44,7 +44,7 @@ class ModelManager:
     on_progress: Callable[[float], None] | None = None
 
     @classmethod
-    def prepare_model(cls, model: Model, *, force: bool = False):
+    def prepare_model(cls, model: Model, *, force: bool = False, use_cache: bool | None = None):
         """Port the C# ``ModelManager.PrepareModel`` preprocessing stage.
 
         The translated implementation currently covers the Quad/Restraint
@@ -55,7 +55,7 @@ class ModelManager:
         from histra.preprocessing.prepare_model import prepare_model
 
         cls.clear_hysteretic_batch()
-        return prepare_model(model, force=force)
+        return prepare_model(model, force=force, use_cache=use_cache)
 
     @classmethod
     def create_brand_new_model(cls, source: Model) -> Model:

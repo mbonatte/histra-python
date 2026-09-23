@@ -28,7 +28,7 @@ def test_default_backend_resolves_to_auto(monkeypatch) -> None:
 
 
 def test_linear_solver_backend_validation() -> None:
-    with pytest.raises(ValueError, match="auto, umfpack, superlu"):
+    with pytest.raises(ValueError, match="auto, umfpack, superlu, cholmod, pcg"):
         LinearSystem(1, backend="dense")
 
 

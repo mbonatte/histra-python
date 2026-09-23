@@ -8,6 +8,20 @@ from histra.types.hysteretic_curve_types import (
 from histra.types.convergence_test import ConvergenceTest
 from histra.types.linear_system import LinearSystem, LinearSolveError
 from histra.types.integrator_state import IntegratorState
+from histra.types.cholmod import (
+    CholmodError,
+    CholmodFactorization,
+    CholmodUnavailable,
+    find_cholmod_library,
+    is_cholmod_available,
+)
+
+from histra.types.pcg import (
+    PCGConvergenceError,
+    PCGFactorization,
+    PCGResult,
+    pcg_solve,
+)
 
 __all__ = [
     "Point",
@@ -19,4 +33,15 @@ __all__ = [
     "LinearSystem",
     "LinearSolveError",
     "IntegratorState",
+    "CholmodError",
+    "CholmodFactorization",
+    "CholmodUnavailable",
+    "find_cholmod_library",
+    "is_cholmod_available",
+    "PCGConvergenceError",
+    "PCGFactorization",
+    "PCGResult",
+    "pcg_solve",
 ]
+
+
