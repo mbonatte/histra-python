@@ -73,8 +73,9 @@ def test_matthies_strang_two_loop_matches_explicit_bfgs_inverse() -> None:
 
 def test_bfgs_nonlinear_solve_step_convergence() -> None:
     benchmarks = [
+        Path(__file__).resolve().parents[1] / "model-benchmark" / "model.hrx",
         Path("my_model/benchmark_1/benchmark_virgin.hrx"),
-        Path("histra/model-live/model.hrx"),
+        Path(__file__).resolve().parents[1] / "model-live" / "model.hrx",
     ]
     model_path = next((p for p in benchmarks if p.exists()), None)
     if model_path is None:
@@ -83,6 +84,7 @@ def test_bfgs_nonlinear_solve_step_convergence() -> None:
     model = load_model(model_path)
     an = model.collections.analyses[1]
     an.method = "BFGS"
+    an.adaptive_convergence_criteria = "ForceMoment"
 
     code, steps = solve_static_nonlinear(
         model, 1, max_committed_steps=2, auto_prepare=True

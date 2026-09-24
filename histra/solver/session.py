@@ -60,6 +60,7 @@ class AnalysisSession:
         umfpack_irstep: int | None = None,
         adaptive_tangent_refresh: bool | int | None = None,
         tangent_refresh_cadence: int | None = None,
+        allow_experimental_methods: bool = False,
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
@@ -89,6 +90,7 @@ class AnalysisSession:
         self.umfpack_irstep = umfpack_irstep
         self.adaptive_tangent_refresh = adaptive_tangent_refresh
         self.tangent_refresh_cadence = tangent_refresh_cadence
+        self.allow_experimental_methods = bool(allow_experimental_methods)
         self.backend_coverage: Any | None = None
         if policy == "diagnostic-scalar" and self.on_log is not None:
             self.on_log(
@@ -218,6 +220,8 @@ class AnalysisSession:
 
             ModelManager.prepare_model(self.model, force=True)
         definition = copy.deepcopy(self.resolve_analysis(analysis))
+        if self.allow_experimental_methods:
+            definition.allow_experimental_methods = True
         inspect_solver_capabilities(self.model, [definition]).require_supported()
         if self.performance_policy == "compiled":
             from histra.solver.backend_coverage import inspect_solver_backend

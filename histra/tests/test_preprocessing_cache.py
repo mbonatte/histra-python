@@ -20,7 +20,15 @@ from histra.solver import ModelManager
 
 @pytest.fixture
 def small_model_path() -> Path:
-    return Path("my_model/benchmark_1/benchmark.hrx").resolve()
+    candidates = [
+        Path(__file__).resolve().parents[1] / "model-benchmark" / "model.hrx",
+        Path("my_model/benchmark_1/benchmark.hrx"),
+        Path(__file__).resolve().parents[1] / "model-live" / "model.hrx",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.resolve()
+    pytest.skip("No benchmark model found for cache test")
 
 
 def test_compute_hrx_fingerprint(small_model_path: Path):
@@ -34,7 +42,7 @@ def test_get_model_cache_path(small_model_path: Path, tmp_path: Path, monkeypatc
     # Explicit directory
     p1 = get_model_cache_path(small_model_path, cache_dir=tmp_path)
     assert p1.parent == tmp_path
-    assert p1.name == "benchmark.hrx.prepared.cache"
+    assert p1.name == f"{small_model_path.name}.prepared.cache"
 
     # Environment variable override
     monkeypatch.setenv("HISTRA_CACHE_DIR", str(tmp_path / "custom_cache"))

@@ -252,7 +252,7 @@ class LinearSystem:
         # of the tens of thousands of fixed-stiffness ArcLength solves.
         same_matrix = (
             self._factorization is not None
-            and self._factor_backend == self.backend
+            and self._factor_backend in (self.backend, "umfpack", "superlu", "cholmod")
             and self._factor_matrix_id == id(self.k)
             and self._factor_matrix_version == self._matrix_version
         )
@@ -270,41 +270,66 @@ class LinearSystem:
                         refactored = False
                 elif (
                     self.backend == "cholmod"
-                    and isinstance(self._factorization, CholmodFactorization)
                     and self._factor_backend == "cholmod"
+                    and isinstance(self._factorization, CholmodFactorization)
                 ):
                     try:
                         refactored = self._factorization.refactor_numeric(matrix)
                     except Exception:
                         refactored = False
                 elif (
-                    self.backend == "umfpack"
+                    (self.backend == "umfpack" or self._factor_backend == "umfpack")
                     and isinstance(self._factorization, UmfpackFactorization)
-                    and self._factor_backend == "umfpack"
                 ):
                     try:
                         refactored = self._factorization.refactor_numeric(matrix)
                     except Exception:
                         refactored = False
                 if not refactored:
-                    self._invalidate_factorization()
                     if self.backend == "pcg":
+                        self._invalidate_factorization()
                         self._factorization = PCGFactorization(matrix)
+                        self._factor_backend = "pcg"
                     elif self.backend == "cholmod":
-                        self._factorization = CholmodFactorization(matrix)
+                        chol_ok = False
+                        try:
+                            self._invalidate_factorization()
+                            self._factorization = CholmodFactorization(matrix)
+                            self._factor_backend = "cholmod"
+                            chol_ok = True
+                        except (CholmodError, CholmodUnavailable):
+                            chol_ok = False
+                        if not chol_ok:
+                            # Indefinite matrix (cracking / softening): fall back to UMFPACK or SuperLU
+                            if find_umfpack_library() is not None:
+                                self._invalidate_factorization()
+                                self._factorization = UmfpackFactorization(
+                                    matrix, irstep=self.irstep, ordering=self.ordering
+                                )
+                                self._factor_backend = "umfpack"
+                            else:
+                                self._invalidate_factorization()
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("error", MatrixRankWarning)
+                                    self._factorization = splu(matrix)
+                                self._factor_backend = "superlu"
                     elif self.backend == "umfpack":
+                        self._invalidate_factorization()
                         self._factorization = UmfpackFactorization(
                             matrix, irstep=self.irstep, ordering=self.ordering
                         )
+                        self._factor_backend = "umfpack"
                     else:
+                        self._invalidate_factorization()
                         with warnings.catch_warnings():
                             warnings.simplefilter("error", MatrixRankWarning)
                             self._factorization = splu(matrix)
+                        self._factor_backend = "superlu"
                 self.factorization_count += 1
-                self._factor_backend = self.backend
                 self._factor_matrix_id = id(self.k)
                 self._factor_matrix_version = self._matrix_version
-            if self.backend in ("umfpack", "cholmod", "pcg"):
+            effective_backend = self._factor_backend or self.backend
+            if effective_backend in ("umfpack", "cholmod", "pcg"):
                 solution = self._factorization.solve(vector, out=self.x)
             else:
                 solution = self._factorization.solve(vector)

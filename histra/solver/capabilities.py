@@ -1,6 +1,7 @@
 """Preflight checks for running an HRX job with the Python solver."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
@@ -20,6 +21,13 @@ _STATIC_METHODS = {
     "ModifiedRegulaFalsiLineSearch",
     "ModifiedBisectionLineSearch",
     "ModifiedInitialInterpolatedLineSearch",
+}
+_EXPERIMENTAL_METHODS = {
+    "BFGS",
+    "QuasiNewton",
+    "BFGSLineSearch",
+    "StandardBFGS",
+    "StandardBFGSLineSearch",
 }
 _CONVERGENCE_CRITERIA = {"ForceMoment", "DispRotation", "Work"}
 _PDELTA_EFFECTS = {"none", "eachstep", "eachiteration", "0", "1", "2"}
@@ -372,7 +380,13 @@ def _inspect_analysis_definition(
                 )
             )
     method = str(getattr(analysis, "method", "StandardNewtonRaphson"))
-    if method not in _STATIC_METHODS:
+    allowed_methods = _STATIC_METHODS
+    if (
+        getattr(analysis, "allow_experimental_methods", False)
+        or os.environ.get("HISTRA_ALLOW_EXPERIMENTAL_METHODS", "").strip().lower() in ("1", "true")
+    ):
+        allowed_methods = _STATIC_METHODS | _EXPERIMENTAL_METHODS
+    if method not in allowed_methods:
         issues.append(
             SolverCapabilityIssue(
                 "NONLINEAR_METHOD_UNSUPPORTED",

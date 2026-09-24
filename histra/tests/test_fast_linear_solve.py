@@ -88,6 +88,7 @@ def test_benchmark_1_fast_solve_session():
         model,
         linear_solver_precision="fast",
         adaptive_tangent_refresh=True,
+        strategy_policy="off",
     )
     assert session.linear_solver_precision == "fast"
     assert session.adaptive_tangent_refresh is True
@@ -95,3 +96,24 @@ def test_benchmark_1_fast_solve_session():
     exec_vert = session.run("Vert")
     assert exec_vert.completed
     assert len(exec_vert.committed_steps) > 0
+
+
+def test_cholmod_indefinite_fallback_to_umfpack():
+    """Verify that LinearSystem with backend='cholmod' falls back on indefinite matrix."""
+    from histra.types.cholmod import find_cholmod_library
+    if find_cholmod_library() is None:
+        pytest.skip("CHOLMOD not available")
+
+    # Symmetric indefinite matrix: diag = [2, -1]
+    k = sp.csc_matrix([[2.0, 0.0], [0.0, -1.0]])
+    b = np.array([4.0, 3.0])
+
+    ls = LinearSystem(2, backend="cholmod")
+    assert ls.backend == "cholmod"
+    ls.k = k.copy()
+    ls.b[:] = b
+    code = ls.solve()
+    assert code == 0
+    np.testing.assert_allclose(ls.x, [2.0, -3.0])
+    assert ls._factor_backend == "umfpack"
+
