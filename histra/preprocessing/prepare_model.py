@@ -304,6 +304,8 @@ def prepare_model(
         tuple[int, bool, str], _CoulombLaw
     ] = {}
 
+    from .quad_geometry import refresh_quad_geometry
+    refresh_quad_geometry(model)
     _assign_quad_afference(model)
     for quad in c.quads.values():
         quad.status = QuadState()

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.3 - 2026-10-06
+
+Fresh Quad geometry reconstruction and regression coverage for C# compatibility.
+
+### Fixes
+
+- Recompute Quad edge lengths, diagonals, corner angles, local axes, and thickness-weighted centroids from structural nodes before afference and spring generation, using a compiled Numba batch routine with C# Single arithmetic compatibility.
+- Invalidate older preprocessing caches so prepared models use refreshed geometry.
+- Add C# Dhir geometry fixtures and regression tests for distorted Quads, variable thickness, degenerate geometry, and rigid hysteretic placeholders.
+- Include CI test corrections and CHOLMOD fallback fixes committed since 1.2.2.
+
+### Tools
+
+- Add a sparse linear solver benchmark harness and optional PyAMG preconditioning for PCG, with SSOR fallback when PyAMG setup fails.
+
 ## 1.2.2 - 2026-09-23
 
 Native CHOLMOD supernodal Cholesky backend, preprocessing mesh & topology disk caching, Preconditioned Conjugate Gradient (PCG) iterative solver, and Quasi-Newton (BFGS) solver architecture.
