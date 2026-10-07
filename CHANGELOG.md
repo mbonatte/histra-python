@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 - 2026-10-07
+
+In-place state modernization: contiguous array-backed transverse fiber groups, 45x faster preprocessing spring allocation, 109x faster solver synchronization, and 3.7x–8x active memory reduction with 100% bit-exact C# parity.
+
+### Performance & Memory Modernization
+
+- **Array-Backed `TransverseFiberGroup` (`histra.springs.transverse_fiber_group`)**: Replaced individual Python `SpringHysteretic` dataclass instances and nested lists with contiguous NumPy array storage for parameters, stiffnesses, contact areas, and constitutive states. Slashes transverse spring allocation time from 13.93s down to 0.31s (45.2x speedup) on 550,000-fiber models and eliminates >4.4M Python heap objects.
+- **On-Demand Proxy Compatibility**: Implemented standard `MutableSequence` interface on `TransverseFiberGroup` with transparent, on-demand `SpringHysteretic` proxy instantiation, preserving complete backward compatibility for external diagnostic tools and inspection readers.
+- **Zero-Copy Dense Solver Synchronization**: Vectorized runtime state synchronization (`sync_all_to_objects`, `sync_tangents_to_objects`, `sync_interface_trial_to_objects`) directly between compiled Numba solver arrays and `TransverseFiberGroup` slices, cutting per-boundary synchronization latency from 1.88s down to 0.017s (109.4x speedup).
+- **Virtual Sequence Mapping (`histra.solver.hysteretic_runtime`)**: Introduced `_VirtualSpringSequence` and `_VirtualManagedSequence` wrappers, avoiding allocation of 500k+ pointer arrays for runtime spring collections.
+- **Material Chaining & Mutation**: Optimized `change_interface_materials` to transfer committed history directly across `TransverseFiberGroup` arrays without materializing scalar objects.
+- **Heap & RSS Memory Footprint**: Reduced pymalloc tracked heap memory from 651 MB to 176 MB (3.7x reduction) and active RSS on canonical bridge benchmarks to ~400–500 MB.
+
 ## 1.2.3 - 2026-10-06
 
 Fresh Quad geometry reconstruction and regression coverage for C# compatibility.

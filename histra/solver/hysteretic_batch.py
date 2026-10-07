@@ -64,4 +64,6 @@ from histra.solver.hysteretic_runtime import (  # noqa: F401
     _scatter_local_forces,
     _update_domain_batch,
     _uses_simple_hysteretic_parameters,
+    _VirtualManagedSequence,
+    _VirtualSpringSequence,
 )

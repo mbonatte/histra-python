@@ -6,6 +6,8 @@ from histra.springs.hysteretic import SpringHysteretic
 from histra.springs.multilinear import SpringMultiLinear
 from histra.springs.registry import _SPRING_REGISTRY, _register_spring, spring_from_xml
 
+from histra.springs.transverse_fiber_group import TransverseFiberGroup
+
 __all__ = [
     "Spring",
     "SpringElastic",
@@ -13,6 +15,7 @@ __all__ = [
     "SpringCoulomb03",
     "SpringHysteretic",
     "SpringMultiLinear",
+    "TransverseFiberGroup",
     "_SPRING_REGISTRY",
     "_register_spring",
     "spring_from_xml",

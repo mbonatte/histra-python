@@ -15,6 +15,7 @@ from histra.preprocessing.errors import ModelPreparationError
 from histra.springs.coulomb03 import SpringCoulomb03
 from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
+from histra.springs.transverse_fiber_group import TransverseFiberGroup
 
 
 def _new_hysteretic_spring() -> SpringHysteretic:
@@ -830,105 +831,35 @@ def _configure_combined_hysteretic_batch(
         interface._transverse_batch_params = batch_params
         interface._transverse_k = k
 
-    springs: list[SpringHysteretic] = []
-    append = springs.append
-    spring_type = "HiStrA.Objects.SpringHysteretic"
-    for index in range(n):
-        sp = SpringHysteretic.__new__(SpringHysteretic)
-        sp.type_of = spring_type
-        sp.extra = {}
-        sp.key = index
-        sp.parent_key = interface_key
-        sp.parent_type = "Interface"
-        sp.spring_purpose = "Transversal1"
-        sp.type_name = ""
-        sp.area = float(area[index])
-        sp.length = 0.0
-        sp.k = float(k[index])
-        k_t = float(e1p[index]) if e1p[index] != 0.0 else sp.k
-        sp.k_tang = k_t
-        sp.f = 0.0
-        sp.u = 0.0
-        sp.is_on = True
-        sp.phase = 0
-        sp.t_phase = 0
-        sp._histra_batch_managed = False
+    t_seq = (
+        None
+        if t_uniform is not None
+        else [law1.tensile_curve if tension_curve_1[idx] else law2.tensile_curve for idx in range(n)]
+    )
+    c_seq = (
+        None
+        if c_uniform is not None
+        else [law1.compressive_curve if compression_curve_1[idx] else law2.compressive_curve for idx in range(n)]
+    )
+    t_curve = t_uniform or (law1.tensile_curve if tension_curve_1[0] else law2.tensile_curve)
+    c_curve = c_uniform or (law1.compressive_curve if compression_curve_1[0] else law2.compressive_curve)
 
-        sp.pinch_xp = 0.0
-        sp.pinch_yp = 0.0
-        sp.pinch_xn = 0.0
-        sp.pinch_yn = 0.0
-        sp.damfc1p = 0.0
-        sp.damfc2p = 0.0
-        sp.damfc1n = 0.0
-        sp.damfc2n = 0.0
-        sp.betap = alfau_t
-        sp.betan = alfau_c
-
-        sp.rot1p = float(rot1p[index])
-        sp.mom1p = float(mom1p[index])
-        sp.rot2p = float(rot2p[index])
-        sp.mom2p = float(mom2p[index])
-        sp.rot3p = float(rot3p[index])
-        sp.mom3p = float(mom3p[index])
-
-        sp.mom1n = float(mom1n[index])
-        sp.rot1n = float(rot1n[index])
-        sp.rot2n = float(rot2n[index])
-        sp.mom2n = float(mom2n[index])
-        sp.rot3n = float(rot3n[index])
-        sp.mom3n = float(mom3n[index])
-
-        sp.e1n = float(e1n[index])
-        sp.e1p = float(e1p[index])
-        sp.e2n = float(e2n[index])
-        sp.e2p = float(e2p[index])
-        sp.e3n = float(e3n[index])
-        sp.e3p = float(e3p[index])
-        sp.eun = float(eun[index])
-        sp.eup = float(eup[index])
-
-        sp.energy_a = float(energy_a[index])
-        sp.tensile_curve_type = (
-            t_uniform if t_uniform is not None
-            else (law1.tensile_curve if tension_curve_1[index] else law2.tensile_curve)
-        )
-        sp.compressive_curve_type = (
-            c_uniform if c_uniform is not None
-            else (law1.compressive_curve if compression_curve_1[index] else law2.compressive_curve)
-        )
-
-        sp.fy = [float(fy_t[index]), float(fy_c[index])]
-        sp.kt = [float(kt_t[index]), float(kt_c[index])]
-        sp.ur = [float(ur_t[index]), float(ur_c[index])]
-        sp.alfau = [alfau_t, alfau_c]
-        sp.alfar = [alfar_t, alfar_c]
-        sp.umax = [0.0, 0.0]
-        sp.uy_corr = [0.0, 0.0]
-
-        sp.f0 = 0.0
-        sp.f0_target = 0.0
-        sp.kstrain = 0.0
-        sp.cenergy_d = 0.0
-        sp.k_tang_committed = k_t
-
-        sp._crot_pu = 0.0
-        sp._crot_nu = 0.0
-        sp._cload_indicator = 0
-        sp._cstress = 0.0
-        sp._cstrain = 0.0
-
-        sp._trot_max = 0.0
-        sp._trot_min = 0.0
-        sp._trot_pu = 0.0
-        sp._trot_nu = 0.0
-        sp._tenergy_d = 0.0
-        sp._tload_indicator = 0
-        sp._tstress = 0.0
-        sp._tstrain = 0.0
-
-        append(sp)
-    return springs
+    return TransverseFiberGroup(
+        batch_params,
+        k=k,
+        area=area,
+        tensile_curve_type=t_curve,
+        compressive_curve_type=c_curve,
+        parent_key=interface_key,
+        betap=alfau_t,
+        betan=alfau_c,
+        tensile_curve_types=t_seq,
+        compressive_curve_types=c_seq,
+        fy=np.column_stack((fy_t, fy_c)),
+        kt=np.column_stack((kt_t, kt_c)),
+        ur=np.column_stack((ur_t, ur_c)),
+        alfar=(alfar_t, alfar_c),
+    )
 
 def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:
     """Copy one configured hysteretic spring without recursive deepcopy.

@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import os
-from typing import Any
+from typing import Any, Iterator, Sequence
 
 import numpy as np
 
@@ -497,6 +497,111 @@ def _uses_simple_hysteretic_parameters(spring: Any) -> bool:
     )
 
 
+class _VirtualSpringSequence(Sequence):
+    """Virtual sequence wrapper providing lazy Spring access over interface slices."""
+
+    __slots__ = ("_records", "_total", "_stops")
+
+    def __init__(self, records: list[_InterfaceSlice], total: int) -> None:
+        self._records = records
+        self._total = total
+        self._stops = np.asarray([r.stop for r in records], dtype=np.int32)
+
+    def __len__(self) -> int:
+        return self._total
+
+    def __bool__(self) -> bool:
+        return self._total > 0
+
+    def __getitem__(self, index: Any) -> Any:
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(self._total))]
+        idx = int(index)
+        if idx < 0:
+            idx += self._total
+        if idx < 0 or idx >= self._total:
+            raise IndexError(f"Virtual spring index {index} out of range [0, {self._total})")
+        rec_idx = int(np.searchsorted(self._stops, idx, side="right"))
+        rec = self._records[rec_idx]
+        return rec.interface.trasv_1[idx - rec.start]
+
+    def __setitem__(self, index: int, value: Any) -> None:
+        idx = int(index)
+        if idx < 0:
+            idx += self._total
+        rec_idx = int(np.searchsorted(self._stops, idx, side="right"))
+        rec = self._records[rec_idx]
+        rec.interface.trasv_1[idx - rec.start] = value
+
+    def __iter__(self) -> Iterator[Any]:
+        for rec in self._records:
+            yield from rec.interface.trasv_1
+
+
+class _VirtualManagedSequence(Sequence):
+    """Virtual sequence combining virtual transverse springs, Coulomb, and Quads."""
+
+    __slots__ = ("_springs", "_coulomb", "_quad_records")
+
+    def __init__(
+        self,
+        springs: Any,
+        coulomb_springs: list[Any],
+        quad_records: list[Any],
+    ) -> None:
+        self._springs = springs
+        self._coulomb = coulomb_springs
+        self._quad_records = quad_records
+
+    def __len__(self) -> int:
+        return len(self._springs) + len(self._coulomb) + len(self._quad_records)
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
+    def __getitem__(self, index: Any) -> Any:
+        if isinstance(index, slice):
+            return [self[i] for i in range(*index.indices(len(self)))]
+        idx = int(index)
+        n_sp = len(self._springs)
+        n_co = len(self._coulomb)
+        total = n_sp + n_co + len(self._quad_records)
+        if idx < 0:
+            idx += total
+        if idx < 0 or idx >= total:
+            raise IndexError(f"Managed spring index out of range: {index}")
+        if idx < n_sp:
+            return self._springs[idx]
+        elif idx < n_sp + n_co:
+            return self._coulomb[idx - n_sp]
+        else:
+            return self._quad_records[idx - n_sp - n_co].spring
+
+    def __setitem__(self, index: int, value: Any) -> None:
+        idx = int(index)
+        n_sp = len(self._springs)
+        n_co = len(self._coulomb)
+        total = n_sp + n_co + len(self._quad_records)
+        if idx < 0:
+            idx += total
+        if idx < n_sp:
+            self._springs[idx] = value
+        elif idx < n_sp + n_co:
+            self._coulomb[idx - n_sp] = value
+        else:
+            self._quad_records[idx - n_sp - n_co].spring = value
+
+    def extend(self, items: Any) -> None:
+        pass
+
+    def __iter__(self) -> Iterator[Any]:
+        yield from self._springs
+        yield from self._coulomb
+        for qr in self._quad_records:
+            if qr.spring is not None:
+                yield qr.spring
+
+
 class _TransverseParameterView:
     """Logical 34-column view over transverse hysteretic parameters.
 
@@ -664,50 +769,87 @@ class HystereticBatchRuntime:
         self.records: list[_InterfaceSlice] = []
         self.interface_rejection_reasons: Counter[str] = Counter()
         springs: list[Any] = []
+        total_springs = 0
         all_simple_params = True
         all_non_parabolic = True
         all_non_exponential = True
+        has_batch_backed = False
         for interface in model.collections.interfaces.values():
-            group = list(interface.trasv_1)
-            if not group:
+            intf_trasv = interface.trasv_1
+            if not intf_trasv:
                 self.interface_rejection_reasons["no_transverse_springs"] += 1
                 continue
-            rejection_reason = ""
-            for spring in group:
-                rejection_reason = self._transverse_rejection_reason(spring)
+            if getattr(intf_trasv, "is_batch_backed", False):
+                has_batch_backed = True
+                rejection_reason = intf_trasv.transverse_rejection_reason()
                 if rejection_reason:
-                    break
-            if rejection_reason:
-                self.interface_rejection_reasons[rejection_reason] += 1
-                continue
-            start = len(springs)
-            springs.extend(group)
-            stop = len(springs)
-            self.records.append(_InterfaceSlice(interface, start, stop))
-            interface._perf_hysteretic_batch = self
-            interface._perf_hysteretic_slice = (start, stop)
-            for spring in group:
-                spring._histra_batch_managed = True
+                    self.interface_rejection_reasons[rejection_reason] += 1
+                    continue
+                start = total_springs
+                group_len = len(intf_trasv)
+                stop = start + group_len
+                total_springs = stop
+                self.records.append(_InterfaceSlice(interface, start, stop))
+                interface._perf_hysteretic_batch = self
+                interface._perf_hysteretic_slice = (start, stop)
+                intf_trasv._histra_batch_managed = True
+                intf_trasv._batch_slice = (start, stop)
+                if intf_trasv.betap != 0.0 or intf_trasv.betan != 0.0:
+                    all_simple_params = False
+                if intf_trasv.compressive_curve_type == "Parabolic":
+                    all_non_parabolic = False
+                if intf_trasv.tensile_curve_type == "Exponential":
+                    all_non_exponential = False
+                if getattr(intf_trasv, "_cache", None):
+                    for sp in intf_trasv._cache.values():
+                        if getattr(sp, "compressive_curve_type", "") == "Parabolic":
+                            all_non_parabolic = False
+                        if getattr(sp, "tensile_curve_type", "") == "Exponential":
+                            all_non_exponential = False
+            else:
+                group = list(intf_trasv)
+                rejection_reason = ""
+                for spring in group:
+                    rejection_reason = self._transverse_rejection_reason(spring)
+                    if rejection_reason:
+                        break
+                if rejection_reason:
+                    self.interface_rejection_reasons[rejection_reason] += 1
+                    continue
+                start = total_springs
+                group_len = len(group)
+                stop = start + group_len
+                total_springs = stop
+                springs.extend(group)
+                self.records.append(_InterfaceSlice(interface, start, stop))
+                interface._perf_hysteretic_batch = self
+                interface._perf_hysteretic_slice = (start, stop)
+                for spring in group:
+                    spring._histra_batch_managed = True
 
-            if all_simple_params:
-                for spring in group:
-                    if not _uses_simple_hysteretic_parameters(spring):
-                        all_simple_params = False
-                        break
-            if all_non_parabolic:
-                for spring in group:
-                    if isinstance(spring, SpringHysteretic) and spring.compressive_curve_type == "Parabolic":
-                        all_non_parabolic = False
-                        break
-            if all_non_exponential:
-                for spring in group:
-                    if getattr(spring, "tensile_curve_type", "") == "Exponential":
-                        all_non_exponential = False
-                        break
+                if all_simple_params:
+                    for spring in group:
+                        if not _uses_simple_hysteretic_parameters(spring):
+                            all_simple_params = False
+                            break
+                if all_non_parabolic:
+                    for spring in group:
+                        if isinstance(spring, SpringHysteretic) and spring.compressive_curve_type == "Parabolic":
+                            all_non_parabolic = False
+                            break
+                if all_non_exponential:
+                    for spring in group:
+                        if getattr(spring, "tensile_curve_type", "") == "Exponential":
+                            all_non_exponential = False
+                            break
 
-        self.springs = springs
+        self.is_batch_backed = bool(has_batch_backed)
+        if has_batch_backed:
+            self.springs = _VirtualSpringSequence(self.records, total_springs)
+        else:
+            self.springs = springs
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
-        n = len(springs)
+        n = total_springs
         self._compact_simple_params = bool(
             n
             and not _force_general_hysteretic_batch()
@@ -852,7 +994,11 @@ class HystereticBatchRuntime:
             self._import_interface_sliding_object(i, spring)
         self._refresh_elastic_sliding_indices()
         self._refresh_unmanaged_sliding_record_indices()
-        self.managed_springs = [*self.springs, *self.coulomb_springs]
+        self.quad_records: list[Any] = []
+        if has_batch_backed:
+            self.managed_springs = _VirtualManagedSequence(self.springs, self.coulomb_springs, self.quad_records)
+        else:
+            self.managed_springs = [*self.springs, *self.coulomb_springs]
         offsets = [0]
         gdls: list[int] = []
         coefficients: list[float] = []
@@ -883,7 +1029,6 @@ class HystereticBatchRuntime:
         # SpringCoulomb03 laws are evaluated in the fused Numba kernel.  Every
         # rejected Quad is classified so production profiles can explain the
         # residual scalar path instead of only reporting its aggregate cost.
-        self.quad_records: list[Any] = []
         self.quad_rejection_reasons: Counter[str] = Counter()
         quad_offsets = [0]
         quad_gdls: list[int] = []
@@ -1435,6 +1580,71 @@ class HystereticBatchRuntime:
             start, stop = record.start, record.stop
             group_count = stop - start
             group = intf.trasv_1
+            if getattr(group, "is_batch_backed", False):
+                if self._compact_simple_params:
+                    param_cols = min(fixed_parameter_count, group._params.shape[1])
+                    self._params[start:stop, :param_cols] = group._params[:, :param_cols]
+                    if not self._compact_linear_params:
+                        if group._tensile_curve_types is not None:
+                            self._params[start:stop, curve_column] = [
+                                TENSILE_EXPONENTIAL if t == "Exponential" else TENSILE_LINEAR
+                                for t in group._tensile_curve_types
+                            ]
+                        else:
+                            self._params[start:stop, curve_column] = (
+                                TENSILE_EXPONENTIAL if group.tensile_curve_type == "Exponential" else TENSILE_LINEAR
+                            )
+                else:
+                    p = group._params
+                    self._params[start:stop, :8] = 0.0
+                    self._params[start:stop, 8] = group.betap
+                    self._params[start:stop, 9] = group.betan
+                    self._params[start:stop, 10:30] = p
+                    self._params[start:stop, 30] = 0.5 * (
+                        p[:, 0] * p[:, 1]
+                        + (p[:, 2] - p[:, 0]) * (p[:, 3] + p[:, 1])
+                        + (p[:, 4] - p[:, 2]) * (p[:, 5] + p[:, 3])
+                        + p[:, 7] * p[:, 6]
+                        + (p[:, 8] - p[:, 7]) * (p[:, 9] + p[:, 6])
+                        + (p[:, 10] - p[:, 8]) * (p[:, 11] + p[:, 9])
+                    )
+                    self._params[start:stop, 31] = group._k
+                    if group._tensile_curve_types is not None:
+                        self._params[start:stop, TENSILE_CURVE_TYPE_PARAM] = [
+                            TENSILE_EXPONENTIAL if t == "Exponential" else TENSILE_LINEAR
+                            for t in group._tensile_curve_types
+                        ]
+                    else:
+                        self._params[start:stop, TENSILE_CURVE_TYPE_PARAM] = (
+                            TENSILE_EXPONENTIAL if group.tensile_curve_type == "Exponential" else TENSILE_LINEAR
+                        )
+                    if group._compressive_curve_types is not None:
+                        self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = [
+                            COMPRESSIVE_PARABOLIC if c == "Parabolic" else COMPRESSIVE_LINEAR
+                            for c in group._compressive_curve_types
+                        ]
+                    else:
+                        self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = (
+                            COMPRESSIVE_PARABOLIC if group.compressive_curve_type == "Parabolic" else COMPRESSIVE_LINEAR
+                        )
+                self._transverse_k[start:stop] = group._k
+                is_dirty = (
+                    np.any(group._committed[:, 7] != 0.0)
+                    or np.any(group._trial[:, 7] != 0.0)
+                    or np.any(group._committed[:, 8] != 0.0)
+                )
+                if not is_dirty:
+                    self.committed[start:stop, :].fill(0.0)
+                    self.trial[start:stop, :].fill(0.0)
+                    self.trial[start:stop, 9] = self._transverse_k[start:stop]
+                    self.targets[start:stop].fill(0.0)
+                    self.enabled[start:stop].fill(True)
+                else:
+                    self.committed[start:stop, :] = group._committed
+                    self.trial[start:stop, :] = group._trial
+                    self.targets[start:stop].fill(0.0)
+                    self.enabled[start:stop] = group.is_on
+                continue
 
             if (
                 self._compact_simple_params
@@ -1608,28 +1818,33 @@ class HystereticBatchRuntime:
             if record_index is None:
                 return False
             record = self.records[record_index]
-            group = tuple(interface.trasv_1)
+            group = interface.trasv_1
             if len(group) != record.stop - record.start:
                 return False
-            if any(self._transverse_rejection_reason(spring) for spring in group):
-                return False
-            if self._compact_simple_params and any(
-                not _uses_simple_hysteretic_parameters(spring)
-                or (
-                    self._compact_linear_params
-                    and spring.tensile_curve_type == "Exponential"
-                )
-                or spring.compressive_curve_type == "Parabolic"
-                for spring in group
-            ):
-                # The compact matrix omits pinching/damage/beta columns, but a
-                # material-only mutation does not change runtime topology.  Do
-                # not discard and rebuild every dense array merely because the
-                # constitutive row now needs the general layout.  Finish
-                # validating *all* changed interfaces first, then promote the
-                # existing transverse parameter storage once and update only
-                # the changed rows below.
-                requires_full_parameter_storage = True
+            if hasattr(group, "transverse_rejection_reason"):
+                rej = group.transverse_rejection_reason()
+                if rej:
+                    return False
+            else:
+                if any(self._transverse_rejection_reason(spring) for spring in group):
+                    return False
+            if self._compact_simple_params:
+                if getattr(group, "is_batch_backed", False):
+                    if (
+                        (self._compact_linear_params and group.tensile_curve_type == "Exponential")
+                        or group.compressive_curve_type == "Parabolic"
+                    ):
+                        requires_full_parameter_storage = True
+                elif any(
+                    not _uses_simple_hysteretic_parameters(spring)
+                    or (
+                        self._compact_linear_params
+                        and spring.tensile_curve_type == "Exponential"
+                    )
+                    or spring.compressive_curve_type == "Parabolic"
+                    for spring in group
+                ):
+                    requires_full_parameter_storage = True
 
             candidates: list[tuple[int, Any]] = []
             if len(interface.slid) > 1 or len(interface.slid_out_plan) > 2:
@@ -1702,16 +1917,70 @@ class HystereticBatchRuntime:
         # spring types and cannot change runtime topology.
         for record_index, record, group, candidates in validated:
             start = record.start
-            for offset, spring in enumerate(group):
-                dense_index = start + offset
-                predecessor = self.springs[dense_index]
-                if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
-                    predecessor._histra_batch_managed = False
-                self.springs[dense_index] = spring
-                self.managed_springs[dense_index] = spring
-                spring._histra_batch_managed = True
-                self._read_transverse_object(dense_index, spring)
-                self._transverse_k[dense_index] = float(spring.k)
+            stop = record.stop
+            if getattr(group, "is_batch_backed", False):
+                group._histra_batch_managed = True
+                self._transverse_k[start:stop] = group._k
+                if self._compact_simple_params:
+                    self._params[start:stop, :len(SIMPLE_PARAM_NAMES)] = group._params
+                    if not self._compact_linear_params:
+                        curve_col = SIMPLE_TENSILE_CURVE_TYPE_PARAM
+                        if group._tensile_curve_types is not None:
+                            self._params[start:stop, curve_col] = [
+                                TENSILE_EXPONENTIAL if t == "Exponential" else TENSILE_LINEAR
+                                for t in group._tensile_curve_types
+                            ]
+                        else:
+                            self._params[start:stop, curve_col] = (
+                                TENSILE_EXPONENTIAL if group.tensile_curve_type == "Exponential" else TENSILE_LINEAR
+                            )
+                else:
+                    p = group._params
+                    self._params[start:stop, :8] = 0.0
+                    self._params[start:stop, 8] = group.betap
+                    self._params[start:stop, 9] = group.betan
+                    self._params[start:stop, 10:30] = p
+                    self._params[start:stop, 30] = 0.5 * (
+                        p[:, 0] * p[:, 1]
+                        + (p[:, 2] - p[:, 0]) * (p[:, 3] + p[:, 1])
+                        + (p[:, 4] - p[:, 2]) * (p[:, 5] + p[:, 3])
+                        + p[:, 7] * p[:, 6]
+                        + (p[:, 8] - p[:, 7]) * (p[:, 9] + p[:, 6])
+                        + (p[:, 10] - p[:, 8]) * (p[:, 11] + p[:, 9])
+                    )
+                    self._params[start:stop, 31] = group._k
+                    if group._tensile_curve_types is not None:
+                        self._params[start:stop, TENSILE_CURVE_TYPE_PARAM] = [
+                            TENSILE_EXPONENTIAL if t == "Exponential" else TENSILE_LINEAR
+                            for t in group._tensile_curve_types
+                        ]
+                    else:
+                        self._params[start:stop, TENSILE_CURVE_TYPE_PARAM] = (
+                            TENSILE_EXPONENTIAL if group.tensile_curve_type == "Exponential" else TENSILE_LINEAR
+                        )
+                    if group._compressive_curve_types is not None:
+                        self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = [
+                            COMPRESSIVE_PARABOLIC if c == "Parabolic" else COMPRESSIVE_LINEAR
+                            for c in group._compressive_curve_types
+                        ]
+                    else:
+                        self._params[start:stop, COMPRESSIVE_CURVE_TYPE_PARAM] = (
+                            COMPRESSIVE_PARABOLIC if group.compressive_curve_type == "Parabolic" else COMPRESSIVE_LINEAR
+                        )
+                self.committed[start:stop, :] = group._committed
+                self.trial[start:stop, :] = group._trial
+                self.enabled[start:stop] = group.is_on
+            else:
+                for offset, spring in enumerate(group):
+                    dense_index = start + offset
+                    predecessor = self.springs[dense_index]
+                    if predecessor is not spring and hasattr(predecessor, "_histra_batch_managed"):
+                        predecessor._histra_batch_managed = False
+                    self.springs[dense_index] = spring
+                    self.managed_springs[dense_index] = spring
+                    spring._histra_batch_managed = True
+                    self._read_transverse_object(dense_index, spring)
+                    self._transverse_k[dense_index] = float(spring.k)
 
             if not requires_coulomb_rebuild:
                 coulomb_offset = len(self.springs)
@@ -2379,29 +2648,33 @@ class HystereticBatchRuntime:
 
     def sync_interface_trial_to_objects(self, interface: Any) -> None:
         start, stop = interface._perf_hysteretic_slice
-        for local_i, spring in enumerate(self.springs[start:stop], start):
-            row = self.trial[local_i]
-            if isinstance(spring, SpringHysteretic):
-                spring._trot_max = float(row[0])
-                spring._trot_min = float(row[1])
-                spring._trot_pu = float(row[2])
-                spring._trot_nu = float(row[3])
-                spring._tenergy_d = float(row[4])
-                spring._tload_indicator = int(row[5])
-                spring._tstress = float(row[6])
-                spring._tstrain = float(row[7])
-                spring.t_phase = _PHASE_BY_CODE[int(row[8])]
-                spring.k_tang = float(row[9])
-                spring.f = spring._tstress
-                spring.u = spring._tstrain
-            else:
-                stress = float(row[6])
-                strain = float(row[7])
-                spring._tstress = stress
-                spring._tstrain = strain
-                spring.f = stress
-                spring.u = strain
-                spring.k_tang = float(row[9])
+        group = interface.trasv_1
+        if getattr(group, "is_batch_backed", False):
+            group.sync_trial_from_dense(self.trial[start:stop])
+        else:
+            for local_i, spring in enumerate(self.springs[start:stop], start):
+                row = self.trial[local_i]
+                if isinstance(spring, SpringHysteretic):
+                    spring._trot_max = float(row[0])
+                    spring._trot_min = float(row[1])
+                    spring._trot_pu = float(row[2])
+                    spring._trot_nu = float(row[3])
+                    spring._tenergy_d = float(row[4])
+                    spring._tload_indicator = int(row[5])
+                    spring._tstress = float(row[6])
+                    spring._tstrain = float(row[7])
+                    spring.t_phase = _PHASE_BY_CODE[int(row[8])]
+                    spring.k_tang = float(row[9])
+                    spring.f = spring._tstress
+                    spring.u = spring._tstrain
+                else:
+                    stress = float(row[6])
+                    strain = float(row[7])
+                    spring._tstress = stress
+                    spring._tstrain = strain
+                    spring.f = stress
+                    spring.u = strain
+                    spring.k_tang = float(row[9])
 
         record_index = self._record_by_id[id(interface)]
         for spring_index in (
@@ -2691,8 +2964,18 @@ class HystereticBatchRuntime:
     def sync_tangents_to_objects(self) -> None:
         """Publish only the tangent stiffness needed for element stiffness assembly."""
         k_tang = self.trial[:, 9]
-        for i, spring in enumerate(self.springs):
-            spring.k_tang = float(k_tang[i])
+        if self.is_batch_backed:
+            for record in self.records:
+                group = record.interface.trasv_1
+                start, stop = record.start, record.stop
+                if getattr(group, "is_batch_backed", False):
+                    group.sync_tangents_from_dense(k_tang[start:stop])
+                else:
+                    for i, spring in enumerate(group, start):
+                        spring.k_tang = float(k_tang[i])
+        else:
+            for i, spring in enumerate(self.springs):
+                spring.k_tang = float(k_tang[i])
         for i, spring in enumerate(self.coulomb_springs):
             spring.k_tang = float(self.coulomb_state[i, CKTANG])
         for i, quad in enumerate(self.quad_records):
@@ -2704,37 +2987,76 @@ class HystereticBatchRuntime:
 
     def sync_all_to_objects(self) -> None:
         """Publish the authoritative dense state to the compatibility objects."""
-        for i, spring in enumerate(self.springs):
-            committed = self.committed[i]
-            trial = self.trial[i]
-            if isinstance(spring, SpringHysteretic):
-                spring.umax[0] = float(committed[0])
-                spring.umax[1] = float(committed[1])
-                spring._crot_pu = float(committed[2])
-                spring._crot_nu = float(committed[3])
-                spring.cenergy_d = float(committed[4])
-                spring._cload_indicator = int(committed[5])
-                spring._cstress = float(committed[6])
-                spring._cstrain = float(committed[7])
-                spring.phase = _PHASE_BY_CODE[int(committed[8])]
-                spring._trot_max = float(trial[0])
-                spring._trot_min = float(trial[1])
-                spring._trot_pu = float(trial[2])
-                spring._trot_nu = float(trial[3])
-                spring._tenergy_d = float(trial[4])
-                spring._tload_indicator = int(trial[5])
-                spring._tstress = float(trial[6])
-                spring._tstrain = float(trial[7])
-                spring.t_phase = _PHASE_BY_CODE[int(trial[8])]
-                spring.k_tang = float(trial[9])
-                spring.k_tang_committed = float(trial[9])
-                spring.f = float(trial[6])
-                spring.u = float(trial[7])
-            else:
-                spring.f = float(committed[6])
-                spring.u = float(committed[7])
-                spring.k_tang = float(trial[9])
-                spring.k_tang_committed = float(trial[9])
+        if self.is_batch_backed:
+            for record in self.records:
+                group = record.interface.trasv_1
+                start, stop = record.start, record.stop
+                if getattr(group, "is_batch_backed", False):
+                    group.sync_from_dense(self.committed[start:stop], self.trial[start:stop])
+                else:
+                    for local_i, spring in enumerate(group, start):
+                        committed = self.committed[local_i]
+                        trial = self.trial[local_i]
+                        if isinstance(spring, SpringHysteretic):
+                            spring.umax[0] = float(committed[0])
+                            spring.umax[1] = float(committed[1])
+                            spring._crot_pu = float(committed[2])
+                            spring._crot_nu = float(committed[3])
+                            spring.cenergy_d = float(committed[4])
+                            spring._cload_indicator = int(committed[5])
+                            spring._cstress = float(committed[6])
+                            spring._cstrain = float(committed[7])
+                            spring.phase = _PHASE_BY_CODE[int(committed[8])]
+                            spring._trot_max = float(trial[0])
+                            spring._trot_min = float(trial[1])
+                            spring._trot_pu = float(trial[2])
+                            spring._trot_nu = float(trial[3])
+                            spring._tenergy_d = float(trial[4])
+                            spring._tload_indicator = int(trial[5])
+                            spring._tstress = float(trial[6])
+                            spring._tstrain = float(trial[7])
+                            spring.t_phase = _PHASE_BY_CODE[int(trial[8])]
+                            spring.k_tang = float(trial[9])
+                            spring.k_tang_committed = float(trial[9])
+                            spring.f = float(trial[6])
+                            spring.u = float(trial[7])
+                        else:
+                            spring.f = float(committed[6])
+                            spring.u = float(committed[7])
+                            spring.k_tang = float(trial[9])
+                            spring.k_tang_committed = float(trial[9])
+        else:
+            for i, spring in enumerate(self.springs):
+                committed = self.committed[i]
+                trial = self.trial[i]
+                if isinstance(spring, SpringHysteretic):
+                    spring.umax[0] = float(committed[0])
+                    spring.umax[1] = float(committed[1])
+                    spring._crot_pu = float(committed[2])
+                    spring._crot_nu = float(committed[3])
+                    spring.cenergy_d = float(committed[4])
+                    spring._cload_indicator = int(committed[5])
+                    spring._cstress = float(committed[6])
+                    spring._cstrain = float(committed[7])
+                    spring.phase = _PHASE_BY_CODE[int(committed[8])]
+                    spring._trot_max = float(trial[0])
+                    spring._trot_min = float(trial[1])
+                    spring._trot_pu = float(trial[2])
+                    spring._trot_nu = float(trial[3])
+                    spring._tenergy_d = float(trial[4])
+                    spring._tload_indicator = int(trial[5])
+                    spring._tstress = float(trial[6])
+                    spring._tstrain = float(trial[7])
+                    spring.t_phase = _PHASE_BY_CODE[int(trial[8])]
+                    spring.k_tang = float(trial[9])
+                    spring.k_tang_committed = float(trial[9])
+                    spring.f = float(trial[6])
+                    spring.u = float(trial[7])
+                else:
+                    spring.f = float(committed[6])
+                    spring.u = float(committed[7])
+                    spring.k_tang = float(trial[9])
+                    spring.k_tang_committed = float(trial[9])
         for i, spring in enumerate(self.coulomb_springs):
             self._write_coulomb_object(i, spring)
         for i, quad in enumerate(self.quad_records):

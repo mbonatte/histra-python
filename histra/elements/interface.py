@@ -144,6 +144,8 @@ class Interface:
 
     def compute_area_corr(self) -> float:
         """Port of the contact-area sum used by Coulomb sliding springs."""
+        if hasattr(self.trasv_1, "compute_area_corr"):
+            return self.trasv_1.compute_area_corr()
         excluded = {
             PhaseEnum.Rupture,
             PhaseEnum.RuptureComp,
@@ -395,14 +397,20 @@ class Interface:
             self.status.k = K
             return
 
-        k0 = I.trasv_1[0].get_k(alfa)
-        uniform = True
-        spring_k = [k0]
-        for index in range(1, spring_count):
-            kval = I.trasv_1[index].get_k(alfa)
-            spring_k.append(kval)
-            if kval != k0:
-                uniform = False
+        if hasattr(I.trasv_1, "get_k_array"):
+            k_arr = I.trasv_1.get_k_array(alfa, spring_count)
+            k0 = float(k_arr[0])
+            uniform = bool(np.all(k_arr == k0))
+            spring_k = k_arr.tolist()
+        else:
+            k0 = I.trasv_1[0].get_k(alfa)
+            uniform = True
+            spring_k = [k0]
+            for index in range(1, spring_count):
+                kval = I.trasv_1[index].get_k(alfa)
+                spring_k.append(kval)
+                if kval != k0:
+                    uniform = False
 
         L = I.length
         L2 = L * L

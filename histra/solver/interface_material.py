@@ -71,6 +71,12 @@ def _transfer_groups(old: Any, new: Any) -> None:
                 f"Interface {old.key}: {label} spring count changed during material "
                 f"mutation ({len(source_group)} -> {len(target_group)})."
             )
+        if (
+            hasattr(target_group, "copy_committed_state_from")
+            and hasattr(source_group, "copy_committed_state_from")
+        ):
+            target_group.copy_committed_state_from(source_group)
+            continue
         for source, target in zip(source_group, target_group):
             transfer_committed_spring_state(source, target)
 
