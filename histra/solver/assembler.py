@@ -19,7 +19,10 @@ except Exception:  # pragma: no cover - optional acceleration
 from histra.model.model import Model
 from histra.model.quad import Quad
 from histra.model.interface import Interface
+from histra.model.spring import SpringElastic
 from histra.model._types import AfferenceEntry
+from histra.solver.hysteretic_kernels.interface_coulomb import CKTANG
+from histra.solver.hysteretic_kernels.quad_takeda import QKTANG
 from histra.solver.load_assembly import (
     _get_comb_coeff_gravity,
     _get_load_template_coefficient,
@@ -170,6 +173,55 @@ class _InterfaceAssemblyLayout:
 
 
 @dataclass(slots=True)
+class _StiffnessBatchData:
+    """Dense precomputed geometry and metadata for compiled batch stiffness evaluation."""
+
+    quad_dalfa_sq: np.ndarray
+    quad_k0: np.ndarray
+    quad_is_elastic: np.ndarray
+    term_offsets: np.ndarray
+    lengths: np.ndarray
+    constrained_flags: np.ndarray
+    d2_flags: np.ndarray
+    has_slid_flags: np.ndarray
+    has_sop_flags: np.ndarray
+    sop_di: np.ndarray
+    sop_dj: np.ndarray
+    nrows: np.ndarray
+    ncols: np.ndarray
+    spring_counts: np.ndarray
+    spring_offsets: np.ndarray
+    sum_di2: np.ndarray
+    sum_dj2: np.ndarray
+    sum_didj: np.ndarray
+    sum_dm: np.ndarray
+    sum_dm2: np.ndarray
+    sum_ecc2: np.ndarray
+    sum_djecc: np.ndarray
+    sum_diecc: np.ndarray
+    flat_di: np.ndarray
+    flat_dj: np.ndarray
+    flat_ecc: np.ndarray
+    flat_dm: np.ndarray
+    slid_managed_idx: np.ndarray
+    slid_k0: np.ndarray
+    sop0_managed_idx: np.ndarray
+    sop0_k0: np.ndarray
+    sop1_managed_idx: np.ndarray
+    sop1_k0: np.ndarray
+    spring_k0: np.ndarray
+
+    def compatible(self, model: Model) -> bool:
+        if model.collections is None:
+            return False
+        if len(self.lengths) != len(model.collections.interfaces):
+            return False
+        if len(self.quad_k0) != len(model.collections.quads):
+            return False
+        return True
+
+
+@dataclass(slots=True)
 class _StiffnessAssemblyPlan:
     """C#-ordered fixed CSC scatter topology for a prepared model.
 
@@ -192,6 +244,8 @@ class _StiffnessAssemblyPlan:
     alpha_i: np.ndarray
     alpha_j: np.ndarray
     term_count: int
+    batch_data: Optional[_StiffnessBatchData] = None
+    validated_runtime_id: int = 0
 
     def compatible(self, model: Model) -> bool:
         if int(model.gdl) != self.n or model.collections is None:
@@ -199,6 +253,8 @@ class _StiffnessAssemblyPlan:
         quads = model.collections.quads
         interfaces = model.collections.interfaces
         if len(quads) != len(self.all_quads) or len(interfaces) != len(self.interfaces):
+            return False
+        if self.batch_data is not None and not self.batch_data.compatible(model):
             return False
         for current, expected in zip(quads.values(), self.all_quads):
             if current is not expected:
@@ -224,6 +280,99 @@ class _StiffnessAssemblyPlan:
             if len(quad.aff) <= 6 or quad.aff[6] is not aff6:
                 return False
         return True
+
+    def ensure_batch_data(self, model: Model, runtime: Any) -> None:
+        if self.batch_data is not None:
+            return
+        try:
+            self.batch_data = _build_stiffness_batch_data(self, model, runtime)
+        except Exception:
+            self.batch_data = None
+
+    def evaluate_and_assemble(
+        self,
+        model: Model,
+        ls: Any,
+        alfa: float,
+        runtime: Any,
+    ) -> None:
+        if self.batch_data is None:
+            self.ensure_batch_data(model, runtime)
+        b = self.batch_data
+        if b is None:
+            terms = _fill_stiffness_terms(self)
+        else:
+            terms = np.empty(self.term_count, dtype=np.float64)
+            quad_state = getattr(runtime, "quad_state", None)
+            if quad_state is None:
+                quad_state = np.empty((0, 66), dtype=np.float64)
+            coulomb_state = getattr(runtime, "coulomb_state", None)
+            if coulomb_state is None:
+                coulomb_state = np.empty((0, 21), dtype=np.float64)
+            trial = getattr(runtime, "trial", None)
+            if trial is None:
+                trial = np.empty((0, 10), dtype=np.float64)
+
+            _evaluate_stiffness_terms_batch(
+                terms,
+                float(alfa),
+                b.quad_dalfa_sq,
+                b.quad_k0,
+                b.quad_is_elastic,
+                quad_state,
+                b.term_offsets,
+                b.lengths,
+                b.constrained_flags,
+                b.d2_flags,
+                b.has_slid_flags,
+                b.has_sop_flags,
+                b.sop_di,
+                b.sop_dj,
+                b.nrows,
+                b.ncols,
+                b.spring_counts,
+                b.spring_offsets,
+                b.sum_di2,
+                b.sum_dj2,
+                b.sum_didj,
+                b.sum_dm,
+                b.sum_dm2,
+                b.sum_ecc2,
+                b.sum_djecc,
+                b.sum_diecc,
+                b.flat_di,
+                b.flat_dj,
+                b.flat_ecc,
+                b.flat_dm,
+                b.spring_k0,
+                trial,
+                b.slid_managed_idx,
+                b.slid_k0,
+                b.sop0_managed_idx,
+                b.sop0_k0,
+                b.sop1_managed_idx,
+                b.sop1_k0,
+                coulomb_state,
+            )
+            for q_idx, quad in enumerate(self.all_quads):
+                quad.status.k = terms[q_idx]
+
+        values = np.zeros(self.indices.size, dtype=np.float64)
+        _accumulate_csharp_order(
+            values,
+            self.output_indices,
+            self.term_indices,
+            self.alpha_i,
+            self.alpha_j,
+            terms,
+        )
+        mat = sp.csc_matrix(
+            (values, self.indices, self.indptr), shape=(self.n, self.n), copy=False
+        )
+        mat._has_sorted_indices = True
+        mat._has_canonical_format = True
+        ls.set_zero()
+        ls.k = mat
 
 
 
@@ -656,6 +805,464 @@ def _accumulate_csharp_order(
 ) -> None:
     _accumulate_csharp_order_impl(
         values, output_indices, term_indices, alpha_i, alpha_j, terms
+    )
+
+
+def _evaluate_stiffness_terms_batch_python(
+    terms: np.ndarray,
+    alfa: float,
+    quad_dalfa_sq: np.ndarray,
+    quad_k0: np.ndarray,
+    quad_is_elastic: np.ndarray,
+    quad_state: np.ndarray,
+    term_offsets: np.ndarray,
+    lengths: np.ndarray,
+    constrained_flags: np.ndarray,
+    d2_flags: np.ndarray,
+    has_slid_flags: np.ndarray,
+    has_sop_flags: np.ndarray,
+    sop_di: np.ndarray,
+    sop_dj: np.ndarray,
+    nrows: np.ndarray,
+    ncols: np.ndarray,
+    spring_counts: np.ndarray,
+    spring_offsets: np.ndarray,
+    sum_di2: np.ndarray,
+    sum_dj2: np.ndarray,
+    sum_didj: np.ndarray,
+    sum_dm: np.ndarray,
+    sum_dm2: np.ndarray,
+    sum_ecc2: np.ndarray,
+    sum_djecc: np.ndarray,
+    sum_diecc: np.ndarray,
+    flat_di: np.ndarray,
+    flat_dj: np.ndarray,
+    flat_ecc: np.ndarray,
+    flat_dm: np.ndarray,
+    spring_k0: np.ndarray,
+    transverse_trial: np.ndarray,
+    slid_managed_idx: np.ndarray,
+    slid_k0: np.ndarray,
+    sop0_managed_idx: np.ndarray,
+    sop0_k0: np.ndarray,
+    sop1_managed_idx: np.ndarray,
+    sop1_k0: np.ndarray,
+    coulomb_state: np.ndarray,
+) -> None:
+    # ── Quads ──
+    nq = len(quad_k0)
+    for q in range(nq):
+        if quad_is_elastic[q] or alfa == 0.0:
+            kq = quad_k0[q]
+        else:
+            kt = quad_state[q, QKTANG]
+            if alfa == 1.0:
+                kq = kt
+            else:
+                kq = quad_k0[q] + (kt - quad_k0[q]) * alfa
+        terms[q] = kq * quad_dalfa_sq[q]
+
+    # ── Interfaces ──
+    ni = len(term_offsets)
+    for i in range(ni):
+        t_idx = term_offsets[i]
+        L = lengths[i]
+        L2 = L * L
+        c = constrained_flags[i]
+        d2 = d2_flags[i]
+        nr = nrows[i]
+        nc = ncols[i]
+        sc = spring_counts[i]
+        sp_base = spring_offsets[i]
+
+        is_uniform = True
+        k0 = 0.0
+        if sc > 0:
+            if alfa == 0.0:
+                k0 = spring_k0[sp_base]
+                for s in range(1, sc):
+                    if spring_k0[sp_base + s] != k0:
+                        is_uniform = False
+                        break
+            elif alfa == 1.0:
+                k0 = transverse_trial[sp_base, 9]
+                for s in range(1, sc):
+                    if transverse_trial[sp_base + s, 9] != k0:
+                        is_uniform = False
+                        break
+            else:
+                k0 = spring_k0[sp_base] + (transverse_trial[sp_base, 9] - spring_k0[sp_base]) * alfa
+                for s in range(1, sc):
+                    ks = spring_k0[sp_base + s] + (transverse_trial[sp_base + s, 9] - spring_k0[sp_base + s]) * alfa
+                    if ks != k0:
+                        is_uniform = False
+                        break
+
+        if is_uniform and sc > 0:
+            num = k0 * sum_di2[i]
+            num2 = k0 * sum_dj2[i]
+            num3 = k0 * sum_didj[i]
+            num4 = 0.0
+            num5 = 0.0
+            num6 = 0.0
+            if c:
+                num4 = k0 * sc
+                num5 = -k0 * sum_dm[i]
+                num6 = k0 * sum_dm2[i]
+            out_of_plane_diag = 0.0
+            num7 = 0.0
+            num8 = 0.0
+            if d2:
+                out_of_plane_diag = k0 * sum_ecc2[i]
+                num7 = k0 * sum_djecc[i]
+                num8 = k0 * sum_diecc[i]
+        else:
+            num = 0.0
+            num2 = 0.0
+            num3 = 0.0
+            for r in range(nr):
+                row_offset = r * nc
+                for col in range(nc):
+                    idx = row_offset + col
+                    if idx >= sc:
+                        continue
+                    if alfa == 0.0:
+                        k = spring_k0[sp_base + idx]
+                    elif alfa == 1.0:
+                        k = transverse_trial[sp_base + idx, 9]
+                    else:
+                        k0_val = spring_k0[sp_base + idx]
+                        k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
+                    di = flat_di[sp_base + idx]
+                    dj = flat_dj[sp_base + idx]
+                    num += k * di * di
+                    num3 += k * di * dj
+                    num2 += k * dj * dj
+
+            num4 = 0.0
+            num5 = 0.0
+            num6 = 0.0
+            if c:
+                for col in range(nc):
+                    for r in range(nr):
+                        idx = r * nc + col
+                        if idx >= sc:
+                            continue
+                        if alfa == 0.0:
+                            k = spring_k0[sp_base + idx]
+                        elif alfa == 1.0:
+                            k = transverse_trial[sp_base + idx, 9]
+                        else:
+                            k0_val = spring_k0[sp_base + idx]
+                            k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
+                        dm = flat_dm[sp_base + idx]
+                        num4 += k
+                        num5 -= k * dm
+                        num6 += k * dm * dm
+
+            out_of_plane_diag = 0.0
+            num7 = 0.0
+            num8 = 0.0
+            if d2:
+                for col in range(nc):
+                    for r in range(nr):
+                        idx = r * nc + col
+                        if idx >= sc:
+                            continue
+                        if alfa == 0.0:
+                            k = spring_k0[sp_base + idx]
+                        elif alfa == 1.0:
+                            k = transverse_trial[sp_base + idx, 9]
+                        else:
+                            k0_val = spring_k0[sp_base + idx]
+                            k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
+                        di = flat_di[sp_base + idx]
+                        dj = flat_dj[sp_base + idx]
+                        ecc = flat_ecc[sp_base + idx]
+                        out_of_plane_diag += k * ecc * ecc
+                        num7 += k * dj * ecc
+                        num8 += k * di * ecc
+
+        if L2 > 1e-30:
+            num /= L2
+            num3 /= L2
+            num2 /= L2
+        if L > 1e-30:
+            num7 /= L
+            num8 /= L
+
+        if c:
+            terms[t_idx + 0] = num4
+            terms[t_idx + 1] = num5
+            terms[t_idx + 2] = -num - num3
+            terms[t_idx + 3] = -num3 - num2
+            terms[t_idx + 4] = -num7 - num8
+            terms[t_idx + 5] = num7 + num8
+            terms[t_idx + 6] = num6
+            terms[t_idx + 7] = (num3 - num) * L * 0.5
+            terms[t_idx + 8] = (num2 - num3) * L * 0.5
+            terms[t_idx + 9] = (-num8 + num7) * L * 0.5
+            terms[t_idx + 10] = (num8 - num7) * L * 0.5
+            terms[t_idx + 11] = num
+            terms[t_idx + 12] = num3
+            terms[t_idx + 13] = num8
+            terms[t_idx + 14] = -num8
+            terms[t_idx + 15] = num2
+            terms[t_idx + 16] = num7
+            terms[t_idx + 17] = -num7
+            terms[t_idx + 18] = out_of_plane_diag
+            terms[t_idx + 19] = -out_of_plane_diag
+            terms[t_idx + 20] = out_of_plane_diag
+        else:
+            terms[t_idx + 0] = num2
+            terms[t_idx + 1] = num3
+            terms[t_idx + 2] = -num3
+            terms[t_idx + 3] = -num2
+            terms[t_idx + 4] = -num7
+            terms[t_idx + 5] = num7
+            terms[t_idx + 6] = num
+            terms[t_idx + 7] = -num
+            terms[t_idx + 8] = -num3
+            terms[t_idx + 9] = -num8
+            terms[t_idx + 10] = num8
+            terms[t_idx + 11] = num
+            terms[t_idx + 12] = num3
+            terms[t_idx + 13] = num8
+            terms[t_idx + 14] = -num8
+            terms[t_idx + 15] = num2
+            terms[t_idx + 16] = num7
+            terms[t_idx + 17] = -num7
+            terms[t_idx + 18] = out_of_plane_diag
+            terms[t_idx + 19] = -out_of_plane_diag
+            terms[t_idx + 20] = out_of_plane_diag
+        t_idx += 21
+
+        if has_slid_flags[i]:
+            sm_idx = slid_managed_idx[i]
+            if sm_idx < 0 or alfa == 0.0:
+                ks = slid_k0[i]
+            else:
+                kt = coulomb_state[sm_idx, CKTANG]
+                ks = kt if alfa == 1.0 else slid_k0[i] + (kt - slid_k0[i]) * alfa
+            terms[t_idx + 0] = ks
+            terms[t_idx + 1] = -ks
+            terms[t_idx + 2] = ks
+            t_idx += 3
+
+        if has_sop_flags[i]:
+            s0_idx = sop0_managed_idx[i]
+            if s0_idx < 0 or alfa == 0.0:
+                k1 = sop0_k0[i]
+            else:
+                kt0 = coulomb_state[s0_idx, CKTANG]
+                k1 = kt0 if alfa == 1.0 else sop0_k0[i] + (kt0 - sop0_k0[i]) * alfa
+
+            s1_idx = sop1_managed_idx[i]
+            if s1_idx < 0 or alfa == 0.0:
+                k2 = sop1_k0[i]
+            else:
+                kt1 = coulomb_state[s1_idx, CKTANG]
+                k2 = kt1 if alfa == 1.0 else sop1_k0[i] + (kt1 - sop1_k0[i]) * alfa
+
+            di_s = sop_di[i]
+            dj_s = sop_dj[i]
+            k00 = k1 * dj_s * dj_s + k2 * di_s * di_s
+            k01 = (k1 + k2) * di_s * dj_s
+            k11 = k1 * di_s * di_s + k2 * dj_s * dj_s
+            terms[t_idx + 0] = k00
+            terms[t_idx + 1] = k01
+            terms[t_idx + 2] = -k00
+            terms[t_idx + 3] = -k01
+            terms[t_idx + 4] = k11
+            terms[t_idx + 5] = -k01
+            terms[t_idx + 6] = -k11
+            terms[t_idx + 7] = k00
+            terms[t_idx + 8] = k01
+            terms[t_idx + 9] = k11
+
+
+if njit is not None:
+    _evaluate_stiffness_terms_batch = njit(cache=True, nogil=True)(
+        _evaluate_stiffness_terms_batch_python
+    )
+else:  # pragma: no cover
+    _evaluate_stiffness_terms_batch = _evaluate_stiffness_terms_batch_python
+
+
+def _build_stiffness_batch_data(
+    plan: _StiffnessAssemblyPlan,
+    model: Model,
+    runtime: Any,
+) -> Optional[_StiffnessBatchData]:
+    if getattr(runtime, "records", None) is None:
+        return None
+    if len(runtime.records) != len(plan.interfaces):
+        return None
+    if len(getattr(runtime, "quad_records", ())) != len(plan.all_quads):
+        return None
+
+    for layout in plan.interfaces:
+        if layout.d0 != 6:
+            return None
+        if layout.has_slid and layout.d1 != 2:
+            return None
+        if layout.has_out_of_plane and layout.d2 != 4:
+            return None
+
+    quad_dalfa_sq = np.array(
+        [float(q.d_alfa_2d_diag() ** 2) for q, _ in plan.quad_terms],
+        dtype=np.float64,
+    )
+    quad_k0 = np.array(
+        [float(getattr(q.spring, "k", 0.0)) for q, _ in plan.quad_terms],
+        dtype=np.float64,
+    )
+    quad_is_elastic = np.array(
+        [int(isinstance(q.spring, SpringElastic)) for q, _ in plan.quad_terms],
+        dtype=np.int8,
+    )
+
+    n_intf = len(plan.interfaces)
+    term_offsets = np.empty(n_intf, dtype=np.int32)
+    lengths = np.empty(n_intf, dtype=np.float64)
+    constrained_flags = np.empty(n_intf, dtype=np.int8)
+    d2_flags = np.empty(n_intf, dtype=np.int8)
+    has_slid_flags = np.empty(n_intf, dtype=np.int8)
+    has_sop_flags = np.empty(n_intf, dtype=np.int8)
+    sop_di = np.empty(n_intf, dtype=np.float64)
+    sop_dj = np.empty(n_intf, dtype=np.float64)
+    nrows = np.empty(n_intf, dtype=np.int32)
+    ncols = np.empty(n_intf, dtype=np.int32)
+    spring_counts = np.empty(n_intf, dtype=np.int32)
+    spring_offsets = np.empty(n_intf, dtype=np.int32)
+
+    sum_di2 = np.empty(n_intf, dtype=np.float64)
+    sum_dj2 = np.empty(n_intf, dtype=np.float64)
+    sum_didj = np.empty(n_intf, dtype=np.float64)
+    sum_dm = np.empty(n_intf, dtype=np.float64)
+    sum_dm2 = np.empty(n_intf, dtype=np.float64)
+    sum_ecc2 = np.empty(n_intf, dtype=np.float64)
+    sum_djecc = np.empty(n_intf, dtype=np.float64)
+    sum_diecc = np.empty(n_intf, dtype=np.float64)
+
+    all_di: list[float] = []
+    all_dj: list[float] = []
+    all_ecc: list[float] = []
+    all_dm: list[float] = []
+    all_k0: list[float] = []
+
+    term_idx = len(plan.quad_terms)
+    sp_offset = 0
+
+    for i, layout in enumerate(plan.interfaces):
+        intf = layout.interface
+        term_offsets[i] = term_idx
+        lengths[i] = float(intf.length)
+        constrained_flags[i] = int(intf.interfaccia_vincolata_computed())
+        d2_flags[i] = int(layout.d2 > 0)
+        has_slid_flags[i] = int(layout.has_slid)
+        has_sop_flags[i] = int(layout.has_out_of_plane)
+
+        if layout.has_out_of_plane and len(intf.slid_out_plan) >= 2:
+            di_v, dj_v = intf.compute_dist_spring_for(intf)
+            sop_di[i] = float(di_v)
+            sop_dj[i] = float(dj_v)
+        else:
+            sop_di[i] = 0.0
+            sop_dj[i] = 0.0
+
+        nr = max(intf.nrow, 1)
+        nc = max(intf.ncol, 1)
+        sc = min(nr * nc, len(intf.trasv_1))
+        nrows[i] = nr
+        ncols[i] = nc
+        spring_counts[i] = sc
+        spring_offsets[i] = sp_offset
+
+        intf._ensure_stiffness_geometry_cache()
+        sum_di2[i] = float(intf._perf_sum_di2 or 0.0)
+        sum_dj2[i] = float(intf._perf_sum_dj2 or 0.0)
+        sum_didj[i] = float(intf._perf_sum_didj or 0.0)
+        sum_dm[i] = float(intf._perf_sum_dm or 0.0)
+        sum_dm2[i] = float(intf._perf_sum_dm2 or 0.0)
+        sum_ecc2[i] = float(intf._perf_sum_ecc2 or 0.0)
+        sum_djecc[i] = float(intf._perf_sum_djecc or 0.0)
+        sum_diecc[i] = float(intf._perf_sum_diecc or 0.0)
+
+        di_c = intf._perf_di[:sc]
+        dj_c = intf._perf_dj[:sc]
+        ecc_c = intf._perf_ecc[:sc]
+        L = float(intf.length)
+        for s_idx in range(sc):
+            all_di.append(float(di_c[s_idx]))
+            all_dj.append(float(dj_c[s_idx]))
+            all_ecc.append(float(ecc_c[s_idx]))
+            all_dm.append(0.5 * L - float(di_c[s_idx]))
+            all_k0.append(float(intf.trasv_1[s_idx].k))
+
+        sp_offset += sc
+        term_idx += 21 + (3 if layout.has_slid else 0) + (10 if layout.has_out_of_plane else 0)
+
+    flat_di = np.asarray(all_di, dtype=np.float64)
+    flat_dj = np.asarray(all_dj, dtype=np.float64)
+    flat_ecc = np.asarray(all_ecc, dtype=np.float64)
+    flat_dm = np.asarray(all_dm, dtype=np.float64)
+    spring_k0 = np.asarray(all_k0, dtype=np.float64)
+
+    slid_managed_idx = np.asarray(getattr(runtime, "_slid_index", ()), dtype=np.int32).copy()
+    slid_k0 = np.array(
+        [float(layout.interface.slid[0].k) if layout.has_slid and layout.interface.slid else 0.0
+         for layout in plan.interfaces],
+        dtype=np.float64,
+    )
+    sop0_managed_idx = np.asarray(getattr(runtime, "_oop0_index", ()), dtype=np.int32).copy()
+    sop0_k0 = np.array(
+        [float(layout.interface.slid_out_plan[0].k) if layout.has_out_of_plane and len(layout.interface.slid_out_plan) >= 1 else 0.0
+         for layout in plan.interfaces],
+        dtype=np.float64,
+    )
+    sop1_managed_idx = np.asarray(getattr(runtime, "_oop1_index", ()), dtype=np.int32).copy()
+    sop1_k0 = np.array(
+        [float(layout.interface.slid_out_plan[1].k) if layout.has_out_of_plane and len(layout.interface.slid_out_plan) >= 2 else 0.0
+         for layout in plan.interfaces],
+        dtype=np.float64,
+    )
+
+    return _StiffnessBatchData(
+        quad_dalfa_sq=quad_dalfa_sq,
+        quad_k0=quad_k0,
+        quad_is_elastic=quad_is_elastic,
+        term_offsets=term_offsets,
+        lengths=lengths,
+        constrained_flags=constrained_flags,
+        d2_flags=d2_flags,
+        has_slid_flags=has_slid_flags,
+        has_sop_flags=has_sop_flags,
+        sop_di=sop_di,
+        sop_dj=sop_dj,
+        nrows=nrows,
+        ncols=ncols,
+        spring_counts=spring_counts,
+        spring_offsets=spring_offsets,
+        sum_di2=sum_di2,
+        sum_dj2=sum_dj2,
+        sum_didj=sum_didj,
+        sum_dm=sum_dm,
+        sum_dm2=sum_dm2,
+        sum_ecc2=sum_ecc2,
+        sum_djecc=sum_djecc,
+        sum_diecc=sum_diecc,
+        flat_di=flat_di,
+        flat_dj=flat_dj,
+        flat_ecc=flat_ecc,
+        flat_dm=flat_dm,
+        slid_managed_idx=slid_managed_idx,
+        slid_k0=slid_k0,
+        sop0_managed_idx=sop0_managed_idx,
+        sop0_k0=sop0_k0,
+        sop1_managed_idx=sop1_managed_idx,
+        sop1_k0=sop1_k0,
+        spring_k0=spring_k0,
     )
 
 

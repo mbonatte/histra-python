@@ -5,7 +5,7 @@ from typing import Any, Callable
 import numpy as np
 
 from histra.model.model import Model
-from histra.solver.assembler import assemble_global_k
+from histra.solver.assembler import assemble_global_k, _get_stiffness_assembly_plan
 from histra.solver.load_assembly import (
     _get_load_template_coefficient,
     assemble_load_vector,
@@ -112,6 +112,10 @@ class ModelManager:
         ):
             return cls._hysteretic_batch
         cls.clear_hysteretic_batch()
+        plan = getattr(model, "_perf_stiffness_assembly_plan", None)
+        if plan is not None:
+            plan.batch_data = None
+            plan.validated_runtime_id = 0
         try:
             from histra.solver.hysteretic_runtime import build_hysteretic_batch
             runtime = build_hysteretic_batch(model)
@@ -151,6 +155,10 @@ class ModelManager:
             return False
         try:
             if runtime.try_update_material_interfaces(interfaces):
+                plan = getattr(model, "_perf_stiffness_assembly_plan", None)
+                if plan is not None:
+                    plan.batch_data = None
+                    plan.validated_runtime_id = 0
                 return True
         except Exception:
             # Never let an acceleration-only refresh compromise the mutation.
@@ -218,6 +226,34 @@ class ModelManager:
     @classmethod
     def compute_ktang(cls, model: Model, ls: LinearSystem, alfa: float) -> int:
         runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            plan = getattr(model, "_perf_stiffness_assembly_plan", None)
+            dirty_interfaces = getattr(
+                model, "_perf_initial_stiffness_dirty_interfaces", None
+            )
+            if dirty_interfaces:
+                if plan is not None:
+                    plan.batch_data = None
+                    plan.validated_runtime_id = 0
+                dirty_interfaces.clear()
+            runtime_id = id(runtime)
+            if (
+                plan is None
+                or (plan.batch_data is not None and not plan.batch_data.compatible(model))
+                or (plan.validated_runtime_id != runtime_id and not plan.compatible(model))
+            ):
+                plan = _get_stiffness_assembly_plan(model)
+                if plan is not None:
+                    plan.validated_runtime_id = runtime_id
+            else:
+                plan.validated_runtime_id = runtime_id
+
+            if plan is not None:
+                plan.ensure_batch_data(model, runtime)
+                if plan.batch_data is not None:
+                    plan.evaluate_and_assemble(model, ls, alfa=alfa, runtime=runtime)
+                    model._perf_element_stiffness_alfa = float(alfa)
+                    return 0
         if runtime is not None and alfa != 0.0:
             # Updated-tangent methods need only the active tangent stiffnesses
             # to assemble K. Avoid expensive full-state object synchronizations.
