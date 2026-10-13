@@ -142,6 +142,85 @@ class RegulaFalsiLineSearch(LineSearch):
     """
 
     def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
+        if not getattr(an, "csharp_line_search_compatibility", True):
+            return self._search_python(model, p, ls, integrator, an, dx0, s0, s1)
+        ratio_initial = self._csharp_ratio(s1, s0)
+        if ratio_initial <= self.tolerance or s1 == s0:
+            return 1.0  # C# retains the integrator's current correction.
+
+        direction = ls.x.copy()
+        eta = 1.0
+        eta_hi, s_hi = 1.0, s1
+        eta_lo, s_lo = 0.0, s0
+        ratio = ratio_initial
+        eta_previous = 1.0
+        stopped = False
+
+        iterations = 0
+        use_update_trial = (
+            not getattr(an, "csharp_line_search_compatibility", True)
+        ) and hasattr(integrator, "update_trial")
+
+        while ratio > self.tolerance and iterations < self.max_iter and not stopped:
+            _check_cancelled(p)
+            iterations += 1
+            denominator = s_lo - s_hi
+            with np.errstate(divide='ignore', invalid='ignore'):
+                eta = eta_hi - float(np.divide(s_hi * (eta_lo - eta_hi), denominator))
+            if eta > self.max_eta:
+                eta = self.max_eta
+            # Exact C# safeguard: once a trial is worse than the initial full
+            # step, evaluate eta=1 again rather than returning immediately.
+            if ratio > ratio_initial:
+                eta = 1.0
+            if eta < self.min_eta:
+                eta = self.min_eta
+
+            delta_eta = eta - eta_previous
+            if use_update_trial:
+                code = integrator.update_trial(model, p, an, delta_eta, direction)
+            else:
+                ls.set_x_vector(delta_eta * direction)
+                code = integrator.update(model, p, an)
+            if code < 0:
+                return float(code)
+            integrator.form_unbalance(p, model, an)
+
+            dot_fn = (
+                _csharp_dot
+                if getattr(an, "csharp_line_search_compatibility", True)
+                else np.dot
+            )
+            s_eta = float(dot_fn(direction, ls.b))
+            ratio = self._csharp_ratio(s_eta, s0)
+
+            # Do not collapse the C# endpoint cycle.  Although all supported
+            # springs rebuild trial state from committed state, the integrator
+            # reaches the endpoint through many incremental floating-point
+            # updates.  Those last bits are significant for branch selection
+            # in symmetric nonlinear models, so exact compatibility requires
+            # traversing the original sequence.
+
+            if eta_previous == eta:
+                stopped = True
+            eta_previous = eta
+
+            if s_eta * s_hi < 0.0:
+                eta_lo, s_lo = eta, s_eta
+            elif s_eta * s_hi == 0.0:
+                stopped = True
+            else:
+                eta_hi, s_hi = eta, s_eta
+            if s_lo == s_hi:
+                stopped = True
+
+        return self._finish(ls, direction, eta)
+
+    @staticmethod
+    def _csharp_ratio(s: float, s0: float) -> float:
+        return abs(s / s0) if s0 != 0.0 else 0.0
+
+    def _search_python(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
         ratio_initial = self._ratio(s1, s0)
         if ratio_initial <= self.tolerance or s1 == s0:
             return self._finish(ls, dx0, 1.0)
