@@ -52,6 +52,7 @@ class _QuadAfferenceGeometry:
     vertices: np.ndarray
     normal: np.ndarray
     warping_nodal: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    node_tolerance: float = 1.0
 
 
 def _assign_quad_afference(model: Model) -> None:
@@ -68,11 +69,12 @@ def _assign_quad_afference(model: Model) -> None:
     model.gdl = gdl - 1
 
 
-def _warping_nodal_vectors(quad: Quad) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _warping_nodal_vectors(quad: Quad, normal: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # Quad.GetDisplacementFromShearDOF builds these vectors with XNA Vector3
     # and Convert.ToSingle intermediates.
     e1 = np.asarray(quad.reference_e1, dtype=np.float32)
-    e2 = np.asarray(quad.reference_e2, dtype=np.float32)
+    e2 = (np.asarray(quad.reference_e2, dtype=np.float32) if normal is None
+          else _cross3_f32(normal, e1))
     zero = np.zeros(3, dtype=np.float32)
     if abs(quad.sin[2]) <= 1.0e-12:
         node2 = zero.copy()
@@ -118,27 +120,21 @@ def _quad_afference_geometry(model: Model, quad: Quad) -> _QuadAfferenceGeometry
         centre=np.asarray(_v(quad.g), dtype=np.float32),
         vertices=vertices,
         normal=normal,
-        warping_nodal=_warping_nodal_vectors(quad),
+        warping_nodal=_warping_nodal_vectors(quad, normal),
+        node_tolerance=float(getattr(model, "geometry_tolerance_node", 1.0)),
     )
 
 
 def _warping_vector_from_geometry(
     geometry: _QuadAfferenceGeometry, point: np.ndarray
 ) -> np.ndarray:
-    point_f = np.asarray(point, dtype=np.float32)
-    offset = np.asarray(point_f - geometry.vertices[0], dtype=np.float32)
-    distance = _dot3_f32(offset, geometry.normal)
-    projected = np.asarray(
-        [
-            _f32(point_f[i] - _f32(geometry.normal[i] * distance))
-            for i in range(3)
-        ],
-        dtype=np.float32,
+    from histra.preprocessing.intrinsic_coordinates import native_projected_intrinsic
+
+    u, v = native_projected_intrinsic(
+        geometry.vertices, np.asarray(point, dtype=np.float32),
+        np.float32(geometry.node_tolerance),
     )
-    u, v = _inverse_bilinear_f32(geometry.vertices, projected)
     return _bilinear_f32(geometry.warping_nodal, u, v)
-
-
 def _warping_vector_at_point(quad: Quad, point: np.ndarray, model: Model) -> np.ndarray:
     """C# ``GetDisplacementFromShearDOF`` for an arbitrary face point.
 

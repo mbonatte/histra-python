@@ -438,7 +438,10 @@ def test_partial_edge_afference_interpolates_quad_warping_at_nonvertex_point():
     nodal = _warping_nodal_vectors(quad)
     midpoint = np.array([1.0, 0.0, 1.0])
     actual = _warping_vector_at_point(quad, midpoint, model)
-    np.testing.assert_allclose(actual, 0.5 * (nodal[2] + nodal[3]), atol=1.0e-14)
+    import json
+    fixture = json.loads((Path(__file__).parent / "fixtures/csharp_midpoint_interpolation_2026_1_1.json").read_text(encoding="utf-8"))
+    np.testing.assert_array_equal(nodal, fixture["input"]["nodal"])
+    np.testing.assert_array_equal(actual, fixture["native"]["expected"])
 
 
 
