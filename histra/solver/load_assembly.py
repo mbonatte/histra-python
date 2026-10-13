@@ -197,6 +197,9 @@ def _get_load_template_coefficient(
         raise KeyError(f"Load condition {load_condition_id} is missing")
     coefficient = combination_table.get_coefficient(combination, load_condition_id)
     if coefficient is None:
+        # Empty cells in existing rows contribute zero without rewriting inputs.
+        if any(item.row_key == combination for item in combination_table.items):
+            return 0.0
         raise KeyError(
             f"Load combination {combination_table.key} has no row {combination} "
             f"coefficient for condition {load_condition_id}"
