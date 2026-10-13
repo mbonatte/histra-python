@@ -1,4 +1,6 @@
 from __future__ import annotations
+import xml.etree.ElementTree as ET
+from histra.types.xml_utils import _attr
 from dataclasses import dataclass
 from typing import List
 from histra.springs.base import Spring
