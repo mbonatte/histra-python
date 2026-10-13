@@ -88,6 +88,8 @@ class LineSearch:
         direction: np.ndarray,
         eta: float,
         eta_previous: float,
+        *,
+        csharp_sign: bool = False,
     ) -> tuple[int, float]:
         """Move from the current trial point to ``eta`` and evaluate ``s``.
 
@@ -107,15 +109,15 @@ class LineSearch:
         if code < 0:
             return code, float("nan")
         integrator.form_unbalance(p, model, an)
-        # Fix an original C# inconsistency: s0/s1 use -dU·R, whereas trial
-        # values used +dU·R.  A single sign convention is required for valid
-        # secant/bracketing logic.
+        # C# compatibility retains positive trial dots. The Python strategy
+        # uses a consistent negative sign for its improved search methods.
         dot_fn = (
             _csharp_dot
             if getattr(an, "csharp_line_search_compatibility", True)
             else np.dot
         )
-        return 0, -float(dot_fn(direction, ls.b))
+        dot = float(dot_fn(direction, ls.b))
+        return 0, dot if csharp_sign else -dot
 
     @staticmethod
     def _ratio(s: float, s0: float) -> float:
@@ -214,9 +216,52 @@ class RegulaFalsiLineSearch(LineSearch):
 
 
 class SecantLineSearch(LineSearch):
-    """C# secant line search with consistent residual signs."""
+    """2026.1.1 C# secant trial sequence, including its sign convention."""
 
     def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
+        if not getattr(an, "csharp_line_search_compatibility", True):
+            return self._search_python(model, p, ls, integrator, an, dx0, s0, s1)
+        ratio_initial = self._csharp_ratio(s1, s0)
+        if ratio_initial <= self.tolerance or s1 == s0:
+            return 1.0  # C# leaves the integrator's current LS.x untouched.
+        direction = ls.x.copy()
+        eta = eta_previous = 1.0
+        eta_older = 0.0
+        s_previous, s_older = s1, s0
+        ratio = ratio_initial
+        stopped = False
+        iteration = 0
+        while ratio > self.tolerance and iteration < self.max_iter and not stopped:
+            _check_cancelled(p)
+            iteration += 1
+            with np.errstate(divide="ignore", invalid="ignore"):
+                eta = eta_previous - float(np.divide(
+                    s_previous * (eta_older - eta_previous), s_older - s_previous
+                ))
+            if eta > self.max_eta:
+                eta = self.max_eta
+            if ratio > ratio_initial:
+                eta = 1.0
+            if eta < self.min_eta:
+                eta = self.min_eta
+            code, s_eta = self._trial(
+                model, p, ls, integrator, an, direction, eta, eta_previous,
+                csharp_sign=True,
+            )
+            if code < 0:
+                return float(code)
+            ratio = self._csharp_ratio(s_eta, s0)
+            stopped = eta_previous == eta
+            eta_older, eta_previous = eta_previous, eta
+            s_older, s_previous = s_previous, s_eta
+            stopped = stopped or s_older == s_previous
+        return self._finish(ls, direction, eta)
+
+    @staticmethod
+    def _csharp_ratio(s: float, s0: float) -> float:
+        return abs(s / s0) if s0 != 0.0 else 0.0
+
+    def _search_python(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
         if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
             return self._finish(ls, dx0, 1.0)
 
@@ -251,9 +296,75 @@ class SecantLineSearch(LineSearch):
 
 
 class BisectionLineSearch(LineSearch):
-    """Bracket-and-bisect search based on the original C# implementation."""
+    """2026.1.1 C# bracket/bisection sequence and exit-state semantics.
+
+    C# doubles past maxEta during bracketing, retains the last correction on
+    an early bracket exit, and applies an extra full step if no bracket is
+    found. These observable quirks are preserved for nonlinear output parity.
+    """
 
     def search(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
+        if not getattr(an, "csharp_line_search_compatibility", True):
+            return self._search_python(model, p, ls, integrator, an, dx0, s0, s1)
+        ratio_initial = self._csharp_ratio(s1, s0)
+        if ratio_initial <= self.tolerance or s1 == s0:
+            return 1.0
+        direction = ls.x.copy()
+        eta = eta_hi = eta_previous = 1.0
+        eta_lo = 0.0
+        s_hi, s_lo = s1, s0
+        ratio = ratio_initial
+        iteration = 0
+        while s_hi * s_lo > 0.0 and eta_hi < self.max_eta and iteration < self.max_iter:
+            _check_cancelled(p)
+            iteration += 1
+            eta_hi *= 2.0
+            code, s_hi = self._trial(
+                model, p, ls, integrator, an, direction, eta_hi, eta_previous,
+                csharp_sign=True,
+            )
+            if code < 0:
+                return float(code)
+            ratio = self._csharp_ratio(s_hi, s0)
+            if ratio < self.tolerance:
+                return 1.0  # Do not overwrite the last correction in LS.x.
+            eta_previous = eta_hi
+        if s_hi * s_lo > 0.0:
+            _check_cancelled(p)
+            ls.set_x_vector(direction)
+            integrator.update(model, p, an)
+            integrator.form_unbalance(p, model, an)
+            return 1.0
+        stopped = ratio <= self.tolerance
+        iteration = 0  # C# gives bisection its own full iteration budget.
+        while ratio > self.tolerance and iteration < self.max_iter and not stopped:
+            _check_cancelled(p)
+            iteration += 1
+            eta = (eta_hi + eta_lo) * 0.5
+            if ratio > ratio_initial:
+                eta = 1.0
+            code, s_eta = self._trial(
+                model, p, ls, integrator, an, direction, eta, eta_previous,
+                csharp_sign=True,
+            )
+            if code < 0:
+                return float(code)
+            ratio = self._csharp_ratio(s_eta, s0)
+            eta_previous = eta
+            if s_eta * s_hi < 0.0:
+                eta_lo, s_lo = eta, s_eta
+            elif s_eta * s_hi == 0.0:
+                stopped = True
+            else:
+                eta_hi, s_hi = eta, s_eta
+            stopped = stopped or s_lo == s_hi
+        return self._finish(ls, direction, eta)
+
+    @staticmethod
+    def _csharp_ratio(s: float, s0: float) -> float:
+        return abs(s / s0) if s0 != 0.0 else 0.0
+
+    def _search_python(self, model, p, ls, integrator, an, dx0, s0, s1) -> float:
         if abs(s0) < 1e-30 or self._ratio(s1, s0) <= self.tolerance or s1 == s0:
             return self._finish(ls, dx0, 1.0)
 
