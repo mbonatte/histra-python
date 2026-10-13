@@ -25,12 +25,12 @@ The original IL was also inspected: coefficient arithmetic is float before
 `conv.r8`. Decompiled C# incorrectly suggests inner double casts in coefficients
 0 and 2. Native method outputs are the regression oracle for this detail.
 
-**Production geometry is not switched yet.** A complete candidate using the new
-cell and fibre routines increases the existing `model-output` first-step maximum
-displacement difference to 1.721604e-9, exceeding its unchanged 1e-9 assertion.
-That regression also occurs with UMFPACK. The candidate is retained for further
-source-based investigation; the passing production geometry remains in use.
-Passing these primitive oracles does not establish complete solver parity.
+Production now uses the native geometry and fibre routines. Correcting upstream
+Quad faces, contact containment and authored tolerances resolved the earlier
+model-output regression without weakening its assertion. The subsequent Vert
+audit also corrected sliding distances, masonry modulus rounding and shear-DOF
+coordinate mapping. See [the current Vert audit](dhir-vert-native-parity.md) for
+all ten committed steps and remaining detailed-history differences.
 
 ## Native energy evidence and implemented fix
 
