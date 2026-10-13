@@ -192,6 +192,7 @@ def _side_sliding_spring(
     material_override: MasonryMaterial | None = None,
     law: _CoulombLaw | None = None,
     distance: float | None = None,
+    stiffness_area: float | None = None,
 ) -> SpringCoulomb03 | SpringElastic:
     assert model.collections is not None
     if parent_type == "Restraint":
@@ -220,10 +221,10 @@ def _side_sliding_spring(
         raise ModelPreparationError(
             f"Quad {quad.key}, Interface {intf.key}: zero sliding distance."
         )
-    # ``area`` is already the half-interface area for the two-spring
-    # out-of-plane torsion model. C# GetOutOfPlaneSlidingStiffness also uses
-    # Interface.Area()/2, so no second division is applied here.
-    effective_area = area
+    # C# sliding stiffness uses Interface.Area()/2 for both out-of-plane
+    # springs, while capacity uses each side temporary's actual polygon area.
+    # Those areas differ on tapered interfaces.
+    effective_area = area if stiffness_area is None else stiffness_area
     k = law.E * effective_area / distance
     if law.is_elastic:
         return SpringElastic(
@@ -244,6 +245,27 @@ def _side_sliding_spring(
     )
     spring.plastic_strain_ratio = 1.0
     return spring
+
+
+def _out_of_plane_spring_areas(intf: Interface) -> tuple[float, float]:
+    """C# GetAreaSpring for the two bilinear out-of-plane half patches."""
+    f = np.float32
+    vertices = np.asarray([(p.x, p.y) for p in intf.vint2d], dtype=np.float32)
+    areas = []
+    for x0, x1 in [(-1., 0.), (0., 1.)]:
+        xi = np.array([x0, x1, x1, x0], dtype=np.float32)[:, None]
+        eta = np.array([-1., -1., 1., 1.], dtype=np.float32)[:, None]
+        points = (vertices[0] * (f(1)-xi) * (f(1)-eta) / f(4)
+                  + vertices[1] * (f(1)+xi) * (f(1)-eta) / f(4)
+                  + vertices[2] * (f(1)+xi) * (f(1)+eta) / f(4)
+                  + vertices[3] * (f(1)-xi) * (f(1)+eta) / f(4))
+        # Operations.Area(Vector2[]) accumulates in single precision and order.
+        total = f(0)
+        for i in range(4):
+            j = (i+1) % 4
+            total += points[i, 0]*points[j, 1] - points[j, 0]*points[i, 1]
+        areas.append(float(abs(total*f(.5))))
+    return areas[0], areas[1]
 
 
 def _transverse_side_properties_batch(
@@ -493,6 +515,7 @@ def _create_interface_springs(
     intf.slid = [slid]
 
     half_area = area / 2.0
+    patch_areas = _out_of_plane_spring_areas(intf)
     intf.slid_out_plan = []
 
     # C# Interface.SetSpring creates the two *side* springs once, then invokes
@@ -510,7 +533,8 @@ def _create_interface_springs(
         intf.parent_element_key1,
         intf,
         out_of_plane=True,
-        area=half_area,
+        area=patch_areas[0],
+        stiffness_area=half_area,
         vertical=vertical,
         material_override=custom_material,
         law=out_law1,
@@ -522,7 +546,8 @@ def _create_interface_springs(
         intf.parent_element_key2,
         intf,
         out_of_plane=True,
-        area=half_area,
+        area=patch_areas[1],
+        stiffness_area=half_area,
         vertical=vertical,
         material_override=custom_material,
         law=out_law2,
@@ -541,7 +566,7 @@ def _create_interface_springs(
         out.parent_key = intf.key
         out.parent_type = "Interface"
         out.spring_purpose = "SlidOutOfPlan"
-        out.area = half_area
+        out.area = patch_areas[index]
         out.length = intf.length / 2.0
         intf.slid_out_plan.append(out)
 
