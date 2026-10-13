@@ -60,8 +60,9 @@ the chain and regenerate the model independently for each comparison.
 
 This is a workflow-dependent registration rule, not a blanket multiplication
 of diagonal force by two. One material reset adds one reference to the current
-interface; later distinct resets append further references. An unchanged
-material request adds none. It does not keep separate old/new material springs
+interface; later resets append further references. C# MaterialKey assignment marks the
+interface modified even when the assigned key is unchanged; an explicit reset
+of that same material therefore also appends a reference. It does not keep separate old/new material springs
 or duplicate the interface's global stiffness and reaction assembly.
 
 Both strategies use the existing compiled Quad normal-force reductions.

@@ -57,7 +57,7 @@ def _restore_quad_links(model: Any, backups: dict[int, list[list[int]]]) -> None
 
 
 def _register_material_resets(model: Any, records: Any, strategy: str) -> int:
-    """Reproduce C# Set/AssignInterfaceAfference only for changed properties.
+    """Reproduce C# Set/AssignInterfaceAfference for each material reset.
 
     This changes neighbour multiplicity for Quad.ComputeDN; it does not clone
     interface springs or double their global force/stiffness assembly.
@@ -65,8 +65,6 @@ def _register_material_resets(model: Any, records: Any, strategy: str) -> int:
     quads = getattr(model.collections, "quads", {})
     added = 0
     for record in records:
-        if record.old_material_key == record.new_material_key:
-            continue
         interface = model.collections.interfaces[record.interface_key]
         for side in (1, 2):
             if getattr(interface, f"parent_type_element{side}", None) != "Quad":
@@ -266,7 +264,7 @@ def change_interface_materials(
                     out_of_plane_springs=len(interface.slid_out_plan),
                 )
             )
-        changed_properties = any(r.old_material_key != r.new_material_key for r in records)
+        changed_properties = bool(records)
         if strategy == "single_link" and quad_links and changed_properties:
             warnings.warn(
                 "single_link material resets retain unique Quad interface links; "

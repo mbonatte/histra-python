@@ -51,10 +51,10 @@ class InterfaceRegistrationTests(unittest.TestCase):
         self.assertEqual(self.quad.interface_keys[0],[7])
         self.assertEqual(self.quad.compute_dn(self.model.collections,nr=True)[0],4.)
 
-    def test_each_distinct_reset_appends_but_same_material_does_not(self):
+    def test_each_reset_appends_even_when_material_key_is_unchanged(self):
         for material in (2,3,3):
             change_interface_materials(self.model,[7,7],material,preserve_committed_state=False)
-        self.assertEqual(self.quad.interface_keys[0],[7,7,7])
+        self.assertEqual(self.quad.interface_keys[0],[7,7,7,7])
 
     def test_invalid_strategy_is_rejected_without_mutation(self):
         with self.assertRaisesRegex(ValueError,"interface_registration"):
