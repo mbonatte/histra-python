@@ -99,12 +99,18 @@ class ConvergenceTest:
 
         if self.absolute:
             self._error = raw
-        else:
-            # Retained as an opt-in compatibility mode.  The original force
-            # test compares the current norm with the first measured norm.
+        elif self.criterion == "ForceMoment":
+            # CTestNormUnbalance divides before capturing the first norm.
+            # Preserve IEEE division (including 0/0) rather than clamping it.
+            import numpy as np
+
+            with np.errstate(divide="ignore", invalid="ignore"):
+                self._error = float(np.divide(raw, self._previous_raw_norm))
             if self.current_iter == 1:
-                self._previous_raw_norm = max(abs(raw), 1e-30)
-            self._error = raw / self._previous_raw_norm
+                self._previous_raw_norm = raw
+        else:
+            # CTestNormDispIncr and CTestEnergyIncr are always absolute.
+            self._error = raw
 
         if self._error <= self.tolerance:
             return self.current_iter
@@ -124,17 +130,18 @@ class ConvergenceTest:
         return self.tolerance
 
     def get_copy(self, iterations: int) -> "ConvergenceTest":
-        """Return a same-type test with a different iteration cap.
+        """Match the 2026.1.1 C# convergence-test copy constructors.
 
-        This intentionally fixes a bug in the original C# implementation where
-        ``CTestNormUnbalance.getCopy`` returned a displacement-increment test.
+        CTestNormUnbalance returns a displacement test and passes its norm
+        type as MaxU. This observable C# quirk is retained for output parity.
+        Copies are fresh tests; no iteration/history state is inherited.
         """
+        force = self.criterion == "ForceMoment"
         return ConvergenceTest(
             tolerance=self.tolerance,
             max_iter=iterations,
-            max_u=self.max_u,
-            print_level=self.print_level,
-            norm_type=self.norm_type,
-            criterion=self.criterion,
-            absolute=self.absolute,
+            max_u=float(self.norm_type) if force else self.max_u,
+            norm_type=2 if force or self.criterion == "Work" else self.norm_type,
+            criterion="DispRotation" if force else self.criterion,
+            absolute=True,
         )
