@@ -182,7 +182,8 @@ class Analysis:
 
     number_of_eigen_modes: int = 1
     number_of_lanczos_eigen_vectors: int = 3
-    modal_procedure: str = "SubspaceIterations"
+    modal_procedure: str = "InverseIterations"
+    residual_vector_tolerance: float = 0.5
     modal_convergence_criteria: str = "Frquency"
 
     pdelta_effect: str = "None"

@@ -381,7 +381,10 @@ def load_model(path: Union[str, Path]) -> Model:
                     _attr(elem, "NumberOfLanczosEigenVectors", default="3"), 3
                 ),
                 modal_procedure=_attr(
-                    elem, "ModalProcedure", default="SubspaceIterations"
+                    elem, "ModalProcedure", default="InverseIterations"
+                ),
+                residual_vector_tolerance=_safe_float(
+                    _attr(elem, "ResidualVectorTolerance", default="0.5"), 0.5
                 ),
                 modal_convergence_criteria=_attr(
                     elem, "ModalConvergenceCriteria", default="Frquency"
