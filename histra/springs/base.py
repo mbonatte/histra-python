@@ -49,6 +49,14 @@ class Spring(_DynamicAttributes):
     # hundreds of thousands of generated interface fibres.
     _histra_batch_managed: bool = False
 
+    def compute_energy(self) -> Tuple[float, float, float]:
+        """Original C# signed trial-to-commit energy increments."""
+        from histra.springs.energy import spring_energy_increment
+        return spring_energy_increment(
+            self.k, getattr(self, "_cstress", 0.0), getattr(self, "_tstress", self.f),
+            getattr(self, "_cstrain", 0.0), getattr(self, "_tstrain", self.u),
+        )
+
     def get_k(self, alfa: float = 0.0) -> float:
         return self.k + (self.k_tang - self.k) * alfa
 

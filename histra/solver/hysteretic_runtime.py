@@ -31,6 +31,7 @@ from histra.model.shear_law import (
     fracture_energy_shear,
     masonry_shear_law_code,
 )
+from histra.springs.energy import spring_energy_increment
 from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
 from histra.types.phase_enum import PhaseEnum
@@ -299,22 +300,34 @@ def _phase_from_code(value: float | int) -> PhaseEnum:
 
 if njit is not None:
 
-    @njit(cache=True, nogil=True)
-    def _managed_elastic_energy(transverse_k, transverse_trial, quad_k, quad_state):
-        # Preserve the Python/C# element iteration order: Quads first, then
-        # interface transverse springs. Interface Coulomb springs are not part
-        # of ModelManager's elastic-energy accumulator.
-        value = 0.0
+    @njit(cache=True, nogil=True, error_model="numpy")
+    def _managed_elastic_energy(transverse_k, committed, trial, quad_k, quad_state,
+                                starts, stops, coulomb_params, coulomb_state,
+                                slid_index, oop0_index, oop1_index):
+        # Original ModelManager.ComputeEnergy: Quads first, then each
+        # Interface's transverse, sliding and two out-of-plane springs.
+        elastic = plastic = 0.0
         for i in range(quad_k.size):
-            # Preserve the existing solver ordering: energy is evaluated
-            # before Quad.Commit publishes the current trial strain, so the
-            # object-level implementation sees the last committed strain.
-            strain = quad_state[i, QCSTRAIN]
-            value += 0.5 * quad_k[i] * strain * strain
-        for i in range(transverse_k.size):
-            strain = transverse_trial[i, 7]
-            value += 0.5 * transverse_k[i] * strain * strain
-        return value
+            e, p, total = spring_energy_increment(quad_k[i], quad_state[i,QCSTRESS], quad_state[i,QTSTRESS],
+                                                  quad_state[i,QCSTRAIN], quad_state[i,QTSTRAIN])
+            elastic += e
+            plastic += p
+        for record in range(starts.size):
+            interface_elastic = interface_plastic = 0.0
+            for i in range(starts[record], stops[record]):
+                e, p, total = spring_energy_increment(transverse_k[i], committed[i,6], trial[i,6], committed[i,7], trial[i,7])
+                interface_elastic += e
+                interface_plastic += p
+            for index in (slid_index[record], oop0_index[record], oop1_index[record]):
+                if index >= 0:
+                    e, p, total = spring_energy_increment(coulomb_params[index,0], coulomb_state[index,CCSTRESS],
+                                                          coulomb_state[index,CTSTRESS], coulomb_state[index,CCSTRAIN],
+                                                          coulomb_state[index,CTSTRAIN])
+                    interface_elastic += e
+                    interface_plastic += p
+            elastic += interface_elastic
+            plastic += interface_plastic
+        return elastic, plastic
 
     @njit(cache=True, nogil=True)
     def _update_domain_batch(
@@ -3068,18 +3081,13 @@ class HystereticBatchRuntime:
         self._objects_trial_synced = True
 
     def compute_energy(self) -> tuple[float, float]:
-        """Return the same managed elastic/plastic totals as element scans."""
-        return (
-            float(
-                _managed_elastic_energy(
-                    self._transverse_k,
-                    self.trial,
-                    self._quad_k,
-                    self.quad_state,
-                )
-            ),
-            0.0,
+        """Original C# signed elastic/plastic increments from dense state."""
+        elastic, plastic = _managed_elastic_energy(
+            self._transverse_k, self.committed, self.trial, self._quad_k, self.quad_state,
+            self._starts, self._stops, self.coulomb_params, self.coulomb_state,
+            self._slid_index, self._oop0_index, self._oop1_index,
         )
+        return float(elastic), float(plastic)
 
     def commit(self, *, sync_objects: bool = False) -> None:
         if self.quad_records:
