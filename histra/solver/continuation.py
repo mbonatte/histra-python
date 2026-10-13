@@ -504,6 +504,7 @@ def _als_loop(
     if not isinstance(integrator, LoadControl):
         return -2
     original_increment = integrator.incr_mult
+    original_step_dt = integrator._step_dt
     factor = max(2, int(getattr(an, "load_factor_als", 2)))
     max_reductions = max(1, int(getattr(an, "max_number_als", 5)))
 
@@ -584,5 +585,9 @@ def _als_loop(
             return -2
         sub_increment /= factor
 
+    # The pre-step snapshot contains the previous step's dt. ALS restores it
+    # while retrying loads, but a successful full increment must advance time
+    # by the interval selected for this step, exactly once at outer commit.
+    integrator._step_dt = original_step_dt
     integrator.incr_mult = original_increment
     return 0

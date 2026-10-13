@@ -436,3 +436,55 @@ def test_load_generation_rejects_missing_analysis_explicitly():
     model = load_model(HRX)
     with pytest.raises(KeyError, match="Analysis 9999"):
         assemble_load_vector(model, 9999, 1)
+
+
+@pytest.mark.parametrize("start_time,previous_dt", [(0.0, 0.0), (0.0, 0.1), (0.75, 0.4)])
+@pytest.mark.parametrize("fail_first_substep", [False, True])
+def test_successful_als_advances_current_interval_once(
+    monkeypatch, start_time, previous_dt, fail_first_substep,
+):
+    """A retry must not repeat loading or consume the preceding step's clock."""
+    model, analysis, p, ls, algorithm, integrator = _runtime()
+    analysis.mult = 1.0
+    analysis.load_factor_als = 2
+    analysis.max_number_als = 2
+    analysis.load_function = LoadFunction(
+        key=99, discr_val=0.3,
+        items=[LoadFunctionItem(pseudo_time=0.0, multiplier=0.0),
+               LoadFunctionItem(pseudo_time=1.0, multiplier=1.0)],
+    )
+    integrator.state.analysis = analysis
+    integrator._get_initial_time_and_force(analysis)
+    integrator._t = start_time
+    integrator.mult = start_time
+    integrator._step_dt = previous_dt
+    monkeypatch.setattr(integrator, "update_ptarget", lambda *args: None)
+    monkeypatch.setattr("histra.solver.continuation._commit_state", lambda *args: None)
+    snapshot = SolverStateSnapshot.capture(
+        model, p, ls, integrator, algorithm.the_test, algorithm.the_line_search,
+    )
+    integrator.new_step(p, model, ls, analysis, 1, 1, 0)
+
+    class ReducedSolver:
+        the_test = algorithm.the_test
+        the_line_search = algorithm.the_line_search
+        calls = 0
+
+        def solve_current_step(self, *args):
+            self.calls += 1
+            return -2 if fail_first_substep and self.calls == 1 else 0
+
+    assert _als_loop(p, ls, model, analysis, 1, 1, 0.0,
+                     integrator, ReducedSolver(), snapshot) == 0
+    assert integrator.get_time() == start_time
+    assert integrator.mult == pytest.approx(start_time + 0.25)
+    stop = integrator.commit(model, analysis, 0.0, 0, [False])
+    assert integrator.get_time() == pytest.approx(start_time + 0.25)
+    assert stop == (start_time == 0.75)
+    # Complete the load function naturally: four total quarter-load steps,
+    # never a fifth step at multiplier 1.25.
+    while not stop:
+        integrator.new_step(p, model, ls, analysis, 1, 2, 0)
+        stop = integrator.commit(model, analysis, 0.0, 0, [False])
+    assert integrator.get_time() == pytest.approx(1.0)
+    assert integrator.mult == pytest.approx(1.0)
