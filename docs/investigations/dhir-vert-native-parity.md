@@ -1,6 +1,6 @@
 # Dhir Vert: native C# parity validation
 
-Validated after the v1.4.1 release; the release tag remains at its published source.
+Validated for v1.4.2, including the spring-history corrections following v1.4.1.
 
 ## Scope and construction
 

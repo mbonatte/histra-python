@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.2 - 2026-10-13
 
 - Initialize hysteretic yield-coordinate metadata for generated scalar and lazy springs.
 - Preserve C# Coulomb unloading memory in compiled interface and Quad commits.

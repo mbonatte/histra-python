@@ -1,14 +1,14 @@
 # Current feature status
 
-Release status: **v1.4.1** (2026-10-13).
+Release status: **v1.4.2** (2026-10-13).
 
 This maintenance release improves C# 2026.1.1 geometry, spring definitions,
 nonlinear contracts and modal inverse iteration. Fresh Dhir Vert comparisons
 cover 77,080 springs at all 10 committed steps with zero spring-phase differences.
-Post-release Dhir Vert validation passes every available numeric spring-history field within the unchanged tolerances. One near-zero horizontal reaction component at step 9 differs by 2.09e-6 kN and remains open. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
+Dhir Vert validation passes every available numeric spring-history field within the unchanged tolerances. One near-zero horizontal reaction component at step 9 differs by 2.09e-6 kN and remains open. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
 
 The V1 Article/interface-chain evidence is historical qualification of its
-recorded source and environment, not a new v1.4.1 rerun of those models.
+recorded source and environment, not a new v1.4.2 rerun of those models.
 
 ## Supported
 
