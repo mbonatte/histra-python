@@ -670,7 +670,7 @@ def test_both_horizontal_interface_endpoints_use_parent_face_reference(monkeypat
         ),
     )
 
-    def remember_node(model, point):
+    def remember_node(model, point, *, tolerance=1.0e-4):
         created.append(np.asarray(point, dtype=float))
         return len(created)
 

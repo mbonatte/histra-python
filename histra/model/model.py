@@ -49,6 +49,8 @@ class Model:
     # preprocessing clears it only after a successful fresh build.
     requires_python_preparation: bool = False
     source_path: Optional[str] = None
+    geometry_tolerance_node: float = 1.0
+    geometry_tolerance_plane: float = 1.0
     interface_nrow: int = 3
     interface_imax: float = 40.0
     mass_matrix_type: str = "Consistent"

@@ -183,7 +183,7 @@ def _make_interface_geometry(
     # only for centred contacts and tilts offset interfaces out of their plane.
     edge_matches: list[tuple[float, np.ndarray]] = []
     for endpoint in (p1, p2):
-        match = _polygon_edge_at_point(vertices_f, endpoint)
+        match = _polygon_edge_at_point(vertices_f, endpoint, tolerance=getattr(model, "geometry_tolerance_node", 1.0e-4))
         if match is None:
             raise ModelPreparationError(
                 f"Interface {intf.key}: endpoint {endpoint.tolist()} is not aligned "
@@ -613,8 +613,16 @@ def _convex_quad_overlap_prefilter_batch(
 
 def _coplanar_quad_intersection_prechecked(
     first: np.ndarray, second: np.ndarray, normal_first: np.ndarray,
+    node_tolerance: float | None = None,
 ) -> list[np.ndarray] | None:
     """Clip two faces after the vectorized broad phase proved coplanarity."""
+    if node_tolerance is not None:
+        from .quad_faces import classify_contained_contact
+        code = classify_contained_contact(first, second, np.float32(node_tolerance))
+        if code in (1, 3):
+            return [p.copy() for p in np.asarray(first, dtype=np.float32)]
+        if code == 2:
+            return [p.copy() for p in np.asarray(second, dtype=np.float32)]
     nx = abs(float(normal_first[0]))
     ny = abs(float(normal_first[1]))
     nz = abs(float(normal_first[2]))
@@ -661,7 +669,8 @@ def _coplanar_quad_intersection_prechecked(
     e2 = math.hypot(p3[0] - p2[0], p3[1] - p2[1])
     e3 = math.hypot(p0[0] - p3[0], p0[1] - p3[1])
     longest_edge = max(e0, e1, e2, e3)
-    if longest_edge <= 0.0 or area / longest_edge <= _CONTACT_DISTANCE_TOLERANCE:
+    sliver_tolerance = _CONTACT_DISTANCE_TOLERANCE if node_tolerance is None else node_tolerance
+    if longest_edge <= 0.0 or area / longest_edge < sliver_tolerance:
         return None
 
     plane_origin = first[0]
@@ -695,28 +704,19 @@ def _coplanar_quad_intersection(
 
 
 def _polygon_edge_at_point(
-    vertices: Sequence[np.ndarray], point: np.ndarray,
+    vertices: Sequence[np.ndarray], point: np.ndarray, *, tolerance: float = 2.0e-4,
 ) -> tuple[float, np.ndarray] | None:
-    best: tuple[float, float, np.ndarray] | None = None
-    tolerance = max(1.0e-4, _CONTACT_DISTANCE_TOLERANCE)
+    from .quad_faces import align_nodes
+    match = None
     for start, end in zip(vertices, (*vertices[1:], vertices[0])):
-        edge = end-start
-        length2 = float(np.dot(edge, edge))
-        if length2 <= 1.0e-18:
-            continue
-        parameter = float(np.dot(point-start, edge) / length2)
-        projected = start + min(max(parameter, 0.0), 1.0) * edge
-        distance = float(np.linalg.norm(point-projected))
-        if -1.0e-6 <= parameter <= 1.0+1.0e-6 and distance <= tolerance:
-            # C# obtains the edge length through XNA ``Vector3.Distance``.
-            length = float(np.float32(math.sqrt(length2)))
-            direction = _unit_f32(
-                np.asarray(start, dtype=np.float32)-np.asarray(end, dtype=np.float32),
-                label="Interface thickness direction",
-            )
-            if best is None or distance < best[0]:
-                best = (distance, length, direction)
-    return None if best is None else (best[1], best[2])
+        start_f = np.asarray(start, dtype=np.float32)
+        end_f = np.asarray(end, dtype=np.float32)
+        if align_nodes(np.asarray(point, dtype=np.float32), start_f, end_f, tolerance) > 0:
+            length = float(_norm3_f32(start_f-end_f))
+            direction = _unit_f32(start_f-end_f, label="Interface thickness direction")
+            # Interface.Set overwrites its temporary on every matching edge.
+            match = (length, direction)
+    return match
 
 
 def _quad_face_reference_edge(
@@ -737,7 +737,7 @@ def _prepare_interface_endpoints(
     vertices: Sequence[np.ndarray],
 ) -> tuple[tuple[int, int], float]:
     """Exact endpoint selection from C# ``PrepareBuildInterface``."""
-    polygon = np.asarray(vertices, dtype=float)
+    polygon = np.asarray(vertices, dtype=np.float32)
     reference_start, reference_end = _quad_face_reference_edge(model, q1, face1)
     # C# derives the reference direction from the intersection polygon when a
     # horizontal face meets a lateral face.  When *both* faces are horizontal,
@@ -773,8 +773,8 @@ def _prepare_interface_endpoints(
     else:
         first = 0.5*(polygon[0]+polygon[1])
         second = 0.5*(polygon[2]+polygon[3])
-    first_key = _find_or_create_geometric_node(model, first)
-    second_key = _find_or_create_geometric_node(model, second)
+    first_key = _find_or_create_geometric_node(model, first, tolerance=getattr(model, "geometry_tolerance_node", 1.0e-4))
+    second_key = _find_or_create_geometric_node(model, second, tolerance=getattr(model, "geometry_tolerance_node", 1.0e-4))
     return (first_key, second_key), float(
         np.float32(np.linalg.norm(second-first))
     )
@@ -976,6 +976,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
     narrow phase performs coplanar convex-polygon clipping and accepts the same
     four-vertex intersections used by ``BuildInterface``.
     """
+    distance_tolerance = max(_CONTACT_DISTANCE_TOLERANCE, model.geometry_tolerance_plane)
     assert model.collections is not None
     quads = sorted(model.collections.quads.values(), key=lambda item: item.key)
     count = len(quads)
@@ -1003,7 +1004,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
             face_max,
             face_center,
             face_normal,
-            _CONTACT_DISTANCE_TOLERANCE,
+            distance_tolerance,
             _CONTACT_ANGLE_TOLERANCE,
         )
         if len(cq1):
@@ -1041,11 +1042,11 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
             overlap = np.all(
                 (
                     face_max[first, :, None, :]
-                    >= face_min[second, None, :, :] - _CONTACT_DISTANCE_TOLERANCE
+                    >= face_min[second, None, :, :] - distance_tolerance
                 )
                 & (
                     face_max[second, None, :, :]
-                    >= face_min[first, :, None, :] - _CONTACT_DISTANCE_TOLERANCE
+                    >= face_min[first, :, None, :] - distance_tolerance
                 ),
                 axis=3,
             )
@@ -1072,7 +1073,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
                     axis=1,
                 )
             )
-            coplanar = plane_distance <= _CONTACT_DISTANCE_TOLERANCE
+            coplanar = plane_distance <= distance_tolerance
             candidate = candidate[coplanar]
             face1 = face1[coplanar]
             face2 = face2[coplanar]
@@ -1102,6 +1103,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
         intersection = _coplanar_quad_intersection_prechecked(
             faces[first, face1], faces[second, face2],
             face_normal[first, face1],
+            node_tolerance=model.geometry_tolerance_node,
         )
         if intersection is None:
             continue
@@ -1200,9 +1202,11 @@ def _quad_vint(model: Model, quad: Quad) -> tuple[np.ndarray, ...]:
     cached = getattr(quad, "_prep_vint", None)
     if cached is not None:
         return cached
-    faces = [np.asarray(_quad_lateral_face_vertices(model, quad, face), dtype=float) for face in range(4)]
-    faces.append(np.asarray([faces[2][1], faces[0][1], faces[0][0], faces[2][0]], dtype=float))
-    faces.append(np.asarray([faces[2][3], faces[0][3], faces[0][2], faces[2][2]], dtype=float))
-    cached = tuple(faces)
+    from .quad_faces import compute_quad_faces_batch
+    points = np.asarray([[_v(model.collections.nodes[k].point) for k in quad.node_keys]], dtype=np.float32)
+    normals = np.asarray([[_v(n) for n in quad.normal]], dtype=np.float32)
+    thickness = np.asarray([quad.thickness], dtype=np.float32)
+    faces = compute_quad_faces_batch(points, normals, thickness)[0]
+    cached = tuple(face.astype(np.float64) for face in faces)
     quad._prep_vint = cached
     return cached

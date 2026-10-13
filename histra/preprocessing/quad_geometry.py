@@ -91,6 +91,9 @@ def refresh_quad_geometry(model):
     points=np.array([[(c.nodes[n].point.x,c.nodes[n].point.y,c.nodes[n].point.z)
                       for n in q.node_keys] for q in quads],dtype=np.float32)
     thickness=np.array([q.thickness for q in quads],dtype=np.float32)
+    normals=np.array([[(n.x,n.y,n.z) for n in q.normal] for q in quads],dtype=np.float32)
+    from .quad_faces import compute_quad_faces_batch
+    faces=compute_quad_faces_batch(points,normals,thickness)
     try:
         lengths,diagonals,cosines,sines,axes,centres,volumes=compute_quad_geometry_batch(points,thickness)
     except ValueError as error:
@@ -98,6 +101,7 @@ def refresh_quad_geometry(model):
     for key,node in c.nodes.items():
         node.point=Point(float(np.float32(node.point.x)),float(np.float32(node.point.y)),float(np.float32(node.point.z)))
     for i,q in enumerate(quads):
+        q._prep_vint=tuple(face.astype(np.float64) for face in faces[i])
         q.length=lengths[i].tolist();q.diago=diagonals[i].tolist()
         q.cos=cosines[i].tolist();q.sin=sines[i].tolist();q.thickness=thickness[i].tolist()
         q.reference_e1=tuple(float(x) for x in axes[i,0]);q.reference_e2=tuple(float(x) for x in axes[i,1]);q.reference_e3=tuple(float(x) for x in axes[i,2])

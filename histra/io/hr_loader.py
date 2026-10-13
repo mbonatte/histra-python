@@ -92,6 +92,14 @@ def load_model(path: Union[str, Path]) -> Model:
             elem.clear()
 
         elif tag in {"AdvancedOptionsDefault", "AdvancedOptions"}:
+            model.geometry_tolerance_node = _safe_float(
+                _attr(elem, "ToleranceNode", default=str(model.geometry_tolerance_node)),
+                model.geometry_tolerance_node,
+            )
+            model.geometry_tolerance_plane = _safe_float(
+                _attr(elem, "TolerancePlane", default=str(model.geometry_tolerance_plane)),
+                model.geometry_tolerance_plane,
+            )
             model.interface_nrow = _safe_int(
                 _attr(elem, "InterfaceNrow", default=str(model.interface_nrow)),
                 model.interface_nrow,
