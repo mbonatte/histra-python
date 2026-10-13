@@ -206,7 +206,7 @@ class TransverseFiberGroup(MutableSequence):
         sp.alfau = [self.betap, self.betan]
         sp.alfar = [self.alfar_p, self.alfar_n]
         sp.umax = [float(self._committed[index, 0]), float(self._committed[index, 1])]
-        sp.uy_corr = [0.0, 0.0]
+        sp.uy_corr = [value / sp.k if sp.k else 0.0 for value in sp.fy]
         sp.f0 = 0.0
         sp.f0_target = 0.0
         sp.kstrain = 0.0

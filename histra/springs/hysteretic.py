@@ -817,6 +817,8 @@ class SpringHysteretic(Spring):
         XML-loaded springs already have pre-computed E values in the file,
         so this method is only needed when creating a spring programmatically.
         """
+        # C# SetInitial retains yield-coordinate metadata across revertToStart.
+        self.uy_corr[:] = [value / self.k if self.k else 0.0 for value in self.fy]
         # Positive envelope
         if self.tensile_curve_type == "Elastic":
             self.mom1p = 1e19 * self.fy[0]
