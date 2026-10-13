@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Initialize hysteretic yield-coordinate metadata for generated scalar and lazy springs.
+- Preserve C# Coulomb unloading memory in compiled interface and Quad commits.
+- Apply Interface.SetSpring curve-family reassignment after ultimate-displacement selection.
+- Dhir Vert now passes every available numeric spring response/history field; a near-zero aggregate R1 at step 9 differs by 2.09e-6 kN and remains open. C# per-spring NULL energy fields remain explicitly unavailable. Full suite: 722 passed, 23 skipped, 670 subtests.
+
 ## 1.4.1 - 2026-10-13
 
 C# 2026.1.1 geometry and nonlinear parity improvements, with native DLL regression oracles.
