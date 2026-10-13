@@ -367,8 +367,18 @@ def _configure_combined_hysteretic(
     ur1_t, ur1_c = out.ur
     _set_ultimate_displacement(out, law2, law2)
     ur2_t, ur2_c = out.ur
-    out.ur[0] = min(ur1_t, ur2_t) if ur1_t and ur2_t else max(ur1_t, ur2_t)
-    out.ur[1] = max(ur1_c, ur2_c) if ur1_c and ur2_c else min(ur1_c, ur2_c)
+    if ur1_t < ur2_t and ur1_t != 0.0:
+        out.ur[0] = ur1_t
+        out.tensile_curve_type = law1.tensile_curve
+    elif ur2_t < ur1_t and ur2_t != 0.0:
+        out.ur[0] = ur2_t
+        out.tensile_curve_type = law2.tensile_curve
+    if ur1_c > ur2_c and ur1_c != 0.0:
+        out.ur[1] = ur1_c
+        out.compressive_curve_type = law1.compressive_curve
+    elif ur2_c > ur1_c and ur2_c != 0.0:
+        out.ur[1] = ur2_c
+        out.compressive_curve_type = law2.compressive_curve
     # initialize() already resets both trial and committed state.
     out.initialize()
     return out
@@ -641,16 +651,16 @@ def _configure_combined_hysteretic_batch(
     )
     ur2_t = ur_t
     ur2_c = ur_c
-    ur_t = np.where(
-        (ur1_t != 0.0) & (ur2_t != 0.0),
-        np.minimum(ur1_t, ur2_t),
-        np.maximum(ur1_t, ur2_t),
-    )
-    ur_c = np.where(
-        (ur1_c != 0.0) & (ur2_c != 0.0),
-        np.maximum(ur1_c, ur2_c),
-        np.minimum(ur1_c, ur2_c),
-    )
+    # Literal Interface.SetSpring selection, including ties and zero values.
+    first_t = (ur1_t < ur2_t) & (ur1_t != 0.0)
+    second_t = (ur2_t < ur1_t) & (ur2_t != 0.0)
+    first_c = (ur1_c > ur2_c) & (ur1_c != 0.0)
+    second_c = (ur2_c > ur1_c) & (ur2_c != 0.0)
+    previous_c_linear = np.logical_not(np.logical_or(compressive_elastic, compressive_parabolic))
+    tension_curve_1 = np.where(first_t, True, np.where(second_t, False, tension_curve_1))
+    compression_curve_1 = np.where(first_c, True, np.where(second_c, False, compression_curve_1))
+    ur_t = np.where(first_t, ur1_t, ur2_t)
+    ur_c = np.where(first_c, ur1_c, ur2_c)
 
     alfau_t = max(float(law1.alfa_u_t), float(law2.alfa_u_t))
     alfau_c = max(float(law1.alfa_u_c), float(law2.alfa_u_c))
@@ -793,6 +803,20 @@ def _configure_combined_hysteretic_batch(
         np.divide(mom1n[m], rot1n[m], out=e1n_m, where=rot_nonzero)
         e1n[m] = e1n_m
 
+    preserve_c = np.logical_and(is_c_para, previous_c_linear)
+    if np.any(preserve_c):
+        mask = preserve_c
+        previous_rot1 = fy_c[mask] / k[mask]
+        previous_mom2 = fy_c[mask] + (ur2_c[mask] - previous_rot1) * kt_c[mask]
+        previous_delta2 = ur2_c[mask] - previous_rot1
+        previous_delta3 = ur2_c[mask] * 1.01 - ur2_c[mask]
+        previous_e2 = np.zeros_like(previous_delta2)
+        previous_e3 = np.zeros_like(previous_delta3)
+        np.divide(previous_mom2 - fy_c[mask], previous_delta2, out=previous_e2, where=previous_delta2 != 0.0)
+        np.divide(-previous_mom2, previous_delta3, out=previous_e3, where=previous_delta3 != 0.0)
+        e2n[mask] = previous_e2
+        e3n[mask] = previous_e3
+
     eup = np.maximum(np.maximum(e1p, e2p), e3p)
     eun = np.maximum(np.maximum(e1n, e2n), e3n)
 
@@ -928,8 +952,20 @@ def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained
         ur1 = out.ur[:]
         _set_ultimate_displacement(out, law2, law2)
         ur2 = out.ur[:]
-        out.ur[0] = min(v for v in (ur1[0], ur2[0]) if v != 0.0) if ur1[0] and ur2[0] else max(ur1[0], ur2[0])
-        out.ur[1] = max(v for v in (ur1[1], ur2[1]) if v != 0.0) if ur1[1] and ur2[1] else min(ur1[1], ur2[1])
+        # Interface.SetSpring reselects the family after the two separate
+        # SetUltimateDisplacement calls; strict comparisons are intentional.
+        if ur1[0] < ur2[0] and ur1[0] != 0.0:
+            out.ur[0] = ur1[0]
+            out.tensile_curve_type = law1.tensile_curve
+        elif ur2[0] < ur1[0] and ur2[0] != 0.0:
+            out.ur[0] = ur2[0]
+            out.tensile_curve_type = law2.tensile_curve
+        if ur1[1] > ur2[1] and ur1[1] != 0.0:
+            out.ur[1] = ur1[1]
+            out.compressive_curve_type = law1.compressive_curve
+        elif ur2[1] > ur1[1] and ur2[1] != 0.0:
+            out.ur[1] = ur2[1]
+            out.compressive_curve_type = law2.compressive_curve
         # initialize() already resets both trial and committed state.
         out.initialize()
         return out
