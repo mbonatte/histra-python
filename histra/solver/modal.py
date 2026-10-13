@@ -21,6 +21,7 @@ from histra.solver.cancellation import (
     exclusive_solver_access,
     raise_if_cancelled,
 )
+from histra.solver.line_search import _csharp_dot
 from histra.solver.load_assembly import generate_line_loads, generate_self_weight_loads
 from histra.solver.mass_matrix import (
     MassMatrixAssembly,
@@ -315,7 +316,7 @@ def _solve_modal_analysis_impl(
             "P-Delta modal stiffness is unavailable because the Python port does not "
             "yet include the C# frame/load-generation subsystem."
         )
-    procedure = str(getattr(analysis, "modal_procedure", "SubspaceIterations"))
+    procedure = str(getattr(analysis, "modal_procedure", "InverseIterations"))
     if procedure not in _SUPPORTED_MODAL_PROCEDURES:
         raise ModalAnalysisError(
             f"Unknown ModalProcedure={procedure!r}; expected one of "
@@ -453,8 +454,12 @@ def _solve_modal_analysis_impl(
     )
     progress(0.48)
 
-    tolerance = _resolve_modal_tolerance(analysis, eigensolver_tolerance)
-    max_iterations = max(1, int(getattr(analysis, "max_iterations", 1000)))
+    tolerance = (
+        float(getattr(analysis, "convergence_tolerance", 1e-4))
+        if procedure == "InverseIterations" and eigensolver_tolerance is None
+        else _resolve_modal_tolerance(analysis, eigensolver_tolerance)
+    )
+    max_iterations = int(getattr(analysis, "max_iterations", 1000))
     log(
         f"Solving for {requested} eigenmodes with {procedure} "
         f"(C# convergence tolerance {tolerance:.3g})."
@@ -467,6 +472,7 @@ def _solve_modal_analysis_impl(
             requested,
             criteria=criteria,
             csharp_tolerance=tolerance,
+            residual_tolerance=float(getattr(analysis, "residual_vector_tolerance", 0.5)),
             max_iterations=max_iterations,
             should_cancel=should_cancel,
             on_mode=lambda index: progress(0.48 + 0.48 * index / requested),
@@ -638,80 +644,81 @@ def _inverse_iterations(
     max_iterations: int,
     should_cancel: CancelCheck | None,
     on_mode: Callable[[int], None],
+    residual_tolerance: float = 0.5,
+    on_iteration: Callable[[int, float], None] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Sequential inverse iteration following C# ``ModalAnalysis.InverseIteration``."""
-    try:
-        factor = splu(stiffness)
-    except Exception as exc:
-        raise ModalAnalysisError("Unable to factor the tangent stiffness matrix.") from exc
+    """C# 2026.1.1 EigenvalueSolver.InverseIterationLegacyLike.
 
+    The shared framework uses both eigenvalue and residual gates regardless
+    of the serialized ModalConvergenceCriteria selector.
+    """
+    del criteria
+    eigen_tolerance = (
+        max(1e-12, csharp_tolerance / 100.0)
+        if csharp_tolerance > 0.0 else 1e-8
+    )
+    residual_tolerance = residual_tolerance if residual_tolerance > 0.0 else 1e-6
+    max_iterations = max_iterations if max_iterations > 0 else 120
     n = stiffness.shape[0]
+    system = LinearSystem(n)
+    system.k = stiffness
+    random = _DotNetRandom(12345)
     euclidean_modes: list[np.ndarray] = []
     values: list[float] = []
     vectors: list[np.ndarray] = []
-    use_frequency = criteria.casefold() != "eigenvector"
+
+    def normalize_euclidean(x: np.ndarray) -> np.ndarray:
+        for mode in euclidean_modes:
+            x -= _csharp_dot(mode, x) * mode
+        x /= sqrt(max(_csharp_dot(x, x), 1e-30))
+        return x
 
     for mode_index in range(count):
         raise_if_cancelled(should_cancel)
-        x = np.ones(n, dtype=float)
-        x = _euclidean_deflate(x, euclidean_modes)
-        b = np.asarray(mass @ x, dtype=float)
+        x = np.fromiter(
+            (1.0 + 0.001 * (2.0 * random.next_double() - 1.0) for _ in range(n)),
+            dtype=float, count=n,
+        )
+        x = normalize_euclidean(x)
         previous_value = 0.0
-        previous_residual = 0.0
-        residual_reference: float | None = None
         converged = False
-        value = float("nan")
-
         for iteration in range(1, max_iterations + 1):
             raise_if_cancelled(should_cancel)
-            x = factor.solve(b)
-            x = _euclidean_deflate(x, euclidean_modes)
-            numerator = float(np.dot(b, x))
+            try:
+                system.solve(np.asarray(mass @ x, dtype=float))
+            except Exception as exc:
+                raise ModalAnalysisError("Unable to solve the tangent stiffness system.") from exc
+            x = normalize_euclidean(system.x.copy())
+            kx = np.asarray(stiffness @ x, dtype=float)
             mx = np.asarray(mass @ x, dtype=float)
-            denominator = float(np.dot(mx, x))
-            if denominator <= 0.0 or not np.isfinite(denominator):
+            modal_mass = _csharp_dot(x, mx)
+            if modal_mass <= 0.0 or not np.isfinite(modal_mass):
+                return np.empty(0), np.empty((n, 0))
+            value = _csharp_dot(x, kx) / modal_mass
+            if value < 0.0 and abs(value) < 1e-60:
+                value = 0.0
+            eigen_error = (
+                abs(value - previous_value) / max(abs(previous_value), 1e-60)
+                if iteration > 1 else float("inf")
+            )
+            residual = kx - value * mx
+            residual_error = sqrt(_csharp_dot(residual, residual)) / (
+                sqrt(_csharp_dot(kx, kx))
+                + abs(value) * sqrt(_csharp_dot(mx, mx)) + 1e-30
+            )
+            if on_iteration is not None:
+                error = residual_error if np.isinf(eigen_error) else max(eigen_error, residual_error)
+                on_iteration(iteration, 100.0 * error)
+            if (iteration > 1 and eigen_error <= eigen_tolerance
+                    and residual_error <= residual_tolerance):
+                converged = True
                 break
-            value = numerator / denominator
-            mass_norm = sqrt(denominator)
-            x /= mass_norm
-            b = mx / mass_norm
-
-            euclidean_norm = float(np.linalg.norm(x))
-            if euclidean_norm == 0.0 or not np.isfinite(euclidean_norm):
-                break
-            candidate_euclidean = x / euclidean_norm
-
-            residual = np.asarray(stiffness @ x - value * (mass @ x), dtype=float)
-            residual_norm = float(np.linalg.norm(residual))
-            if use_frequency:
-                error = (
-                    float("inf")
-                    if previous_value == 0.0
-                    else 10000.0 * abs(value - previous_value) / abs(value)
-                )
-                converged = error <= csharp_tolerance
-            else:
-                error = (
-                    float("inf")
-                    if residual_norm == 0.0 or previous_residual == 0.0
-                    else abs(residual_norm - previous_residual) / residual_norm
-                )
-                if residual_reference is None:
-                    residual_reference = residual_norm / 2.0
-                converged = (
-                    error <= csharp_tolerance
-                    and residual_norm <= residual_reference
-                )
             previous_value = value
-            previous_residual = residual_norm
-            if converged:
-                euclidean_modes.append(candidate_euclidean.copy())
-                values.append(float(value))
-                vectors.append(x.copy())
-                break
-
         if not converged:
             break
+        euclidean_modes.append(x.copy())
+        values.append(value)
+        vectors.append(x / sqrt(_csharp_dot(x, np.asarray(mass @ x))))
         on_mode(mode_index + 1)
 
     if not values:

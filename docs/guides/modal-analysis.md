@@ -97,14 +97,31 @@ can be assessed explicitly.
 
 ## `InverseIterations`
 
-The alternate C# path factorizes `K` once and finds modes sequentially by inverse
-iteration. Previously found mode vectors are removed using the source's
-Euclidean projection. The HRX convergence criterion selects either:
+C# 2026.1.1 uses `EigenvalueSolver.SolveByInverseIterationLegacyLike`.
+Python now follows its seeded starting vectors (`System.Random(12345)`),
+Euclidean deflation, Rayleigh quotient and mass normalization. The selected
+linear backend is reused across iterations, with one stiffness factorization.
 
-- `Frquency`: `10000 * abs(lambda_i - lambda_(i-1)) / lambda_i`; or
-- `EigenVector`: the source residual-change test.
+Both convergence gates must pass after at least two iterations:
 
-The final vector is mass-normalized before modal quantities are calculated.
+- relative eigenvalue change <= `max(1e-12, ConvergenceTolerance / 100)`;
+- `||K phi - lambda M phi|| / (||K phi|| + |lambda| ||M phi|| + 1e-30)`
+  <= `ResidualVectorTolerance`.
+
+The HRX residual tolerance defaults to 0.5. A nonpositive value selects the
+C# framework fallback of 1e-6. `ModalConvergenceCriteria` is retained in
+the input; the new framework applies both gates regardless of that selector.
+Already converged modes are retained if a later mode exhausts its iterations.
+
+Unit fixtures execute the unmodified C# inverse-iteration routine on small
+matrices, including coupled mass and partial convergence. Full-model comparison
+against C# 2026.1.1 modal `.Results` remains pending.
+
+The `SubspaceIterations` implementation below still follows the older C#
+routine. The 2026.1.1 shared subspace implementation and its additional
+`SparseBlockInverseSubspace` and `InverseIterationMassOrthogonal` procedures
+remain to be ported; the two additional procedures are rejected explicitly.
+Full modal parity with 2026.1.1 is not yet established.
 
 ## Modal quantities
 

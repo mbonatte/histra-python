@@ -23,7 +23,7 @@ requires the Article and platform gates.
 | ForceMoment/DispRotation/Work | verified | C# convergence-test factory | `convergence_test.py` | convergence and equilibrium tests |
 | RelativeWork | intentional C# defect | enum exists; C# factory branch absent | `capabilities.py` | preflight rejection test |
 | P-Delta EachStep/EachIteration | verified | C# incremental-integrator geometric update | `incremental_integrator.py` | unit parity and compiled scatter verified (`test_pdelta.py`) |
-| Modal mass/eigensolution/projection | verified | `SolverRuntime/ModelManager.cs`, `Pseudovectors.cs`, `SubSpaceIteration2`; modal/mass enums in `UtilityLibrary.Tipi` | `mass_matrix.py`, `modal.py`, output projection | modal and batch comparison tests; unknown modal/mass enums fail before assembly |
+| Modal mass/eigensolution/projection | partial for C# 2026.1.1 | `SolverRuntime/ModelManager.cs`, `Pseudovectors.cs`, `SubSpaceIteration2`; modal/mass enums in `UtilityLibrary.Tipi` | `mass_matrix.py`, `modal.py`, output projection | 2026.1.1 inverse-iteration numerical fixtures pass; full-model 2026.1.1 modal results and shared subspace ports remain pending; unsupported modal/mass enums fail before assembly |
 | Dynamic nonlinear/response spectrum | out of V1 scope | dynamic analysis subsystem | capability preflight | precise rejection tests |
 | Frame/Slab/Link/Joint/Solid/Truss/Vertex/InterfaceMF/NodeBC and concrete/steel/fiber | out of V1 scope | C# computational-element and material collections | capability/input boundary | every serialized non-V1 element tag is inventoried and rejected; no partial-result claim |
 
