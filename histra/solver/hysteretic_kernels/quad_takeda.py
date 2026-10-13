@@ -697,18 +697,6 @@ if njit is not None:
             if params[i, QPENABLED] == 0.0:
                 continue
             row = state[i]
-            if int(params[i, QPHYSTERETIC_TYPE]) == QUAD_HYSTERETIC_INITIAL:
-                row[QFY1] = -row[QFY0]
-                row[QCUP] = row[QTUP]
-                row[QCENERGY] = row[QTENERGY]
-                row[QCSTRESS_NORMAL_PREV] = row[QCSTRESS_NORMAL]
-                row[QCSTRESS] = row[QTSTRESS]
-                row[QCSTRAIN] = row[QTSTRAIN]
-                row[QCSTRESS_NORMAL] = row[QTSTRESS_NORMAL]
-                row[QDN] = 0.0
-                row[QKTANG_COMMITTED] = row[QKTANG]
-                row[QPHASE] = row[QTPHASE]
-                continue
             row[QFY1] = -row[QFY0]
             row[QCUP] = row[QTUP]
             row[QUMAX0] = row[QTROT_MAX]

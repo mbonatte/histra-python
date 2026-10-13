@@ -81,6 +81,12 @@ from histra.solver.hysteretic_kernels.transverse import (
 )
 
 from histra.solver.hysteretic_kernels.interface_coulomb import (
+    CCUNLOAD_T,
+    CCUNLOAD_C,
+    CCPLASTIC_T,
+    CCPLASTIC_C,
+    CTANGENT_RELOAD_T,
+    CTANGENT_RELOAD_C,
     CCCONTACT_AREA,
     CCENERGY,
     CCPHASE,
@@ -2282,6 +2288,13 @@ class HystereticBatchRuntime:
         row[CF] = float(spring.f)
         row[CKTANG_COMMITTED] = float(spring.k_tang_committed)
         row[CDN] = float(spring.dn)
+        row[CCUNLOAD_T] = int(spring._c_phase_unload_t)
+        row[CCUNLOAD_C] = int(spring._c_phase_unload_c)
+        row[CCPLASTIC_T] = float(spring._cplastic_tension_indicator)
+        row[CCPLASTIC_C] = float(spring._cplastic_compression_indicator)
+        row[CTANGENT_RELOAD_T] = float(spring.tangent_reload_t)
+        row[CTANGENT_RELOAD_C] = float(spring.tangent_reload_c)
+
 
     def _write_coulomb_object(self, index: int, spring: Any) -> None:
         row = self.coulomb_state[index]
@@ -2304,6 +2317,17 @@ class HystereticBatchRuntime:
         spring._ccontact_area = float(row[CCCONTACT_AREA])
         spring.cenergy_d = float(row[CCENERGY])
         spring.phase = _PHASE_BY_CODE[int(row[CCPHASE])]
+        spring._c_phase_unload_t = _PHASE_BY_CODE[int(row[CCUNLOAD_T])]
+        spring._c_phase_unload_c = _PHASE_BY_CODE[int(row[CCUNLOAD_C])]
+        spring._t_phase_unload_t = spring._c_phase_unload_t
+        spring._t_phase_unload_c = spring._c_phase_unload_c
+        spring._cplastic_tension_indicator = bool(row[CCPLASTIC_T])
+        spring._cplastic_compression_indicator = bool(row[CCPLASTIC_C])
+        spring._tplastic_tension_indicator = spring._cplastic_tension_indicator
+        spring._tplastic_compression_indicator = spring._cplastic_compression_indicator
+        spring.tangent_reload_t = float(row[CTANGENT_RELOAD_T])
+        spring.tangent_reload_c = float(row[CTANGENT_RELOAD_C])
+
         spring._tup = float(row[CTUP])
         spring._tstress = float(row[CTSTRESS])
         spring._tstrain = float(row[CTSTRAIN])

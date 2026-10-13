@@ -21,6 +21,8 @@ from histra.solver.hysteretic_kernels.transverse import (
     ELASTIC,
     PLASTIC_C,
     PLASTIC_T,
+    RELOAD_T,
+    RELOAD_C,
     RUPTURE,
 )
 
@@ -66,7 +68,14 @@ CU = 28
 CF = 29
 CKTANG_COMMITTED = 30
 CDN = 31
-COULOMB_STATE_SIZE = 32
+# Committed unloading memory is required even for the Initial force law.
+CCUNLOAD_T = 32
+CCUNLOAD_C = 33
+CCPLASTIC_T = 34
+CCPLASTIC_C = 35
+CTANGENT_RELOAD_T = 36
+CTANGENT_RELOAD_C = 37
+COULOMB_STATE_SIZE = 38
 
 
 if njit is not None:
@@ -298,6 +307,26 @@ if njit is not None:
             row[CU] = row[CTSTRAIN]
             row[CF] = row[CTSTRESS]
             row[CDN] = 0.0
+            phase = int(row[CCPHASE])
+            if phase == PLASTIC_T:
+                row[CCUNLOAD_T] = phase
+            elif phase == PLASTIC_C:
+                row[CCUNLOAD_C] = phase
+            elif phase == RELOAD_T:
+                if row[CCPLASTIC_T] == 0.0 and row[CCPLASTIC_C] == 0.0:
+                    row[CCUNLOAD_T] = ELASTIC
+                else:
+                    row[CCUNLOAD_T] = phase
+                    row[CCPLASTIC_T] = 1.0
+                row[CTANGENT_RELOAD_T] = row[CKTANG]
+            elif phase == RELOAD_C:
+                if row[CCPLASTIC_T] == 0.0 and row[CCPLASTIC_C] == 0.0:
+                    row[CCUNLOAD_C] = ELASTIC
+                else:
+                    row[CCUNLOAD_C] = phase
+                    row[CCPLASTIC_C] = 1.0
+                row[CTANGENT_RELOAD_C] = row[CKTANG]
+
 
     @njit(cache=True, nogil=True)
     def _commit_elastic_sliding_batch(state, elastic_indices):
