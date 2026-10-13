@@ -262,7 +262,7 @@ def shear_law(material: MasonryMaterial) -> CoulombLaw:
     )
     is_ductility = law_type in {"Elastic", "ElastoPlastic"}
     return CoulombLaw(
-        E=material_float(material, "Gd") / _alfa_shear(material),
+        E=float(np.float32(np.float32(material_float(material, "Gd")) / np.float32(_alfa_shear(material)))),
         cohesion=material_float(material, "fvk0d"),
         mu=material_float(material, "FrictionRatioShear"),
         plastic_stiffness_ratio=material_float(
@@ -308,7 +308,7 @@ def sliding_law(
 
     E = material_float(material, "Gd")
     if not out_of_plane and normalized != "dir3":
-        E = 2.0 * E / (1.0 - _alfa_shear(material))
+        E = float(np.float32(np.float32(2.0) * np.float32(E) / np.float32(np.float32(1.0) - np.float32(_alfa_shear(material)))))
 
     if normalized == "hor":
         suffix = "Hor"

@@ -148,7 +148,7 @@ def test_diagonal_elastoplastic_preserves_csharp_tensile_weight_asymmetry():
 )
 def test_shear_modulus_uses_csharp_alfa_shear_clamp(alpha, expected):
     law = shear_law(_material(Gd=8.0, AlfaShearUser=alpha))
-    assert law.E == 8.0 / expected
+    assert law.E == float(np.float32(np.float32(8.0) / np.float32(expected)))
 
 
 def test_shear_law_maps_every_csharp_coulomb_constructor_field():
