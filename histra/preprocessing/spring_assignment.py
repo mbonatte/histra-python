@@ -71,9 +71,12 @@ from histra.preprocessing.spring_factory import (
 
 
 def _distance_to_interface_plane(quad: Quad, intf: Interface) -> float:
-    p0 = _v(intf.vint3d[0])
-    normal = _unit(_cross3(_v(intf.vint3d[1])-p0, _v(intf.vint3d[2])-p0), label="interface plane")
-    return abs(float(np.dot(_v(quad.g)-p0, normal)))
+    from histra.preprocessing.quad_faces import distance_to_contact_plane
+
+    centre = np.asarray((quad.g.x, quad.g.y, quad.g.z), dtype=np.float32)
+    vertices = np.asarray([(p.x, p.y, p.z) for p in intf.vint3d], dtype=np.float32)
+    return distance_to_contact_plane(centre, vertices)
+
 
 
 def _quad_spring(

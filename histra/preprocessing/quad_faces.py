@@ -138,3 +138,14 @@ def classify_contained_contact(first, second, tolerance):
         if not _inside_polygon(a,b[i],tolerance):contained=False
     if contained:return 2
     return 0
+
+
+@njit(cache=True)
+def distance_to_contact_plane(centre, vertices):
+    """C# Quad.GetSlidingStiffness ray intersection and Single length."""
+    normal = _plane_normal(vertices[0], vertices[1], vertices[2])
+    projected = _ray_project(centre, normal, _plane_w(vertices[0], normal))
+    delta = projected - centre
+    squared = np.float32(np.float32(delta[0]*delta[0]) + np.float32(delta[1]*delta[1]))
+    squared = np.float32(squared + np.float32(delta[2]*delta[2]))
+    return float(np.float32(math.sqrt(float(squared))))
