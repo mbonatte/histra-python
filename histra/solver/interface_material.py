@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from dataclasses import dataclass
 from typing import Iterable, Any
 
@@ -12,6 +13,73 @@ from histra.solver.restart import transfer_committed_spring_state
 
 class InterfaceMaterialMutationError(RuntimeError):
     """Raised when an interface material cannot be changed losslessly."""
+
+
+class InterfaceRegistrationWarning(UserWarning):
+    """A selected material-reset strategy differs from C# registration."""
+
+
+def normalize_interface_registration(value: str) -> str:
+    strategy = str(value).strip().lower()
+    if strategy not in {"csharp", "single_link"}:
+        raise ValueError(
+            f"Unknown interface_registration {value!r}; "
+            "expected 'csharp' or 'single_link'."
+        )
+    return strategy
+
+
+def _backup_quad_links(model: Any, keys: Iterable[int]) -> dict[int, list[list[int]]]:
+    quads = getattr(model.collections, "quads", {})
+    parents = set()
+    for key in keys:
+        interface = model.collections.interfaces[key]
+        for side in (1, 2):
+            if getattr(interface, f"parent_type_element{side}", None) == "Quad":
+                parents.add(getattr(interface, f"parent_element_key{side}"))
+    return {
+        key: [list(edge) for edge in quads[key].interface_keys]
+        for key in parents if key in quads
+    }
+
+
+def _invalidate_quad_links(quad: Any) -> None:
+    quad._perf_dn_edges = None
+    quad._perf_dn_areas = None
+
+
+def _restore_quad_links(model: Any, backups: dict[int, list[list[int]]]) -> None:
+    for key, edges in backups.items():
+        quad = model.collections.quads[key]
+        for target, source in zip(quad.interface_keys, edges):
+            target[:] = source
+        _invalidate_quad_links(quad)
+
+
+def _register_material_resets(model: Any, records: Any, strategy: str) -> int:
+    """Reproduce C# Set/AssignInterfaceAfference only for changed properties.
+
+    This changes neighbour multiplicity for Quad.ComputeDN; it does not clone
+    interface springs or double their global force/stiffness assembly.
+    """
+    quads = getattr(model.collections, "quads", {})
+    added = 0
+    for record in records:
+        if record.old_material_key == record.new_material_key:
+            continue
+        interface = model.collections.interfaces[record.interface_key]
+        for side in (1, 2):
+            if getattr(interface, f"parent_type_element{side}", None) != "Quad":
+                continue
+            quad = quads[getattr(interface, f"parent_element_key{side}")]
+            edge = quad.interface_keys[getattr(interface, f"face{side}")]
+            if strategy == "csharp":
+                edge.append(interface.key)
+                added += 1
+            else:
+                edge[:] = list(dict.fromkeys(edge))
+            _invalidate_quad_links(quad)
+    return added
 
 
 @dataclass(frozen=True)
@@ -28,6 +96,8 @@ class InterfaceMaterialMutationRecord:
 class InterfaceMaterialMutationReport:
     material_key: int
     records: tuple[InterfaceMaterialMutationRecord, ...]
+    interface_registration: str = "csharp"
+    added_quad_links: int = 0
 
     @property
     def interface_count(self) -> int:
@@ -87,6 +157,7 @@ def change_interface_materials(
     material_key: int,
     *,
     preserve_committed_state: bool = True,
+    interface_registration: str = "csharp",
 ) -> InterfaceMaterialMutationReport:
     """Change selected interface materials atomically.
 
@@ -100,10 +171,15 @@ def change_interface_materials(
     4. update compatible dense constitutive rows in place, otherwise fall
        back to the existing full compiled-runtime rebuild.
 
-    The global displacement and all unaffected elements remain unchanged.
+    ``interface_registration="csharp"`` appends the changed interface to its
+    Quad parents as C# ReSetInterfaces/Set does. ``single_link`` retains unique
+    links and emits an explicit compatibility warning. Select a strategy before
+    starting the chain. The global displacement and unaffected springs are
+    preserved; affected Quad normal-force caches are rebuilt.
     """
     if model.collections is None:
         raise InterfaceMaterialMutationError("Model.collections is not initialized.")
+    strategy = normalize_interface_registration(interface_registration)
     material_key = int(material_key)
     if material_key != 0 and material_key not in model.collections.materials:
         raise InterfaceMaterialMutationError(
@@ -112,13 +188,18 @@ def change_interface_materials(
 
     keys = tuple(dict.fromkeys(int(key) for key in interface_keys))
     if not keys:
-        return InterfaceMaterialMutationReport(material_key, ())
+        return InterfaceMaterialMutationReport(material_key, (), strategy)
     missing = [key for key in keys if key not in model.collections.interfaces]
     if missing:
         raise InterfaceMaterialMutationError(
             f"Unknown interface keys: {missing}."
         )
 
+    quad_links = _backup_quad_links(model, keys)
+    runtime = ModelManager.hysteretic_batch_for(model)
+    if quad_links and runtime is not None:
+        # Dense committed histories must seed the full topology rebuild.
+        runtime.sync_all_to_objects()
     backups = {
         key: _backup_interface(model.collections.interfaces[key]) for key in keys
     }
@@ -185,7 +266,17 @@ def change_interface_materials(
                     out_of_plane_springs=len(interface.slid_out_plan),
                 )
             )
+        changed_properties = any(r.old_material_key != r.new_material_key for r in records)
+        if strategy == "single_link" and quad_links and changed_properties:
+            warnings.warn(
+                "single_link material resets retain unique Quad interface links; "
+                "this differs from C# ReSetInterfaces registration and may change "
+                "diagonal normal force and nonlinear response.",
+                InterfaceRegistrationWarning, stacklevel=2,
+            )
+        added_links = _register_material_resets(model, records, strategy)
     except Exception:
+        _restore_quad_links(model, quad_links)
         for key, backup in backups.items():
             model.collections.interfaces[key] = backup
         ModelManager.clear_hysteretic_batch()
@@ -196,7 +287,13 @@ def change_interface_materials(
     # before touching its arrays; any incompatibility or update error clears it
     # so the next solve follows the existing full-build path.
     changed_interfaces = tuple(model.collections.interfaces[key] for key in keys)
-    ModelManager.update_hysteretic_batch_material_interfaces(
-        model, changed_interfaces
+    if quad_links and changed_properties:
+        # Its compiled edge reductions encode neighbour multiplicity.
+        ModelManager.clear_hysteretic_batch()
+    else:
+        ModelManager.update_hysteretic_batch_material_interfaces(
+            model, changed_interfaces
+        )
+    return InterfaceMaterialMutationReport(
+        material_key, tuple(records), strategy, added_links
     )
-    return InterfaceMaterialMutationReport(material_key, tuple(records))

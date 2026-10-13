@@ -12,6 +12,9 @@ from histra.solver.cancellation import CancelCheck
 from histra.solver.interface_material import (
     InterfaceMaterialMutationReport,
     change_interface_materials,
+    normalize_interface_registration,
+    _backup_quad_links,
+    _restore_quad_links,
 )
 from histra.solver.outcomes import (
     AnalysisExecution,
@@ -61,10 +64,12 @@ class AnalysisSession:
         adaptive_tangent_refresh: bool | int | None = None,
         tangent_refresh_cadence: int | None = None,
         allow_experimental_methods: bool = False,
+        interface_registration: str = "csharp",
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
         self.model = model
+        self.interface_registration = normalize_interface_registration(interface_registration)
         self.combination_row = int(combination_row)
         self.on_log = on_log
         self.on_progress = on_progress
@@ -148,7 +153,7 @@ class AnalysisSession:
         self._require_usable()
         keys = tuple(dict.fromkeys(int(key) for key in interface_keys))
         if not keys:
-            return InterfaceMaterialMutationReport(int(material_key), ())
+            return InterfaceMaterialMutationReport(int(material_key), (), self.interface_registration)
 
         if self.model.collections is None:
             from histra.solver.interface_material import InterfaceMaterialMutationError
@@ -163,6 +168,13 @@ class AnalysisSession:
 
         from histra.solver.interface_material import _backup_interface
 
+        quad_links = _backup_quad_links(self.model, keys)
+        if quad_links:
+            from histra.solver.model_manager import ModelManager
+
+            runtime = ModelManager.hysteretic_batch_for(self.model)
+            if runtime is not None:
+                runtime.sync_all_to_objects()
         backups = {
             key: _backup_interface(self.model.collections.interfaces[key])
             for key in keys
@@ -174,6 +186,7 @@ class AnalysisSession:
                 keys,
                 material_key,
                 preserve_committed_state=preserve_committed_state,
+                interface_registration=self.interface_registration,
             )
             if self.performance_policy == "compiled":
                 from histra.solver.backend_coverage import inspect_solver_backend
@@ -183,6 +196,7 @@ class AnalysisSession:
                 coverage.require_compiled()
         except Exception:
             try:
+                _restore_quad_links(self.model, quad_links)
                 for key, backup in backups.items():
                     self.model.collections.interfaces[key] = backup
                 from histra.solver.model_manager import ModelManager
@@ -198,7 +212,9 @@ class AnalysisSession:
         if self.on_log is not None:
             self.on_log(
                 f"Changed {report.interface_count} interfaces to material "
-                f"{report.material_key}; rebuilt {report.spring_count} springs"
+                f"{report.material_key}; rebuilt {report.spring_count} springs; "
+                f"registration={report.interface_registration}, "
+                f"added Quad links={report.added_quad_links}"
             )
         return report
 
