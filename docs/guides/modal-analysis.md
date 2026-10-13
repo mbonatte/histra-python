@@ -139,10 +139,10 @@ The directional pseudovectors reproduce C# assignment semantics: the first
 entry of each Quad translational afference is assigned to the corresponding
 global DOF. `Umax` is the maximum of `abs(phi[j] * e_d[j])`.
 
-Eigenvector sign is mathematically arbitrary. Python orients every mode
-consistently by making its largest absolute component positive. Participation
-coefficient signs can therefore be opposite to a C# run while frequencies,
-effective masses and physical shapes remain equivalent.
+C# 2026.1.1 `InverseIterations` preserves discovery order and eigenvector sign.
+Python retains that order and sign because mode numbers and signed participation
+factors are observable outputs. `SubspaceIterations` retains its existing
+frequency ordering and largest-component-positive archive convention.
 
 ## Python API
 

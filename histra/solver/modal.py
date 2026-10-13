@@ -512,6 +512,7 @@ def _solve_modal_analysis_impl(
             directions,
             mass_directions,
             total_masses,
+            canonicalize_sign=procedure != "InverseIterations",
         )
         modes.append(mode)
         log(
@@ -723,7 +724,9 @@ def _inverse_iterations(
 
     if not values:
         return np.empty(0, dtype=float), np.empty((n, 0), dtype=float)
-    return _sorted_positive_modes(np.asarray(values), np.column_stack(vectors))
+    # C# LegacyLike emits discovery order; mode numbers are persisted and
+    # referenced by later analyses. Sorting silently changes those identities.
+    return np.asarray(values), np.column_stack(vectors)
 
 
 def _euclidean_deflate(vector: np.ndarray, modes: list[np.ndarray]) -> np.ndarray:
@@ -758,6 +761,8 @@ def _compute_mode(
     directions: np.ndarray,
     mass_directions: np.ndarray,
     total_masses: np.ndarray,
+    *,
+    canonicalize_sign: bool = True,
 ) -> ModalMode:
     mass_vector = np.asarray(mass @ vector, dtype=float)
     norm_squared = float(np.dot(vector, mass_vector))
@@ -765,10 +770,10 @@ def _compute_mode(
         raise ModalAnalysisError(f"Mode {mode_number} has a zero/invalid modal mass norm.")
     shape = vector / sqrt(norm_squared)
 
-    # Eigenvector sign is mathematically arbitrary. Fix it for deterministic
-    # archives/tests while preserving all C# modal quantities except Gamma sign.
+    # LegacyLike persists the discovered sign, including signed Gamma.
+    # Other procedures retain their existing deterministic archive convention.
     largest = int(np.argmax(np.abs(shape)))
-    if shape[largest] < 0.0:
+    if canonicalize_sign and shape[largest] < 0.0:
         shape = -shape
 
     participations = np.asarray(shape @ mass_directions, dtype=float)

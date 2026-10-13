@@ -37,3 +37,42 @@ class TestModalInverse2026(unittest.TestCase):
         vector = _inverse_iterations(k, m, 1, criteria="EigenVector", **kwargs)
         np.testing.assert_array_equal(frequency[0], vector[0])
         np.testing.assert_array_equal(frequency[1], vector[1])
+
+
+    def test_discovery_order_is_preserved_for_persisted_mode_numbers(self):
+        from unittest.mock import patch
+
+        class ControlledSolve:
+            """Emit exact eigenvectors in the order a backend discovers them."""
+            def __init__(self, size):
+                self.calls = 0
+                self.x = np.zeros(size)
+
+            def solve(self, rhs):
+                # Each exact eigenvector passes after two iterations. The
+                # second mode is lower in frequency than the first.
+                axis = [1, 0, 2][self.calls // 2]
+                self.x = np.eye(3)[axis].copy()
+                self.calls += 1
+
+        with patch("histra.solver.modal.LinearSystem", ControlledSolve):
+            values, shapes = _inverse_iterations(
+                sp.diags([4., 18., 48.], format="csc"), sp.eye(3, format="csc"), 3,
+                criteria="Frquency", csharp_tolerance=1e-6,
+                residual_tolerance=1e-8, max_iterations=4,
+                should_cancel=None, on_mode=lambda _: None,
+            )
+        np.testing.assert_array_equal(values, [18., 4., 48.])
+        np.testing.assert_array_equal(shapes, np.eye(3)[:, [1, 0, 2]])
+
+
+    def test_legacy_mode_retains_discovered_shape_and_participation_sign(self):
+        from histra.solver.modal import _compute_mode
+        k, m = sp.eye(2, format="csc"), sp.eye(2, format="csc")
+        directions = np.array([[1., 0., 0.], [0., 1., 1.]])
+        result = _compute_mode(1, 1., np.array([-2., 0.]), k, m,
+                               directions, directions, np.ones(3),
+                               canonicalize_sign=False)
+        np.testing.assert_array_equal(result.shape, [-1., 0.])
+        self.assertEqual(result.participation_x, -1.)
+        self.assertEqual(result.effective_mass_x, 1.)
