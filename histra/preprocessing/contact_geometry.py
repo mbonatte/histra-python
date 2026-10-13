@@ -132,8 +132,11 @@ def _unit_f32(value: Sequence[float], *, label: str) -> np.ndarray:
     norm = _norm3_f32(out)
     if float(norm) <= 1.0e-12:
         raise ModelPreparationError(f"Cannot normalize zero vector while building {label}.")
+    # XNA Vector3.Normalize computes the Single reciprocal once and then
+    # multiplies every component. Component-wise division rounds differently.
+    scale = _f32(_f32(1.0) / norm)
     return np.asarray(
-        (_f32(out[0] / norm), _f32(out[1] / norm), _f32(out[2] / norm)),
+        (_f32(out[0] * scale), _f32(out[1] * scale), _f32(out[2] * scale)),
         dtype=np.float32,
     )
 
