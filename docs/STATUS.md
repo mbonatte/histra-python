@@ -1,8 +1,14 @@
 # Current feature status
 
-Release status: **Ready for v1.0.0 private release**.
-Authored C# parity qualification is complete across all 14 Article models, interface material chains, and strategy matrices under brand-new model preparation. Experimental calibration and strict mode are deferred post-V1 per release directives.
-See the [V1 implementation and validation plan](release/v1-implementation-plan.md) and [V1 release checklist](release/v1-release-checklist.md).
+Release status: **v1.4.1** (2026-10-13).
+
+This maintenance release improves C# 2026.1.1 geometry, spring definitions,
+nonlinear contracts and modal inverse iteration. Fresh Dhir Vert comparisons
+cover 77,080 springs at all 10 committed steps with zero spring-phase differences.
+Detailed spring-history parity remains open. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
+
+The V1 Article/interface-chain evidence is historical qualification of its
+recorded source and environment, not a new v1.4.1 rerun of those models.
 
 ## Supported
 

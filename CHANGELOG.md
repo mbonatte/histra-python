@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.1 - 2026-10-13
+
+C# 2026.1.1 geometry and nonlinear parity improvements, with native DLL regression oracles.
+
+### Fixes
+
+- Reproduce C# Quad face projection, contact containment, node/plane tolerances, Vector3 normalization, local spring-cell construction, and projected fibre stiffness using compiled kernels.
+- Match float32 ray–plane sliding distances and masonry shear/sliding modulus arithmetic.
+- Use C# polygon-strip bisection for shear-DOF coordinates instead of Newton inversion, resolving Dhir Vert spring force and phase divergence.
+- Preserve C# signed spring-energy increments, nonlinear convergence and Regula-Falsi/secant/bisection contracts, and successful Arc-Length retry clocks.
+- Preserve C# interface registration on material resets by default, with the single-link alternative retained.
+- Correct tapered sliding patch areas and parse legacy spring snapshots and empty load-combination cells.
+
+### Modal
+
+- Port C# 2026.1.1 sequential inverse iteration and configuration defaults, preserving mode identities and signs.
+
+### Validation and limits
+
+- Full local suite: 719 passed, 23 skipped, 623 subtests passed.
+- Fresh Dhir Vert reconstruction, with material 146 applied to all 148 foundation interfaces: 77,080 springs compared at step 0 and every one of 10 committed steps; zero spring-phase differences.
+- Final maximum spring-force difference: 6.10e-7 kN; spring-displacement difference: 3.01e-10. Reaction and global displacement comparisons pass.
+- Detailed spring-history metadata still has open yield-coordinate, compression-history and unloading-memory differences; this release does not claim complete or bit-identical C# parity. See [the Vert audit](docs/investigations/dhir-vert-native-parity.md).
+- These measurements concern Vert in explicit C# compatibility mode. They do not qualify later load stages or independent strict equilibrium.
+
 ## 1.4.0 - 2026-10-07
 
 Batch element stiffness assembly ($K_e$), compiled Numba local-term evaluation, fixed-topology CSC scatter acceleration, and solver lifecycle plan caching: 24.4x faster element stiffness assembly with 100% bit-exact C# parity.
