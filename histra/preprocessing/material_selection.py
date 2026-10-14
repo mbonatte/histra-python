@@ -19,6 +19,7 @@ This module must not depend on spring construction; it selects parameters only.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
@@ -32,6 +33,7 @@ from histra.preprocessing.constitutive_laws import (
     flex_law as _flex_law,
     shear_law as _shear_law,
     sliding_law as _sliding_law,
+    material_bool,
 )
 from histra.preprocessing.errors import ModelPreparationError
 
@@ -58,6 +60,56 @@ def _cached_flex_law(
         law = _flex_law(material, vertical=vertical)
         cache[key] = law
     return law
+
+
+def _flex_alignment(interface_e1, quad_e1) -> tuple[float, float]:
+    """ConstitutiveLawBase: Vector3.Dot in Single, then Double sqrt."""
+    f = np.float32
+    a = np.asarray(interface_e1, dtype=np.float32)
+    b = np.asarray(quad_e1, dtype=np.float32)
+    dot = f(f(f(a[0] * b[0]) + f(a[1] * b[1])) + f(a[2] * b[2]))
+    c1 = min(1.0, abs(float(dot)))
+    return c1, math.sqrt(1.0 - c1 * c1)
+
+
+def _blend_hysteretic_laws(primary: _HystereticLaw, secondary: _HystereticLaw,
+                           c1: float, c2: float) -> _HystereticLaw:
+    """Literal ConstitutiveLawHysteretic.PropOrthotropyParameter order.
+
+    Keep each value*c*c product in source order. Even equal material values
+    must go through the blend: rounding can determine the softening tail sign.
+    The source retains the primary unloading/ductility coefficients.
+    """
+    def blend(name):
+        return (getattr(primary, name) * c1 * c1
+                + getattr(secondary, name) * c2 * c2)
+
+    changes = {'E': blend('E')}
+    primary_elastic = primary.tensile_curve == primary.compressive_curve == 'Elastic'
+    secondary_elastic = secondary.tensile_curve == secondary.compressive_curve == 'Elastic'
+    if not primary_elastic and not secondary_elastic:
+        for name in ('ratio_et_c', 'ratio_et_t', 'fy_c', 'fy_t',
+                     'eps_u_c', 'eps_u_t', 'G_t', 'G_c'):
+            changes[name] = blend(name)
+        if c2 != 0.0:
+            changes['tensile_curve'] = secondary.tensile_curve
+            changes['compressive_curve'] = secondary.compressive_curve
+    return replace(primary, **changes)
+
+
+def _interface_flex_law(material: MasonryMaterial, intf: Interface, quad,
+                        face: int, *, cache=None) -> _HystereticLaw:
+    horizontal = _cached_flex_law(material, vertical=False, cache=cache)
+    vertical = _cached_flex_law(material, vertical=True, cache=cache)
+    primary, secondary = horizontal, vertical
+    if material_bool(material, 'FlexuralOrthotropyType', False):
+        if face in (0, 2):
+            primary, secondary = vertical, horizontal
+        elif face not in (1, 3):
+            # The source switch has no blending branch for broad faces 4/5.
+            return horizontal
+    c1, c2 = _flex_alignment(intf.reference_e1, quad.reference_e1)
+    return _blend_hysteretic_laws(primary, secondary, c1, c2)
 
 
 def _cached_diagonal_laws(

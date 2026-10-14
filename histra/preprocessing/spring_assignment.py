@@ -53,6 +53,7 @@ from histra.preprocessing.material_selection import (
     _cached_diagonal_laws,
     _cached_flex_law,
     _interface_sliding_law,
+    _interface_flex_law,
     _material,
 )
 from histra.springs.coulomb03 import SpringCoulomb03
@@ -142,10 +143,7 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
         return sp, _flex_law(_material(model, model.collections.quads[quad_key].material_key))
     quad = model.collections.quads[parent_key]
     material = material_override if material_override is not None else _material(model, quad.material_key)
-    # Current bridge materials are flexurally isotropic. Choose vertical for
-    # predominantly vertical interface normal, horizontal otherwise.
-    vertical = abs(float(np.dot(np.asarray(intf.reference_e2), np.asarray((0.0,0.0,1.0))))) > math.cos(math.radians(45.0))
-    law = _flex_law(material, vertical=vertical)
+    law = _interface_flex_law(material, intf, quad, face)
     k, area, length = _fiber_stiffness(model, quad, intf, cell, law.E, face)
     return _configure_hysteretic(k, area, length, law), law
 
@@ -307,11 +305,7 @@ def _transverse_side_properties_batch(
         if material_override is not None
         else _material(model, quad.material_key)
     )
-    if vertical is None:
-        vertical = abs(float(intf.reference_e2[2])) > math.cos(math.radians(45.0))
-    law = _cached_flex_law(
-        material, vertical=vertical, cache=law_cache
-    )
+    law = _interface_flex_law(material, intf, quad, face, cache=law_cache)
     return _fiber_stiffness_batch(
         model, quad, intf, cells, law.E, face
     ), law
