@@ -401,18 +401,9 @@ class Interface:
 
         if hasattr(I.trasv_1, "get_k_array"):
             k_arr = I.trasv_1.get_k_array(alfa, spring_count)
-            k0 = float(k_arr[0])
-            uniform = bool(np.all(k_arr == k0))
             spring_k = k_arr.tolist()
         else:
-            k0 = I.trasv_1[0].get_k(alfa)
-            uniform = True
-            spring_k = [k0]
-            for index in range(1, spring_count):
-                kval = I.trasv_1[index].get_k(alfa)
-                spring_k.append(kval)
-                if kval != k0:
-                    uniform = False
+            spring_k = [I.trasv_1[index].get_k(alfa) for index in range(spring_count)]
 
         L = I.length
         L2 = L * L
@@ -423,60 +414,47 @@ class Interface:
         num7 = 0.0
         num8 = 0.0
 
-        if uniform and I._perf_sum_di2 is not None:
-            num = k0 * I._perf_sum_di2
-            num2 = k0 * I._perf_sum_dj2
-            num3 = k0 * I._perf_sum_didj
-            if constrained:
-                num4 = k0 * spring_count
-                num5 = -k0 * I._perf_sum_dm
-                num6 = k0 * I._perf_sum_dm2
-            if d2 > 0:
-                out_of_plane_diag = k0 * I._perf_sum_ecc2
-                num7 = k0 * I._perf_sum_djecc
-                num8 = k0 * I._perf_sum_diecc
-        else:
-            num = num2 = num3 = 0.0
-            for i in range(nrow):
-                row_offset = i * ncol
-                for j in range(ncol):
-                    idx_ = row_offset + j
+        num = num2 = num3 = 0.0
+        for i in range(nrow):
+            row_offset = i * ncol
+            for j in range(ncol):
+                idx_ = row_offset + j
+                if idx_ >= spring_count:
+                    continue
+                di = di_cache[idx_]
+                dj = dj_cache[idx_]
+                k = spring_k[idx_]
+                num += k * di * di
+                num3 += k * di * dj
+                num2 += k * dj * dj
+
+        if constrained:
+            num4 = num5 = num6 = 0.0
+            for i_ in range(ncol):
+                for j_ in range(nrow):
+                    idx_ = j_ * ncol + i_
                     if idx_ >= spring_count:
                         continue
                     di = di_cache[idx_]
-                    dj = dj_cache[idx_]
+                    dm = 0.5 * I.length - di
                     k = spring_k[idx_]
-                    num += k * di * di
-                    num3 += k * di * dj
-                    num2 += k * dj * dj
+                    num4 += k
+                    num5 -= k * dm
+                    num6 += k * dm * dm
 
-            if constrained:
-                num4 = num5 = num6 = 0.0
-                for i_ in range(ncol):
-                    for j_ in range(nrow):
-                        idx_ = j_ * ncol + i_
-                        if idx_ >= spring_count:
-                            continue
-                        di = di_cache[idx_]
-                        dm = 0.5 * I.length - di
-                        k = spring_k[idx_]
-                        num4 += k
-                        num5 -= k * dm
-                        num6 += k * dm * dm
-
-            if d2 > 0:
-                for i_ in range(ncol):
-                    for j_ in range(nrow):
-                        idx_ = j_ * ncol + i_
-                        if idx_ >= spring_count:
-                            continue
-                        k = spring_k[idx_]
-                        di = di_cache[idx_]
-                        dj = dj_cache[idx_]
-                        ecc = ecc_cache[idx_]
-                        out_of_plane_diag += k * ecc * ecc
-                        num7 += k * dj * ecc
-                        num8 += k * di * ecc
+        if d2 > 0:
+            for i_ in range(ncol):
+                for j_ in range(nrow):
+                    idx_ = j_ * ncol + i_
+                    if idx_ >= spring_count:
+                        continue
+                    k = spring_k[idx_]
+                    di = di_cache[idx_]
+                    dj = dj_cache[idx_]
+                    ecc = ecc_cache[idx_]
+                    out_of_plane_diag += k * ecc * ecc
+                    num7 += k * dj * ecc
+                    num8 += k * di * ecc
 
         if L2 > 1e-30:
             num /= L2

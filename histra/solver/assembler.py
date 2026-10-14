@@ -857,10 +857,7 @@ def _evaluate_stiffness_terms_batch_python(
             kq = quad_k0[q]
         else:
             kt = quad_state[q, QKTANG]
-            if alfa == 1.0:
-                kq = kt
-            else:
-                kq = quad_k0[q] + (kt - quad_k0[q]) * alfa
+            kq = quad_k0[q] + (kt - quad_k0[q]) * alfa
         terms[q] = kq * quad_dalfa_sq[q]
 
     # ── Interfaces ──
@@ -876,113 +873,65 @@ def _evaluate_stiffness_terms_batch_python(
         sc = spring_counts[i]
         sp_base = spring_offsets[i]
 
-        is_uniform = True
-        k0 = 0.0
-        if sc > 0:
-            if alfa == 0.0:
-                k0 = spring_k0[sp_base]
-                for s in range(1, sc):
-                    if spring_k0[sp_base + s] != k0:
-                        is_uniform = False
-                        break
-            elif alfa == 1.0:
-                k0 = transverse_trial[sp_base, 9]
-                for s in range(1, sc):
-                    if transverse_trial[sp_base + s, 9] != k0:
-                        is_uniform = False
-                        break
-            else:
-                k0 = spring_k0[sp_base] + (transverse_trial[sp_base, 9] - spring_k0[sp_base]) * alfa
-                for s in range(1, sc):
-                    ks = spring_k0[sp_base + s] + (transverse_trial[sp_base + s, 9] - spring_k0[sp_base + s]) * alfa
-                    if ks != k0:
-                        is_uniform = False
-                        break
+        num = 0.0
+        num2 = 0.0
+        num3 = 0.0
+        for r in range(nr):
+            row_offset = r * nc
+            for col in range(nc):
+                idx = row_offset + col
+                if idx >= sc:
+                    continue
+                if alfa == 0.0:
+                    k = spring_k0[sp_base + idx]
+                else:
+                    k0_val = spring_k0[sp_base + idx]
+                    k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
+                di = flat_di[sp_base + idx]
+                dj = flat_dj[sp_base + idx]
+                num += k * di * di
+                num3 += k * di * dj
+                num2 += k * dj * dj
 
-        if is_uniform and sc > 0:
-            num = k0 * sum_di2[i]
-            num2 = k0 * sum_dj2[i]
-            num3 = k0 * sum_didj[i]
-            num4 = 0.0
-            num5 = 0.0
-            num6 = 0.0
-            if c:
-                num4 = k0 * sc
-                num5 = -k0 * sum_dm[i]
-                num6 = k0 * sum_dm2[i]
-            out_of_plane_diag = 0.0
-            num7 = 0.0
-            num8 = 0.0
-            if d2:
-                out_of_plane_diag = k0 * sum_ecc2[i]
-                num7 = k0 * sum_djecc[i]
-                num8 = k0 * sum_diecc[i]
-        else:
-            num = 0.0
-            num2 = 0.0
-            num3 = 0.0
-            for r in range(nr):
-                row_offset = r * nc
-                for col in range(nc):
-                    idx = row_offset + col
+        num4 = 0.0
+        num5 = 0.0
+        num6 = 0.0
+        if c:
+            for col in range(nc):
+                for r in range(nr):
+                    idx = r * nc + col
                     if idx >= sc:
                         continue
                     if alfa == 0.0:
                         k = spring_k0[sp_base + idx]
-                    elif alfa == 1.0:
-                        k = transverse_trial[sp_base + idx, 9]
+                    else:
+                        k0_val = spring_k0[sp_base + idx]
+                        k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
+                    dm = flat_dm[sp_base + idx]
+                    num4 += k
+                    num5 -= k * dm
+                    num6 += k * dm * dm
+
+        out_of_plane_diag = 0.0
+        num7 = 0.0
+        num8 = 0.0
+        if d2:
+            for col in range(nc):
+                for r in range(nr):
+                    idx = r * nc + col
+                    if idx >= sc:
+                        continue
+                    if alfa == 0.0:
+                        k = spring_k0[sp_base + idx]
                     else:
                         k0_val = spring_k0[sp_base + idx]
                         k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
                     di = flat_di[sp_base + idx]
                     dj = flat_dj[sp_base + idx]
-                    num += k * di * di
-                    num3 += k * di * dj
-                    num2 += k * dj * dj
-
-            num4 = 0.0
-            num5 = 0.0
-            num6 = 0.0
-            if c:
-                for col in range(nc):
-                    for r in range(nr):
-                        idx = r * nc + col
-                        if idx >= sc:
-                            continue
-                        if alfa == 0.0:
-                            k = spring_k0[sp_base + idx]
-                        elif alfa == 1.0:
-                            k = transverse_trial[sp_base + idx, 9]
-                        else:
-                            k0_val = spring_k0[sp_base + idx]
-                            k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
-                        dm = flat_dm[sp_base + idx]
-                        num4 += k
-                        num5 -= k * dm
-                        num6 += k * dm * dm
-
-            out_of_plane_diag = 0.0
-            num7 = 0.0
-            num8 = 0.0
-            if d2:
-                for col in range(nc):
-                    for r in range(nr):
-                        idx = r * nc + col
-                        if idx >= sc:
-                            continue
-                        if alfa == 0.0:
-                            k = spring_k0[sp_base + idx]
-                        elif alfa == 1.0:
-                            k = transverse_trial[sp_base + idx, 9]
-                        else:
-                            k0_val = spring_k0[sp_base + idx]
-                            k = k0_val + (transverse_trial[sp_base + idx, 9] - k0_val) * alfa
-                        di = flat_di[sp_base + idx]
-                        dj = flat_dj[sp_base + idx]
-                        ecc = flat_ecc[sp_base + idx]
-                        out_of_plane_diag += k * ecc * ecc
-                        num7 += k * dj * ecc
-                        num8 += k * di * ecc
+                    ecc = flat_ecc[sp_base + idx]
+                    out_of_plane_diag += k * ecc * ecc
+                    num7 += k * dj * ecc
+                    num8 += k * di * ecc
 
         if L2 > 1e-30:
             num /= L2
@@ -1000,8 +949,8 @@ def _evaluate_stiffness_terms_batch_python(
             terms[t_idx + 4] = -num7 - num8
             terms[t_idx + 5] = num7 + num8
             terms[t_idx + 6] = num6
-            terms[t_idx + 7] = (num3 - num) * L * 0.5
-            terms[t_idx + 8] = (num2 - num3) * L * 0.5
+            terms[t_idx + 7] = num3 * L / 2.0 - num * L / 2.0
+            terms[t_idx + 8] = num2 * L / 2.0 - num3 * L / 2.0
             terms[t_idx + 9] = (-num8 + num7) * L * 0.5
             terms[t_idx + 10] = (num8 - num7) * L * 0.5
             terms[t_idx + 11] = num
@@ -1044,7 +993,7 @@ def _evaluate_stiffness_terms_batch_python(
                 ks = slid_k0[i]
             else:
                 kt = coulomb_state[sm_idx, CKTANG]
-                ks = kt if alfa == 1.0 else slid_k0[i] + (kt - slid_k0[i]) * alfa
+                ks = slid_k0[i] + (kt - slid_k0[i]) * alfa
             terms[t_idx + 0] = ks
             terms[t_idx + 1] = -ks
             terms[t_idx + 2] = ks
@@ -1056,14 +1005,14 @@ def _evaluate_stiffness_terms_batch_python(
                 k1 = sop0_k0[i]
             else:
                 kt0 = coulomb_state[s0_idx, CKTANG]
-                k1 = kt0 if alfa == 1.0 else sop0_k0[i] + (kt0 - sop0_k0[i]) * alfa
+                k1 = sop0_k0[i] + (kt0 - sop0_k0[i]) * alfa
 
             s1_idx = sop1_managed_idx[i]
             if s1_idx < 0 or alfa == 0.0:
                 k2 = sop1_k0[i]
             else:
                 kt1 = coulomb_state[s1_idx, CKTANG]
-                k2 = kt1 if alfa == 1.0 else sop1_k0[i] + (kt1 - sop1_k0[i]) * alfa
+                k2 = sop1_k0[i] + (kt1 - sop1_k0[i]) * alfa
 
             di_s = sop_di[i]
             dj_s = sop_dj[i]
