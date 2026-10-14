@@ -64,6 +64,12 @@ from histra.solver.modal import (
     ModalMode,
     solve_modal_analysis,
 )
+from histra.collapse import (
+    CollapseConfig,
+    CollapseScreeningReport,
+    ComponentMappingConfig,
+    screen_analysis_collapse,
+)
 
 
 try:
@@ -124,4 +130,8 @@ __all__ = [
     "PythonSolverTimeout",
     "run_python_solver_job",
     "warmup_compiled_backends",
+    "CollapseConfig",
+    "CollapseScreeningReport",
+    "ComponentMappingConfig",
+    "screen_analysis_collapse",
 ]

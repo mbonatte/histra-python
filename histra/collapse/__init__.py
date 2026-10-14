@@ -23,6 +23,13 @@ from histra.collapse.classifier import (
     classify_collapse_mechanism,
     classify_execution,
 )
+from histra.collapse.config import (
+    CollapseConfig,
+    CollapseScreeningReport,
+    ComponentMappingConfig,
+    resolve_component_mapping,
+    screen_analysis_collapse,
+)
 from histra.collapse.evolution import (
     EvolutionStepRecord,
     MechanismEvolutionHistory,
@@ -82,6 +89,9 @@ __all__ = [
     "ClassificationResult",
     "ClassifierThresholds",
     "CollapseCategory",
+    "CollapseConfig",
+    "CollapseScreeningReport",
+    "ComponentMappingConfig",
     "DamageParticipationSummary",
     "EvidenceBundle",
     "EvolutionStepRecord",
@@ -135,7 +145,9 @@ __all__ = [
     "extract_interface_forces",
     "extract_interface_kinematics",
     "extract_load_history",
+    "resolve_component_mapping",
     "sample_quad_displacements_and_masses",
+    "screen_analysis_collapse",
     "track_mechanism_evolution",
 ]
 

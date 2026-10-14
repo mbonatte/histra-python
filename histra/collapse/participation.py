@@ -145,6 +145,11 @@ class BridgeClassification:
     all_quad_keys: tuple[int, ...] = ()
     arch_spans: dict[str, tuple[int, ...]] = field(default_factory=dict)
     backfill_spans: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    abutment_quad_keys: tuple[int, ...] = ()
+    unmapped_quad_keys: tuple[int, ...] = ()
+    unmapped_material_keys: tuple[int, ...] = ()
+    ambiguous_quad_keys: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    mapping_warnings: tuple[str, ...] = ()
 
     @property
     def has_piers(self) -> bool:
@@ -159,8 +164,42 @@ class BridgeClassification:
         return len(self.arch_quad_keys) > 0
 
     @property
+    def has_abutments(self) -> bool:
+        return len(self.abutment_quad_keys) > 0
+
+    @property
+    def has_unmapped(self) -> bool:
+        return len(self.unmapped_quad_keys) > 0
+
+    @property
+    def has_ambiguous(self) -> bool:
+        return len(self.ambiguous_quad_keys) > 0
+
+    @property
+    def has_warnings(self) -> bool:
+        return len(self.mapping_warnings) > 0
+
+    @property
     def num_spans(self) -> int:
         return len(self.arch_spans)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_structure_count": len(self.total_structure_quad_keys),
+            "backfill_count": len(self.backfill_quad_keys),
+            "arch_count": len(self.arch_quad_keys),
+            "pier_count": len(self.pier_quad_keys),
+            "abutment_count": len(self.abutment_quad_keys),
+            "other_count": len(self.other_quad_keys),
+            "unmapped_count": len(self.unmapped_quad_keys),
+            "ambiguous_count": len(self.ambiguous_quad_keys),
+            "unmapped_quad_keys": list(self.unmapped_quad_keys),
+            "unmapped_material_keys": list(self.unmapped_material_keys),
+            "ambiguous_quad_keys": {str(k): list(v) for k, v in self.ambiguous_quad_keys.items()},
+            "mapping_warnings": list(self.mapping_warnings),
+            "arch_spans": {k: list(v) for k, v in self.arch_spans.items()},
+            "backfill_spans": {k: list(v) for k, v in self.backfill_spans.items()},
+        }
 
 
 @dataclass(frozen=True)
@@ -454,6 +493,8 @@ def sample_quad_displacements_and_masses(
 def classify_bridge_components(
     model: Model,
     custom_regions: Mapping[str, Sequence[int]] | None = None,
+    *,
+    mapping_config: Any | None = None,
 ) -> BridgeClassification:
     """Classify model Quad elements into structural components.
 
@@ -463,14 +504,24 @@ def classify_bridge_components(
              or elements located at lower elevations below arch springing.
     - arch: Masonry vault elements along the bridge span (Layer 0 in bridge wizard models,
             or material name 'masonry' not in piers/backfill).
+    - abutment: End masonry abutments.
     - total_structure: All elements excluding backfill.
     """
+    if mapping_config is not None:
+        from histra.collapse.config import resolve_component_mapping
+        return resolve_component_mapping(model, mapping_config)
+
+    if custom_regions is not None and hasattr(custom_regions, "material_keys") and hasattr(custom_regions, "quad_keys"):
+        from histra.collapse.config import resolve_component_mapping
+        return resolve_component_mapping(model, custom_regions)
+
     if custom_regions is not None:
         all_keys = tuple(sorted(model.collections.quads.keys())) if model.collections else ()
         total_struct = tuple(sorted(custom_regions.get("total_structure", ())))
         backfill = tuple(sorted(custom_regions.get("backfill", ())))
         arch = tuple(sorted(custom_regions.get("arch", ())))
         piers = tuple(sorted(custom_regions.get("piers", ())))
+        abutment = tuple(sorted(custom_regions.get("abutment", ())))
         other = tuple(sorted(set(all_keys) - set(total_struct) - set(backfill)))
         arch_spans = {str(k): tuple(sorted(v)) for k, v in custom_regions.get("arch_spans", {}).items()}
         backfill_spans = {str(k): tuple(sorted(v)) for k, v in custom_regions.get("backfill_spans", {}).items()}
@@ -478,6 +529,8 @@ def classify_bridge_components(
             arch_spans = {"span_1": arch}
         if not backfill_spans and backfill:
             backfill_spans = {"span_1": backfill}
+        if not total_struct:
+            total_struct = tuple(sorted(set(arch) | set(piers) | set(abutment) | set(other)))
         return BridgeClassification(
             total_structure_quad_keys=total_struct,
             backfill_quad_keys=backfill,
@@ -487,6 +540,7 @@ def classify_bridge_components(
             all_quad_keys=all_keys,
             arch_spans=arch_spans,
             backfill_spans=backfill_spans,
+            abutment_quad_keys=abutment,
         )
 
     if model.collections is None:
