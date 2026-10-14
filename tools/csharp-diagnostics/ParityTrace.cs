@@ -47,7 +47,7 @@ public static class ParityTrace
         {
             var dictionary = Get(Get(collections, family), "Collection") as IDictionary;
             if (dictionary == null) continue;
-            int[] keys = family == "Interfaces" ? new[] { 681, 1806, 863, 5818 } : new[] { 1111 };
+            int[] keys = family == "Interfaces" ? new[] { 272, 356, 681, 1806, 863, 5818 } : new[] { 1111 };
             foreach (int key in keys)
             {
                 if (!dictionary.Contains(key)) continue;
@@ -65,6 +65,12 @@ public static class ParityTrace
                     {
                         b.Append("\nSPRING\t").Append(family).Append('\t').Append(key).Append('\t').Append(list).Append('\t').Append(index++);
                         Fields(b, spring, "", "U", "F", "K_tang", "Phase", "N", "Fy", "Up", "Cstrain", "Tstrain", "Cstress", "Tstress", "CstressNormal", "CstressNormalPrev", "CmomMax");
+                        if (family == "Interfaces" && (key == 272 || key == 356))
+                            Fields(b, spring, "", "K", "Kt", "Ur", "Alfar", "Alfau",
+                                "TPhase", "CenergyD", "Umax", "_CrotPu", "_CrotNu", "_CloadIndicator",
+                                "_TrotPu", "_TrotNu", "_TrotMax", "_TrotMin", "_TloadIndicator",
+                                "_mom1p", "_mom2p", "_mom3p", "_rot1p", "_rot2p", "_rot3p",
+                                "_E1p", "_E2p", "_E3p", "_Eup", "_Eun");
                     }
                 }
             }

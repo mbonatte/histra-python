@@ -37,6 +37,14 @@ $list.Add($spring)
 [Objects.Interface].GetProperty('Trasv_1').SetValue($interface,$list,$null)
 $dictionary = $collections.Interfaces.Collection
 $dictionary.GetType().GetMethod('Add').Invoke($dictionary,[object[]]@([int]681,$interface))
+$phaseInterface = [Activator]::CreateInstance([Objects.Interface])
+$phaseSpring = [Activator]::CreateInstance([Objects.SpringHysteretic])
+$phaseSpring.Cstress = -0.008999158310192793
+[Objects.SpringHysteretic].GetField('_CrotNu',$flags).SetValue($phaseSpring,[double]0.00017782434173150004)
+$phaseList = [Activator]::CreateInstance([Collections.Generic.List[Objects.Spring]])
+$phaseList.Add($phaseSpring)
+[Objects.Interface].GetProperty('Trasv_1').SetValue($phaseInterface,$phaseList,$null)
+$dictionary.GetType().GetMethod('Add').Invoke($dictionary,[object[]]@([int]356,$phaseInterface))
 [ParityTrace]::Record('NATIVE_SPRING_SNAPSHOT_TEST',$null,[object[]]@($collections))
 $loadControlType = $assembly.GetType('SolverRuntime.Integrator.LoadControl')
 $loadControl = [Activator]::CreateInstance($loadControlType,$true)
@@ -51,5 +59,8 @@ $files = Get-ChildItem (Join-Path $app 'parity-logs') -Filter '*.tsv' | Sort-Obj
 $text = Get-Content -LiteralPath $files[0].FullName -Raw
 foreach ($marker in @('DIAGNOSTIC_SMOKE_SUCCESS','NewGraphError/enter','Commit/enter','Commit/exit','revertToLastCommit/enter','revertToLastCommit/exit','SPRING',"U=0.05217365161936875",'Cstrain=0.04868369273565119')) {
     if (-not $text.Contains($marker)) { throw "Missing diagnostic record: $marker" }
+}
+foreach ($marker in @("SPRING`tInterfaces`t356`tTrasv_1`t0", 'Cstress=-0.008999158310192793', '_CrotNu=0.00017782434173150004', '_Eup=', '_mom2p=')) {
+    if (-not $text.Contains($marker)) { throw "Missing targeted phase diagnostic: $marker" }
 }
 Write-Output "PASS: all 12 instrumented methods JIT-compiled; success-only native calls wrote and flushed $($files[0].FullName)"
