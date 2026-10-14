@@ -187,6 +187,8 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
     # Exact fracture-energy branches used by the supplied materials.  Keep the
     # law-1/law-2 evaluation order of the former list-based implementation,
     # but avoid allocating four short Python lists for every generated fibre.
+    h1 = not (law1.tensile_curve == law1.compressive_curve == "Elastic")
+    h2 = not (law2.tensile_curve == law2.compressive_curve == "Elastic")
     gt1 = law1.tensile_curve in {"LinearSoftening", "Exponential"}
     gt2 = law2.tensile_curve in {"LinearSoftening", "Exponential"}
     if (gt1 or gt2) and spring.area and spring.fy[0]:
@@ -201,24 +203,20 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
             spring.ur[0] = g / (spring.fy[0] / spring.area) + spring.fy[0] / spring.k
         spring.ur[0] = max(spring.ur[0], spring.fy[0] / spring.k)
     else:
-        candidate1 = (
-            spring.fy[0] / spring.k * law1.eps_u_t / (law1.fy_t / law1.E)
-            if law1.tensile_curve != "Elastic" and law1.fy_t and law1.E
-            else None
-        )
-        candidate2 = (
-            spring.fy[0] / spring.k * law2.eps_u_t / (law2.fy_t / law2.E)
-            if law2.tensile_curve != "Elastic" and law2.fy_t and law2.E
-            else None
-        )
-        if candidate1 is not None:
-            spring.ur[0] = (
-                min(candidate1, candidate2)
-                if candidate2 is not None
-                else candidate1
-            )
-        elif candidate2 is not None:
-            spring.ur[0] = candidate2
+        if h1 and h2:
+            selected = law1
+            if law2.fy_t < law1.fy_t or (
+                    law2.fy_t == law1.fy_t and law2.eps_u_t < law1.eps_u_t):
+                selected = law2
+        elif h1 and law1.tensile_curve != "Elastic":
+            selected = law1
+        elif h2 and law2.tensile_curve != "Elastic":
+            selected = law2
+        else:
+            selected = None
+        if selected is not None and selected.fy_t and selected.E:
+            spring.ur[0] = (spring.fy[0] / spring.k * selected.eps_u_t
+                              / (selected.fy_t / selected.E))
 
     gc1 = law1.compressive_curve in {"LinearSoftening", "Parabolic"}
     gc2 = law2.compressive_curve in {"LinearSoftening", "Parabolic"}
@@ -234,24 +232,20 @@ def _set_ultimate_displacement(spring: SpringHysteretic, law1: _HystereticLaw, l
             spring.ur[1] = 3.0 * g / (2.0 * spring.fy[1] / spring.area) + 5.0 * spring.fy[1] / (3.0 * spring.k)
         spring.ur[1] = min(spring.ur[1], spring.fy[1] / spring.k)
     else:
-        candidate1 = (
-            spring.fy[1] / spring.k * law1.eps_u_c / (law1.fy_c / law1.E)
-            if law1.compressive_curve != "Elastic" and law1.fy_c and law1.E
-            else None
-        )
-        candidate2 = (
-            spring.fy[1] / spring.k * law2.eps_u_c / (law2.fy_c / law2.E)
-            if law2.compressive_curve != "Elastic" and law2.fy_c and law2.E
-            else None
-        )
-        if candidate1 is not None:
-            spring.ur[1] = (
-                max(candidate1, candidate2)
-                if candidate2 is not None
-                else candidate1
-            )
-        elif candidate2 is not None:
-            spring.ur[1] = candidate2
+        if h1 and h2:
+            selected = law1
+            if law2.fy_c < law1.fy_c or (
+                    law2.fy_c == law1.fy_c and law2.eps_u_c < law1.eps_u_c):
+                selected = law2
+        elif h1 and law1.compressive_curve != "Elastic":
+            selected = law1
+        elif h2 and law2.compressive_curve != "Elastic":
+            selected = law2
+        else:
+            selected = None
+        if selected is not None and selected.fy_c and selected.E:
+            spring.ur[1] = (spring.fy[1] / spring.k * selected.eps_u_c
+                              / (selected.fy_c / selected.E))
 
 
 def _hysteretic_side_definition(
@@ -473,7 +467,7 @@ def _apply_ultimate_displacement_arrays(
         # selected combined curve family is neither softening nor exponential.
         if np.any(active):
             ur_t[active] = np.maximum(ur_t[active], base_t[active])
-    elif law.tensile_curve != "Elastic" and law.fy_t and law.E:
+    elif not (law.tensile_curve == law.compressive_curve == "Elastic") and law.fy_t and law.E:
         ur_t[:] = base_t * law.eps_u_t / (law.fy_t / law.E)
 
     base_c = fy_c / k
@@ -492,7 +486,7 @@ def _apply_ultimate_displacement_arrays(
             )
         if np.any(active):
             ur_c[active] = np.minimum(ur_c[active], base_c[active])
-    elif law.compressive_curve != "Elastic" and law.fy_c and law.E:
+    elif not (law.tensile_curve == law.compressive_curve == "Elastic") and law.fy_c and law.E:
         ur_c[:] = base_c * law.eps_u_c / (law.fy_c / law.E)
 
 

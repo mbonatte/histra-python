@@ -272,13 +272,19 @@ def _set_ultimate_displacement_reference(spring, law1, law2):
             spring.ur[1] = max(candidates)
 
 
-def test_ultimate_displacement_scalar_fast_path_is_bitwise_reference_equivalent():
+def test_fracture_ultimate_displacement_fast_path_preserves_operation_order():
     tensile = ("LinearSoftening", "Exponential", "LinearHardening", "Elastic")
     compressive = ("LinearSoftening", "Parabolic", "LinearHardening", "Elastic")
 
     for t1, c1, t2, c2 in itertools.product(
         tensile, compressive, tensile, compressive
     ):
+        # Only the fracture branches retain this pre-optimization reference.
+        # Its minimum-candidate ductility selection was not the C# rule;
+        # native mixed-law/cyclic fixtures now cover those branches instead.
+        if not ({t1, t2} & {'LinearSoftening', 'Exponential'}
+                and {c1, c2} & {'LinearSoftening', 'Parabolic'}):
+            continue
         law1 = _law(t1, c1, scale=1.0)
         law2 = _law(t2, c2, scale=1.3)
         for output_t, output_c in ((t1, c2), (t2, c1)):
