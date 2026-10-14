@@ -13,6 +13,16 @@ from histra.collapse.active_mass import (
     evaluate_regional_active_mass,
     evaluate_step_active_mass,
 )
+from histra.collapse.classifier import (
+    ClassificationResult,
+    ClassifierThresholds,
+    CollapseCategory,
+    EvidenceBundle,
+    ExecutionClassificationReport,
+    ReviewPriority,
+    classify_collapse_mechanism,
+    classify_execution,
+)
 from histra.collapse.interface_damage import (
     DamageParticipationSummary,
     ExecutionInterfaceReport,
@@ -53,8 +63,13 @@ __all__ = [
     "ActiveMassCriteria",
     "ActiveMassIndex",
     "BridgeClassification",
+    "ClassificationResult",
+    "ClassifierThresholds",
+    "CollapseCategory",
     "DamageParticipationSummary",
+    "EvidenceBundle",
     "ExecutionActiveMassReport",
+    "ExecutionClassificationReport",
     "ExecutionInterfaceReport",
     "ExecutionParticipationReport",
     "InterfaceActivityRecord",
@@ -68,11 +83,14 @@ __all__ = [
     "RegionalActiveMassSummary",
     "RegionalInterfaceSummary",
     "RegionalParticipationSummary",
+    "ReviewPriority",
     "StepActiveMassReport",
     "StepInterfaceReport",
     "StepParticipationReport",
     "classify_bridge_components",
     "classify_bridge_interfaces",
+    "classify_collapse_mechanism",
+    "classify_execution",
     "compute_active_mass_fraction",
     "compute_active_mass_sensitivity",
     "compute_kinematic_participation",
@@ -92,5 +110,6 @@ __all__ = [
     "extract_interface_kinematics",
     "sample_quad_displacements_and_masses",
 ]
+
 
 
