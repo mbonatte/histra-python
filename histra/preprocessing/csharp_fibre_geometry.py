@@ -6,7 +6,7 @@ all three coefficient expressions are promoted only after float arithmetic.
 The decompiler inserts misleading inner double casts in coefficients 0 and 2.
 """
 import math
-from histra.preprocessing.csharp_math import csharp_pow
+from histra.preprocessing.csharp_math import csharp_pow, csharp_atan
 import numpy as np
 from histra.elements.interface import Interface
 from histra.preprocessing.contact_geometry import _v
@@ -153,7 +153,7 @@ def _csharp_stiffness(near,far,cell,E,e2):
             integral=(math.log(abs((upper-r1)/(upper-r2)))-math.log(abs((-r1)/(-r2))))/root
         elif disc<0:
             root=csharp_pow(-disc,.5)
-            integral=2.*(math.atan((2.*a*upper+b)/root)-math.atan(b/root))/root
+            integral=2.*(csharp_atan((2.*a*upper+b)/root)-csharp_atan(b/root))/root
         else:integral=-(1./(upper+b/(2.*a))-2.*a/b)/a
     return abs(E/(length*integral)*np.float64(_csharp_dot(axis,e2))),min(abs(a*csharp_pow(upper,2.)+b*upper+c),abs(c)),length*upper
 
