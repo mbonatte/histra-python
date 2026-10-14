@@ -2,6 +2,18 @@
 
 Validated for v1.4.2, including the spring-history corrections following v1.4.1.
 
+## 2026-10-14: Vert gate closed; constant-load transition open
+
+The latest run supersedes the earlier reaction discrepancy below. Commit `1731e4d` matches the float32 result of C# `Operations.sqrt(float)` when computing out-of-plane spring distance factors. Six direct native distance cases agree exactly. Fresh geometry preparation with foundation material 146 now passes every available numeric state field at step zero and all ten committed Vert steps, with all reaction vectors exactly matching C#. Phase/history differences remain zero. Final maximum global displacement difference is 2.60903e-15, spring-force difference 6.82122e-13 kN, and spring displacement difference 1.02696e-15. NULL per-spring energy fields remain unavailable; the separate equilibrium diagnostic is not qualified by this parity result.
+
+Evidence: `python-comparison-2026-10-13/dhir-vert-native-spring-distance/comparison-numeric-fields.json` under the local dnSpy HiStrA audit directory. Original input/result hashes are unchanged.
+
+Commit `ddea51d` subsequently matches native line-load polygon bisection, source projection and float arithmetic against seventeen direct C# cases. The complete Python suite passes 725 tests, with 23 skips and 819 subtests. The gated second-load run agrees at its initial state but stops at the first TLM_Constant_UDL commit. Replaying C# local displacement endpoints in a fresh diagnostic Python model still reveals an interface spring-history offset, so correcting global load integration alone does not explain it.
+
+The original source and native calls establish that spring rollback restores committed/trial hysteretic state but leaves base spring U unchanged. They do not establish that a failed attempt occurred in this saved run. Native database-reader checks also reproduce the saved spring U and interface U values exactly. The user has no solver log and recalls a large first-step jump followed by linear increments.
+
+A separate application copy at `C:\Users\mbonatte\Documents\Histra\csharp-diagnostics-2026.1.1\app` now instruments original solver IL with the C# helper in [the diagnostic tools](../../tools/csharp-diagnostics/README.md). Successful-call smoke tests confirm flushed convergence, commit, rollback and native U/Cstrain records. A full GUI run of Vert then TLM_Constant_UDL on the prepared model copy is pending. The diagnostic build has not yet been qualified by an end-to-end model comparison. Pushover remains gated behind resolving the second analysis.
+
 ## 2026-10-14: native transcendental arithmetic
 
 Post-release validation at source commit `e651ddc`, following v1.4.2. The original release evidence below remains historical.

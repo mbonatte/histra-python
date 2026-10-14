@@ -5,9 +5,9 @@ Release status: **v1.4.2** (2026-10-13).
 This maintenance release improves C# 2026.1.1 geometry, spring definitions,
 nonlinear contracts and modal inverse iteration. Fresh Dhir Vert comparisons
 cover 77,080 springs at all 10 committed steps with zero spring-phase differences.
-Dhir Vert validation passes every available numeric spring-history field within the unchanged tolerances. One near-zero horizontal reaction component at step 9 differs by 2.09e-6 kN and remains open. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
+Dhir Vert now passes every available numeric state field at initial state and all ten commits, including exactly matching reaction vectors at every step. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
 
-Post-release source corrections on 2026-10-14 match the native Windows power and arctangent arithmetic used in fibre integration. The fresh Vert rerun preserves spring-history agreement and reduces initial transverse stiffness differences to about 5e-15 relative error; the same step 9 reaction remains open. See the dated update in the current Vert audit.
+Post-release source corrections on 2026-10-14 match native power/arctangent rounding, float32 spring-distance square roots and native line-load integration. The remaining Vert reaction difference is resolved. The second analysis, TLM_Constant_UDL, passes its initial-state gate but differs at the first commit; pushover remains gated behind it. A separate instrumented original C# solver now captures successful-run restart, convergence, rollback and commit logs. A full GUI rerun is pending to establish the cause of the constant-load offset; rollback is a hypothesis, not a confirmed explanation.
 
 The V1 Article/interface-chain evidence is historical qualification of its
 recorded source and environment, not a new v1.4.2 rerun of those models.

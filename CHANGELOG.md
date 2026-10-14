@@ -5,7 +5,10 @@
 - Match .NET Framework power and arctangent rounding in compiled fibre integration on Windows.
 - Route production through the same source-owning fibre kernel as the native unittest, avoiding a stale cached wrapper.
 - Add 126 original C# fibre oracle cases; full suite: 723 passed, 23 skipped, 796 subtests.
-- Revalidate all 77,080 springs at initial state and all 10 committed Dhir Vert steps with the changed foundation material. Available spring fields pass; the step 9 near-zero R1 difference remains open. Initial transverse stiffness agrees to about 5e-15 relative error.
+- Match the native float32 square-root result in out-of-plane spring distance factors, resolving the remaining Dhir Vert reaction difference.
+- Match native line-load polygon bisection, projection and float32 integration; add 17 original C# line-load oracles.
+- Revalidate all 77,080 springs at initial state and all 10 committed Dhir Vert steps with foundation material 146. Every available numeric state field passes; all reaction vectors match exactly. C# NULL per-spring energies remain unavailable. Full suite: 725 passed, 23 skipped, 819 subtests.
+- Add a separately copied native C# diagnostic build with always-flushed success logs, restart/rollback/commit snapshots and a native smoke test. TLM_Constant_UDL still differs at its first commit; later stages remain gated.
 
 ## 1.4.2 - 2026-10-13
 
