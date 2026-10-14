@@ -43,6 +43,15 @@ from histra.collapse.interface_damage import (
     extract_interface_forces,
     extract_interface_kinematics,
 )
+from histra.collapse.load_drop import (
+    LoadDropAnalysisReport,
+    LoadDropCriteria,
+    LoadDropEvent,
+    LoadHistoryCurve,
+    detect_load_drop_events,
+    evaluate_load_drop_analysis,
+    extract_load_history,
+)
 from histra.collapse.participation import (
     BridgeClassification,
     ExecutionParticipationReport,
@@ -79,6 +88,10 @@ __all__ = [
     "InterfaceForces",
     "InterfaceKinematics",
     "KinematicParticipationIndex",
+    "LoadDropAnalysisReport",
+    "LoadDropCriteria",
+    "LoadDropEvent",
+    "LoadHistoryCurve",
     "RegionDeformationMetrics",
     "RegionalActiveMassSummary",
     "RegionalInterfaceSummary",
@@ -96,10 +109,12 @@ __all__ = [
     "compute_kinematic_participation",
     "compute_quad_mass",
     "compute_spatial_concentration",
+    "detect_load_drop_events",
     "evaluate_damage_participation",
     "evaluate_execution_active_mass",
     "evaluate_execution_interface_damage",
     "evaluate_execution_participation",
+    "evaluate_load_drop_analysis",
     "evaluate_regional_active_mass",
     "evaluate_regional_participation",
     "evaluate_step_active_mass",
@@ -108,8 +123,10 @@ __all__ = [
     "extract_interface_constitutive",
     "extract_interface_forces",
     "extract_interface_kinematics",
+    "extract_load_history",
     "sample_quad_displacements_and_masses",
 ]
+
 
 
 
