@@ -78,7 +78,8 @@ def _quad_local_displacement(quad, global_u: np.ndarray) -> np.ndarray:
 def quad_node_displacement(quad, node_point, node_index: int, global_u: np.ndarray) -> np.ndarray:
     """Reconstruct one Quad-node translation using C# float boundaries."""
 
-    u = np.asarray(_quad_local_displacement(quad, global_u), dtype=np.float32)
+    local = _quad_local_displacement(quad, global_u)
+    u = np.asarray(local, dtype=np.float32)
     translation = u[:3]
     rotation = u[3:6]
     point = np.asarray((node_point.x, node_point.y, node_point.z), dtype=np.float32)
@@ -93,19 +94,37 @@ def quad_node_displacement(quad, node_point, node_index: int, global_u: np.ndarr
                 * float(quad.sin[3])
                 / denominator
             )
-            direction = (
-                float(quad.sin[1]) * np.asarray(quad.reference_e1, dtype=np.float32)
-                + float(quad.cos[1]) * np.asarray(quad.reference_e2, dtype=np.float32)
-            )
-            result = result + np.float32(u[6] * coefficient) * direction
+            e1 = np.asarray(quad.reference_e1, dtype=np.float32)
+            e2 = np.asarray(quad.reference_e2, dtype=np.float32)
+            correction = np.array([
+                np.float32(local[6] * (coefficient * (
+                    float(quad.sin[1]) * float(e1[j])
+                    + float(quad.cos[1]) * float(e2[j])
+                ))) for j in range(3)
+            ], dtype=np.float32)
+            result = result + correction
     elif node_index == 3:
-        direction = (
-            -float(quad.sin[0]) * np.asarray(quad.reference_e1, dtype=np.float32)
-            + float(quad.cos[0]) * np.asarray(quad.reference_e2, dtype=np.float32)
-        )
-        result = result + np.float32(u[6] * float(quad.length[3])) * direction
+        e1 = np.asarray(quad.reference_e1, dtype=np.float32)
+        e2 = np.asarray(quad.reference_e2, dtype=np.float32)
+        correction = np.array([
+            np.float32(local[6] * (float(quad.length[3]) * (
+                -float(quad.sin[0]) * float(e1[j])
+                + float(quad.cos[0]) * float(e2[j])
+            ))) for j in range(3)
+        ], dtype=np.float32)
+        result = result + correction
 
     return np.asarray(result, dtype=float)
+
+
+def _average_node_displacements(contributions) -> np.ndarray:
+    """Original ordered Vector3 sum and scalar reciprocal multiplication."""
+    total = np.zeros(3, dtype=np.float32)
+    for contribution in contributions:
+        total += np.asarray(contribution, dtype=np.float32)
+    if len(contributions) > 1:
+        total *= np.float32(1.0) / np.float32(len(contributions))
+    return total.astype(float)
 
 
 def compute_node_displacements(model: Model, global_u: Iterable[float]) -> list[NodeDisplacement]:
@@ -149,7 +168,7 @@ def compute_node_displacements(model: Model, global_u: Iterable[float]) -> list[
             quad_node_displacement(quad, node.point, index, u)
             for quad, index in connected[node_key]
         ]
-        displacement = np.mean(np.asarray(contributions, dtype=float), axis=0)
+        displacement = _average_node_displacements(contributions)
         rows.append(
             NodeDisplacement(
                 node_key=int(node_key),

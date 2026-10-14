@@ -11,7 +11,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from histra.postprocessing import quad_node_displacement
+from histra.postprocessing import _average_node_displacements, quad_node_displacement
 from histra.solver.outcomes import AnalysisExecution, AnalysisStep
 
 
@@ -93,7 +93,7 @@ def model_point_displacement(
                 f"Node ModelPoint {point.key} references Node {element_key}, which "
                 "has no supported Quad contribution."
             )
-        return np.mean(np.asarray(contributions, dtype=float), axis=0)
+        return _average_node_displacements(contributions)
     if element_type == "quad":
         try:
             quad = collections.quads[element_key]
