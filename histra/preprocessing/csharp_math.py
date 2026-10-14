@@ -1,0 +1,35 @@
+"""Power arithmetic for source-sensitive C# fibre integration.
+
+The Windows .NET Framework runtime used by HiStrA 2026.1.1 has its own CRT
+power implementation. LLVM may replace pow(x, 0.5) with sqrt(x), which changes
+cancellation-sensitive roots. Register the CRT symbol at import, so cached
+Numba code resolves a fresh process-local address instead of caching a pointer.
+Other platforms retain their standard power arithmetic; bitwise agreement with
+the Windows runtime is not guaranteed there.
+"""
+import ctypes
+import sys
+import math
+from numba import njit, types
+from llvmlite import binding
+_runtime = None
+if sys.platform == "win32":
+    try:
+        _runtime = ctypes.CDLL("msvcr120_clr0400.dll", winmode=0x800)
+    except OSError:
+        pass
+POWER_BACKEND = "dotnet-framework-crt" if _runtime is not None else "platform-math"
+
+if _runtime is not None:
+    _native_pow = _runtime.pow
+    _native_pow.argtypes = [ctypes.c_double, ctypes.c_double]
+    _native_pow.restype = ctypes.c_double
+    binding.add_symbol("histra_clr_framework_pow", ctypes.cast(_native_pow, ctypes.c_void_p).value)
+    _compiled_pow = types.ExternalFunction("histra_clr_framework_pow", types.float64(types.float64, types.float64))
+    @njit(cache=True)
+    def csharp_pow(value, exponent):
+        return _compiled_pow(value, exponent)
+else:
+    @njit(cache=True)
+    def csharp_pow(value, exponent):
+        return math.pow(value, exponent)

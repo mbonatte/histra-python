@@ -6,6 +6,7 @@ all three coefficient expressions are promoted only after float arithmetic.
 The decompiler inserts misleading inner double casts in coefficients 0 and 2.
 """
 import math
+from histra.preprocessing.csharp_math import csharp_pow
 import numpy as np
 from histra.elements.interface import Interface
 from histra.preprocessing.contact_geometry import _v
@@ -146,15 +147,15 @@ def _csharp_stiffness(near,far,cell,E,e2):
     if a<=1e-10:
         integral=upper/c if abs(b)<=1e-10 else (math.log(abs(upper+c/b))-math.log(abs(c/b)))/b
     else:
-        disc=b*b-4.*a*c
+        disc=csharp_pow(b,2.)-4.*a*c
         if disc>0:
-            root=math.sqrt(disc);r1=(-b+root)/(2.*a);r2=(-b-root)/(2.*a)
+            root=csharp_pow(disc,.5);r1=(-b+root)/(2.*a);r2=(-b-root)/(2.*a)
             integral=(math.log(abs((upper-r1)/(upper-r2)))-math.log(abs((-r1)/(-r2))))/root
         elif disc<0:
-            root=math.sqrt(-disc)
+            root=csharp_pow(-disc,.5)
             integral=2.*(math.atan((2.*a*upper+b)/root)-math.atan(b/root))/root
         else:integral=-(1./(upper+b/(2.*a))-2.*a/b)/a
-    return abs(E/(length*integral)*np.float64(_csharp_dot(axis,e2))),min(abs(a*upper**2+b*upper+c),abs(c)),length*upper
+    return abs(E/(length*integral)*np.float64(_csharp_dot(axis,e2))),min(abs(a*csharp_pow(upper,2.)+b*upper+c),abs(c)),length*upper
 
 
 
