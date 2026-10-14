@@ -182,6 +182,7 @@ def _interface_sliding_law(
     out_of_plane: bool,
     vertical: bool,
     cache: dict[tuple[int, bool, str], _CoulombLaw] | None,
+    side: int = 1,
 ) -> _CoulombLaw:
     """Select/blend the same constitutive-law slot used by C# Interface.SetSpring."""
     assert model.collections is not None
@@ -210,6 +211,11 @@ def _interface_sliding_law(
             cache=cache,
         )
     if orthotropic and quad is not None:
+        if out_of_plane and side == 2 and parent_type == "Quad":
+            # Node-based Interface.SetSpring assigns law2[5] = law2[6]
+            # after blending slot 5 on side 2. The final slot is vertical.
+            return _cached_sliding_law(
+                material, out_of_plane=True, direction="vert", cache=cache)
         horizontal = _cached_sliding_law(
             material,
             out_of_plane=out_of_plane,

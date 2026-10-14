@@ -463,6 +463,7 @@ def _create_interface_springs(
         out_of_plane=True,
         vertical=vertical,
         cache=sliding_law_cache,
+        side=2,
     )
 
     distance1 = None
