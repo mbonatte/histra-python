@@ -1,0 +1,59 @@
+﻿{
+    "cases":  [
+                  {
+                      "step":  0.01,
+                      "hat":  1.1,
+                      "bar":  0.3,
+                      "lambda_bits":  "-4624787399161556618",
+                      "code":  0,
+                      "alpha2":  0,
+                      "du_bits":  "-4854880398305394688"
+                  },
+                  {
+                      "step":  0.01,
+                      "hat":  0.0037,
+                      "bar":  1.8E-08,
+                      "lambda_bits":  "-4696014592279691908",
+                      "code":  0,
+                      "alpha2":  0,
+                      "du_bits":  "4336944554004447232"
+                  },
+                  {
+                      "step":  0.4,
+                      "hat":  1.1,
+                      "bar":  -0.3,
+                      "lambda_bits":  "4598307626865318900",
+                      "code":  0,
+                      "alpha2":  0.2,
+                      "du_bits":  "-4642839424875306800"
+                  },
+                  {
+                      "step":  -0.02,
+                      "hat":  1.3,
+                      "bar":  -0.7,
+                      "lambda_bits":  "4603025249913213883",
+                      "code":  0,
+                      "alpha2":  0,
+                      "du_bits":  "4384817187198599168"
+                  },
+                  {
+                      "step":  0.1,
+                      "hat":  1,
+                      "bar":  1,
+                      "lambda_bits":  "4607182418800017408",
+                      "code":  0,
+                      "alpha2":  1,
+                      "du_bits":  "4611686018427387904"
+                  },
+                  {
+                      "step":  0.1,
+                      "hat":  1E-16,
+                      "bar":  0.3,
+                      "lambda_bits":  "-4385009636686233603",
+                      "code":  0,
+                      "alpha2":  0,
+                      "du_bits":  "4370743438363066368"
+                  }
+              ],
+    "source":  "Original SolverRuntime.Integrator.ArcLength.Update; identity native UMFPACK system"
+}

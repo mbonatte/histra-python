@@ -26,14 +26,22 @@ class ArcLength(StaticIntegrator):
     reference-load displacement ``delta_u_hat`` and enforces the quadratic
     constraint over either a control DOF or all active generalized DOFs.
 
+    ``constraint_mode="csharp"`` preserves the original quadratic calculation
+    and exact zero tests. The explicit ``"stable"`` option retains Python's
+    simplified one-dimensional correction and small-denominator safeguards;
+    it can produce different last bits and branch decisions.
+
     Two apparent C# defects are intentionally corrected:
 
     * the adaptive radius is not reset to ``Analysis.Dr2`` at every step;
     * ``MaxArcLengthRay`` is compared with the radius, not radius-squared.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, constraint_mode: str = "csharp") -> None:
+        if constraint_mode not in ("csharp", "stable"):
+            raise ValueError("constraint_mode must be 'csharp' or 'stable'")
         super().__init__()
+        self.constraint_mode = constraint_mode
         self._target_displacement = 0.0
         self._target_displacement_base = 0.0
         self._arc_length2 = 0.0
@@ -564,12 +572,15 @@ class ArcLength(StaticIntegrator):
         )
         c = 2.0 * float(np.dot(step, bar)) + float(np.dot(bar, bar))
 
-        if abs(a) < 1e-30:
-            if abs(b) < 1e-30:
+        def is_zero(value: float) -> bool:
+            return value == 0.0 if self.constraint_mode == "csharp" else abs(value) < 1e-30
+
+        if is_zero(a):
+            if is_zero(b):
                 self.errors.append("ArcLength constraint has zero reference load and denominator")
                 return -10
             delta_lambda = -c / b
-        elif self._alpha2 == 0.0 and hat.size == 1:
+        elif self.constraint_mode == "stable" and self._alpha2 == 0.0 and hat.size == 1:
             # In 1D cylindrical arc-length, the spherical constraint on a single
             # scalar coordinate is (s + delta_u)^2 = s^2.  Preserving the forward
             # predictor branch (s * (s + delta_u) > 0) uniquely requires
@@ -588,7 +599,7 @@ class ArcLength(StaticIntegrator):
                 # direction choice.
                 numerator = float(np.dot(step, bar))
                 denominator = float(np.dot(step, hat)) + self._alpha2 * self._delta_lambda_step
-                if abs(denominator) < 1e-30:
+                if is_zero(denominator):
                     self.errors.append("ArcLength linearized constraint denominator is zero")
                     return -10
                 delta_lambda = -numerator / denominator
