@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Qualify every available numeric/history field for 77,080 springs at initial state and all 20 Vert plus 10 constant-load commits in the new same-session C# reference. Reaction vectors and iteration counts match exactly; the missing CmomMax history now matches. No solver changes or relaxed thresholds were needed. Pushover needs a new reference from this matched predecessor.
+
 - Match .NET Framework power and arctangent rounding in compiled fibre integration on Windows.
 - Route production through the same source-owning fibre kernel as the native unittest, avoiding a stale cached wrapper.
 - Add 126 original C# fibre oracle cases; full suite: 723 passed, 23 skipped, 796 subtests.

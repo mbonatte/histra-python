@@ -1,5 +1,7 @@
 # Dhir constant load: ten-step reference
 
+This earlier reopened-model run is superseded for current chain qualification by [the passing same-session 20-step Vert and ten-step constant-load benchmark](../benchmarks/dhir-vert20-udl10-native-parity.md). The missing history documented below now matches after rerunning Vert before constant load; the native omission itself remains verified.
+
 ## Result, 2026-10-14
 
 The user changed only the constant-load step count and reran the locked model in the diagnostic application. The new C# trace is `trace-20261014-095659-968-10564.tsv`. The solver uses ten increments of 0.1, reaches load factor 1.0, and reports no failed attempts, adaptive reductions or rollback calls. Saved steps are initial state 0 and committed steps 1 through 10. All saved Vert state fields remain exactly equal to the original reference, excluding surrogate database IDs.
