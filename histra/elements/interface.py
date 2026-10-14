@@ -644,8 +644,10 @@ class Interface:
 
         local_du = self._local_increment(x)
         status_u = self.status.u
-        for i, value in enumerate(local_du):
-            status_u[i] += float(value)
+        for i, pairs in enumerate(self._perf_aff_pairs or ()):
+            for gdl, coefficient in pairs:
+                if 0 <= gdl < len(x):
+                    status_u[i] += float(x[gdl] * coefficient)
 
         if not self._perf_constrained:
             num = local_du[3] - local_du[0]

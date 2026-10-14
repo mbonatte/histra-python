@@ -25,24 +25,29 @@ except Exception:  # pragma: no cover - exercised when numba is unavailable
 
 if njit is not None:
     @njit(cache=True, nogil=True)
-    def _map_global_to_local(x, offsets, gdls, coefficients, out):
+    def _map_global_to_local(x, offsets, gdls, coefficients, out, local_u=None):
         flat = out.reshape(out.size)
+        state = local_u.reshape(local_u.size) if local_u is not None else None
         for local_index in range(flat.size):
             total = 0.0
             for pair_index in range(offsets[local_index], offsets[local_index + 1]):
                 gdl = gdls[pair_index]
                 if 0 <= gdl < x.size:
-                    total += x[gdl] * coefficients[pair_index]
+                    increment = x[gdl] * coefficients[pair_index]
+                    total += increment
+                    if state is not None:
+                        state[local_index] += increment
             flat[local_index] = total
 
     @njit(cache=True, nogil=True)
     def _prepare_interface_kinematics(
         local_du, local_u, lengths, constrained, d0s, d1s,
-        nums, nums2, delta_flex, pending,
+        nums, nums2, delta_flex, pending, accumulate_local_u=True,
     ):
         for i in range(local_du.shape[0]):
-            for j in range(local_du.shape[1]):
-                local_u[i, j] += local_du[i, j]
+            if accumulate_local_u:
+                for j in range(local_du.shape[1]):
+                    local_u[i, j] += local_du[i, j]
             if not constrained[i]:
                 nums[i] = local_du[i, 3] - local_du[i, 0]
                 nums2[i] = local_du[i, 2] - local_du[i, 1]
@@ -74,9 +79,10 @@ if njit is not None:
                 ):
                     gdl = gdls[pair_index]
                     if 0 <= gdl < x.size:
-                        total += x[gdl] * coefficients[pair_index]
+                        increment = x[gdl] * coefficients[pair_index]
+                        total += increment
+                        local_u[i, j] += increment
                 local_du[i, j] = total
-                local_u[i, j] += total
 
             if not constrained[i]:
                 nums[i] = local_du[i, 3] - local_du[i, 0]
@@ -104,11 +110,12 @@ if njit is not None:
     def _prepare_quad_kinematics(
         local_du, local_u, edge_offsets, edge_records, edge_areas,
         interface_normal_increments, interface_committed_forces,
-        d_alfa, step, sigma_initial, strains, dns, quad_params,
+        d_alfa, step, sigma_initial, strains, dns, quad_params, accumulate_local_u=True,
     ):
         for q in range(local_du.shape[0]):
-            for j in range(local_du.shape[1]):
-                local_u[q, j] += local_du[q, j]
+            if accumulate_local_u:
+                for j in range(local_du.shape[1]):
+                    local_u[q, j] += local_du[q, j]
             if int(quad_params[q, QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
                 dns[q] = 0.0
                 strains[q] = d_alfa[q] * local_u[q, 6]

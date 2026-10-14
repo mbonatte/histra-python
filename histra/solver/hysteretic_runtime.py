@@ -358,11 +358,11 @@ if njit is not None:
         # kernels from Numba avoids four Python↔native transitions and keeps
         # their shared dense arrays hot in cache.
         _map_global_to_local(
-            x, aff_offsets, aff_gdls, aff_coefficients, local_du,
+            x, aff_offsets, aff_gdls, aff_coefficients, local_du, local_u,
         )
         _prepare_interface_kinematics(
             local_du, local_u, lengths, constrained, d0s, d1s,
-            num, num2, delta_flex, pending_values,
+            num, num2, delta_flex, pending_values, False,
         )
         for i in range(targets.size):
             ri = record_index[i]
@@ -401,13 +401,13 @@ if njit is not None:
         if quad_local_du.shape[0]:
             _map_global_to_local(
                 x, quad_aff_offsets, quad_aff_gdls,
-                quad_aff_coefficients, quad_local_du,
+                quad_aff_coefficients, quad_local_du, quad_local_u,
             )
             _prepare_quad_kinematics(
                 quad_local_du, quad_local_u, quad_edge_offsets,
                 quad_edge_records, quad_edge_areas, normal_increments,
                 committed_forces, quad_d_alfa, step, quad_sigma_initial,
-                quad_strains, quad_dns, quad_params,
+                quad_strains, quad_dns, quad_params, False,
             )
             _evaluate_quad_takeda_batch(
                 quad_params, quad_state, quad_strains, quad_dns,
@@ -2504,7 +2504,7 @@ class HystereticBatchRuntime:
         if self._quad_local_du.shape[0]:
             _map_global_to_local(
                 x, self._quad_aff_offsets, self._quad_aff_gdls,
-                self._quad_aff_coefficients, self._quad_local_du,
+                self._quad_aff_coefficients, self._quad_local_du, self._quad_local_u,
             )
             _prepare_quad_kinematics(
                 self._quad_local_du, self._quad_local_u,
@@ -2512,7 +2512,7 @@ class HystereticBatchRuntime:
                 self._quad_edge_areas, self._normal_increments,
                 self._committed_forces, self._quad_d_alfa,
                 int(getattr(state, "step", 0)), self._quad_sigma_initial,
-                self._quad_strains, self._quad_dns, self.quad_params,
+                self._quad_strains, self._quad_dns, self.quad_params, False,
             )
             _evaluate_quad_takeda_batch(
                 self.quad_params, self.quad_state, self._quad_strains,
@@ -2534,7 +2534,7 @@ class HystereticBatchRuntime:
             return
         _map_global_to_local(
             x, self._quad_aff_offsets, self._quad_aff_gdls,
-            self._quad_aff_coefficients, self._quad_local_du,
+            self._quad_aff_coefficients, self._quad_local_du, self._quad_local_u,
         )
         _prepare_quad_kinematics(
             self._quad_local_du, self._quad_local_u,
@@ -2542,7 +2542,7 @@ class HystereticBatchRuntime:
             self._quad_edge_areas, self._normal_increments,
             self._committed_forces, self._quad_d_alfa,
             int(getattr(state, "step", 0)), self._quad_sigma_initial,
-            self._quad_strains, self._quad_dns, self.quad_params,
+            self._quad_strains, self._quad_dns, self.quad_params, False,
         )
         _evaluate_quad_takeda_batch(
             self.quad_params, self.quad_state,

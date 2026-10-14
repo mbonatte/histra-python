@@ -244,9 +244,11 @@ class Quad(
         if self.spring is None:
             return
         x = ls_or_x.x if hasattr(ls_or_x, "x") else ls_or_x
-        local_du = self._local_increment(x)
-        for i, value in enumerate(local_du):
-            self.status.u[i] += float(value)
+        self._local_increment(x)  # Initialize immutable afference cache.
+        for i, pairs in enumerate(self._perf_aff_pairs or ()):
+            for gdl, coefficient in pairs:
+                if 0 <= gdl < len(x):
+                    self.status.u[i] += float(x[gdl] * coefficient)
         from histra.springs.coulomb03 import SpringCoulomb03
         if isinstance(self.spring, SpringCoulomb03):
             if collections is None:

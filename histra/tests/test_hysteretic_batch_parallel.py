@@ -364,11 +364,11 @@ def test_fused_interface_mapping_and_kinematics_matches_two_pass_path_exactly() 
     )
     actual = tuple(array.copy() for array in expected)
     hb._map_global_to_local(
-        x, offsets, gdls, coefficients, expected[0]
+        x, offsets, gdls, coefficients, expected[0], expected[1]
     )
     hb._prepare_interface_kinematics(
         expected[0], expected[1], lengths, constrained, d0s, d1s,
-        expected[2], expected[3], expected[4], expected[5],
+        expected[2], expected[3], expected[4], expected[5], False,
     )
     hb._map_and_prepare_interface_kinematics(
         x, offsets, gdls, coefficients, actual[0], actual[1], lengths,
