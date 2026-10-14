@@ -10,6 +10,7 @@
 - Revalidate all 77,080 springs at initial state and all 10 committed Dhir Vert steps with foundation material 146. Every available numeric state field passes; all reaction vectors match exactly. C# NULL per-spring energies remain unavailable. Full suite: 725 passed, 23 skipped, 819 subtests.
 - Add a separately copied native C# diagnostic build with always-flushed success logs, restart/rollback/commit snapshots and a native smoke test. TLM_Constant_UDL still differs at its first commit; later stages remain gated.
 - Confirm native failed-step stale-U rollback from a GUI rerun that exactly reproduces all original Vert/constant-load result fields. Add 36 logged native transverse rollback cases; full suite: 726 passed, 23 skipped, 855 subtests. Production rollback policy is unchanged; first-increment convergence parity remains open.
+- Validate the ten-step constant-load reference: all response fields pass and reaction vectors match exactly, with no native rollback. Full history parity remains open for 418 native CmomMax values lost on model reopening. Add a lossless-restart regression from original native reader/setter/writer calls; full suite: 727 passed, 23 skipped, 857 subtests. Solver behavior is unchanged.
 
 ## 1.4.2 - 2026-10-13
 

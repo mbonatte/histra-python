@@ -1,5 +1,7 @@
 # Dhir constant-load failed-step rollback
 
+The later [ten-step comparison](dhir-constant-load-ten-step-parity.md) avoids this rollback branch and matches all response fields. It identifies a separate native history-restoration omission after reopening the saved model; full history parity remains gated on that value.
+
 ## Confirmed native behavior, 2026-10-14
 
 The user reran the separate instrumented C# 2026.1.1 application: modal, Vert, then TLM_Constant_UDL. All 1,562,624 stored Vert/constant-load rows match the original C# reference exactly across all available state tables, excluding only surrogate database Id columns. Counts and bidirectional SQL EXCEPT comparisons agree, including NULL values. The diagnostic logging did not change those saved outputs. Vert has ten committed steps, constant load has four; each also has an initial step-zero record. The first constant-load step contains two successful internal substeps, not an extra saved committed step.
