@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from math import sqrt
+from histra._framework_math import csharp_pow
 
 import numpy as np
 
@@ -82,7 +82,7 @@ if njit is not None:
                     sy=lam*(eps_x+eps_y)+2.0*G*eps_y
                     tau=G*gamma
                     avg=(sx+sy)/2.0
-                    radius=sqrt(((sx-sy)/2.0)**2+tau*tau)
+                    radius=csharp_pow(csharp_pow((sx-sy)/2.0,2.0)+csharp_pow(tau,2.0),0.5)
                     pmax=avg+radius; pmin=avg-radius
                     if pmin<pass_min: pass_min=pmin
                     if pmax>pass_max: pass_max=pmax
@@ -91,7 +91,7 @@ if njit is not None:
             value=0.0
             if max_principal != 0.0 and min_principal != 0.0:
                 scale=direction*min(abs(Fyt/max_principal),abs(Fyc/min_principal))
-                value=k*dalfa*scale
+                value=k*(dalfa*scale)
             if pass_index==0: result0=value
             else: result1=value
         return result0, result1
@@ -150,10 +150,10 @@ def quad_yield_search_scalar(
                 (1.0 + xi) / 4.0,
                 (1.0 - xi) / 4.0,
             ]
-            j11 = sum(x[i] * dxi[i] for i in range(4))
-            j12 = sum(x[i] * deta[i] for i in range(4))
-            j21 = sum(y[i] * dxi[i] for i in range(4))
-            j22 = sum(y[i] * deta[i] for i in range(4))
+            j11 = x[0]*dxi[0]+x[1]*dxi[1]+x[2]*dxi[2]+x[3]*dxi[3]
+            j12 = x[0]*deta[0]+x[1]*deta[1]+x[2]*deta[2]+x[3]*deta[3]
+            j21 = y[0]*dxi[0]+y[1]*dxi[1]+y[2]*dxi[2]+y[3]*dxi[3]
+            j22 = y[0]*deta[0]+y[1]*deta[1]+y[2]*deta[2]+y[3]*deta[3]
             det = j11 * j22 - j12 * j21
             if abs(det) <= 1.0e-30:
                 continue
@@ -177,7 +177,7 @@ def quad_yield_search_scalar(
             sigma_y = lam * (eps_x + eps_y) + 2.0 * G * eps_y
             tau = G * gamma_xy
             average = (sigma_x + sigma_y) / 2.0
-            radius = sqrt(((sigma_x - sigma_y) / 2.0) ** 2 + tau ** 2)
+            radius = csharp_pow(csharp_pow((sigma_x-sigma_y)/2.0,2.0)+csharp_pow(tau,2.0),0.5)
             principal_max = average + radius
             principal_min = average - radius
             if principal_min < pass_min:
@@ -197,7 +197,7 @@ def quad_yield_search_scalar(
                 abs(Fyt / max_principal),
                 abs(Fyc / min_principal),
             )
-            result[pass_index] = k * dalfa * scale
+            result[pass_index] = k * (dalfa * scale)
 
     return result[0], result[1]
 
