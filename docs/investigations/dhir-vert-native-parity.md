@@ -2,6 +2,53 @@
 
 Validated for v1.4.2, including the spring-history corrections following v1.4.1.
 
+## 2026-10-14: native transcendental arithmetic
+
+Post-release validation at source commit `e651ddc`, following v1.4.2. The original release evidence below remains historical.
+
+Direct calls to the installed C# `Quad.GetFiberProperties` and `Quad.GetFiberStiffness` isolated cancellation-sensitive stiffness differences despite exactly matching geometry coefficients and lengths. The .NET Framework power and arctangent functions round differently from Python/LLVM on those inputs. Compiled fibre integration now calls the corresponding Windows CRT functions through registered symbols, retaining source operation order. Production uses the same source-owning batch kernel as its native regression, avoiding a stale cached wrapper with an older imported implementation.
+
+The native unittest covers 126 fibres in seven interfaces, both parent Quads, through scalar and actual production batch paths. The full suite passes: **723 tests, 23 skipped, 796 subtests**. Separate-process cached execution was also checked for the power correction.
+
+Fresh Dhir preparation reapplies material 146 to all 148 foundation interfaces before Vert. Step 0 remains initial; both implementations have exactly 10 committed steps and 77,080 matching spring identities. All available numeric spring histories and responses pass unchanged thresholds. C# NULL per-spring energy values remain unavailable. Other available state tables pass except step 9 ReactionSumStates.R1.
+
+Initial stiffness comparison against all saved C# definitions:
+
+| Spring family | Maximum absolute difference | Maximum relative difference |
+|---|---:|---:|
+| Transverse | 5.45697e-12 | 4.99166e-15 |
+| Shear | 5.23869e-10 | 4.35236e-15 |
+| Out-of-plane | 5.09317e-11 | 4.90871e-15 |
+| Diagonal | 9.31323e-10 | 5.84087e-15 |
+
+The previous transverse relative difference was 2.06e-8. Its remaining difference is now consistent with the decimal precision of the saved definitions. This correction does **not** resolve the remaining reaction discrepancy or imply bit-identical output.
+
+| Step | Maximum spring-force difference (kN) | Maximum spring-displacement difference | Phase differences |
+|---:|---:|---:|---:|
+| 0 | 0 | 0 | 0 |
+| 1 | 2.6608449e-08 | 2.17043924e-11 | 0 |
+| 2 | 5.16791099e-08 | 3.68610396e-11 | 0 |
+| 3 | 7.88373753e-08 | 5.47109841e-11 | 0 |
+| 4 | 1.21961737e-07 | 6.94304678e-11 | 0 |
+| 5 | 2.05149917e-07 | 9.0306105e-11 | 0 |
+| 6 | 3.07142253e-07 | 1.10553871e-10 | 0 |
+| 7 | 3.7897129e-07 | 1.36807719e-10 | 0 |
+| 8 | 4.56456139e-07 | 1.88121088e-10 | 0 |
+| 9 | 5.17715215e-07 | 2.37214252e-10 | 0 |
+| 10 | 6.09531721e-07 | 3.00569347e-10 | 0 |
+
+Final saved global displacement maximum difference: 1.42254e-10. Step 9 R1 remains 7.152557373046875e-7 kN in Python versus 2.8014183044433594e-6 kN in C#, a 2.086162567138672e-6 kN difference above the unchanged 1e-6 absolute cutoff. Its remaining source must be investigated downstream of initial stiffness construction.
+
+Exact runtime rounding is selected when the Windows .NET Framework CRT is available. Other platforms retain standard compiled arithmetic; this Windows precision qualification does not establish bitwise portability. These changes affect preprocessing, with no Python callback in the compiled integration. The full audit took 102.70 seconds while other validation processes were running; it is not a controlled performance comparison.
+
+The independent equilibrium diagnostic remains in warning mode for C# acceptance parity; all 10 commits fail that additional residual check. Source HRX and Results hashes stayed unchanged. This audit does not qualify later stages or strict equilibrium.
+
+Commits: `115affc` (power), `8f533a3` (production kernel), `e651ddc` (arctangent).
+
+Raw paired data and unfiltered per-field diagnostics: `C:\Users\mbonatte\Downloads\_Organized_Downloads\Software\dnSpy-net-win64\histra\python-comparison-2026-10-13\dhir-vert-native-transcendental\static\every-step`. Numeric summary excluding explicitly unavailable SQL NULL fields: `C:\Users\mbonatte\Downloads\_Organized_Downloads\Software\dnSpy-net-win64\histra\python-comparison-2026-10-13\dhir-vert-native-transcendental\comparison-numeric-fields.json`.
+
+## v1.4.2 release evidence (2026-10-13)
+
 ## Scope and construction
 
 Reference: HiStrA Bridges 2026.1.1 Dhir HRX and Results. This audit covers Vert only. Python recreates geometry, all interfaces, springs and local-to-global mappings from the structural inputs. It applies material 146 (`Soil_Foundation_ONLY_V75_X024`) to all 148 foundation interfaces before Vert. C# computational objects remain comparison references only.

@@ -7,6 +7,8 @@ nonlinear contracts and modal inverse iteration. Fresh Dhir Vert comparisons
 cover 77,080 springs at all 10 committed steps with zero spring-phase differences.
 Dhir Vert validation passes every available numeric spring-history field within the unchanged tolerances. One near-zero horizontal reaction component at step 9 differs by 2.09e-6 kN and remains open. See [the current Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
 
+Post-release source corrections on 2026-10-14 match the native Windows power and arctangent arithmetic used in fibre integration. The fresh Vert rerun preserves spring-history agreement and reduces initial transverse stiffness differences to about 5e-15 relative error; the same step 9 reaction remains open. See the dated update in the current Vert audit.
+
 The V1 Article/interface-chain evidence is historical qualification of its
 recorded source and environment, not a new v1.4.2 rerun of those models.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Match .NET Framework power and arctangent rounding in compiled fibre integration on Windows.
+- Route production through the same source-owning fibre kernel as the native unittest, avoiding a stale cached wrapper.
+- Add 126 original C# fibre oracle cases; full suite: 723 passed, 23 skipped, 796 subtests.
+- Revalidate all 77,080 springs at initial state and all 10 committed Dhir Vert steps with the changed foundation material. Available spring fields pass; the step 9 near-zero R1 difference remains open. Initial transverse stiffness agrees to about 5e-15 relative error.
+
 ## 1.4.2 - 2026-10-13
 
 - Initialize hysteretic yield-coordinate metadata for generated scalar and lazy springs.
