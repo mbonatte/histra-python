@@ -136,7 +136,10 @@ class Interface:
         transverse springs' incremental forces.
         """
         if nr:
-            return -sum(float(s.get_incr_force()) for s in self.trasv_1)
+            result = 0.0
+            for spring in self.trasv_1:
+                result -= float(spring.get_incr_force())
+            return result
         raise NotImplementedError(
             "Interface.ComputeDN with NR=False requires the flexural "
             "deformation path, which is not used by the selected benchmark."
@@ -656,7 +659,7 @@ class Interface:
                 trial = float(spring._tstress) if hasattr(spring, "_tstress") else float(spring.get_force())
                 committed = float(spring._cstress) if hasattr(spring, "_cstress") else float(spring.get_committed_force())
                 normal_increment -= float(spring.get_incr_force()) if hasattr(spring, "get_incr_force") else (trial - committed)
-                committed_normal_force += committed
+                committed_normal_force += trial - (trial - committed)
                 abs_u = abs(new_u)
                 if abs_u > max_displacement:
                     max_displacement = abs_u
@@ -676,7 +679,7 @@ class Interface:
                     trial = float(spring._tstress)
                     committed = float(spring._cstress)
                 normal_increment -= trial - committed
-                committed_normal_force += committed
+                committed_normal_force += trial - (trial - committed)
                 abs_u = abs(new_u)
                 if abs_u > max_displacement:
                     max_displacement = abs_u

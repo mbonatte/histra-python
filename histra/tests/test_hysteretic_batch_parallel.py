@@ -616,7 +616,7 @@ def _finish_transverse_reference(
             force = trial[spring_index, 6]
             committed_value = committed[spring_index, 6]
             normal_increment -= force - committed_value
-            committed_force += committed_value
+            committed_force += force - (force - committed_value)
             displacement = abs(trial[spring_index, 7])
             if displacement > max_displacement:
                 max_displacement = displacement
