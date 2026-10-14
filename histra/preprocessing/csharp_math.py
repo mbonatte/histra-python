@@ -14,10 +14,14 @@ from numba import njit, types
 from llvmlite import binding
 _runtime = None
 if sys.platform == "win32":
-    try:
-        _runtime = ctypes.CDLL("msvcr120_clr0400.dll", winmode=0x800)
-    except OSError:
-        pass
+    # Current Framework servicing uses its private UCRT; older installations
+    # use the VC120 CRT. They differ in cancellation-sensitive power results.
+    for library in ("ucrtbase_clr0400.dll", "msvcr120_clr0400.dll"):
+        try:
+            _runtime = ctypes.CDLL(library, winmode=0x800)
+            break
+        except OSError:
+            pass
 POWER_BACKEND = "dotnet-framework-crt" if _runtime is not None else "platform-math"
 
 if _runtime is not None:
