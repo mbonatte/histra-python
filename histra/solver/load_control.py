@@ -54,17 +54,20 @@ class LoadControl(StaticIntegrator):
 
         last_time, last_multiplier = self._lf_items[-1]
         analysis_multiplier = float(getattr(self.state.analysis, "mult", 1.0))
-        if self._t >= last_time - 1e-12:
-            return 0.0, last_multiplier * analysis_multiplier - self.mult
-
-        (t0, f0), (t1, f1) = self._segment()
-        dt_range = t1 - t0
-        df_range = f1 - f0
         lf = getattr(self.state.analysis, "load_function", None)
         discretization = abs(float(getattr(lf, "discr_val", 0.1)))
         if discretization < 1e-15:
             raise ValueError("Load-function discretization must be positive")
+        if self._t >= last_time - 1e-12:
+            return 0.0, last_multiplier * analysis_multiplier - self.mult
+        # Original GetIncrement closes the final interval against the accumulated
+        # multiplier. Reusing the nominal increment changes its last bits.
+        if last_time - 1e-5 < self._t + discretization:
+            return last_time - self._t, last_multiplier * analysis_multiplier - self.mult
 
+        (t0, f0), (t1, f1) = self._segment()
+        dt_range = t1 - t0
+        df_range = f1 - f0
         force_based = bool(getattr(lf, "type_discr", False))
         span = abs(df_range) if force_based else abs(dt_range)
         n_steps = max(1, int(np.ceil(span / discretization)))
