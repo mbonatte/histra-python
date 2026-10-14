@@ -423,45 +423,82 @@ def reconstruct_global_displacements(
     """
     model = _resolve_model(model_or_hrx)
     qstates = read_quad_states(results_path, analysis_key, combination, step)
+    if not qstates:
+        raise ResultsStateError(f"No quad states found for analysis {analysis_key}, step {step}")
     resolved_step = next(iter(qstates.values())).step
-    istates = read_interface_states(results_path, analysis_key, combination, resolved_step)
-    rows: list[np.ndarray] = []
-    values: list[float] = []
+
+    # Fast path: check if uncoupled quad afferences determine all DOFs directly
+    u_direct = np.zeros(model.gdl, dtype=np.float64)
+    assigned = np.zeros(model.gdl, dtype=bool)
+    has_conflict = False
+
     for key, state in qstates.items():
         element = model.collections.quads.get(key)
         if element is None:
             raise ResultsStateError(f"Quad {key} from database is absent from HRX model")
         for local, target in enumerate(state.u):
-            row = np.zeros(model.gdl, dtype=np.float64)
+            if local < len(element.aff) and len(element.aff[local]) == 1:
+                aff = element.aff[local][0]
+                idx = int(aff.gdl) - 1
+                if 0 <= idx < model.gdl and abs(float(aff.alfa)) > 1e-12:
+                    val = float(target) / float(aff.alfa)
+                    if assigned[idx] and abs(u_direct[idx] - val) > 1e-9:
+                        has_conflict = True
+                        break
+                    u_direct[idx] = val
+                    assigned[idx] = True
+        if has_conflict:
+            break
+
+    if not has_conflict and np.all(assigned):
+        return u_direct
+
+    istates = read_interface_states(results_path, analysis_key, combination, resolved_step)
+    coo_rows: list[int] = []
+    coo_cols: list[int] = []
+    coo_data: list[float] = []
+    rhs_list: list[float] = []
+    current_row = 0
+
+    for key, state in qstates.items():
+        element = model.collections.quads.get(key)
+        if element is None:
+            raise ResultsStateError(f"Quad {key} from database is absent from HRX model")
+        for local, target in enumerate(state.u):
             for aff in element.aff[local]:
                 idx = int(aff.gdl) - 1
                 if not 0 <= idx < model.gdl:
                     raise ResultsStateError(f"Quad {key} afference DOF {aff.gdl} is outside model range")
-                row[idx] += float(aff.alfa)
-            rows.append(row)
-            values.append(target)
+                coo_rows.append(current_row)
+                coo_cols.append(idx)
+                coo_data.append(float(aff.alfa))
+            rhs_list.append(float(target))
+            current_row += 1
+
     for key, state in istates.items():
         element = model.collections.interfaces.get(key)
         if element is None:
             raise ResultsStateError(f"Interface {key} from database is absent from HRX model")
         for local, target in enumerate(state.u):
-            row = np.zeros(model.gdl, dtype=np.float64)
             for aff in element.aff[local]:
                 idx = int(aff.gdl) - 1
                 if not 0 <= idx < model.gdl:
                     raise ResultsStateError(f"Interface {key} afference DOF {aff.gdl} is outside model range")
-                row[idx] += float(aff.alfa)
-            rows.append(row)
-            values.append(target)
-    matrix = np.asarray(rows)
-    rhs = np.asarray(values)
-    u, _residuals, rank, _singular = np.linalg.lstsq(matrix, rhs, rcond=None)
-    if rank != model.gdl:
-        raise ResultsStateError(
-            f"Local states determine rank {rank}, but model has {model.gdl} generalized DOFs"
-        )
-    local_error = np.max(np.abs(matrix @ u - rhs)) if rhs.size else 0.0
-    if local_error > 1.0e-9:
+                coo_rows.append(current_row)
+                coo_cols.append(idx)
+                coo_data.append(float(aff.alfa))
+            rhs_list.append(float(target))
+            current_row += 1
+
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.linalg import lsqr
+
+    matrix = csr_matrix((coo_data, (coo_rows, coo_cols)), shape=(current_row, model.gdl))
+    rhs = np.asarray(rhs_list, dtype=np.float64)
+    res = lsqr(matrix, rhs, atol=1e-12, btol=1e-12)
+    u = res[0]
+    local_error = np.max(np.abs(matrix.dot(u) - rhs)) if rhs.size else 0.0
+    if local_error > 1.0e-6:
         raise ResultsStateError(
             f"Local states are internally inconsistent; maximum reconstruction error={local_error:.6e}"
         )
