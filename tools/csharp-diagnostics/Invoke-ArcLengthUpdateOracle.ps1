@@ -20,7 +20,7 @@ if(!$ls.SymbolicFactorization() -or $ls.K.NumericFactorization() -ne 0) {throw '
 [SolverRuntime.ModelManager].GetField('_Fext',$static).SetValue($null,[MatrixManager.Vector]::new(1))
 $an=[Objects.Analyses.Analysis]::new()
 $rows=@()
-foreach($case in @(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,0.4),@(0.0,1.3,-0.7,-0.02),@(1.0,1.0,1.0,0.1),@(0.0,1e-16,0.3,0.1))) {
+foreach($case in @(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,0.4),@(0.0,1.3,-0.7,-0.02),@(1.0,1.0,1.0,0.1),@(0.0,1e-16,0.3,0.1),@(0.0,0.0,0.3,0.1,-10),@(1.0,1.0,1.0,0.0,-10))) {
  $arc=[Activator]::CreateInstance($type,$true)
  foreach($name in @('deltaUhat','deltaUbar','deltaU','deltaUstep','phat')) {$v=[MatrixManager.Vector]::new(1);$type.GetField($name,$flags).SetValue($arc,$v)}
  $type.GetField('alpha2',$flags).SetValue($arc,[double]$case[0])
@@ -30,7 +30,8 @@ foreach($case in @(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,
  $base.GetField('U',$flags).SetValue($arc,[MatrixManager.Vector]::new(1))
  $ls.SetX(0,[double]$case[2])
  $code=$type.GetMethod('Update',$flags).Invoke($arc,[object[]]@($model.Collections,$p,$an))
- if($code -ne 0) {throw "Native Update failed: $code"}
+ $expected=0;if($case.Length -eq 5) {$expected=[int]$case[4]}
+ if($code -ne $expected) {throw "Unexpected native Update status: $code"}
  if($type.GetField('deltaUhat',$flags).GetValue($arc).Get(0) -ne [double]$case[1]) {throw 'Native reference solve did not return the identity solution'}
  $dl=[double]$type.GetField('deltaLambdaStep',$flags).GetValue($arc)
  $du=[double]$type.GetField('deltaU',$flags).GetValue($arc).Get(0)

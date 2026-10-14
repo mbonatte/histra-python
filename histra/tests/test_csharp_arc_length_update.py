@@ -33,7 +33,7 @@ class NativeArcLengthUpdateTests(unittest.TestCase):
         arc.update_ptarget = lambda *args: None
         arc.apply_load_domain = lambda *args: None
         with patch("histra.solver.arc_length.ModelManager.update_domain"):
-            self.assertEqual(arc.update(object(), SimpleNamespace(ls=System()), object()), 0)
+            self.assertEqual(arc.update(object(), SimpleNamespace(ls=System()), object()), case.get("code", 0))
         return arc
 
     def test_original_update_binary_outputs(self):
@@ -41,6 +41,11 @@ class NativeArcLengthUpdateTests(unittest.TestCase):
         for case in json.loads(fixture.read_text(encoding="utf-8-sig"))["cases"]:
             with self.subTest(case=case):
                 arc = self._run(case)
+                if case["code"] < 0:
+                    self.assertTrue(arc.errors)
+                    self.assertEqual(arc._delta_lambda_step, 0.0)
+                    self.assertEqual(arc.u[0], 0.0)
+                    continue
                 for value, key in ((arc._last_delta_lambda, "lambda_bits"), (arc._last_delta_u[0], "du_bits")):
                     self.assertEqual(struct.unpack("<q", struct.pack("<d", value))[0], int(case[key]))
 
