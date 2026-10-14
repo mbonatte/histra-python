@@ -48,9 +48,25 @@ foreach($constrained in @($false,$true)) {foreach($uniform in @($false,$true)) {
     $state=[Objects.InterfaceState].GetConstructor([Type[]]@([Objects.Interface],[bool])).Invoke([object[]]@($intf,$false))
     SetInterface $intf 'Status' $state
     [void][Objects.Interface].GetMethod('ComputeK').Invoke($intf,[object[]]@([double]$alpha))
+    $forces=@(2.71828,-1.4,1e-9,.77,-5.09,1.31)
+    for($j=0;$j -lt 6;$j++) {
+        [Objects.SpringHysteretic].GetField('_Tstress',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($fibres[$j],[double]$forces[$j])
+    }
+    $slid=[Objects.Interface].GetProperty('Slid').GetValue($intf,$null)
+    $oop=[Objects.Interface].GetProperty('SlidOutPlan').GetValue($intf,$null)
+    $slidingForces=@(.7737,-.827,.3456)
+    $springs=@($slid[0],$oop[0],$oop[1])
+    for($j=0;$j -lt 3;$j++) {
+        [Objects.SpringLinearElastic].GetField('_Tstress',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($springs[$j],[double]$slidingForces[$j])
+    }
+    SetInterface $intf 'F' ([MatrixManager.Vector].GetConstructor([Type[]]@([int])).Invoke([object[]]@([int]12)))
+    [void][Objects.Interface].GetMethod('SetResistingForce').Invoke($intf,[object[]]@())
+    $f=[Objects.Interface].GetProperty('F').GetValue($intf,$null)
+    $localForces=@();for($j=0;$j -lt 12;$j++) {$localForces += $f[$j]}
     $xy=@();foreach($p in $vertices){$xy += ,@([double]$p.X,[double]$p.Y)}
     $output += @{constrained=$constrained;uniform=$uniform;alpha=$alpha;length=2.718281828459045;thickness=@(.48,.66);vertices=$xy;spring_k=$ks;spring_kt=$kts;
-        K=(MatrixRows $state.K 6);Kslid=(MatrixRows $state.Kslid 2);Kout=(MatrixRows $state.KslidOutPlan 4)}
+        K=(MatrixRows $state.K 6);Kslid=(MatrixRows $state.Kslid 2);Kout=(MatrixRows $state.KslidOutPlan 4);
+        transverse_forces=$forces;sliding_forces=$slidingForces;local_forces=$localForces}
 }}}
 @{source='Original Interface.ComputeK: transverse, in-plane and out-of-plane stiffness blocks';cases=$output} |
     ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputPath -Encoding UTF8

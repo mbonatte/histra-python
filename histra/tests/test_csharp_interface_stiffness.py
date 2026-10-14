@@ -9,6 +9,9 @@ from histra.model._types import Point
 from histra.springs.elastic import SpringElastic
 from histra.springs.hysteretic import SpringHysteretic
 from histra.solver.assembler import _evaluate_stiffness_terms_batch
+from histra.solver.hysteretic_kernels.transverse import _finish_transverse_batch
+from histra.solver.hysteretic_kernels.interface_coulomb import (
+    CTSTRESS, _assemble_full_interface_forces)
 
 
 class NativeInterfaceStiffnessTests(unittest.TestCase):
@@ -47,3 +50,23 @@ class NativeInterfaceStiffnessTests(unittest.TestCase):
                                            for f, n in [('K',6), ('Kslid',2), ('Kout',4)]])
                 with self.subTest(path='compiled'):
                     np.testing.assert_array_equal(terms, expected)
+                for spring, force in zip(i.trasv_1, case['transverse_forces']):
+                    spring._tstress = force
+                for spring, force in zip([*i.slid, *i.slid_out_plan], case['sliding_forces']):
+                    spring._tstress = force
+                i.set_resisting_force()
+                with self.subTest(path='scalar forces'):
+                    np.testing.assert_array_equal(i.f, case['local_forces'])
+                force_trial = np.zeros((6,10));force_trial[:,6] = case['transverse_forces']
+                local_flex = np.zeros((1,6));normals=np.zeros(1);committed_force=np.zeros(1);max_u=np.zeros(1)
+                _finish_transverse_batch(
+                    force_trial,np.zeros((6,9)),np.asarray(i._perf_di),np.asarray(i._perf_dj),
+                    np.asarray(i._perf_ecc),np.array([i.length]),ints(0),ints(6),
+                    np.array([case['constrained']]),local_flex,normals,committed_force,max_u)
+                coulomb=np.zeros((3,70));coulomb[:,CTSTRESS] = case['sliding_forces']
+                full=np.zeros((1,12))
+                _assemble_full_interface_forces(
+                    local_flex,coulomb,ints(0),ints(1),ints(2),np.array([i._perf_dist]),
+                    full,max_u,np.zeros(3))
+                with self.subTest(path='compiled forces'):
+                    np.testing.assert_array_equal(full[0],case['local_forces'])
