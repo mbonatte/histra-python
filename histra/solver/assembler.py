@@ -21,6 +21,7 @@ from histra.model.quad import Quad
 from histra.model.interface import Interface
 from histra.model.spring import SpringElastic
 from histra.model._types import AfferenceEntry
+from histra.preprocessing.csharp_math import csharp_pow
 from histra.solver.hysteretic_kernels.interface_coulomb import CKTANG
 from histra.solver.hysteretic_kernels.quad_takeda import QKTANG
 from histra.solver.load_assembly import (
@@ -1110,7 +1111,7 @@ def _build_stiffness_batch_data(
             return None
 
     quad_dalfa_sq = np.array(
-        [float(q.d_alfa_2d_diag() ** 2) for q, _ in plan.quad_terms],
+        [float(csharp_pow(q.d_alfa_2d_diag(), 2.0)) for q, _ in plan.quad_terms],
         dtype=np.float64,
     )
     quad_k0 = np.array(

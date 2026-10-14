@@ -46,9 +46,9 @@ class QuadGeometryMixin:
         if denominator == 0.0:
             return 0.0
         return (
-            self.length[0] ** 2
-            + self.diago[0] ** 2
-            - self.length[1] ** 2
+            self.length[0] * self.length[0]
+            + self.diago[0] * self.diago[0]
+            - self.length[1] * self.length[1]
         ) / denominator
 
     # ── ComputeK ─────────────────────────────────────────────────────────────
@@ -63,9 +63,11 @@ class QuadGeometryMixin:
         """
         if self.spring is None:
             return 0.0
+        from histra.preprocessing.csharp_math import csharp_pow
+
         k = self.spring.get_k(alfa)
         dalfa = self.d_alfa_2d_diag()
-        self.status.k = k * dalfa * dalfa
+        self.status.k = k * csharp_pow(dalfa, 2.0)
         return self.status.k
 
     # ── GetDiagonalStiffness ─────────────────────────────────────────────────
