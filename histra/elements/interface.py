@@ -354,7 +354,9 @@ class Interface:
         # square root.  Preserve that precision loss: it changes the
         # out-of-plane sliding interpolation and therefore its stiffness.
         x_val = float(np.float32(3.0 * num2 / (num * (num2 / num - 0.63))))
-        x_val = math.sqrt(x_val)
+        # Operations.sqrt returns Single, so round the result as well as
+        # its input before the following double-precision division.
+        x_val = float(np.float32(math.sqrt(x_val)))
         num3 = 2.0 * num / x_val
         return 0.5 - 0.5 * num3 / L
 
