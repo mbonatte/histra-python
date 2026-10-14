@@ -12,7 +12,7 @@ Commit `ddea51d` subsequently matches native line-load polygon bisection, source
 
 The original source and native calls establish that spring rollback restores committed/trial hysteretic state but leaves base spring U unchanged. They do not establish that a failed attempt occurred in this saved run. Native database-reader checks also reproduce the saved spring U and interface U values exactly. The user has no solver log and recalls a large first-step jump followed by linear increments.
 
-A separate application copy at `C:\Users\mbonatte\Documents\Histra\csharp-diagnostics-2026.1.1\app` now instruments original solver IL with the C# helper in [the diagnostic tools](../../tools/csharp-diagnostics/README.md). Successful-call smoke tests confirm flushed convergence, commit, rollback and native U/Cstrain records. A full GUI run of Vert then TLM_Constant_UDL on the prepared model copy is pending. The diagnostic build has not yet been qualified by an end-to-end model comparison. Pushover remains gated behind resolving the second analysis.
+A separate application copy at `C:\Users\mbonatte\Documents\Histra\csharp-diagnostics-2026.1.1\app` instruments original solver IL with the C# helper in [the diagnostic tools](../../tools/csharp-diagnostics/README.md). The subsequent GUI run reproduced all original Vert/constant-load stored fields exactly and confirmed the stale-U rollback defect for the rejected first constant-load attempt. See [the dated constant-load investigation](dhir-constant-load-rollback.md). Python's earlier full-increment convergence remains a separate open difference; pushover remains gated behind resolving the second analysis.
 
 ## 2026-10-14: native transcendental arithmetic
 
