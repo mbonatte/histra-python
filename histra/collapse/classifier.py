@@ -400,37 +400,23 @@ def classify_collapse_mechanism(
         return ClassificationResult(category, confidence, priority, desc, tuple(rationale), evidence, step_number)
 
     # -------------------------------------------------------------------------
-    # Case 2: No significant failure event (stable ascending / elastic state)
+    # Case 2: Local backfill failure
     # -------------------------------------------------------------------------
-    has_arch_mechanism = (
-        hinges_tot >= thresholds.arch_hinge_mechanism_count
-        or (hinges_tot >= 2 and max_rot >= thresholds.arch_hinge_rotation_tolerance)
-    )
-
-    if not has_significant_load_drop and not is_solver_failed and not has_arch_mechanism:
-        category = CollapseCategory.NO_SIGNIFICANT_FAILURE_EVENT
-        confidence = 0.92
-        priority = ReviewPriority.LOW
-        desc = "No failure event detected; load factor is ascending or stable near peak without structural collapse mechanism."
-        rationale.append(f"Load factor is at or near peak (drop ratio = {drop_ratio*100:.2f}% < {thresholds.load_drop_trigger*100:.1f}% threshold).")
-        rationale.append(f"No complete arch collapse mechanism detected ({hinges_tot} hinge(s) present).")
-        return ClassificationResult(category, confidence, priority, desc, tuple(rationale), evidence, step_number)
-
-    # -------------------------------------------------------------------------
-    # Case 3: Local backfill failure
-    # -------------------------------------------------------------------------
-    # Conditions:
-    # 1. Backfill displacement heavily dominates structural motion (ratio > 3.0) OR backfill sliding > 20% OR D_backfill > 60%
-    # 2. Masonry arch has zero hinges (or max opening is tiny < 0.5 mm)
-    # 3. Active structural mass is small (< 15%)
+    # Conditions for local backfill failure:
+    # 1. Physical mobilization: backfill interface sliding > 20%, OR dissipation dominance > 60%,
+    #    OR significant load drop coinciding with backfill displacement dominance (> 3.0).
+    # 2. Masonry arch barrel has zero hinges (or max opening is tiny < 0.2 mm).
+    # 3. Active structural mass is small (<= 15%).
     is_backfill_dominant = (
-        (backfill_disp_ratio >= thresholds.backfill_disp_dominance_ratio or backfill_sliding_frac >= thresholds.backfill_sliding_fraction_threshold)
+        (
+            backfill_sliding_frac >= thresholds.backfill_sliding_fraction_threshold
+            or (energy_status == "AVAILABLE" and d_back >= thresholds.backfill_dissipation_dominance_ratio)
+            or (has_significant_load_drop and backfill_disp_ratio >= thresholds.backfill_disp_dominance_ratio)
+        )
         and hinges_tot == 0
         and max_open < thresholds.arch_hinge_opening_tolerance
         and act_struct <= thresholds.masonry_active_mass_low
     )
-    if not is_backfill_dominant and energy_status == "AVAILABLE" and d_back >= thresholds.backfill_dissipation_dominance_ratio and hinges_tot == 0:
-        is_backfill_dominant = True
 
     if is_backfill_dominant:
         category = CollapseCategory.LOCAL_BACKFILL_FAILURE
@@ -450,7 +436,7 @@ def classify_collapse_mechanism(
         return ClassificationResult(category, confidence, priority, desc, tuple(rationale), evidence, step_number)
 
     # -------------------------------------------------------------------------
-    # Case 4: Mixed or Progressive Failure
+    # Case 3: Mixed or Progressive Failure
     # -------------------------------------------------------------------------
     # Concurrent active backfill sliding AND arch hinge activation (1 to 2 hinges or high contact slip)
     is_mixed = (
@@ -467,6 +453,23 @@ def classify_collapse_mechanism(
         rationale.append(f"Active masonry mass = {act_struct*100:.1f}%, active backfill mass = {act_back*100:.1f}%.")
         if energy_status == "AVAILABLE":
             rationale.append(f"Dissipation shared across media: D_backfill = {d_back*100:.1f}%, D_masonry = {d_mas*100:.1f}%.")
+        return ClassificationResult(category, confidence, priority, desc, tuple(rationale), evidence, step_number)
+
+    # -------------------------------------------------------------------------
+    # Case 4: No significant failure event (stable ascending / elastic state)
+    # -------------------------------------------------------------------------
+    has_arch_mechanism = (
+        hinges_tot >= thresholds.arch_hinge_mechanism_count
+        or (hinges_tot >= 2 and max_rot >= thresholds.arch_hinge_rotation_tolerance)
+    )
+
+    if not has_significant_load_drop and not is_solver_failed and not has_arch_mechanism:
+        category = CollapseCategory.NO_SIGNIFICANT_FAILURE_EVENT
+        confidence = 0.92
+        priority = ReviewPriority.LOW
+        desc = "No failure event detected; load factor is ascending or stable near peak without structural collapse mechanism."
+        rationale.append(f"Load factor is at or near peak (drop ratio = {drop_ratio*100:.2f}% < {thresholds.load_drop_trigger*100:.1f}% threshold).")
+        rationale.append(f"No complete arch collapse mechanism detected ({hinges_tot} hinge(s) present).")
         return ClassificationResult(category, confidence, priority, desc, tuple(rationale), evidence, step_number)
 
     # -------------------------------------------------------------------------

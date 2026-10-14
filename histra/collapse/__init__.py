@@ -23,6 +23,13 @@ from histra.collapse.classifier import (
     classify_collapse_mechanism,
     classify_execution,
 )
+from histra.collapse.evolution import (
+    EvolutionStepRecord,
+    MechanismEvolutionHistory,
+    MechanismEvolutionTracker,
+    MechanismTransition,
+    track_mechanism_evolution,
+)
 from histra.collapse.interface_damage import (
     DamageParticipationSummary,
     ExecutionInterfaceReport,
@@ -77,6 +84,7 @@ __all__ = [
     "CollapseCategory",
     "DamageParticipationSummary",
     "EvidenceBundle",
+    "EvolutionStepRecord",
     "ExecutionActiveMassReport",
     "ExecutionClassificationReport",
     "ExecutionInterfaceReport",
@@ -92,6 +100,9 @@ __all__ = [
     "LoadDropCriteria",
     "LoadDropEvent",
     "LoadHistoryCurve",
+    "MechanismEvolutionHistory",
+    "MechanismEvolutionTracker",
+    "MechanismTransition",
     "RegionDeformationMetrics",
     "RegionalActiveMassSummary",
     "RegionalInterfaceSummary",
@@ -125,6 +136,7 @@ __all__ = [
     "extract_interface_kinematics",
     "extract_load_history",
     "sample_quad_displacements_and_masses",
+    "track_mechanism_evolution",
 ]
 
 
