@@ -4,8 +4,10 @@ from pathlib import Path
 import unittest
 import numpy as np
 from histra.elements.quad_kernels import quad_yield_search, quad_yield_search_scalar
+from histra.preprocessing.csharp_math import POWER_BACKEND
 
 
+@unittest.skipUnless(POWER_BACKEND == 'dotnet-framework-crt', 'Windows Framework arithmetic required')
 class NativeQuadYieldSearchTests(unittest.TestCase):
     def test_original_capacity_search(self):
         data=json.loads((Path(__file__).parent/'fixtures/csharp_quad_yield_search_exact_2026_1_1.json').read_text(encoding='utf-8-sig'))
