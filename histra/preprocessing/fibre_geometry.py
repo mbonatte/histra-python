@@ -194,16 +194,11 @@ if njit is not None:
                 break
         return u, v, 0
 
-    @njit(cache=True, nogil=True)
-    def _fiber_stiffness_batch_nb(near_face, far_face, cells, E, reference_e2, output, errors):
-        for index in range(len(cells)):
-            k, area, length = _csharp_stiffness(near_face, far_face, cells[index], E, reference_e2)
-            if not (math.isfinite(k) and math.isfinite(area) and math.isfinite(length)) or area <= 0 or length <= 0:
-                errors[index] = 5
-            else:
-                output[index,0] = k
-                output[index,1] = area
-                output[index,2] = length
+    # Use the source-owning kernel directly: a cached wrapper can retain an
+    # older imported stiffness implementation after numerical corrections.
+    from histra.preprocessing.csharp_fibre_geometry import (
+        _csharp_fibre_stiffness_batch_nb as _fiber_stiffness_batch_nb,
+    )
 else:
     _fiber_stiffness_batch_nb = None
 

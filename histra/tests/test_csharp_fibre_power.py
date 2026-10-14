@@ -6,6 +6,7 @@ import sys
 import unittest
 import numpy as np
 from histra.preprocessing.csharp_fibre_geometry import _csharp_stiffness, _csharp_fibre_stiffness_batch_nb
+from histra.preprocessing.fibre_geometry import _fiber_stiffness_batch_nb
 
 try:
     _runtime = ctypes.CDLL("msvcr120_clr0400.dll") if sys.platform == "win32" else None
@@ -15,6 +16,7 @@ except OSError:
 @unittest.skipIf(_runtime is None, "Exact .NET Framework arithmetic requires its Windows runtime")
 class NativeFibrePowerTests(unittest.TestCase):
     def test_scalar_and_compiled_fibres(self):
+        self.assertIs(_fiber_stiffness_batch_nb, _csharp_fibre_stiffness_batch_nb)
         fixture = Path(__file__).parent / "fixtures/csharp_fibre_power_2026_1_1.json"
         for case in json.loads(fixture.read_text())["cases"]:
             face = case["face"]
@@ -26,7 +28,7 @@ class NativeFibrePowerTests(unittest.TestCase):
             e2 = np.asarray(case["e2"], dtype=np.float32)
             output = np.empty((len(cells), 3))
             errors = np.zeros(len(cells), dtype=np.int32)
-            _csharp_fibre_stiffness_batch_nb(vint[face], far, cells, 1., e2, output, errors)
+            _fiber_stiffness_batch_nb(vint[face], far, cells, 1., e2, output, errors)
             np.testing.assert_array_equal(errors, 0)
             for ref in case["expected"]:
                 with self.subTest(interface=case["interface"], quad=case["quad"], cell=ref["Cell"]):
