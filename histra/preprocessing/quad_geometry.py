@@ -10,6 +10,7 @@ import numpy as np
 from numba import njit
 from histra.types.point import Point
 from .errors import ModelPreparationError
+from .csharp_math import csharp_pow
 
 
 @njit(cache=True)
@@ -53,9 +54,9 @@ def compute_quad_geometry_batch(points,thickness):
         cosines[k,2]=(l[1]**2+l[2]**2-d[1]**2)/(2*l[1]*l[2])
         cosines[k,3]=(l[2]**2+l[3]**2-d[0]**2)/(2*l[2]*l[3])
         for j in range(4):
-            value=1.-cosines[k,j]**2
+            value=1.-csharp_pow(cosines[k,j],2.)
             if value<0:raise ValueError('Invalid Quad corner angle')
-            sines[k,j]=math.sqrt(value)
+            sines[k,j]=csharp_pow(value,.5)
         e1=_unit(p[1]-p[0]);e3=_unit(_cross(e1,p[2]-p[0]));e2=_cross(e3,e1)
         axes[k,0]=e1;axes[k,1]=e2;axes[k,2]=e3
         xy=np.array([[-l[0]/2.,0.],[l[0]/2.,0.],
