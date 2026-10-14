@@ -26,6 +26,6 @@ The user triggered the Vert rerun by changing its load discretization from ten t
 
 This is output parity under the source Work criterion for these two stages. Python's separate equilibrium diagnostic fails 19 of 20 Vert steps and all ten constant-load steps under the recorded warn policy, so the result does not qualify strict equilibrium acceptance. It also does not qualify a failed native rollback branch, a reopened-history branch, other models or modal analysis. Solver implementation and tolerances were unchanged for this validation; the existing suite remains at 727 passed, 23 skipped and 857 subtests from the preceding native-history regression run.
 
-## Next reference
+## Subsequent full-chain reference
 
-Run Pushover_5Axle_P1 from the newly completed constant-load state in the same open C# application, save the HRX/results and retain the diagnostic log. Reopening before this next analysis can lose the unpersisted CmomMax value again; if the application has been closed, rerun Vert and constant load in the same session first. The older pushover reference follows a different predecessor history and cannot substitute for this new chain. Python will use the same fresh geometry and matching stage sequence, with no imposed terminal-step cap, and compare every available committed pushover state.
+The user subsequently supplied the full same-session chain. It contains 58 pushover commits and a failed attempt 59. See [the full-chain comparison](dhir-full-chain-native-parity-progress.md) for the construction fixes, remaining strict phase mismatch and targeted native diagnostics. The older pushover reference is not substituted for this new chain.

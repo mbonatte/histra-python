@@ -1,0 +1,58 @@
+{
+  "reference_version": "2026.1.1",
+  "hrx_sha256": "50b0cc68ac4db339adf54bf67c27b6eef37ea69a1ba8172118cb28855a841bbb",
+  "results_sha256": "ceddfd96506a6fb1c4329589257b2850429559b6bb5c8a87642f62cf541ae5a0",
+  "reference_files_unchanged": true,
+  "python_revision": "6d17b1c",
+  "strict_gate": "FAILED: one phase at pushover step 23; numeric fields pass",
+  "steps": {
+    "Vert": 20,
+    "TLM_Constant_UDL": 10,
+    "Pushover_5Axle_P1": 58
+  },
+  "step_zero_is_committed": false,
+  "foundation_material": 146,
+  "foundation_interface_count": 148,
+  "python_generates_from_geometry": true,
+  "native_failed_attempt": 59,
+  "strict_fully_matching_pushover_commits": 22,
+  "first_strict_failure": {
+    "compared": 77080,
+    "mismatched": 1,
+    "nonfinite": 0,
+    "max_abs_difference": 1.0,
+    "worst_identity": [
+      102,
+      356,
+      1,
+      6
+    ],
+    "python": 5.0,
+    "csharp": 4.0,
+    "absolute_tolerance": 0.0,
+    "relative_tolerance": 0.0
+  },
+  "tests": {
+    "passed": 730,
+    "skipped": 23,
+    "subtests": 875
+  },
+  "diagnostic_only_full_chain": {
+    "python_revision": "before 5ba058c",
+    "phase_mismatches_explicitly_retained": true,
+    "qualifies_full_parity": false,
+    "committed_steps": 58,
+    "failed_attempt": 59,
+    "available_numeric_fields_match": true,
+    "spring_force_max_abs_difference_kN": 2.2634649710084886e-10,
+    "spring_U_max_abs_difference": 7.06072353362508e-13,
+    "reaction_vectors_exact": true,
+    "all_iteration_counts_match": true
+  },
+  "missing_native_measurements": [
+    "Pushover full SpringStates history",
+    "Pushover full global displacement vector",
+    "NULL per-spring E/Ed/Eel"
+  ],
+  "next_diagnostic": "Original C# internal hysteretic parameters and committed/trial history for interfaces 272 and 356; new trace helper installed and smoke-tested."
+}
