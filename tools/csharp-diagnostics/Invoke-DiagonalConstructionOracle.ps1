@@ -3,7 +3,11 @@ $ErrorActionPreference='Stop'
 $i=$InstalledRoot
 foreach($name in @('MonoGame.Framework.dll','XNALibrary.dll','UtilityLibrary.dll','SirioCommon.dll','MatrixManager.dll','ModelLibrary.dll')) {[void][Reflection.Assembly]::LoadFrom((Join-Path $i $name))}
 $output=@()
-foreach($fc in @(2.7,0.01)) {
+$geometries=@(
+    @{name='rectangle';points=@(@(0.,0.),@(100.,0.),@(100.,200.),@(0.,200.));thickness=@(10,10,10,10)},
+    @{name='tapered-skew';points=@(@(0.,0.),@(137.2,0.),@(129.4,211.3),@(-13.1,183.7));thickness=@(8.3,10.1,12.4,9.7)}
+)
+foreach($geometry in $geometries) {foreach($fc in @(2.7,0.01)) {
 $coll=[ModelLibrary.Collections].GetConstructor([Type[]]@([bool])).Invoke([object[]]@($false))
 $model=[Runtime.Serialization.FormatterServices]::GetUninitializedObject([ModelLibrary.Model]);$model.Collections=$coll
 [ModelLibrary.Model].GetField('_model',[Reflection.BindingFlags]'Static,NonPublic').SetValue($null,$model)
@@ -15,10 +19,10 @@ foreach($kind in @('HorizontalFlexional','VerticalFlexional','Shear')) {
 }
 $q=[Activator]::CreateInstance([Objects.Quad]);$q.MaterialKey=1
 $nodes=[Activator]::CreateInstance([Collections.Generic.List[Objects.Node]])
-foreach($xy in @(@(0.,0.),@(100.,0.),@(100.,200.),@(0.,200.))) {$n=[Activator]::CreateInstance([Objects.Node]);[Objects.Node].GetProperty('Point').SetValue($n,[Microsoft.Xna.Framework.Vector3]::new([single]$xy[0],[single]$xy[1],[single]0.),$null);$nodes.Add($n)}
-$q.Thickness=[single[]]@(10,10,10,10);$q.Normal=[Microsoft.Xna.Framework.Vector3[]]@([Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ)
+foreach($xy in $geometry.points) {$n=[Activator]::CreateInstance([Objects.Node]);[Objects.Node].GetProperty('Point').SetValue($n,[Microsoft.Xna.Framework.Vector3]::new([single]$xy[0],[single]$xy[1],[single]0.),$null);$nodes.Add($n)}
+$q.Thickness=[single[]]$geometry.thickness;$q.Normal=[Microsoft.Xna.Framework.Vector3[]]@([Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ,[Microsoft.Xna.Framework.Vector3]::UnitZ)
 [void]$q.SetGeometry($nodes,$false,$false);$q.SetDiagonalQuad()
 $blend=$vertical.Clone();$c=0.5*[math]::Pow(2.0,0.5);$blend.PropOrthotropyParameter($c,$c,$horizontal)
-$output += @{K=$q.Spring.K;Fy=$q.Spring.Fy;Ur=$q.Spring.Ur;Area=$q.Spring.Area;Length=$q.Length;Diago=$q.Diago;Sin=$q.Sin;Cos=$q.Cos;input_fy_c=$fc;flex_type=$vertical.Type.ToString();blend_E=$blend.E;blend_eps_t=$blend.Eps_u_t;blend_eps_c=$blend.Eps_u_c}
-}
+$output += @{geometry=$geometry.name;thickness=@($q.Thickness|ForEach-Object{[double]$_});volume=$q.GetVolume();K=$q.Spring.K;Fy=$q.Spring.Fy;Ur=$q.Spring.Ur;Area=$q.Spring.Area;Length=$q.Length;Diago=$q.Diago;Sin=$q.Sin;Cos=$q.Cos;input_fy_c=$fc;flex_type=$vertical.Type.ToString();blend_E=$blend.E;blend_eps_t=$blend.Eps_u_t;blend_eps_c=$blend.Eps_u_c}
+}}
 @{source="Original Quad.SetDiagonalQuad with masonry Hysteretic flexural laws, including very weak compression";cases=$output}|ConvertTo-Json -Depth 7|Set-Content -LiteralPath $OutputPath -Encoding UTF8

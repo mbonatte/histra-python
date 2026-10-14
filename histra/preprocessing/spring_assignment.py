@@ -104,7 +104,7 @@ def _quad_spring(
             ur = ((shear.G * quad.compute_volume() - 0.5*strength*yield_u)/strength + yield_u) if strength else length*shear.ductility
         else:
             ur = shear.ductility * length
-        area = length * quad.diago[1] / quad.length[0] * (sum(quad.thickness)/4.0)
+        area = length * quad.diago[1] / quad.length[0] * float(np.float32(sum(quad.thickness)/4.0))
         spring = _configure_coulomb(
             k=k, area=area, length=length, law=shear,
             cohesion_force=min(abs(fy[0]), abs(fy[1])),

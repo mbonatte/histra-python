@@ -134,24 +134,46 @@ class Quad(
         l0, l1, l3 = self.length[0], self.length[1], self.length[3]
         xcoord = [-l0 / 2.0, l0 / 2.0, l0 / 2.0 - l1 * self.cos[1], -l0 / 2.0 + l3 * self.cos[0]]
         ycoord = [0.0, 0.0, l1 * self.sin[1], l3 * self.sin[0]]
-        gp = sqrt(3.0) / 3.0
-        volume = 0.0
-        for xi in (gp, -gp):
-            for eta in (gp, -gp):
-                n = [
-                    (1.0 - xi) * (1.0 - eta) / 4.0,
-                    (1.0 + xi) * (1.0 - eta) / 4.0,
-                    (1.0 + xi) * (1.0 + eta) / 4.0,
-                    (1.0 - xi) * (1.0 + eta) / 4.0,
-                ]
-                dxi = [-(1.0 - eta) / 4.0, (1.0 - eta) / 4.0, (1.0 + eta) / 4.0, -(1.0 + eta) / 4.0]
-                deta = [-(1.0 - xi) / 4.0, -(1.0 + xi) / 4.0, (1.0 + xi) / 4.0, (1.0 - xi) / 4.0]
-                j11 = sum(xcoord[i] * dxi[i] for i in range(4))
-                j12 = sum(xcoord[i] * deta[i] for i in range(4))
-                j21 = sum(ycoord[i] * dxi[i] for i in range(4))
-                j22 = sum(ycoord[i] * deta[i] for i in range(4))
-                thickness = sum(n[i] * self.thickness[i] for i in range(4))
-                volume += thickness * (j11 * j22 - j12 * j21)
+        volume = ((-self.thickness[0]) * xcoord[1] * ycoord[0] / 6.0
+                  - self.thickness[1] * xcoord[1] * ycoord[0] / 6.0
+                  - self.thickness[2] * xcoord[1] * ycoord[0] / 12.0
+                  - self.thickness[3] * xcoord[1] * ycoord[0] / 12.0
+                  + self.thickness[1] * xcoord[2] * ycoord[0] / 12.0
+                  - self.thickness[3] * xcoord[2] * ycoord[0] / 12.0
+                  + self.thickness[0] * xcoord[3] * ycoord[0] / 6.0
+                  + self.thickness[1] * xcoord[3] * ycoord[0] / 12.0
+                  + self.thickness[2] * xcoord[3] * ycoord[0] / 12.0
+                  + self.thickness[3] * xcoord[3] * ycoord[0] / 6.0
+                  + self.thickness[0] * xcoord[0] * ycoord[1] / 6.0
+                  + self.thickness[1] * xcoord[0] * ycoord[1] / 6.0
+                  + self.thickness[2] * xcoord[0] * ycoord[1] / 12.0
+                  + self.thickness[3] * xcoord[0] * ycoord[1] / 12.0
+                  - self.thickness[0] * xcoord[2] * ycoord[1] / 12.0
+                  - self.thickness[1] * xcoord[2] * ycoord[1] / 6.0
+                  - self.thickness[2] * xcoord[2] * ycoord[1] / 6.0
+                  - self.thickness[3] * xcoord[2] * ycoord[1] / 12.0
+                  - self.thickness[0] * xcoord[3] * ycoord[1] / 12.0
+                  + self.thickness[2] * xcoord[3] * ycoord[1] / 12.0
+                  - self.thickness[1] * xcoord[0] * ycoord[2] / 12.0
+                  + self.thickness[3] * xcoord[0] * ycoord[2] / 12.0
+                  + self.thickness[0] * xcoord[1] * ycoord[2] / 12.0
+                  + self.thickness[1] * xcoord[1] * ycoord[2] / 6.0
+                  + self.thickness[2] * xcoord[1] * ycoord[2] / 6.0
+                  + self.thickness[3] * xcoord[1] * ycoord[2] / 12.0
+                  - self.thickness[0] * xcoord[3] * ycoord[2] / 12.0
+                  - self.thickness[1] * xcoord[3] * ycoord[2] / 12.0
+                  - self.thickness[2] * xcoord[3] * ycoord[2] / 6.0
+                  - self.thickness[3] * xcoord[3] * ycoord[2] / 6.0
+                  - self.thickness[0] * xcoord[0] * ycoord[3] / 6.0
+                  - self.thickness[1] * xcoord[0] * ycoord[3] / 12.0
+                  - self.thickness[2] * xcoord[0] * ycoord[3] / 12.0
+                  - self.thickness[3] * xcoord[0] * ycoord[3] / 6.0
+                  + self.thickness[0] * xcoord[1] * ycoord[3] / 12.0
+                  - self.thickness[2] * xcoord[1] * ycoord[3] / 12.0
+                  + self.thickness[0] * xcoord[2] * ycoord[3] / 12.0
+                  + self.thickness[1] * xcoord[2] * ycoord[3] / 12.0
+                  + self.thickness[2] * xcoord[2] * ycoord[3] / 6.0
+                  + self.thickness[3] * xcoord[2] * ycoord[3] / 6.0)
         self._perf_volume = volume
         return volume
 

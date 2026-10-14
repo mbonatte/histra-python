@@ -86,6 +86,8 @@ class QuadGeometryMixin:
         E : Young's modulus.
         G : Shear modulus.
         """
+        from histra.preprocessing.csharp_math import csharp_pow
+
         nu = E / (2.0 * G) - 1.0           # Poisson ratio
         lam = E * nu / (2.0 * (1.0 + 2.0 * nu))  # λ = νE/((1+ν)(1-2ν)) – first Lamé param
 
@@ -98,7 +100,7 @@ class QuadGeometryMixin:
         Y = [ 0.0, 0.0,  L1 * Sin1,  L3 * Sin0 ]
 
         # Gauss points (2×2)
-        gp = sqrt(3.0) / 3.0
+        gp = csharp_pow(3.0, 0.5) / 3.0
         gauss = [gp, -gp]
 
         # Accumulated stiffness coefficients (symmetric 4×4 layout)
@@ -149,10 +151,10 @@ class QuadGeometryMixin:
                 eta = gauss[j]
 
                 # C# array3 = interpolated thickness
-                array3[i][j] = (self.thickness[0] * (1.0 - xi) * (1.0 - eta) / 4.0 +
-                                self.thickness[1] * (1.0 + xi) * (1.0 - eta) / 4.0 +
-                                self.thickness[2] * (1.0 + xi) * (1.0 + eta) / 4.0 +
-                                self.thickness[3] * (1.0 - xi) * (1.0 + eta) / 4.0)
+                array3[i][j] = (self.thickness[0] * ((1.0 - xi) * (1.0 - eta) / 4.0) +
+                                self.thickness[1] * ((1.0 + xi) * (1.0 - eta) / 4.0) +
+                                self.thickness[2] * ((1.0 + xi) * (1.0 + eta) / 4.0) +
+                                self.thickness[3] * ((1.0 - xi) * (1.0 + eta) / 4.0))
 
                 # array4..array11: shape function derivatives at xi,eta
                 # These correspond to dN_k/dxi and dN_k/deta for each of the 4 nodes
@@ -228,38 +230,37 @@ class QuadGeometryMixin:
                 # Constitutive contributions to the 4×4 stiffness block
                 # (actually 2×2 since we only have 2 warping modes)
                 # These are B^T·D·B integrated over the element.
-                array25[i][j] = ((lam + 2.0 * G) * array21[i][j]**2 +
-                                 G * array23[i][j]**2)
+                array25[i][j] = ((lam + 2.0 * G) * csharp_pow(array21[i][j], 2.0) +
+                                 G * csharp_pow(array23[i][j], 2.0))
                 array26[i][j] = ((lam + G) * array21[i][j] * array23[i][j])
                 array27[i][j] = ((lam + 2.0 * G) * array21[i][j] * array22[i][j] +
                                  G * array23[i][j] * array24[i][j])
                 array28[i][j] = (lam * array21[i][j] * array24[i][j] +
                                  G * array23[i][j] * array22[i][j])
-                array29[i][j] = ((lam + 2.0 * G) * array23[i][j]**2 +
-                                 G * array21[i][j]**2)
+                array29[i][j] = ((lam + 2.0 * G) * csharp_pow(array23[i][j], 2.0) +
+                                 G * csharp_pow(array21[i][j], 2.0))
                 array30[i][j] = (lam * array23[i][j] * array22[i][j] +
                                  G * array21[i][j] * array24[i][j])
                 array31[i][j] = ((lam + 2.0 * G) * array23[i][j] * array24[i][j] +
                                  G * array21[i][j] * array22[i][j])
-                array32[i][j] = ((lam + 2.0 * G) * array22[i][j]**2 +
-                                 G * array24[i][j]**2)
+                array32[i][j] = ((lam + 2.0 * G) * csharp_pow(array22[i][j], 2.0) +
+                                 G * csharp_pow(array24[i][j], 2.0))
                 array33[i][j] = ((lam + G) * array22[i][j] * array24[i][j])
-                array34[i][j] = ((lam + 2.0 * G) * array24[i][j]**2 +
-                                 G * array22[i][j]**2)
+                array34[i][j] = ((lam + 2.0 * G) * csharp_pow(array24[i][j], 2.0) +
+                                 G * csharp_pow(array22[i][j], 2.0))
 
                 # Accumulate weighted by thickness * detJ
-                w = array3[i][j] * array16[i][j]
-
-                num3  += w * array25[i][j]
-                num4  += w * array26[i][j]
-                num5  += w * array27[i][j]
-                num6  += w * array28[i][j]
-                num7  += w * array29[i][j]
-                num8  += w * array30[i][j]
-                num9  += w * array31[i][j]
-                num10 += w * array32[i][j]
-                num11 += w * array33[i][j]
-                num12 += w * array34[i][j]
+                # Match source thickness * stiffness contribution * detJ order.
+                num3 += array3[i][j] * array25[i][j] * array16[i][j]
+                num4 += array3[i][j] * array26[i][j] * array16[i][j]
+                num5 += array3[i][j] * array27[i][j] * array16[i][j]
+                num6 += array3[i][j] * array28[i][j] * array16[i][j]
+                num7 += array3[i][j] * array29[i][j] * array16[i][j]
+                num8 += array3[i][j] * array30[i][j] * array16[i][j]
+                num9 += array3[i][j] * array31[i][j] * array16[i][j]
+                num10 += array3[i][j] * array32[i][j] * array16[i][j]
+                num11 += array3[i][j] * array33[i][j] * array16[i][j]
+                num12 += array3[i][j] * array34[i][j] * array16[i][j]
 
         # Warping displacement vector (C# array2)
         Sin2, Sin3 = self.sin[2], self.sin[3]
@@ -274,7 +275,7 @@ class QuadGeometryMixin:
         a[3] =  L3 * Cos0
 
         # Quadratic form a^T · [stiffness_4x4] · a
-        S = (num3 * a[0]**2 + num7 * a[1]**2 + num10 * a[2]**2 + num12 * a[3]**2 +
+        S = (num3 * csharp_pow(a[0], 2.0) + num7 * csharp_pow(a[1], 2.0) + num10 * csharp_pow(a[2], 2.0) + num12 * csharp_pow(a[3], 2.0) +
              2.0 * num4 * a[0] * a[1] +
              2.0 * num5 * a[0] * a[2] +
              2.0 * num6 * a[0] * a[3] +

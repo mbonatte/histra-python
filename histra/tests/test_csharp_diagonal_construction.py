@@ -16,7 +16,7 @@ class NativeDiagonalConstructionTests(unittest.TestCase):
         fixture = json.loads((Path(__file__).parent / 'fixtures' /
                               'csharp_diagonal_construction_2026_1_1.json').read_text(encoding='utf-8-sig'))
         for case in fixture['cases']:
-            with self.subTest(fy_c=case['input_fy_c']):
+            with self.subTest(geometry=case['geometry'], fy_c=case['input_fy_c']):
                 def law(E):
                     return HystereticLaw(E=E, fy_t=.23, fy_c=case['input_fy_c'],
                         tensile_curve='LinearSoftening', compressive_curve='LinearSoftening',
@@ -34,11 +34,12 @@ class NativeDiagonalConstructionTests(unittest.TestCase):
                 shear = CoulombLaw(E=230., cohesion=.5, mu=.45, plastic_stiffness_ratio=.001,
                                   max_tensile_ratio=.4, reload_stiffness_ratio=.8, ductility=1.5)
                 q = Quad(material_key=1, length=case['Length'], diago=case['Diago'],
-                         sin=case['Sin'], cos=case['Cos'], thickness=[10.]*4)
+                         sin=case['Sin'], cos=case['Cos'], thickness=case['thickness'])
                 with patch('histra.preprocessing.spring_assignment._material', return_value=object()), \
                      patch('histra.preprocessing.spring_assignment._cached_diagonal_laws', return_value=(flex, shear)):
                     spring = _quad_spring(SimpleNamespace(collections=object()), q)
-                np.testing.assert_allclose(spring.k, case['K'], rtol=1e-13, atol=1e-11)
+                self.assertEqual(spring.k, case['K'])
+                self.assertEqual(q.compute_volume(), case['volume'])
                 np.testing.assert_allclose(spring.fy, case['Fy'], rtol=1e-13, atol=1e-10)
                 np.testing.assert_allclose(spring.ur, case['Ur'], rtol=1e-13, atol=1e-12)
-                self.assertAlmostEqual(spring.area, case['Area'], delta=1e-11)
+                self.assertEqual(spring.area, case['Area'])
