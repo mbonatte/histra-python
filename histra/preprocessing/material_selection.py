@@ -158,29 +158,17 @@ def _blend_coulomb_laws(
     The C# method modifies only E, Fy_0, Mu and U_r.  Other envelope settings
     remain those of the primary (horizontal) law.
     """
-    w1 = float(c1) * float(c1)
-    w2 = float(c2) * float(c2)
-    return _CoulombLaw(
-        E=primary.E * w1 + secondary.E * w2,
-        cohesion=primary.cohesion * w1 + secondary.cohesion * w2,
-        mu=primary.mu * w1 + secondary.mu * w2,
-        plastic_stiffness_ratio=primary.plastic_stiffness_ratio,
-        max_tensile_ratio=primary.max_tensile_ratio,
-        reload_stiffness_ratio=primary.reload_stiffness_ratio,
-        plastic_stiffness_ratio2=primary.plastic_stiffness_ratio2,
-        plastic_strain=primary.plastic_strain,
-        sub_law=primary.sub_law,
-        hysteretic_type=primary.hysteretic_type,
-        fracture_energy=primary.fracture_energy,
-        G=primary.G,
-        ductility=primary.ductility * w1 + secondary.ductility * w2,
-        is_ductility_fixed=primary.is_ductility_fixed,
-        check_contact_area=primary.check_contact_area,
-        bcacovic=primary.bcacovic,
-        # PropOrthotropyParameter changes values on the primary C# law; it
-        # does not change its runtime constitutive-law type.
-        is_elastic=primary.is_elastic,
-    )
+    def blend(name):
+        return (getattr(primary, name) * c1 * c1
+                + getattr(secondary, name) * c2 * c2)
+
+    changes = {'E': blend('E')}
+    # Elastic primary laws interpolate E only. A Coulomb primary with an
+    # elastic secondary also retains its own strength/friction/ductility.
+    if not primary.is_elastic and not secondary.is_elastic:
+        for name in ('cohesion', 'mu', 'ductility'):
+            changes[name] = blend(name)
+    return replace(primary, **changes)
 
 
 def _interface_sliding_law(
@@ -234,9 +222,7 @@ def _interface_sliding_law(
             direction="vert",
             cache=cache,
         )
-        c1 = abs(float(np.dot(np.asarray(intf.reference_e1), np.asarray(quad.reference_e1))))
-        c1 = min(1.0, max(0.0, c1))
-        c2 = math.sqrt(max(0.0, 1.0 - c1 * c1))
+        c1, c2 = _flex_alignment(intf.reference_e1, quad.reference_e1)
         return _blend_coulomb_laws(horizontal, vertical_law, c1, c2)
     return _cached_sliding_law(
         material,
