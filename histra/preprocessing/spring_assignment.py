@@ -91,11 +91,9 @@ def _quad_spring(
     length = quad.d_alfa_2d_diag()
     k = quad.get_diagonal_stiffness(flex.E, shear.E)
     if shear.sub_law in {"Coulomb", "Cacovic"}:
-        fy_compression = (
-            flex.fy_c
-            if flex.law_type.startswith("ElastoPlastic")
-            else 10.0 * shear.cohesion
-        )
+        # Current masonry flexural laws are Hysteretic or LinearElastic,
+        # not ConstitutiveLawElastoPlastic, regardless of the settings name.
+        fy_compression = 10.0 * shear.cohesion
         fy = quad.set_non_linear_properties(
             k, flex.E, shear.E, shear.cohesion, fy_compression
         )

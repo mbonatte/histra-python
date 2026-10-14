@@ -224,33 +224,19 @@ def flex_law(material: MasonryMaterial, *, vertical: bool = False) -> Hysteretic
 
 
 def diagonal_flex_law(material: MasonryMaterial) -> HystereticLaw:
-    """Apply C# ``PropOrthotropyParameter(sqrt(2)/2, sqrt(2)/2)``."""
+    """Blend the actual masonry Hysteretic/Elastic laws used by Quad.
+
+    ConstitutiveLawFlex names do not make these ConstitutiveLawElastoPlastic
+    objects: current C# SetFlexionalConstitutiveLaw constructs Hysteretic
+    unless both curves are Elastic. Use that runtime class's interpolation.
+    """
+    from .material_selection import _blend_hysteretic_laws
+    from .csharp_math import csharp_pow
+
     vertical = flex_law(material, vertical=True)
     horizontal = flex_law(material, vertical=False)
-    c = math.sqrt(2.0) / 2.0
-    w = c * c
-    elasto_plastic = vertical.law_type.startswith("ElastoPlastic")
-    return HystereticLaw(
-        E=vertical.E * w + horizontal.E * w,
-        fy_t=vertical.fy_t * w + horizontal.fy_t * w,
-        fy_c=vertical.fy_c * w + horizontal.fy_c * w,
-        tensile_curve=horizontal.tensile_curve,
-        compressive_curve=horizontal.compressive_curve,
-        ratio_et_t=vertical.ratio_et_t * w + horizontal.ratio_et_t * w,
-        ratio_et_c=vertical.ratio_et_c * w + horizontal.ratio_et_c * w,
-        alfa_r_t=vertical.alfa_r_t,
-        alfa_r_c=vertical.alfa_r_c,
-        alfa_u_t=vertical.alfa_u_t,
-        alfa_u_c=vertical.alfa_u_c,
-        G_t=vertical.G_t * w + horizontal.G_t * w,
-        G_c=vertical.G_c * w + horizontal.G_c * w,
-        # Preserve ConstitutiveLawElastoPlastic's source-level asymmetry.
-        eps_u_t=(vertical.eps_u_t * c + horizontal.eps_u_t * c)
-        if elasto_plastic
-        else (vertical.eps_u_t * w + horizontal.eps_u_t * w),
-        eps_u_c=vertical.eps_u_c * w + horizontal.eps_u_c * w,
-        law_type=vertical.law_type,
-    )
+    c = 0.5 * csharp_pow(2.0, 0.5)
+    return _blend_hysteretic_laws(vertical, horizontal, c, c)
 
 
 def shear_law(material: MasonryMaterial) -> CoulombLaw:

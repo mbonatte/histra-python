@@ -113,7 +113,7 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
     }
 
 
-def test_diagonal_elastoplastic_preserves_csharp_tensile_weight_asymmetry():
+def test_diagonal_uses_actual_masonry_hysteretic_runtime_law():
     material = _material(
         Ehor=8.0,
         Ever=16.0,
@@ -134,8 +134,8 @@ def test_diagonal_elastoplastic_preserves_csharp_tensile_weight_asymmetry():
     w = c * c
 
     assert diagonal.E == 12.000000000000004
-    assert diagonal.eps_u_t == pytest.approx((0.75 + 1.25) * c, abs=1.0e-15)
-    assert diagonal.eps_u_c == 6.75 * w + 5.25 * w
+    assert diagonal.eps_u_t == 0.75 * c * c + 1.25 * c * c
+    assert diagonal.eps_u_c == 6.75 * c * c + 5.25 * c * c
 
 
 @pytest.mark.parametrize(
