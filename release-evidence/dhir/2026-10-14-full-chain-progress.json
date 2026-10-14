@@ -1,10 +1,10 @@
 {
   "reference_version": "2026.1.1",
-  "hrx_sha256": "50b0cc68ac4db339adf54bf67c27b6eef37ea69a1ba8172118cb28855a841bbb",
-  "results_sha256": "ceddfd96506a6fb1c4329589257b2850429559b6bb5c8a87642f62cf541ae5a0",
+  "hrx_sha256": "c06ea59373fdf26c2d4267dab90f2e48f2e6072da1f00c56a345614f3c053c5e",
+  "results_sha256": "65aae6351c1e072f14210df9c2e20c7a22302c796ffc3bd7c0b0d194c8f89e51",
   "reference_files_unchanged": true,
-  "python_revision": "6d17b1c",
-  "strict_gate": "FAILED: one phase at pushover step 23; numeric fields pass",
+  "python_revision": "3441017",
+  "strict_gate": "Parity gate failed at Pushover_5Axle_P1 step 23: {\"SpringStatesTmp\": {\"Phase\": 1}}",
   "steps": {
     "Vert": 20,
     "TLM_Constant_UDL": 10,
@@ -33,9 +33,9 @@
     "relative_tolerance": 0.0
   },
   "tests": {
-    "passed": 730,
+    "passed": 737,
     "skipped": 23,
-    "subtests": 875
+    "subtests_passed": 1275
   },
   "diagnostic_only_full_chain": {
     "python_revision": "before 5ba058c",
@@ -54,5 +54,15 @@
     "Pushover full global displacement vector",
     "NULL per-spring E/Ed/Eel"
   ],
-  "next_diagnostic": "Original C# internal hysteretic parameters and committed/trial history for interfaces 272 and 356; new trace helper installed and smoke-tested."
+  "next_diagnostic": "Original C# internal hysteretic parameters and committed/trial history for interfaces 272 and 356; new trace helper installed and smoke-tested.",
+  "elapsed_seconds": 242.0389307000005,
+  "reference_directory": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-native-installed-full-chain-reference",
+  "construction_comparison": {
+    "spring_count": 58396,
+    "quads": 2344,
+    "interfaces": 6228,
+    "identity_matches": true,
+    "quad_sine_bit_differences": 588,
+    "half_power_prototype": "failed native tests; reverted"
+  }
 }
