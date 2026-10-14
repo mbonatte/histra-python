@@ -143,6 +143,8 @@ class BridgeClassification:
     pier_quad_keys: tuple[int, ...]
     other_quad_keys: tuple[int, ...] = ()
     all_quad_keys: tuple[int, ...] = ()
+    arch_spans: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    backfill_spans: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
     @property
     def has_piers(self) -> bool:
@@ -155,6 +157,10 @@ class BridgeClassification:
     @property
     def has_arch(self) -> bool:
         return len(self.arch_quad_keys) > 0
+
+    @property
+    def num_spans(self) -> int:
+        return len(self.arch_spans)
 
 
 @dataclass(frozen=True)
@@ -466,6 +472,12 @@ def classify_bridge_components(
         arch = tuple(sorted(custom_regions.get("arch", ())))
         piers = tuple(sorted(custom_regions.get("piers", ())))
         other = tuple(sorted(set(all_keys) - set(total_struct) - set(backfill)))
+        arch_spans = {str(k): tuple(sorted(v)) for k, v in custom_regions.get("arch_spans", {}).items()}
+        backfill_spans = {str(k): tuple(sorted(v)) for k, v in custom_regions.get("backfill_spans", {}).items()}
+        if not arch_spans and arch:
+            arch_spans = {"span_1": arch}
+        if not backfill_spans and backfill:
+            backfill_spans = {"span_1": backfill}
         return BridgeClassification(
             total_structure_quad_keys=total_struct,
             backfill_quad_keys=backfill,
@@ -473,6 +485,8 @@ def classify_bridge_components(
             pier_quad_keys=piers,
             other_quad_keys=other,
             all_quad_keys=all_keys,
+            arch_spans=arch_spans,
+            backfill_spans=backfill_spans,
         )
 
     if model.collections is None:
@@ -520,6 +534,75 @@ def classify_bridge_components(
     # Total structure = everything excluding backfill
     total_structure_keys = sorted(set(arch_keys) | set(pier_keys) | set(other_keys))
 
+    # Multi-span partitioning
+    arch_set = set(arch_keys)
+    adj: dict[int, set[int]] = {k: set() for k in arch_set}
+    arch_quads_list = [model.collections.quads[k] for k in arch_set]
+
+    # Connect adjacent arch quads through interfaces
+    for q in arch_quads_list:
+        for face_keys in q.interface_keys:
+            for ikey in face_keys:
+                intf = model.collections.interfaces.get(ikey)
+                if intf:
+                    p1, p2 = intf.parent_element_key1, intf.parent_element_key2
+                    other = p2 if p1 == q.key else p1
+                    if other in adj:
+                        adj[q.key].add(other)
+
+    # Connect adjacent arch quads through shared nodes (e.g. across width strips)
+    node_to_quads: dict[int, set[int]] = {}
+    for q in arch_quads_list:
+        for nk in q.node_keys:
+            node_to_quads.setdefault(nk, set()).add(q.key)
+    for qkeys in node_to_quads.values():
+        if len(qkeys) > 1:
+            for k1 in qkeys:
+                for k2 in qkeys:
+                    if k1 != k2 and k1 in adj and k2 in adj:
+                        adj[k1].add(k2)
+
+    visited: set[int] = set()
+    components: list[list[int]] = []
+    for k in sorted(arch_set):
+        if k not in visited:
+            comp: list[int] = []
+            st = [k]
+            visited.add(k)
+            while st:
+                c = st.pop()
+                comp.append(c)
+                for nxt in adj[c]:
+                    if nxt not in visited:
+                        visited.add(nxt)
+                        st.append(nxt)
+            components.append(sorted(comp, key=lambda x: model.collections.quads[x].g.x))
+
+    # Sort components from left to right along X
+    components.sort(key=lambda c: min(model.collections.quads[x].g.x for x in c))
+
+    arch_spans: dict[str, tuple[int, ...]] = {}
+    backfill_spans: dict[str, tuple[int, ...]] = {}
+
+    if len(components) <= 1:
+        arch_spans["span_1"] = tuple(arch_keys)
+        backfill_spans["span_1"] = tuple(sorted(backfill_keys))
+    else:
+        dividers = []
+        for idx in range(len(components) - 1):
+            max_x_cur = max(model.collections.quads[x].g.x for x in components[idx])
+            min_x_nxt = min(model.collections.quads[x].g.x for x in components[idx + 1])
+            dividers.append(0.5 * (max_x_cur + min_x_nxt))
+
+        for idx, comp in enumerate(components):
+            span_name = f"span_{idx + 1}"
+            arch_spans[span_name] = tuple(comp)
+
+            lower_x = -float("inf") if idx == 0 else dividers[idx - 1]
+            upper_x = float("inf") if idx == len(components) - 1 else dividers[idx]
+            bf_in_span = [bk for bk in backfill_keys if lower_x <= model.collections.quads[bk].g.x < upper_x]
+            backfill_spans[span_name] = tuple(sorted(bf_in_span))
+
     return BridgeClassification(
         total_structure_quad_keys=tuple(total_structure_keys),
         backfill_quad_keys=tuple(sorted(backfill_keys)),
@@ -527,6 +610,8 @@ def classify_bridge_components(
         pier_quad_keys=tuple(sorted(pier_keys)),
         other_quad_keys=tuple(sorted(other_keys)),
         all_quad_keys=tuple(sorted(q.key for q in all_quads)),
+        arch_spans=arch_spans,
+        backfill_spans=backfill_spans,
     )
 
 
