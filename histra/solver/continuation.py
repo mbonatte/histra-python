@@ -378,9 +378,9 @@ def _execute_steps(
                     )
                     break
 
-        de_el, de_pl = ModelManager.compute_energy(model)
-        energy_elastic += de_el
-        energy_dissipated += de_pl
+        energy_elastic, energy_dissipated = ModelManager.compute_energy(
+            model, energy_elastic, energy_dissipated
+        )
         commit_started = time.perf_counter()
         _commit_state(model, ls)
         if diagnostic_writer is not None:

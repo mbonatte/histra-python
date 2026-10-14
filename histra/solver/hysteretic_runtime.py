@@ -309,10 +309,12 @@ if njit is not None:
     @njit(cache=True, nogil=True, error_model="numpy")
     def _managed_elastic_energy(transverse_k, committed, trial, quad_k, quad_state,
                                 starts, stops, coulomb_params, coulomb_state,
-                                slid_index, oop0_index, oop1_index):
+                                slid_index, oop0_index, oop1_index,
+                                initial_elastic=0.0, initial_plastic=0.0):
         # Original ModelManager.ComputeEnergy: Quads first, then each
         # Interface's transverse, sliding and two out-of-plane springs.
-        elastic = plastic = 0.0
+        elastic = initial_elastic
+        plastic = initial_plastic
         for i in range(quad_k.size):
             e, p, total = spring_energy_increment(quad_k[i], quad_state[i,QCSTRESS], quad_state[i,QTSTRESS],
                                                   quad_state[i,QCSTRAIN], quad_state[i,QTSTRAIN])
@@ -3104,12 +3106,13 @@ class HystereticBatchRuntime:
         self._sync_interface_status_to_objects()
         self._objects_trial_synced = True
 
-    def compute_energy(self) -> tuple[float, float]:
-        """Original C# signed elastic/plastic increments from dense state."""
+    def compute_energy(self, initial_elastic=0.0, initial_plastic=0.0) -> tuple[float, float]:
+        """Add original signed increments directly to the running totals."""
         elastic, plastic = _managed_elastic_energy(
             self._transverse_k, self.committed, self.trial, self._quad_k, self.quad_state,
             self._starts, self._stops, self.coulomb_params, self.coulomb_state,
             self._slid_index, self._oop0_index, self._oop1_index,
+            initial_elastic, initial_plastic,
         )
         return float(elastic), float(plastic)
 

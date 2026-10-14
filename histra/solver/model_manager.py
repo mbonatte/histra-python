@@ -491,9 +491,9 @@ class ModelManager:
                 quad.update_domain(ls, state, model.collections)
 
     @classmethod
-    def compute_energy(cls, model: Model) -> tuple[float, float]:
+    def compute_energy(cls, model: Model, initial_elastic=0.0, initial_plastic=0.0) -> tuple[float, float]:
         runtime = cls.hysteretic_batch_for(model)
-        eel, ed = runtime.compute_energy() if runtime is not None else (0.0, 0.0)
+        eel, ed = runtime.compute_energy(initial_elastic, initial_plastic) if runtime is not None else (initial_elastic, initial_plastic)
         elements = (
             [*runtime.unmanaged_quads, *runtime.unmanaged_interfaces]
             if runtime is not None
