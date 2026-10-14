@@ -219,6 +219,7 @@ class QuadLoadsMixin:
         node_coords: List[Point],
         points: Tuple[Tuple[float, float, float], Tuple[float, float, float]],
         endpoint_forces: Tuple[Tuple[float, float, float], Tuple[float, float, float]],
+        *, node_tolerance: float = 1.0,
     ) -> List[float]:
         """Port the C# ``Quad.ComputeStaticLoadInternal`` line-load branch.
 
@@ -228,6 +229,9 @@ class QuadLoadsMixin:
         This method deliberately preserves that behavior because it is part of
         the committed C# LiveLoad reference path.
         """
+        from histra.preprocessing.intrinsic_coordinates import native_intrinsic_2d
+        from histra.preprocessing.quad_faces import _dot, _plane_normal, _plane_w, _ray_project
+        from histra.preprocessing.quad_geometry import _norm, _unit
         f32 = np.float32
         out = np.zeros(7, dtype=np.float64)
         gp0 = f32(f32(np.sqrt(3.0)) / f32(3.0))
@@ -296,70 +300,33 @@ class QuadLoadsMixin:
         for i, point in enumerate(points):
             vector = np.asarray(point, dtype=np.float32) - origin
             local_points3[i] = (
-                f32(np.dot(vector, e1)),
-                f32(np.dot(vector, e2)),
-                f32(np.dot(vector, e3)),
+                _dot(vector, e1),
+                _dot(vector, e2),
+                _dot(vector, e3),
             )
             local_points2[i] = (
-                f32(local_points3[i, 0] - l0 / f32(2.0)),
+                f32(local_points3[i, 0] - f32(self.length[0] / 2.0)),
                 local_points3[i, 1],
             )
 
-        def intrinsic(point: np.ndarray) -> tuple[np.float32, np.float32]:
-            # Newton inversion of the bilinear map.  C#'s FindU/FindV stops at
-            # 0.001; this converges more tightly while retaining float32 math.
-            u = f32(0.0)
-            v = f32(0.0)
-            one = f32(1.0)
-            four = f32(4.0)
-            for _ in range(30):
-                n = np.asarray(
-                    (
-                        f32((one-u)*(one-v)/four),
-                        f32((one+u)*(one-v)/four),
-                        f32((one+u)*(one+v)/four),
-                        f32((one-u)*(one+v)/four),
-                    ), dtype=np.float32,
-                )
-                du = np.asarray(
-                    (f32(-(one-v)/four), f32((one-v)/four),
-                     f32((one+v)/four), f32(-(one+v)/four)), dtype=np.float32,
-                )
-                dv = np.asarray(
-                    (f32(-(one-u)/four), f32(-(one+u)/four),
-                     f32((one+u)/four), f32((one-u)/four)), dtype=np.float32,
-                )
-                mapped = np.asarray(
-                    (f32(np.dot(n, local_nodes[:,0])), f32(np.dot(n, local_nodes[:,1]))),
-                    dtype=np.float32,
-                )
-                residual = mapped - point
-                jac = np.asarray(
-                    ((f32(np.dot(du, local_nodes[:,0])), f32(np.dot(dv, local_nodes[:,0]))),
-                     (f32(np.dot(du, local_nodes[:,1])), f32(np.dot(dv, local_nodes[:,1])))),
-                    dtype=np.float32,
-                )
-                det = f32(jac[0,0]*jac[1,1] - jac[0,1]*jac[1,0])
-                if abs(float(det)) < 1e-20:
-                    break
-                duv0 = f32(( jac[1,1]*residual[0] - jac[0,1]*residual[1]) / det)
-                duv1 = f32((-jac[1,0]*residual[0] + jac[0,0]*residual[1]) / det)
-                u = f32(u - duv0)
-                v = f32(v - duv1)
-                if max(abs(float(duv0)), abs(float(duv1))) < 1e-7:
-                    break
-            return u, v
-
-        uv = [intrinsic(local_points2[i]) for i in range(2)]
+        # The float-array overload uses polygon-strip bisection, retaining
+        # the original 0.001 stopping tolerance and corner shortcut.
+        uv = []
+        for point in local_points2:
+            corner = None
+            for j in range(4):
+                if abs(float(f32(point[0]-local_nodes[j,0]))) < node_tolerance and abs(float(f32(point[1]-local_nodes[j,1]))) < node_tolerance:
+                    corner = (f32(-1 if j in (0,3) else 1), f32(-1 if j in (0,1) else 1))
+            uv.append(corner if corner is not None else native_intrinsic_2d(local_nodes, point, f32(node_tolerance)))
         forces = np.asarray(endpoint_forces, dtype=np.float32)
-        line_length = f32(np.linalg.norm(np.asarray(points[0], np.float32) - np.asarray(points[1], np.float32)))
+        line_length = _norm(np.asarray(points[0], np.float32) - np.asarray(points[1], np.float32))
         one = f32(1.0)
         two = f32(2.0)
         four = f32(4.0)
 
         for gauss_point in gauss:
             force = np.asarray(
-                [f32(forces[0,j]*(one-gauss_point)/two + forces[1,j]*(one+gauss_point)/two) for j in range(3)],
+                [f32(f32(forces[0,j]*f32((one-gauss_point)/two)) + f32(forces[1,j]*f32((one+gauss_point)/two))) for j in range(3)],
                 dtype=np.float32,
             )
             # Preserve C# source typo (both endpoint terms use 1-gp).
@@ -388,17 +355,17 @@ class QuadLoadsMixin:
         # quad plane.  This term is zero for the supplied symmetric transverse
         # line, but retain the general calculation.
         f0, f1 = forces[0], forces[1]
-        l0f, l1f = f32(np.linalg.norm(f0)), f32(np.linalg.norm(f1))
+        l0f, l1f = _norm(f0), _norm(f1)
         denom = f32(l1f + l0f)
         if line_length > 0 and abs(float(denom)) > 1e-30:
             distance = f32(line_length / f32(3.0) * f32(f32(2.0)*l1f + l0f) / denom)
             direction = np.asarray(points[1], np.float32) - np.asarray(points[0], np.float32)
-            direction /= f32(np.linalg.norm(direction))
+            direction = _unit(direction)
             centroid = np.asarray(points[0], np.float32) + f32(distance) * direction
-            normal = e3 / f32(np.linalg.norm(e3))
-            plane_point = np.asarray((node_coords[0].x,node_coords[0].y,node_coords[0].z), np.float32)
-            projected = centroid - f32(np.dot(centroid-plane_point, normal)) * normal
-            resultant = f32(0.5) * (f0+f1) * line_length
+            vertices = np.asarray([(n.x,n.y,n.z) for n in node_coords], np.float32)
+            normal = _plane_normal(vertices[0], vertices[1], vertices[2])
+            projected = _ray_project(centroid, normal, _plane_w(vertices[0],normal))
+            resultant = f32(0.5) * (f0+f1) * _norm(local_points3[0]-local_points3[1])
             moment = np.cross(centroid-projected, resultant).astype(np.float32)
             out[3] += float(moment[0]); out[4] += float(moment[1]); out[5] += float(moment[2])
         return out.tolist()

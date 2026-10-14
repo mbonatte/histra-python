@@ -110,10 +110,10 @@ def test_live_line_load_generates_expected_generalized_vector():
 
     nonzero = np.flatnonzero(np.abs(vector) > 1.0e-12)
     assert nonzero.tolist() == [23, 25, 27]
-    # The assigned line is 288 units long with load intensity 0.01.
-    assert vector[23] == pytest.approx(-2.879999876022339, abs=1.0e-12)
-    assert vector[25] == pytest.approx(12.062898635864258, abs=1.0e-12)
-    assert vector[27] == pytest.approx(-2.3925376808620058e-05, abs=1.0e-15)
+    # Original C# ComputeStaticLoadInternal(Line) oracle: 288 units, intensity 0.01.
+    assert vector[23] == pytest.approx(-2.8799997568130493, abs=1.0e-12)
+    assert vector[25] == pytest.approx(11.997182369232178, abs=1.0e-12)
+    assert vector[27] == pytest.approx(-2.3934336240927223e-05, abs=1.0e-15)
     assert np.all(np.isfinite(vector))
 
 

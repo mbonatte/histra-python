@@ -274,6 +274,7 @@ def generate_line_loads(model: Model, analysis_key: int, combination: int = 1) -
             nodes,
             load.points,
             (tuple(float(x) for x in endpoint), tuple(float(x) for x in endpoint)),
+            node_tolerance=float(model.geometry_tolerance_node),
         )
         for index in range(7):
             quad.status.p[index] += local_load[index]
