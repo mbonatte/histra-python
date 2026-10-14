@@ -31,10 +31,8 @@ class ArcLength(StaticIntegrator):
     simplified one-dimensional correction and small-denominator safeguards;
     it can produce different last bits and branch decisions.
 
-    Two apparent C# defects are intentionally corrected:
-
-    * the adaptive radius is not reset to ``Analysis.Dr2`` at every step;
-    * ``MaxArcLengthRay`` is compared with the radius, not radius-squared.
+    The predictor resets the squared radius from ``Analysis.Dr2`` as in C#.
+    Commit-time radius limiting retains Python's comparison with radius-squared.
     """
 
     def __init__(self, *, constraint_mode: str = "csharp") -> None:
