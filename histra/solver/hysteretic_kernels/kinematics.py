@@ -14,6 +14,7 @@ import numpy as np
 from histra.solver.hysteretic_kernels.quad_takeda import (
     QPSUBLAW,
     QUAD_SUBLAW_ELASTIC,
+    QUAD_SUBLAW_HYSTERETIC,
 )
 
 try:  # optional acceleration dependency
@@ -116,7 +117,7 @@ if njit is not None:
             if accumulate_local_u:
                 for j in range(local_du.shape[1]):
                     local_u[q, j] += local_du[q, j]
-            if int(quad_params[q, QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
+            if int(quad_params[q, QPSUBLAW]) in (QUAD_SUBLAW_ELASTIC, QUAD_SUBLAW_HYSTERETIC):
                 dns[q] = 0.0
                 strains[q] = d_alfa[q] * local_u[q, 6]
                 continue

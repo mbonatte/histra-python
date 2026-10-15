@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match C# zero-friction Coulomb masonry with a Hysteretic diagonal, including asymmetric strengths, fracture-energy/ultimate-strain construction and compiled trial/commit/revert lifecycle. Native routine fixtures cover eight geometry/material cases; production coverage includes material mutation and runtime rebuilds.
+
+
 - Confirm the published v1.5.0 wheel with a fresh complete Dhir mechanical solve and output comparison: every available measured field matches through all 88 commits; attempt 59 and all iteration counts also match.
 - Match native elastic transverse spring classes, mixed series construction and compiled cyclic updates, with preparation, rebuild and material-mutation coverage.
 - Preserve C# Single gravity and masonry weight during modal mass assembly. The existing 20-mode Dhir reference now agrees within 2.60e-14 relative frequency difference; small remaining arithmetic differences and unqualified branches are documented in the modal benchmark.

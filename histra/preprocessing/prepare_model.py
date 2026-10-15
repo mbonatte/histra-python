@@ -297,7 +297,7 @@ def prepare_model(
     if not c.quads:
         raise ModelPreparationError("PrepareModel currently requires at least one Quad.")
     diagonal_law_cache: dict[
-        int, tuple[_HystereticLaw, _CoulombLaw]
+        int, tuple[_HystereticLaw, _CoulombLaw | _HystereticLaw]
     ] = {}
     flex_law_cache: dict[tuple[int, bool], _HystereticLaw] = {}
     sliding_law_cache: dict[

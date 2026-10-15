@@ -84,13 +84,32 @@ def _quad_spring(
     model: Model,
     quad: Quad,
     *,
-    law_cache: dict[int, tuple[_HystereticLaw, _CoulombLaw]] | None = None,
+    law_cache: dict[int, tuple[_HystereticLaw, _CoulombLaw | _HystereticLaw]] | None = None,
 ) -> SpringCoulomb03 | SpringHysteretic | SpringElastic:
     material = _material(model, quad.material_key)
     flex, shear = _cached_diagonal_laws(material, law_cache)
     length = quad.d_alfa_2d_diag()
     k = quad.get_diagonal_stiffness(flex.E, shear.E)
-    if shear.sub_law in {"Coulomb", "Cacovic"}:
+    if isinstance(shear, _HystereticLaw):
+        fy = quad.set_non_linear_properties(k, flex.E, shear.E, shear.fy_t, shear.fy_c)
+        if shear.law_type == "ElastoPlasticFractureEnergyFixed":
+            from histra.preprocessing.constitutive_laws import material_float
+            strength = min(abs(fy[0]), abs(fy[1]))
+            ultimate = (strength / k + length * (2.0 / quad.length[3])
+                        * (quad.sin[2] / (quad.sin[3] * quad.sin[1] + quad.sin[0] * quad.sin[2]))
+                        * material_float(material, "FractureEnergyShear")
+                        / material_float(material, "fvk0d"))
+            ur = [ultimate, -ultimate]
+        else:
+            ur = [shear.eps_u_t * length, -shear.eps_u_c * length]
+        spring = _new_hysteretic_spring()
+        spring.k, spring.fy, spring.ur = k, fy, ur
+        spring.length, spring.area = length, k * length / shear.E
+        spring.tensile_curve_type = spring.compressive_curve_type = "LinearSoftening"
+        spring.kt = [-fy[i] / (ur[i] - fy[i] / k) for i in range(2)]
+        spring.alfar, spring.alfau = [0.0, 0.0], [0.0, 0.0]
+        spring.initialize()
+    elif shear.sub_law in {"Coulomb", "Cacovic"}:
         # Current masonry flexural laws are Hysteretic or LinearElastic,
         # not ConstitutiveLawElastoPlastic, regardless of the settings name.
         fy_compression = 10.0 * shear.cohesion

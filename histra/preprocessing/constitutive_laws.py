@@ -241,7 +241,7 @@ def diagonal_flex_law(material: MasonryMaterial) -> HystereticLaw:
     return _blend_hysteretic_laws(vertical, horizontal, c, c)
 
 
-def shear_law(material: MasonryMaterial) -> CoulombLaw:
+def shear_law(material: MasonryMaterial) -> CoulombLaw | HystereticLaw:
     law_type = material_enum(
         material,
         "ConstitutiveLawMasonryShear",
@@ -249,7 +249,7 @@ def shear_law(material: MasonryMaterial) -> CoulombLaw:
         "Elastic",
     )
     is_ductility = law_type in {"Elastic", "ElastoPlastic"}
-    return CoulombLaw(
+    law = CoulombLaw(
         E=float(np.float32(np.float32(material_float(material, "Gd")) / np.float32(_alfa_shear(material)))),
         cohesion=material_float(material, "fvk0d"),
         mu=material_float(material, "FrictionRatioShear"),
@@ -281,6 +281,19 @@ def shear_law(material: MasonryMaterial) -> CoulombLaw:
         check_contact_area=material_bool(material, "CheckContactArea", False),
         bcacovic=material_float(material, "Bcacovic"),
     )
+    if law.sub_law == "Coulomb" and law.mu == 0.0:
+        # Original SetShearConstitutiveLaw dispatches on Single friction.
+        ultimate = material_float(material, "ShearUltimateStrain", 0.005)
+        return HystereticLaw(
+            E=law.E, fy_t=law.cohesion, fy_c=material_float(material, "FmHor"),
+            tensile_curve="LinearSoftening", compressive_curve="LinearSoftening",
+            ratio_et_t=material_float(material, "RatioEtTraction"),
+            ratio_et_c=material_float(material, "RatioEtCompression"),
+            alfa_r_t=1.0, alfa_r_c=1.0, alfa_u_t=0.0, alfa_u_c=0.0,
+            G_t=0.0, G_c=0.0, eps_u_t=ultimate, eps_u_c=ultimate,
+            law_type=law_type,
+        )
+    return law
 
 
 def sliding_law(

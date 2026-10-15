@@ -1,4 +1,4 @@
-"""Compiled Quad diagonal kernels (C# SpringCoulomb03, Takeda law).
+"""Compiled Quad diagonal kernels (native Coulomb, elastic and hysteretic laws).
 
 The Quad diagonal spring state machine translated from C# ``Quad``: tau limit
 and shear ultimate strain helpers, trial revert, tangent reload branches, the
@@ -23,6 +23,8 @@ from histra.model.shear_law import (
 )
 from histra.solver.hysteretic_kernels.transverse import (
     ELASTIC,
+    TRANSVERSE_PARAM_SIZE,
+    _evaluate_linear_serial_batch,
     PLASTIC_C,
     PLASTIC_T,
     RELOAD_C,
@@ -61,7 +63,10 @@ QTSTRESS_NORMAL, QTCONTACT, QTPHASE, QKTANG = 47, 48, 49, 50
 QMOM1P, QROT1P, QMOM2P, QROT2P, QMOM3P, QROT3P = 51, 52, 53, 54, 55, 56
 QMOM1N, QROT1N, QMOM2N, QROT2N, QMOM3N, QROT3N = 57, 58, 59, 60, 61, 62
 QUR0, QUR1, QDN = 63, 64, 65
-QUAD_STATE_SIZE = 66
+# Append the shared hysteretic layouts; keep existing Coulomb indices stable.
+QHCOMMITTED = 66
+QHTRIAL = QHCOMMITTED + 9
+QUAD_STATE_SIZE = QHTRIAL + 10
 
 QPCOHESION, QPMU = 0, 1
 QPE1P, QPE2P, QPE3P = 2, 3, 4
@@ -74,12 +79,14 @@ QPFRACTURE_MODE = 15
 QPFRACTURE_ENERGY = 16
 QPHYSTERETIC_TYPE = 17
 QPH = 18
-QUAD_PARAM_SIZE = 19
+QHPARAMS = 19
+QUAD_PARAM_SIZE = QHPARAMS + TRANSVERSE_PARAM_SIZE
 
 
 QUAD_SUBLAW_COULOMB = 0
 QUAD_SUBLAW_CACOVIC = 1
 QUAD_SUBLAW_ELASTIC = 2
+QUAD_SUBLAW_HYSTERETIC = 3
 QUAD_HYSTERETIC_TAKEDA = 0
 QUAD_HYSTERETIC_INITIAL = 1
 QUAD_FRACTURE_NONE = 0
@@ -88,6 +95,23 @@ QUAD_FRACTURE_INTERPOLATED = ELASTO_PLASTIC_ENERGY_SIGMA_INTERPOLATION
 
 
 if njit is not None:
+    @njit(cache=True, inline="always")
+    def _mirror_hysteretic_quad(row):
+        c, t = QHCOMMITTED, QHTRIAL
+        for target, source in ((QUMAX0,0),(QUMAX1,1),(QCROT_PU,2),(QCROT_NU,3),
+                               (QCENERGY,4),(QCLOAD,5),(QCSTRESS,6),(QCSTRAIN,7),(QPHASE,8)):
+            row[target] = row[c + source]
+        for target, source in ((QTROT_MAX,0),(QTROT_MIN,1),(QTROT_PU,2),(QTROT_NU,3),
+                               (QTENERGY,4),(QTLOAD,5),(QTSTRESS,6),(QTSTRAIN,7),(QTPHASE,8),(QKTANG,9)):
+            row[target] = row[t + source]
+
+    @njit(cache=True, inline="always")
+    def _revert_hysteretic_quad(row):
+        # Native history restore retains the current trial tangent.
+        for j in range(9):
+            row[QHTRIAL + j] = row[QHCOMMITTED + j]
+        _mirror_hysteretic_quad(row)
+
     @njit(cache=True, inline="always")
     def _quad_tau_limit(par, normal_stress):
         cohesion = par[QPCOHESION]
@@ -413,6 +437,13 @@ if njit is not None:
             if par[QPENABLED] == 0.0:
                 continue
             strain = strains[i]
+            if int(par[QPSUBLAW]) == QUAD_SUBLAW_HYSTERETIC:
+                _evaluate_linear_serial_batch(
+                    params[i:i+1, QHPARAMS:], state[i:i+1, QHCOMMITTED:QHTRIAL],
+                    state[i:i+1, QHTRIAL:], strains[i:i+1], par[QPENABLED:QPENABLED+1],
+                )
+                _mirror_hysteretic_quad(row)
+                continue
             if int(par[QPSUBLAW]) == QUAD_SUBLAW_ELASTIC:
                 row[QDN] = 0.0
                 row[QTSTRAIN] = strain
@@ -697,6 +728,12 @@ if njit is not None:
             if params[i, QPENABLED] == 0.0:
                 continue
             row = state[i]
+            if int(params[i, QPSUBLAW]) == QUAD_SUBLAW_HYSTERETIC:
+                for j in range(9):
+                    row[QHCOMMITTED + j] = row[QHTRIAL + j]
+                row[QKTANG_COMMITTED] = row[QHTRIAL + 9]
+                _mirror_hysteretic_quad(row)
+                continue
             row[QFY1] = -row[QFY0]
             row[QCUP] = row[QTUP]
             row[QUMAX0] = row[QTROT_MAX]
@@ -746,6 +783,8 @@ if njit is not None:
 
 else:  # pragma: no cover - exercised when numba is unavailable
     _quad_tau_limit = None
+    _mirror_hysteretic_quad = None
+    _revert_hysteretic_quad = None
     _quad_interpolated_shear_energy = None
     _quad_shear_ultimate_strain = None
     _evaluate_quad_takeda_batch = None

@@ -43,6 +43,8 @@ from histra.solver.hysteretic_runtime import (  # noqa: F401
     _finish_transverse_batch,
     _force_general_hysteretic_batch,
     _managed_elastic_energy,
+    _mirror_hysteretic_quad,
+    _revert_hysteretic_quad,
     _map_and_prepare_interface_kinematics,
     _map_global_to_local,
     _phase_from_code,

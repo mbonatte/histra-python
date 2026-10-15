@@ -40,6 +40,7 @@ class SolverBackendCoverageReport:
     managed_quad_coulomb_springs: int
     managed_quad_cacovic_springs: int
     managed_quad_elastic_springs: int
+    managed_quad_hysteretic_springs: int = 0
     interface_rejection_reasons: dict[str, int] = field(default_factory=dict)
     interface_coulomb_rejection_reasons: dict[str, int] = field(default_factory=dict)
     quad_rejection_reasons: dict[str, int] = field(default_factory=dict)
@@ -241,6 +242,7 @@ def inspect_solver_backend(
         managed_quad_coulomb_springs=counts["managed_quad_coulomb_springs"],
         managed_quad_cacovic_springs=counts["managed_quad_cacovic_springs"],
         managed_quad_elastic_springs=counts["managed_quad_elastic_springs"],
+        managed_quad_hysteretic_springs=counts["managed_quad_hysteretic_springs"],
         interface_rejection_reasons=dict(counts["interface_rejection_reasons"]),
         interface_coulomb_rejection_reasons=dict(counts["interface_coulomb_rejection_reasons"]),
         quad_rejection_reasons=dict(counts["quad_rejection_reasons"]),

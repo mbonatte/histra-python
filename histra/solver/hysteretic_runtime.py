@@ -219,6 +219,9 @@ from histra.solver.hysteretic_kernels.quad_takeda import (
     QUAD_SUBLAW_CACOVIC,
     QUAD_SUBLAW_COULOMB,
     QUAD_SUBLAW_ELASTIC,
+    QUAD_SUBLAW_HYSTERETIC,
+    QHPARAMS, QHCOMMITTED, QHTRIAL,
+    _mirror_hysteretic_quad, _revert_hysteretic_quad,
     QUAD_STATE_SIZE,
     QUMAX0,
     QUMAX1,
@@ -1072,15 +1075,23 @@ class HystereticBatchRuntime:
                 continue
             spring = getattr(quad, "spring", None)
             is_elastic = isinstance(spring, SpringElastic)
-            if not is_elastic and not isinstance(spring, SpringCoulomb03):
+            is_hysteretic = isinstance(spring, SpringHysteretic)
+            needs_normal_force = isinstance(spring, SpringCoulomb03)
+            if not (is_elastic or is_hysteretic or needs_normal_force):
                 self.quad_rejection_reasons["unsupported_spring_type"] += 1
                 continue
             htype = str(getattr(spring, "hysteretic_type", "Takeda")).casefold()
-            if not is_elastic and htype not in ("takeda", "initial", "0"):
+            if needs_normal_force and htype not in ("takeda", "initial", "0"):
                 self.quad_rejection_reasons["unsupported_hysteretic_type"] += 1
                 continue
             if is_elastic:
                 sub_law = QUAD_SUBLAW_ELASTIC
+            elif is_hysteretic:
+                reason = self._transverse_rejection_reason(spring)
+                if reason:
+                    self.quad_rejection_reasons[reason] += 1
+                    continue
+                sub_law = QUAD_SUBLAW_HYSTERETIC
             else:
                 sub_law_name = str(spring.sub_law).strip().lower()
                 if sub_law_name == "coulomb":
@@ -1093,7 +1104,7 @@ class HystereticBatchRuntime:
                 else:
                     self.quad_rejection_reasons["unsupported_shear_sublaw"] += 1
                     continue
-            if not is_elastic and spring.check_contact_area:
+            if needs_normal_force and spring.check_contact_area:
                 self.quad_rejection_reasons["contact_area_check"] += 1
                 continue
             if _evaluate_quad_takeda_batch is None:
@@ -1102,8 +1113,8 @@ class HystereticBatchRuntime:
 
             material = model.collections.materials.get(quad.material_key)
             fracture_mode = (
-                QUAD_FRACTURE_NONE if is_elastic
-                else masonry_shear_law_code(material)
+                masonry_shear_law_code(material) if needs_normal_force
+                else QUAD_FRACTURE_NONE
             )
             if fracture_mode not in (
                 ELASTO_PLASTIC_FRACTURE_ENERGY_FIXED,
@@ -1116,7 +1127,7 @@ class HystereticBatchRuntime:
             assert quad._perf_dn_areas is not None
             local_edge_records: list[int] = []
             local_edge_counts: list[int] = [0, 0, 0, 0]
-            if not is_elastic:
+            if needs_normal_force:
                 compatible = True
                 rejection_reason = ""
                 local_edge_counts.clear()
@@ -1222,6 +1233,20 @@ class HystereticBatchRuntime:
                 self.quad_params[index, QPHYSTERETIC_TYPE] = QUAD_HYSTERETIC_TAKEDA
                 self.quad_params[index, QPH] = 0.0
                 self._read_elastic_quad_object(index, spring)
+            elif isinstance(spring, SpringHysteretic):
+                self.quad_params[index, QPENABLED] = float(bool(spring.is_on))
+                self.quad_params[index, QPK] = float(spring.k)
+                self.quad_params[index, QPSUBLAW] = QUAD_SUBLAW_HYSTERETIC
+                self.quad_params[index, QHPARAMS:QHPARAMS+32] = _extract_spring_params(spring, False)
+                self.quad_params[index, QHPARAMS+32] = _extract_spring_curve_type(spring)
+                self.quad_params[index, QHPARAMS+33] = _extract_spring_compressive_curve_type(spring)
+                row = self.quad_state[index]
+                row[QHCOMMITTED:QHTRIAL] = _extract_spring_committed(spring)
+                row[QHTRIAL:] = _extract_spring_trial(spring)
+                row[QFY0:QFY1+1] = spring.fy
+                row[QUR0:QUR1+1] = spring.ur
+                row[QKTANG_COMMITTED] = float(spring.k_tang_committed)
+                _mirror_hysteretic_quad(row)
             else:
                 htype = str(getattr(spring, "hysteretic_type", "Takeda")).casefold()
                 quad_htype = (
@@ -2069,6 +2094,9 @@ class HystereticBatchRuntime:
             "managed_quad_coulomb_springs": managed_quad_coulomb,
             "managed_quad_cacovic_springs": managed_quad_cacovic,
             "managed_quad_elastic_springs": managed_quad_elastic,
+            "managed_quad_hysteretic_springs": sum(
+                int(row[QPSUBLAW]) == QUAD_SUBLAW_HYSTERETIC for row in self.quad_params
+            ),
             "managed_coulomb_springs": (
                 managed_interface_coulomb + managed_quad_coulomb
             ),
@@ -2171,9 +2199,28 @@ class HystereticBatchRuntime:
         row[QUR0], row[QUR1] = map(float, spring.ur[:2])
         row[QDN] = float(spring.dn)
 
+    def _write_hysteretic_quad_object(self, index: int, spring: SpringHysteretic) -> None:
+        row = self.quad_state[index]
+        c, t = row[QHCOMMITTED:QHTRIAL], row[QHTRIAL:]
+        spring.umax[:] = c[:2].tolist()
+        spring._crot_pu, spring._crot_nu = float(c[2]), float(c[3])
+        spring.cenergy_d, spring._cload_indicator = float(c[4]), int(c[5])
+        spring._cstress, spring._cstrain = float(c[6]), float(c[7])
+        spring.phase = _PHASE_BY_CODE[int(c[8])]
+        spring._trot_max, spring._trot_min = float(t[0]), float(t[1])
+        spring._trot_pu, spring._trot_nu = float(t[2]), float(t[3])
+        spring._tenergy_d, spring._tload_indicator = float(t[4]), int(t[5])
+        spring._tstress, spring._tstrain = float(t[6]), float(t[7])
+        spring.t_phase, spring.k_tang = _PHASE_BY_CODE[int(t[8])], float(t[9])
+        spring.k_tang_committed = float(row[QKTANG_COMMITTED])
+        spring.u, spring.f = spring._tstrain, spring._tstress
+
     def _write_quad_object(self, index: int, spring: Any) -> None:
         if isinstance(spring, SpringElastic):
             self._write_elastic_quad_object(index, spring)
+            return
+        if isinstance(spring, SpringHysteretic):
+            self._write_hysteretic_quad_object(index, spring)
             return
         row = self.quad_state[index]
         spring.fy[:] = [float(row[QFY0]), float(row[QFY1])]
@@ -3189,6 +3236,10 @@ class HystereticBatchRuntime:
     def revert_quad(self, quad: Any) -> None:
         index = int(quad.spring._histra_quad_batch_index)
         row = self.quad_state[index]
+        if isinstance(quad.spring, SpringHysteretic):
+            _revert_hysteretic_quad(row)
+            self._write_quad_object(index, quad.spring)
+            return
         _quad_revert_trial(row)
         # Preserve the C# ordering in Quad.revertToLastCommit: trial normal
         # stress is restored first, then committed normal stress rolls back to

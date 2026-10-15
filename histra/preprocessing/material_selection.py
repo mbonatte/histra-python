@@ -114,8 +114,8 @@ def _interface_flex_law(material: MasonryMaterial, intf: Interface, quad,
 
 def _cached_diagonal_laws(
     material: MasonryMaterial,
-    cache: dict[int, tuple[_HystereticLaw, _CoulombLaw]] | None,
-) -> tuple[_HystereticLaw, _CoulombLaw]:
+    cache: dict[int, tuple[_HystereticLaw, _CoulombLaw | _HystereticLaw]] | None,
+) -> tuple[_HystereticLaw, _CoulombLaw | _HystereticLaw]:
     if cache is None:
         return _diagonal_flex_law(material), _shear_law(material)
     key = id(material)

@@ -522,6 +522,9 @@ if njit is not None:
             trial[i, 8] = tphase
             trial[i, 9] = ktang
 
+    # Reuse the state machine without launching a parallel team for one row.
+    _evaluate_linear_serial_batch = njit(cache=False, nogil=True)(_evaluate_linear_batch.py_func)
+
     @njit(cache=True, nogil=True, parallel=True)
     def _evaluate_simple_linear_batch(params, committed, trial, targets, enabled):
         """Specialized C# Hysteretic path for generated masonry fibers.
@@ -1396,6 +1399,7 @@ else:  # pragma: no cover - exercised when numba is unavailable
     _neg_tangent_typed = None
     _neg_rotlim_typed = None
     _evaluate_linear_batch = None
+    _evaluate_linear_serial_batch = None
     _advance_transverse_targets = None
     _evaluate_simple_linear_batch = None
     _advance_and_evaluate_simple_linear_batch = None
