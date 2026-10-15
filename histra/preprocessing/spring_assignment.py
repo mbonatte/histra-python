@@ -38,16 +38,15 @@ from histra.preprocessing.constitutive_laws import (
 )
 from histra.preprocessing.contact_geometry import (
     _cross3,
-    _polygon_area_3d,
     _unit,
     _v,
 )
 from histra.preprocessing.errors import ModelPreparationError
+from histra.preprocessing.csharp_fibre_geometry import _csharp_polygon_area, _csharp_polygon_areas
 from histra.preprocessing.fibre_geometry import (
     _fiber_stiffness,
     _fiber_stiffness_batch,
     _interface_cells,
-    _polygon_areas_3d,
 )
 from histra.preprocessing.material_selection import (
     _cached_diagonal_laws,
@@ -150,7 +149,7 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
     if parent_type == "Restraint":
         sp = SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic")
         sp.k = -1.0
-        sp.area = _polygon_area_3d(cell)
+        sp.area = float(_csharp_polygon_area(np.asarray(cell, dtype=np.float32)))
         if material_override is not None:
             return sp, _restraint_flex_law(model, parent_key, material_override, intf)
         quad_key = (
@@ -300,7 +299,7 @@ def _transverse_side_properties_batch(
     if parent_type == "Restraint":
         props = np.zeros((len(cells), 3), dtype=np.float64)
         props[:, 0] = -1.0
-        props[:, 1] = _polygon_areas_3d(cells)
+        props[:, 1] = _csharp_polygon_areas(np.asarray(cells, dtype=np.float32))
         if material_override is not None:
             law = _restraint_flex_law(model, parent_key, material_override, intf, cache=law_cache)
         else:

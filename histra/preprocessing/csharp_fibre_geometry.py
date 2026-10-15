@@ -36,6 +36,32 @@ def _csharp_unit(a):
     return a*np.float32(np.float32(1)/_csharp_norm(a))
 
 @njit(cache=True)
+def _csharp_polygon_area(points):
+    """Original Operations.Area(Vector3[], true), including Single projection."""
+    f = np.float32
+    x = _csharp_unit(points[1] - points[0])
+    z = _csharp_unit(_csharp_cross(x, points[2] - points[0]))
+    y = _csharp_cross(z, x)
+    projected = np.empty((len(points), 2), dtype=np.float32)
+    for i in range(len(points)):
+        delta = points[i] - points[0]
+        projected[i, 0] = f(_csharp_dot(delta, x) + f(0))
+        projected[i, 1] = f(_csharp_dot(delta, y) + f(0))
+    area = f(0)
+    for i in range(len(points)):
+        following = (i + 1) % len(points)
+        area = f(area + f(f(projected[i, 0] * projected[following, 1])
+                         - f(projected[following, 0] * projected[i, 1])))
+    return abs(f(area * f(0.5)))
+
+@njit(cache=True)
+def _csharp_polygon_areas(cells):
+    areas = np.empty(len(cells), dtype=np.float64)
+    for i in range(len(cells)):
+        areas[i] = _csharp_polygon_area(cells[i])
+    return areas
+
+@njit(cache=True)
 def _csharp_rotation(face):
     x=_csharp_unit(face[1]-face[0])
     corner=face[3] if _csharp_norm(face[0]-face[3])>np.float32(1) else face[2]

@@ -42,23 +42,41 @@ Original routine bit-equality tests retain their existing strict assertions.
 ## Static comparison remains open
 
 Orthotropic and elastic-transverse cases match all checked numeric and phase
-outputs exactly in the first audit. Isotropic and zero-friction cases have
+outputs exactly after the restraint-area correction below. Isotropic and zero-friction cases have
 near-roundoff force/displacement differences but also different phase and
 private history fields; those are not waived as a parity pass. Some private
 diagonal history differences are large despite negligible current force.
 
-The actual compiled initial stiffness matrix matches a fresh original C#
-assembly exactly on the isotropic case. Replaying Python's first displacement
-increment through original `updateDomain`, `GetResistingForce`, and `Commit`
-matches U, F and phase exactly for all 340 springs. Both differ from the UI's
+The actual compiled initial stiffness matrix, including its sparse pattern,
+matches a fresh original C# assembly exactly on the isotropic case. The first
+native linear solve also matches Python exactly. Replaying all ten recorded
+Python Newton increments through original `updateDomain`, `GetResistingForce`,
+`Commit`, and `SpringStateDBclass.SetFromSpring` matches every compared spring
+field exactly on all four walls: 13,600 spring records, excluding unpopulated
+energies. This is a controlled routine replay, not an independent C# nonlinear
+solve. Both implementations differ from the UI's
 saved first-step values in 13 spring displacements/forces, by at most 1.04e-25
 displacement and 4.14e-22 kN. This isolates that first difference upstream of
 the constitutive update; it does not yet explain all later histories.
 
-The first audit also identifies identical duplicate DynamicVectorsState rows
-at reversal combination 1 step 32; they must be checked for identical values
-before comparing that vector. Native NULL spring energies and absent private
+Each native database contains 28 identical duplicate DynamicVectorsState rows
+at reversal combination 1 step 32. The final audit collapses only identical
+key/value rows; conflicting duplicate values would still fail identity checks.
+Native NULL spring energies and absent private
 histories at intermediate steps are unavailable measurements, not passes.
+
+## Restraint spring area correction
+
+The terminal private-history audit found a 5.42e-6 area difference on 81
+elastic foundation transverse springs. Original
+`SpringOperations.SetInterfaceTrasvSpring` sets restraint area using
+`Operations.Area(Vector3[], true)`, which projects to a local plane and
+accumulates polygon area in Single arithmetic. Python previously used a
+double-precision Newell area. Both scalar and compiled batch preparation now
+use the original calculation. Stiffness and force histories on this elastic
+reference are unchanged. Native fixture tests check 81 actual wall cells and
+12 rotated/skew cells bit-for-bit on Windows and Linux; an integration test
+checks the generated foundation springs.
 
 The reviewed v1.6.0 packages predate this correction. They must be rebuilt
 before they can include it. The remote Article-model regression remains open.
