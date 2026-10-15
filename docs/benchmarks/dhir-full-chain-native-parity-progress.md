@@ -79,3 +79,13 @@ the source-boundary limitation of the earlier 8138ddd regression for these
 changes. The separate [horizontal reference](dhir-horizontal-native-parity.md)
 now matches all 521 commits through its final pushover step 501. Missing native
 measurements and independent equilibrium limitations remain as described above.
+
+## Snapshot performance regression
+
+A fresh run at ed8a104 after Newton snapshot buffer reuse retains exact checked
+output at all 88 commits and all 91 states. Every native committed iteration
+count matches, and both solvers stop at attempt 59 with code -2. Reference
+hashes are unchanged. [Evidence](../../release-evidence/dhir/2026-10-15-snapshot-reuse-full-chain.json)
+and the [performance report](newton-snapshot-reuse-performance.md) record source
+boundaries and timing scope. Later norm-helper corrections have original-routine
+bit-exact tests and do not alter this model's Work convergence decision.

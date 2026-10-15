@@ -38,3 +38,20 @@ ordinary solve with explicit reusable workspace; see the
 records source ed8a104, raw timing samples and scope. The larger native solve
 remains the principal cost; this change does not alter convergence settings,
 iteration counts, tangent choices or precision.
+
+## Complete native regression
+
+Fresh runs at ed8a104 now repeat both complete reference histories after the
+snapshot reuse change. Vert 20 plus horizontal pushover 501, and the separate
+foundation-modified Vert 20 / constant load 10 / pushover 58 chain, match every
+available checked field and identity exactly. That is 609 commits and
+46,941,720 committed spring records. The original reference files are unchanged;
+terminal attempts/codes match and all 88 available Dhir iteration counts match.
+
+[Horizontal evidence](../../release-evidence/dhir/2026-10-15-horizontal-snapshot-reuse-full-chain.json)
+and [foundation-modified evidence](../../release-evidence/dhir/2026-10-15-snapshot-reuse-full-chain.json)
+qualify the mechanical snapshot optimization at ed8a104. The later native
+norm-selector correction has direct routine coverage and leaves the selected
+Work convergence calculation unchanged. Faster library configurations are
+screened separately under the user's global-response tolerance allowance;
+these exact checks remain the baseline.

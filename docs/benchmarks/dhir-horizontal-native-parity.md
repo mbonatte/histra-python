@@ -70,3 +70,13 @@ active under the selected warn policy: 18 Vert commits and all 501 horizontal
 commits fail that independent check despite matching C# Work acceptance and
 saved outputs. This establishes available-output parity for this reference,
 not independent equilibrium or equivalence for every masonry input.
+
+## Snapshot performance regression
+
+The complete chain was repeated at ed8a104 with reusable Newton snapshot
+buffers. Every available checked output and identity remains exact across all
+521 commits and 523 states. Both solvers retain step 501 and stop on attempt
+502 at the displacement limit. Original reference hashes are unchanged.
+[Evidence](../../release-evidence/dhir/2026-10-15-horizontal-snapshot-reuse-full-chain.json)
+and the [performance report](newton-snapshot-reuse-performance.md) describe the
+source boundary; faster library configurations are evaluated separately.

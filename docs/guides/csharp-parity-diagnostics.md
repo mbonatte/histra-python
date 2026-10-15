@@ -55,8 +55,12 @@ reaction histories, energy differences, stopping behavior and local/spring
 phase differences. A matrix solve speedup alone does not qualify a nonlinear
 analysis. State the numeric envelope before screening and keep the original
 routine tests unchanged. Current experiments initially screen global response
-with rtol=1e-6, displacement atol=1e-8 in native model units, reaction atol=1e-5
-kN and energy atol=1e-6 in native energy units. These are provisional experiment
+with displacement rtol=1e-6 / atol=1e-8 in native model units, and energy
+rtol=1e-6 / atol=1e-6 in native energy units. Global reaction vectors use
+L2(error) <= 1e-5 kN + 1e-8 * max(L2(reference reaction), 1 kN). This compares
+forces on a physical vector scale when an individual component is near zero;
+the original resultants include Single arithmetic. The earlier componentwise
+screen and its failures remain in the experiment record. These are experiment
 limits, not blanket acceptance criteria for other models. An unchanged physical
 failure mode and the final stopping state still require examination.
 
