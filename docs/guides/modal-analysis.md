@@ -50,8 +50,13 @@ nodes by `+/- normal * thickness / 2`. It integrates
 M_e = integral rho * V(q)^T * V(q) dV
 ```
 
-with a 6 x 6 x 6 Gauss rule, where `rho = material.w / 980.6`. Existing local
-loads contribute `abs(P[i] / 980.6)` to the corresponding diagonal term.
+with a 6 x 6 x 6 Gauss rule, where `rho = material.w / g`. C# stores both
+`material.w` and `Operations.g` as `System.Single` before promoting them to
+double; the promoted gravity is `980.5999755859375`. Existing local loads
+contribute `abs(P[i] / g)` to the corresponding diagonal term. Python preserves
+these input conversions. Direct native-routine coverage isolates the
+translational mass block; exact rotational integration arithmetic remains an
+audit item.
 
 A compatibility-sensitive source behavior is preserved: the HRX
 `MassMatrixType` and the method's `diagonal` argument are passed through the C#

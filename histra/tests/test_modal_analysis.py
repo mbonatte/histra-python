@@ -209,3 +209,20 @@ def test_ersino_modal_regression_against_csharp_results() -> None:
     # The source's eigenvalue-change criterion does not enforce a small
     # eigen-residual; the tenth stored mode intentionally retains this behavior.
     assert max(mode.residual_norm for mode in result.modes) < 0.12
+
+
+def test_quad_mass_matches_original_native_single_precision_inputs():
+    import json
+    fixture = Path(__file__).parent / 'fixtures/csharp_quad_mass_2026_1_1.json'
+    reference = json.loads(fixture.read_text(encoding='utf-8-sig'))
+    model = _single_quad_model()
+    model.collections.materials[1].w = 0.0000224
+    quad = model.collections.quads[1]
+    quad.thickness = reference['thickness']
+    assert GRAVITY_ACCELERATION == reference['gravity']
+    assert float(np.float32(model.collections.materials[1].w)) == reference['weight']
+    actual = compute_quad_local_mass(quad, model)
+    expected = np.array(reference['mass']).reshape(7, 7)
+    # Isolate density/gravity in the translational block. Native rotational
+    # coupling terms require a separate integration operation-order audit.
+    np.testing.assert_allclose(actual[:3, :3], expected[:3, :3], rtol=3e-14, atol=0.0)

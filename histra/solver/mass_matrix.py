@@ -14,7 +14,8 @@ from typing import Any, Callable
 import numpy as np
 import scipy.sparse as sp
 
-GRAVITY_ACCELERATION = 980.6
+# Original Operations.g and MasonryMaterial.w are System.Single.
+GRAVITY_ACCELERATION = float(np.float32(980.6))
 _GAUSS_COORDS, _GAUSS_WEIGHTS_1D = np.polynomial.legendre.leggauss(6)
 _GAUSS_POINTS = np.asarray(
     [(a, b, c) for a in _GAUSS_COORDS for b in _GAUSS_COORDS for c in _GAUSS_COORDS],
@@ -197,7 +198,7 @@ def compute_quad_local_mass(
     velocity[:, :, :3] = np.eye(3)
     velocity[:, :, 3:] = b_gauss - b_centre
 
-    density = float(material.w) / gravity
+    density = float(np.float32(material.w)) / gravity
     local = np.einsum(
         "pki,pkj,p->ij",
         velocity,
