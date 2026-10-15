@@ -35,6 +35,31 @@ code, steps = solve_static_nonlinear(
 )
 ```
 
+## Routine parity and global performance validation
+
+Original C# routines remain the source of truth for model construction,
+constitutive updates and numerical control logic. Their bit-exact unit tests
+stay exact. At the user's 2026-10-15 direction, global performance experiments
+may use faster numerical libraries/orderings with small rounding differences
+when the physical response is preserved.
+
+Use explicit backend, precision, refinement and ordering settings in every
+comparison report. The exact Dhir reference configuration uses UMFPACK,
+accurate precision, refinement 2 and AMD ordering; Python's UMFPACK default
+ordering is METIS. Pin AMD explicitly when reproducing that exact reference.
+SuperLU and other orderings can be screened as performance candidates while
+retaining identical model inputs and solver logic.
+
+A performance screen must record the complete available load-displacement and
+reaction histories, energy differences, stopping behavior and local/spring
+phase differences. A matrix solve speedup alone does not qualify a nonlinear
+analysis. State the numeric envelope before screening and keep the original
+routine tests unchanged. Current experiments initially screen global response
+with rtol=1e-6, displacement atol=1e-8 in native model units, reaction atol=1e-5
+kN and energy atol=1e-6 in native energy units. These are provisional experiment
+limits, not blanket acceptance criteria for other models. An unchanged physical
+failure mode and the final stopping state still require examination.
+
 ## Deterministic event stream
 
 ```python
