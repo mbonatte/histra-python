@@ -1,0 +1,658 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T22:01:52.876679+00:00",
+  "source_commit": "69381ee19f4950d9802a54b92f540d412172670d",
+  "generator": "release-1.6.0-reviewed/verify-artifact-bytes.py",
+  "benchmark_id": "v1.6.0-reviewed-package-source-bytes",
+  "version": "1.6.0",
+  "production_modules": 133,
+  "wheel_and_sdist_match_source": true,
+  "artifacts": {
+    "histra_python-1.6.0-py3-none-any.whl": {
+      "sha256": "1052c6cc7322c35e1408a5edd81edb131ffa46461fd8d1368330add1d409e757",
+      "bytes": 432196
+    },
+    "histra_python-1.6.0.tar.gz": {
+      "sha256": "a17bc0ada94aa2791f0023608ea83ea942280d7c1f9c769d4fb271c78a93fe5d",
+      "bytes": 373156
+    }
+  },
+  "module_manifest": [
+    {
+      "path": "histra/__init__.py",
+      "sha256": "10d0477526373dac3c0052383dd956b8a9dfe118733ae4e823e78e1d95f6f62f"
+    },
+    {
+      "path": "histra/__main__.py",
+      "sha256": "39564bef2ef2fbc497e06b6e2403e51b84a1e7b50b1125937d5389aafd2c109a"
+    },
+    {
+      "path": "histra/_framework_math.py",
+      "sha256": "337270a50fa672507ab13821fbde55e448533a43ca35c5173dc579813627e20a"
+    },
+    {
+      "path": "histra/elements/__init__.py",
+      "sha256": "d84cfe20c537590bc1baa4f7d447ee28f6ee40f08c9e86847680f9fb4d31de18"
+    },
+    {
+      "path": "histra/elements/interface.py",
+      "sha256": "168441d82aa09bbc9df3f76707f3f9acf7d898c6f45fda0545d7fa20e9cdeac8"
+    },
+    {
+      "path": "histra/elements/interface_state.py",
+      "sha256": "a397e0292ad510e7933b542a53d34a6c4102d52e062a50cf1493bcf78119d9ce"
+    },
+    {
+      "path": "histra/elements/quad.py",
+      "sha256": "e1cdc4aa128797e758af36e672d219cd3972923af77b4e4337403fd7a37ff8c6"
+    },
+    {
+      "path": "histra/elements/quad_geometry.py",
+      "sha256": "bfd5f9daa7518609f7080138e5c3c332ff78395b2e375b44fa4fbb951e6cb06e"
+    },
+    {
+      "path": "histra/elements/quad_kernels.py",
+      "sha256": "8e208cd94fdbf4d0c7efd1aac0b8fcac2c9f49c2826044f7ece13e2a39018313"
+    },
+    {
+      "path": "histra/elements/quad_loads.py",
+      "sha256": "bdfb221a47e903954b545b2d94a69d0623ae7bc969f183ad55768a3f9f766120"
+    },
+    {
+      "path": "histra/elements/quad_state.py",
+      "sha256": "d459aeb95df05784852eea21599a2b6b9ea416eb1cab5633fb51ba31428bb4b8"
+    },
+    {
+      "path": "histra/elements/quad_static_load.py",
+      "sha256": "f9f1cc23ed2aacae6adb90d3b9ca04d213e459741ba7aa8cbf8d79369fcb8539"
+    },
+    {
+      "path": "histra/io/__init__.py",
+      "sha256": "0226e8f76fd9754149a03a251968ba7d268965c018a9db0602e2a537eff609fc"
+    },
+    {
+      "path": "histra/io/hr_loader.py",
+      "sha256": "12d14119a4eeb14dfddaf71c03a4733db2a6fc28db17400b9589284e556b3ae8"
+    },
+    {
+      "path": "histra/io/results_reader.py",
+      "sha256": "b4bc103f88b69d1a34d02a25b81a15a15966d5e3d1a2a40455ab13c472397fb5"
+    },
+    {
+      "path": "histra/model/__init__.py",
+      "sha256": "49727f7c10888bd54ec760616b139160545a35ebf8572a609fcbe5b8cf1342ee"
+    },
+    {
+      "path": "histra/model/_types.py",
+      "sha256": "d195f731cc05444253d63fce5f367d2ddb20224b85b50e07010374217a88ab86"
+    },
+    {
+      "path": "histra/model/interface.py",
+      "sha256": "6f77b90a1e7ac9fe8bbe647895c48bd52f16c702bf35f545f2fd3be3caaf1262"
+    },
+    {
+      "path": "histra/model/load.py",
+      "sha256": "40ab6a0db5640da210c120e91534766aeea1294d97c8808cf530e59261b7f7b3"
+    },
+    {
+      "path": "histra/model/masonry_material.py",
+      "sha256": "e87a9a1ee6ecc3482ab80e2f8403d9f06821687f3c00aae2392f476dce4e15f7"
+    },
+    {
+      "path": "histra/model/model.py",
+      "sha256": "328dbf54228e8b19640f4e762f9f74e4c3e38d2a78acaa49ef11c342b6056065"
+    },
+    {
+      "path": "histra/model/node.py",
+      "sha256": "1b8fbb701bfe6aacf22aec0ee26c07f539bbcbd98ea642fee5872a1aea633430"
+    },
+    {
+      "path": "histra/model/quad.py",
+      "sha256": "64250b976180b6d381a52d6940cf1cd86d651069d5d0341b338c3607e0935711"
+    },
+    {
+      "path": "histra/model/restraint.py",
+      "sha256": "65100a2662e8beb52b65501c679e547c0e12c77b919ec480d8c177d1e5144154"
+    },
+    {
+      "path": "histra/model/shear_law.py",
+      "sha256": "7ad5a4559b9c9eaaf876b45ff41ba2c217c2b4b0bbac72996ca687a437f7a3da"
+    },
+    {
+      "path": "histra/model/spring.py",
+      "sha256": "5834f8bcbc5e42375ec64efa05a1f3f4c660bf30caf3ea792692a44852ebec79"
+    },
+    {
+      "path": "histra/postprocessing.py",
+      "sha256": "08fd2b0d732412a0a465fcade30d42bba82ee3a28084a3a1f29fdef09aeabc07"
+    },
+    {
+      "path": "histra/preprocessing/__init__.py",
+      "sha256": "fe077b7d3b5f0cc7b2e3a1e3be3cb43de124e23433adf386313b3d6f78ca4a5d"
+    },
+    {
+      "path": "histra/preprocessing/afference.py",
+      "sha256": "9b4615a7a3b726b55e2f12fa0a1de7fdcf97cc948508ef525dc6d26e613bb4e4"
+    },
+    {
+      "path": "histra/preprocessing/cache.py",
+      "sha256": "7179bb02a52c479b46004fc50ee0bba65a92b848bf2a5a01b8538a18671122f3"
+    },
+    {
+      "path": "histra/preprocessing/constitutive_laws.py",
+      "sha256": "62b6911b1e8be622acf69b671a520200e82808c12eb0b4c03ba587f46a6340b4"
+    },
+    {
+      "path": "histra/preprocessing/contact_geometry.py",
+      "sha256": "5aa8967d0e19d201061020691e7142877b1a217bf3a20def28d66f4736cc1f58"
+    },
+    {
+      "path": "histra/preprocessing/csharp_fibre_geometry.py",
+      "sha256": "8638efe1c2a6275777d206b69bd88ed02740d902cdc0b6cf45e5b02cee44cd72"
+    },
+    {
+      "path": "histra/preprocessing/csharp_math.py",
+      "sha256": "2dc9dd5e79fcbc11f0f98935c25d5ae24665447da8f6d87e99e97f2a710e6da9"
+    },
+    {
+      "path": "histra/preprocessing/errors.py",
+      "sha256": "4aa4b4fd7dccb68bdedd87aa47f030df578b7ee708da84a46243ccf17b6e26c8"
+    },
+    {
+      "path": "histra/preprocessing/fibre_geometry.py",
+      "sha256": "b926cf7bdfda8bf99584e7ed0f05699ea79c53d84d7b126cfd0c961af29a1ba7"
+    },
+    {
+      "path": "histra/preprocessing/intrinsic_coordinates.py",
+      "sha256": "c8695f0a80f6a48be610b59ffd6f64dbf190a5fc63ce0a551ff701672ca63300"
+    },
+    {
+      "path": "histra/preprocessing/material_selection.py",
+      "sha256": "3e245e23819745c8d8b2f42a36be6a0079c57e3cf11ac8e2d377d3a4b65f87ca"
+    },
+    {
+      "path": "histra/preprocessing/prepare_model.py",
+      "sha256": "0692ca56a1b0a5fb02845035aa18de76f5c73bb2e1d311f8f6c16b1b980224f4"
+    },
+    {
+      "path": "histra/preprocessing/quad_faces.py",
+      "sha256": "67864987277ad7cfd188bafdc049df6c93cbd244162767199829910f1366233e"
+    },
+    {
+      "path": "histra/preprocessing/quad_geometry.py",
+      "sha256": "b71a4b5e8079af0f41967874264011a3a8c706778743c4508195fb1faefbb344"
+    },
+    {
+      "path": "histra/preprocessing/spring_assignment.py",
+      "sha256": "da8e96072e45356900eb9b17c2a356277b3c7585f92213095e436bbe732956d9"
+    },
+    {
+      "path": "histra/preprocessing/spring_factory.py",
+      "sha256": "ecccb6a9c1e82747cb0ed8e928872244d687e0b99bbc3584411222e0fc57e4b3"
+    },
+    {
+      "path": "histra/preprocessing/validation.py",
+      "sha256": "368ef29f0d19e72bb7f5da7ff6d0f98975ae44e79b1f1202c5b47e18c44a2d2e"
+    },
+    {
+      "path": "histra/solver/__init__.py",
+      "sha256": "f2265eaced050723849580acb427f714e5b0114cd864e541d277544d4f7d9f3d"
+    },
+    {
+      "path": "histra/solver/arc_length.py",
+      "sha256": "a6fc5369ae9afd1082cf469ecf12ecb5d7d983f0e2137fa71d9351a786241c8f"
+    },
+    {
+      "path": "histra/solver/assembler.py",
+      "sha256": "e8d99c0bfd4dbdbcdd994d6217ad85f7d08c9cf6998a89aafaf48dde67ac3cd2"
+    },
+    {
+      "path": "histra/solver/backend_api.py",
+      "sha256": "ac61e535ead83b1a141631113823fbed15f4d9304fb6f9699e00adfec619bc97"
+    },
+    {
+      "path": "histra/solver/backend_coverage.py",
+      "sha256": "dd3e5c1beb9e2e3606cf8c0421c8c835584989ffeef5df3f4ddcba361e7d1440"
+    },
+    {
+      "path": "histra/solver/bfgs.py",
+      "sha256": "aaac192acbdecb253f802e8f976823724c13eb22d0c548009714d8d61104cd48"
+    },
+    {
+      "path": "histra/solver/cancellation.py",
+      "sha256": "3824918adefcaab8a7ea696dfe94afe9d1a0d8790ef1c38bfa3cb52b987ff77c"
+    },
+    {
+      "path": "histra/solver/capabilities.py",
+      "sha256": "e4d4f3e48095f260299c8548eb77896917b075f15bd43fe970cdd602014bfa36"
+    },
+    {
+      "path": "histra/solver/continuation.py",
+      "sha256": "8ecf607202a9516e341eb4c81e48dacdb68e7805a14db14f8ef1d654009287be"
+    },
+    {
+      "path": "histra/solver/diagnostics.py",
+      "sha256": "e9630eb368fc526177f3409c7438da16ca2ffead5758eb225d575942cc3cca8b"
+    },
+    {
+      "path": "histra/solver/equilibrium.py",
+      "sha256": "8e9ec22c186c71d502d9453c8e5c2eb2425c1777dafaea8fd6252ba2ae4fd6c4"
+    },
+    {
+      "path": "histra/solver/equilibrium_audit.py",
+      "sha256": "e210e5ae183ab0e3c07e5c55729ba3cc0c256aa2bdd24c635a9be566df7f9fc8"
+    },
+    {
+      "path": "histra/solver/hysteretic_batch.py",
+      "sha256": "3d952ffa3ec7d558047089f659280b824483ad82b14272e271a6ecc0b0fe3cf0"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/__init__.py",
+      "sha256": "86a51034953a390a0a07e3f469e91cf68f8371d9a02e007e6a929030edd92777"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/interface_coulomb.py",
+      "sha256": "06fce81bb80352d7f4ae393251aceb733f46ecdabdc598aedbb0831c6b551870"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/kinematics.py",
+      "sha256": "984b8cd4284d4ef8d724ce7a3b0a5dac8ddae9a2beabb086fd4ce922a62ef5d0"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/quad_takeda.py",
+      "sha256": "662095e1423b92bd5c7b32150cbdc9e2d29a149c613c29b0b64d4a3b51448375"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/scatter.py",
+      "sha256": "4e0593e88b4200a01e53387967b23344b8c653a3faa858f6ca4b8b926fd20548"
+    },
+    {
+      "path": "histra/solver/hysteretic_kernels/transverse.py",
+      "sha256": "63a57efade40b0400614a510f764c22e61ab99e8c7600587d074e0de01730a12"
+    },
+    {
+      "path": "histra/solver/hysteretic_runtime.py",
+      "sha256": "f46c9a7d6cfb1099e5a6d029be6995e38f1f8e182ffa9f764d1770a0de483724"
+    },
+    {
+      "path": "histra/solver/hysteretic_topology.py",
+      "sha256": "419e4a0c419339b396e907c69657ce2298363d02fa2d448682fc7744c19d80fd"
+    },
+    {
+      "path": "histra/solver/incremental_integrator.py",
+      "sha256": "d4b8559b9c1bf8257a5831ba997f452ce21f3c6f16244ee7b8c553abbc3836a6"
+    },
+    {
+      "path": "histra/solver/interface_material.py",
+      "sha256": "bb06eede9ccc7c25feb988e1cd76760dd713775480d7e8f1da2ea65992c35c44"
+    },
+    {
+      "path": "histra/solver/line_search.py",
+      "sha256": "75a95124ee139f924b2b9108c3c10d44c36b04cde2b651bc58e8a647eac79653"
+    },
+    {
+      "path": "histra/solver/load_assembly.py",
+      "sha256": "77d30ce793abcfccc65408ce444c0bd9a2ef49a60545e0d805de3ea2a3a67823"
+    },
+    {
+      "path": "histra/solver/load_control.py",
+      "sha256": "5bf85c7854b396661f1b48029789575ff125320b444be2dd31e72ac703a20974"
+    },
+    {
+      "path": "histra/solver/mass_matrix.py",
+      "sha256": "93f63ef3a9319340aab3a8a2c3e7cee0f365eeefc847e87a6461040ea65d4b3f"
+    },
+    {
+      "path": "histra/solver/modal.py",
+      "sha256": "70f6de629d3b7561893522d1bcc9dcde455d7e6cbde03c667ba614bc9b340dad"
+    },
+    {
+      "path": "histra/solver/model_manager.py",
+      "sha256": "cdfe37ce37510abf2417871cbfa4f897f0d16d5dedd5671e862a8cee96d7c10f"
+    },
+    {
+      "path": "histra/solver/newton_line_search.py",
+      "sha256": "ffa16ef170da86f1357cbac3975586e73d0c9870684e6516b06c89dd6e264e5a"
+    },
+    {
+      "path": "histra/solver/newton_raphson.py",
+      "sha256": "a59e499fe89583596bedde4a1b29e128fd09da2049147a38eda0f44ffbab4059"
+    },
+    {
+      "path": "histra/solver/nonlinear_setup.py",
+      "sha256": "7867e06420382de75785f591c56f99832bd6adbf65ad90d082685adc1cef893a"
+    },
+    {
+      "path": "histra/solver/nonlinear_solver.py",
+      "sha256": "e2405fd591a7bd7359a22835d1bb909c57139657df0103bdd70dd590f13f42a2"
+    },
+    {
+      "path": "histra/solver/nonlinear_step.py",
+      "sha256": "6954430d5729199efb46cd6b9dc3cc2840c8744e8b73dae71a6b00cfa8ef3c95"
+    },
+    {
+      "path": "histra/solver/outcomes.py",
+      "sha256": "f62d2f2e45dcb023461c0ed9d96487a11ca43a833eb7f6ec4b8ece9fc7a9ce7e"
+    },
+    {
+      "path": "histra/solver/output_projection.py",
+      "sha256": "2d2b1f89ddbc85c4778308af1b944c991005bcdc124b49a67c0c3b58cb5ac1ea"
+    },
+    {
+      "path": "histra/solver/program.py",
+      "sha256": "fb59c660f189200461b8a706137405d9d41ede9f016b7d920afcd8701ab7c771"
+    },
+    {
+      "path": "histra/solver/restart.py",
+      "sha256": "7ce8bbb281da6a2a91eb35f1ba2411d108fb9e7653fd60b3db42880cdc085c1d"
+    },
+    {
+      "path": "histra/solver/session.py",
+      "sha256": "39832fb28344def5b94ead459faf5babed6f9ea49bef4d4509c25e8af932536f"
+    },
+    {
+      "path": "histra/solver/solution_algorithm.py",
+      "sha256": "edd61a3cbce27dfd47825afc75663fc27909c042c00f62a93897e6289815e301"
+    },
+    {
+      "path": "histra/solver/solve.py",
+      "sha256": "9946f89992922d03242bf3edf259371760f98b570e262028e930e78998fb2dcd"
+    },
+    {
+      "path": "histra/solver/solver.py",
+      "sha256": "0f3ff02aaa701bcb1995da3cbb0f500851f5bbf867b292fec9bc6e29830d17ee"
+    },
+    {
+      "path": "histra/solver/sparse_rank.py",
+      "sha256": "449c98266e654ad99f1d277e153e860ef536272c680ffa281ce9abff4eb1b3fe"
+    },
+    {
+      "path": "histra/solver/state_snapshot.py",
+      "sha256": "363415c6b0dabe64a2951dfec13a7ba5db9539f0d8788054b1c14e92439ed974"
+    },
+    {
+      "path": "histra/solver/strategy.py",
+      "sha256": "868bc056f41f4330927bc09d0f97d1dbf5eed57b9f2b7404204deff3e176d1db"
+    },
+    {
+      "path": "histra/solver/strategy_evidence.py",
+      "sha256": "b549eb96d02f3dd430a99f11f1d23f2c62cb382beaed465fc7e75dd9c6ff9aa9"
+    },
+    {
+      "path": "histra/solver/warmup.py",
+      "sha256": "f92d16d56c7c539a43305640863e3427ad50c03250610bf6179873c623e5e853"
+    },
+    {
+      "path": "histra/springs/__init__.py",
+      "sha256": "c0582a8c751fe975216bd1d455224421ea3fcd06e776813f93814f0323ddfaf5"
+    },
+    {
+      "path": "histra/springs/base.py",
+      "sha256": "f5a5e45dc8ce0e5b3efdc983b114488a45dd913d2d7eb2b66c786bcaaac1873a"
+    },
+    {
+      "path": "histra/springs/coulomb.py",
+      "sha256": "f2def2f5007be14b02e14deff110e1469f270c3893993b20f6f89b7e5bfcb849"
+    },
+    {
+      "path": "histra/springs/coulomb03.py",
+      "sha256": "d9575fd565784607d408b9a828fbff6149c500be97d6c71000280f924d1cbfec"
+    },
+    {
+      "path": "histra/springs/coulomb03_envelope.py",
+      "sha256": "77a297d6409b3c82f9ece4aab0b4138085141c536ef90e63917bdd9e1cd524a6"
+    },
+    {
+      "path": "histra/springs/coulomb03_state.py",
+      "sha256": "13f3949f67c27a78c77237a2eb5f63a7e63ebcaca4386f0681c163eafcffbe14"
+    },
+    {
+      "path": "histra/springs/elastic.py",
+      "sha256": "e027caabb78016927f9953d4848cbd5c6291acafc9e5ea1c56e6b47d2318fcf2"
+    },
+    {
+      "path": "histra/springs/energy.py",
+      "sha256": "74bdec410a8fb1ed972817449b063deeec6228a2660170b9c6079257eb1db432"
+    },
+    {
+      "path": "histra/springs/hysteretic.py",
+      "sha256": "bbd408562e89cb88edd2fedf53b1195c77c6e0d2d5623372cedd92eb13de6b11"
+    },
+    {
+      "path": "histra/springs/multilinear.py",
+      "sha256": "1ff0a928c594b3ed0e06ef006b2d19f0becacf89f97c6fe5c3bcbf1030041fa8"
+    },
+    {
+      "path": "histra/springs/registry.py",
+      "sha256": "64e55d760e9a2ed58a89e8404d4dd015fc05d121719457b5c1981cf3ee525e18"
+    },
+    {
+      "path": "histra/springs/transverse_fiber_group.py",
+      "sha256": "492ff88ce068537bcb743e24b864786acdd2ec91ac15a93e38819865d0489100"
+    },
+    {
+      "path": "histra/tools/__init__.py",
+      "sha256": "e86f6bf6b05c35ec2ada71588d9510b8f7c781b0209b422272211e3a92bbab34"
+    },
+    {
+      "path": "histra/tools/article_models_benchmark.py",
+      "sha256": "26892103a97f9e7d4ad7f4c5e3680b34aca6a3be873fd2de74f9d89422bb8ec7"
+    },
+    {
+      "path": "histra/tools/benchmark_csharp_sqlite.py",
+      "sha256": "4aa46ac02cbf0e676953553d4d5b45ba1900d92758de39bc5486df1cc2897639"
+    },
+    {
+      "path": "histra/tools/benchmark_preprocessing.py",
+      "sha256": "57d6e1142706ec06104d181666efe88b55b0cf9c9fb77ecc3e0b234141040667"
+    },
+    {
+      "path": "histra/tools/compare_csharp_results.py",
+      "sha256": "ee58c93cf268d2ddc841ede59953ec92a8dcc7f5c5518ffbd5a73081f78b8b7a"
+    },
+    {
+      "path": "histra/tools/interface_chain_benchmark.py",
+      "sha256": "18361d0679e98f6a8cff8f02b0ad92e37e90d1640aec9dd526172cb361acd8d6"
+    },
+    {
+      "path": "histra/tools/linear_solver_benchmark.py",
+      "sha256": "7599f2a6794f922107dd2fb1dfb4e8d2b33da2c1b42e3e2bda6384da2dffac1f"
+    },
+    {
+      "path": "histra/tools/release_manifest.py",
+      "sha256": "f028a278f8a0cbce9ace1d1472b8a282cf094c5d22dca1c44b1ff1dcc8eaed7d"
+    },
+    {
+      "path": "histra/tools/run_benchmark_full_comparison.py",
+      "sha256": "c3b9af5fe62597024c6b17e8b1d82b14145481ca08740e2b61c126b1e4a09a57"
+    },
+    {
+      "path": "histra/tools/run_five_scour_comparison.py",
+      "sha256": "87b717b7b1526f7b67b592cb1dbe00b7dd2ef79d9d479b756cb1fb5c9d9efc78"
+    },
+    {
+      "path": "histra/tools/run_modal.py",
+      "sha256": "93b170fa1b89f4d533e19ebb1b81e23678933a25be8753d3e34432d74e1c8e7c"
+    },
+    {
+      "path": "histra/tools/run_six_soil_vert_comparison.py",
+      "sha256": "2a6efc396c3ca3ed392707504184920104d3121e46a8ce2589278b5353c5f7c4"
+    },
+    {
+      "path": "histra/tools/run_vert_live.py",
+      "sha256": "6dccf93678411d6425ef5100fdb244d9d8dbead7819f7d128fb3544650038a3a"
+    },
+    {
+      "path": "histra/tools/strategy_benchmark.py",
+      "sha256": "44e32856d476107d2d90babbe0951ca49cca0e980996357d551ca7ede21148bd"
+    },
+    {
+      "path": "histra/tools/validate_modal_results.py",
+      "sha256": "8dd4bc4af9bb97837ae77f093596d8d0badb1ea5d6e8231c4dab1d5d34e9486f"
+    },
+    {
+      "path": "histra/types/__init__.py",
+      "sha256": "555778651bd9ebf1cced9c0cdbd953f24f082e40d0989d174ce1499bf6032bcf"
+    },
+    {
+      "path": "histra/types/afference_entry.py",
+      "sha256": "088775aaeab434a470f4e69d736290e4ccac049fc0bb84249db02632ae3d9983"
+    },
+    {
+      "path": "histra/types/cholmod.py",
+      "sha256": "8c1e9d5a8f70455e055017071456a2c2abaf36334069345ec9a29cd5d316e5b3"
+    },
+    {
+      "path": "histra/types/convergence_test.py",
+      "sha256": "43e10dbd209aa6167d76067b696d960a44d8ed065b4cf08c4dcb90daf487f540"
+    },
+    {
+      "path": "histra/types/hysteretic_curve_types.py",
+      "sha256": "4200307e0dd1b2267ab51df3952af0b332c66211eeb36dd1516cb3b43a791b95"
+    },
+    {
+      "path": "histra/types/integrator_state.py",
+      "sha256": "3518c7b9b87e57572c59c9a8f63de27fd2dd2b0b922586009a82319936df0da9"
+    },
+    {
+      "path": "histra/types/linear_system.py",
+      "sha256": "6d56dce5c1713bb33eb70b45e449b02cee53e659ee136e5f67f54465ef86fa91"
+    },
+    {
+      "path": "histra/types/pcg.py",
+      "sha256": "45b5c6da54daab765be1eb42b494cbdb096e30765f90ec1991011fbe0d676373"
+    },
+    {
+      "path": "histra/types/phase_enum.py",
+      "sha256": "1a77c19f930e57e72c9d9167d002f140daaf7d4efa94bad65030ef88d6e507bd"
+    },
+    {
+      "path": "histra/types/point.py",
+      "sha256": "9c37ef7fe3e395d69c8f4724e10e874b0103b43522326532adc519f7348f0fd3"
+    },
+    {
+      "path": "histra/types/umfpack.py",
+      "sha256": "3d2fd9c1247c2f86febade5703e3510119125a2a4b1fa37a68cc9c634d618a4c"
+    },
+    {
+      "path": "histra/types/vector_norm.py",
+      "sha256": "d4425b9db515b1ed68152331cffc7c291b972012676cedb626feb486f77a9978"
+    },
+    {
+      "path": "histra/types/xml_utils.py",
+      "sha256": "2f355e607fa50dad7253b9f65558f5426aa5288f7e993014a4e8e8a34e932833"
+    },
+    {
+      "path": "histra/validation/__init__.py",
+      "sha256": "ba36d0e13e3db997bb561ddf473eece066e0bfe58edd545749455bfc744246ba"
+    },
+    {
+      "path": "histra/validation/modal_results.py",
+      "sha256": "322100880b3b653edeb798c91589d07f1a443600f645fb4282eff83da7d74dc1"
+    }
+  ],
+  "wheel_smokes": {
+    "windows": {
+      "version": "1.6.0",
+      "module": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\release-1.6.0\\wheel-smoke\\Lib\\site-packages\\histra\\__init__.py",
+      "python": "3.12.7 (tags/v3.12.7:0b05ead, Oct  1 2024, 03:06:41) [MSC v.1941 64 bit (AMD64)]",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "dependencies": {
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "numba": "0.67.0",
+        "llvmlite": "0.49.0"
+      },
+      "model": "C:\\Users\\mbonatte\\Documents\\Histra\\histra-python\\histra\\model-live\\model.hrx",
+      "model_sha256": "15102d63808b31de4b3fedc9b4e54d50bbd01784c0c77e81814272e400bd8efd",
+      "method": "ModifiedNewtonRaphson",
+      "fresh_preparation": true,
+      "committed_steps": 5,
+      "initial_state_counted_as_committed": false,
+      "outcome": "completed",
+      "code": 0,
+      "unmanaged_interfaces": 0,
+      "unmanaged_quads": 0,
+      "elapsed_seconds": 55.36141550000002,
+      "equilibrium_policy": "warn",
+      "scope": "Installed wheel integration smoke, not C# output parity or strict equilibrium qualification"
+    },
+    "linux": {
+      "version": "1.6.0",
+      "module": "/home/mbonatte/.cache/histra-v1_6-wheel/lib/python3.12/site-packages/histra/__init__.py",
+      "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+      "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "dependencies": {
+        "numpy": "2.5.4",
+        "scipy": "1.18.1",
+        "numba": "0.67.0",
+        "llvmlite": "0.49.0"
+      },
+      "model": "/mnt/c/Users/mbonatte/Documents/Histra/histra-python/histra/model-live/model.hrx",
+      "model_sha256": "15102d63808b31de4b3fedc9b4e54d50bbd01784c0c77e81814272e400bd8efd",
+      "method": "ModifiedNewtonRaphson",
+      "fresh_preparation": true,
+      "committed_steps": 5,
+      "initial_state_counted_as_committed": false,
+      "outcome": "completed",
+      "code": 0,
+      "unmanaged_interfaces": 0,
+      "unmanaged_quads": 0,
+      "elapsed_seconds": 37.27353407999999,
+      "equilibrium_policy": "warn",
+      "scope": "Installed wheel integration smoke, not C# output parity or strict equilibrium qualification"
+    }
+  },
+  "twine_check": {
+    "wheel": "passed",
+    "sdist": "passed"
+  },
+  "distribution_directory": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\release-1.6.0-reviewed\\dist",
+  "installation_note": "Force-reinstalled the rebuilt wheel without dependencies into the previously clean, dependency-resolved isolated Windows/Linux smoke environments. Imports and full production module bytes are verified.",
+  "source_test_suites": {
+    "windows-native": {
+      "passed": 807,
+      "skipped": 14,
+      "subtests_passed": 1614,
+      "seconds": 53.2,
+      "source_commit": "17acaf9",
+      "raw_log": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\review-final-windows-suite.log",
+      "sha256": "cb5bcf14fe841099194980c180a2b64500289e105b41d10961e5052da7ebda3a"
+    },
+    "linux": {
+      "passed": 787,
+      "skipped": 34,
+      "subtests_passed": 1413,
+      "seconds": 120.37,
+      "source_commit": "17acaf9",
+      "raw_log": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\review-final-linux-suite.log",
+      "sha256": "6b4c97cf2fa832f4fe98f4009978864e56502c6e07eb1b16a711163187b1b29b"
+    }
+  },
+  "quality_checks": {
+    "ruff": "passed",
+    "mypy": "passed; configured 12 model/API source files"
+  },
+  "verification_scripts": {
+    "verify-artifact-bytes.py": "180e3d9e933c27dab82ffa8a06788c155e3a8cecc78ff13716be24a97e28d523",
+    "wheel-smoke-model.py": "46fcd57641c0ab92ef592633735a9780567c0b517720312998b220fbf38c1a2d",
+    "verify-installed-bytes.py": "a0ba5374e0b73595d45f3dce6707fceed16462e285a0535b3e71db086442ac2c"
+  },
+  "publication_status": "Prepared locally; no push, tag or publication performed",
+  "supersedes_artifact_source": "feb97f5; earlier artifacts preserved in release-1.6.0",
+  "open_qualifications": [
+    "Fresh 14-model Article regression: inputs on another computer, unavailable here.",
+    "Full native committed histories for four new masonry walls and their modes await user runs.",
+    "Complete modal parity remains a separate milestone."
+  ],
+  "installed_production_module_bytes": {
+    "windows": {
+      "matched_modules": 133,
+      "log_sha256": "097f242705aef38ffefd1e482b2520ed01f3f1f94bec726f416ae186d534aa76"
+    },
+    "linux": {
+      "matched_modules": 133,
+      "log_sha256": "097f242705aef38ffefd1e482b2520ed01f3f1f94bec726f416ae186d534aa76"
+    }
+  }
+}

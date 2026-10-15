@@ -55,3 +55,18 @@ norm-selector correction has direct routine coverage and leaves the selected
 Work convergence calculation unchanged. Faster library configurations are
 screened separately under the user's global-response tolerance allowance;
 these exact checks remain the baseline.
+
+## Small-model follow-up
+
+Review 6d8e491 correctly identifies that validation overhead can dominate small
+copies. On the 419,856-byte model-live state, an alternating microbenchmark
+measures validated reuse about 3.70 times slower than fresh copying. Newton now
+selects fresh copies below 1 MiB and retains fully validated reuse for larger
+snapshots. Public explicit reuse still validates every call. The large-model
+numerical path remains the one measured above; no new full Dhir run is claimed.
+
+Eight paired five-commit model-live runs with ModifiedNewtonRaphson retain every
+committed measured array/scalar exactly. Their median solve times are 0.10050 s
+(always reuse) and 0.08381 s (size selection), for this configuration only.
+[Follow-up evidence](../../release-evidence/performance/2026-10-15-small-snapshot-adaptive.json)
+retains all timing samples and scope.

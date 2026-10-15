@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T22:01:01.353497+00:00",
+  "source_commit": "17acaf9281b4b3772466914fef218683f5399f55",
+  "generator": "tools/benchmarks/build_masonry_reference_models.py; Invoke-FreshConstructionOracle.ps1; validate_masonry_reference_preflight.py",
+  "benchmark_id": "small-masonry-reference-input-kit",
+  "target_reference_version": "2026.1.1",
+  "directory": "C:\\Users\\mbonatte\\Documents\\Histra\\csharp-diagnostics-2026.1.1\\masonry-validation-ready",
+  "fresh_geometry": true,
+  "native_routines": [
+    "ConstitutiveLawOperations.ExtractInfoFromMaterials",
+    "ModelManager.PreliminaryOperations",
+    "InterfaceOperations.GenerateInterfaces",
+    "ComputeAff",
+    "ComputeK/AssembleK",
+    "GenerateLoadsForPushOverAnalysis/AssembleLoad"
+  ],
+  "native_target_entries_compared": 224,
+  "native_target_max_absolute_difference": 0.0,
+  "models": [
+    {
+      "case": "01_isotropic_reversal",
+      "path": "01_isotropic_reversal/01_isotropic_reversal.hrx",
+      "sha256": "dabb92641ed65c0468d2a0da85c1240dbd9f76079690e1e5bdbbfca3b34b2aa9",
+      "preflight": {
+        "1": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "2": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "Vert": {
+          "code": 0,
+          "commits": 10
+        },
+        "Reversal": {
+          "code": 0,
+          "commits": 32
+        }
+      }
+    },
+    {
+      "case": "02_orthotropic_reversal",
+      "path": "02_orthotropic_reversal/02_orthotropic_reversal.hrx",
+      "sha256": "461457c8a79ef4c86ed2297cad5318eee9457c043eceba40353986b970dc4f7c",
+      "preflight": {
+        "1": {
+          "K_max_abs_difference": 3.725290298461914e-09,
+          "load_max_abs_difference": 0.0
+        },
+        "2": {
+          "K_max_abs_difference": 3.725290298461914e-09,
+          "load_max_abs_difference": 0.0
+        },
+        "Vert": {
+          "code": 0,
+          "commits": 10
+        },
+        "Reversal": {
+          "code": 0,
+          "commits": 32
+        }
+      }
+    },
+    {
+      "case": "03_elastic_transverse_reversal",
+      "path": "03_elastic_transverse_reversal/03_elastic_transverse_reversal.hrx",
+      "sha256": "0a2afc6bde74646178ef89a621aba19b1a5fdb23c6dbb824431e1135cd9e50bb",
+      "preflight": {
+        "1": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "2": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "Vert": {
+          "code": 0,
+          "commits": 10
+        },
+        "Reversal": {
+          "code": 0,
+          "commits": 32
+        }
+      }
+    },
+    {
+      "case": "04_zero_friction_reversal",
+      "path": "04_zero_friction_reversal/04_zero_friction_reversal.hrx",
+      "sha256": "57f39a99e9a13c576368c5fe15fe45adc9351c8bb3d5cba3b0ca63a8b2fb8c8b",
+      "preflight": {
+        "1": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "2": {
+          "K_max_abs_difference": 1.4901161193847656e-08,
+          "load_max_abs_difference": 0.0
+        },
+        "Vert": {
+          "code": 0,
+          "commits": 10
+        },
+        "Reversal": {
+          "code": 0,
+          "commits": 32
+        }
+      }
+    }
+  ],
+  "python_baseline": "Original UMFPACK, strategy 3, AMD, refinement 2; all four Vert 10 / Reversal 32 chains complete. Independent warn policy is retained.",
+  "scope": "Native initial-construction/load preflight plus fresh Python solves. Full C# nonlinear and modal results still need generating; no output-history parity is claimed.",
+  "test_log_sha256": "19a513625adba66b55e8ea24de13d62dae4fb8ca608db485c047744ea7cd7736"
+}

@@ -1,7 +1,11 @@
 # Current feature status
 
 Published release: **v1.5.0** (2026-10-14). **v1.6.0 is being prepared locally**;
-see [its preparation record](release/v1.6.0-preparation.md).
+see [its preparation record](release/v1.6.0-preparation.md). The
+[critical review response](release/v1.6.0-critical-review-response.md) records
+accepted findings, source-backed disagreements and the remaining Article gate.
+Current reviewed artifacts and platform verification supersede the earlier
+preparation build; broader native wall/modal outputs still await reference runs.
 
 The released package has been rerun from fresh Dhir geometry through Vert,
 constant load and the final committed pushover step. Every available measured
