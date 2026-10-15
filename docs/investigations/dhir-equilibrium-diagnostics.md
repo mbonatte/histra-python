@@ -67,7 +67,8 @@ fail-closed handling of NaN maximum norms remains in place.
 The small previous NumPy/ordered L2 rounding difference was a few ULPs and
 cannot explain residuals of this size. The selected Work path does not call
 these norm helpers to decide convergence; its mechanical update is unchanged.
-The ongoing performance runs use source ed8a104, before the norm correction.
+The completed exact snapshot regression uses source ed8a104, before the norm
+correction. Faster-library global screens use the corrected norm helpers.
 
 [Compact evidence](../../release-evidence/equilibrium/2026-10-15-native-residual-investigation.json)
 records group values, source provenance and native routine decisions. The
