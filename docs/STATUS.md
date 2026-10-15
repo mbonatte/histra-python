@@ -1,16 +1,21 @@
 # Current feature status
 
-Release status: **v1.4.2** (2026-10-13).
+Release status: **v1.5.0** (2026-10-14).
 
-This maintenance release improves C# 2026.1.1 geometry, spring definitions,
-nonlinear contracts and modal inverse iteration. Fresh Dhir Vert comparisons
-cover 77,080 springs with zero spring-phase differences.
-The current Dhir reference passes every available numeric/history field at initial state and all 20 Vert plus 10 constant-load commits, including exactly matching reaction vectors at every step. See [the current chain benchmark](benchmarks/dhir-vert20-udl10-native-parity.md), [the earlier Vert audit](investigations/dhir-vert-native-parity.md) and [the changelog](../CHANGELOG.md).
+The released package has been rerun from fresh Dhir geometry through Vert,
+constant load and the final committed pushover step. Every available measured
+field matches C# 2026.1.1 exactly for this configuration, including all committed
+iteration counts. See [the full-chain benchmark](benchmarks/dhir-full-chain-native-parity-progress.md).
 
-Post-release source corrections on 2026-10-14 match native power/arctangent rounding, float32 spring-distance square roots and native line-load integration. The current same-session 20-step Vert followed by ten-step constant load closes full available history parity, including CmomMax; iteration counts also match. The original four-step reference exposes a native stale-U rollback defect, and reopening exposes a native history-restoration omission; those branches remain separately documented. A new pushover reference from the matched predecessor is now needed. See [the current benchmark](benchmarks/dhir-vert20-udl10-native-parity.md), [the reopening investigation](investigations/dhir-constant-load-ten-step-parity.md) and [the rollback investigation](investigations/dhir-constant-load-rollback.md).
+Post-release changes cover native elastic transverse spring construction and
+compiled cyclic updates, including material mutation. Modal mass assembly now
+preserves C# Single gravity and masonry weight. The existing Dhir reference
+validates all 20 virgin modes with small remaining arithmetic differences;
+see [the modal benchmark](benchmarks/dhir-modal-native-parity.md) and
+[the remaining masonry audit](benchmarks/masonry-source-audit-2026-10-14.md).
 
-The V1 Article/interface-chain evidence is historical qualification of its
-recorded source and environment, not a new v1.4.2 rerun of those models.
+Historical Article/interface-chain evidence qualifies its recorded source and
+environment; it is not a fresh v1.5.0 rerun of those models.
 
 ## Supported
 

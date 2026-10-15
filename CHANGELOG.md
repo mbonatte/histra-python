@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Confirm the published v1.5.0 wheel with a fresh complete Dhir mechanical solve and output comparison: every available measured field matches through all 88 commits; attempt 59 and all iteration counts also match.
+- Match native elastic transverse spring classes, mixed series construction and compiled cyclic updates, with preparation, rebuild and material-mutation coverage.
+- Preserve C# Single gravity and masonry weight during modal mass assembly. The existing 20-mode Dhir reference now agrees within 2.60e-14 relative frequency difference; small remaining arithmetic differences and unqualified branches are documented in the modal benchmark.
+
+
 ## 1.5.0 - 2026-10-14
 
 - Match the installed C# 2026.1.1 Dhir reference through all 20 Vert, 10 constant-load and 58 pushover commits. Every saved field for all 77,080 springs matches exactly at every commit; all 88 iteration counts match, and both solvers fail to converge at attempt 59 with code -2. Step zero is excluded from committed-step counts.

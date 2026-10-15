@@ -274,3 +274,6 @@ The mass implementation covers the model entities currently represented by the
 Python domain: Quads carry mass and Interfaces do not. Future Vertex, Solid,
 Frame or Fiber collections are rejected explicitly until their C# mass routines
 are ported. The code does not silently discard unsupported element masses.
+
+
+The recorded [Dhir 2026.1.1 modal comparison](../benchmarks/dhir-modal-native-parity.md) covers virgin default masonry and all 20 saved modes.

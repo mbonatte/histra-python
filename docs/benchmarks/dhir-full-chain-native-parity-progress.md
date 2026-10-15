@@ -18,4 +18,24 @@ The decisive controller corrections preserve the original quadratic arc-length c
 
 The full suite passes **757 tests and 1,418 subtests**, with 14 skips. [Compact evidence](../../release-evidence/dhir/2026-10-14-full-chain-progress.json) records provenance, hashes, scope and validation. Paired arrays remain in `dhir-installed-chain-native-load-endpoint/static/every-step` under the local audit directory.
 
-This establishes available-output parity for this model and configuration. Complete native pushover private histories and global displacement vectors are unavailable; native NULL per-spring energy fields are excluded. C# Work-criterion acceptance still fails Python's separate equilibrium audit, retained under the selected warn policy. Matching C# outputs does not qualify independent equilibrium. Remaining masonry branches are listed in the [source audit](masonry-source-audit-2026-10-14.md); modal reference validation remains deferred.
+This establishes available-output parity for this model and configuration. Complete native pushover private histories and global displacement vectors are unavailable; native NULL per-spring energy fields are excluded. C# Work-criterion acceptance still fails Python's separate equilibrium audit, retained under the selected warn policy. Matching C# outputs does not qualify independent equilibrium. Remaining masonry branches are listed in the [source audit](masonry-source-audit-2026-10-14.md); modal reference validation is recorded in the update below.
+
+
+## Fresh released-package confirmation, 2026-10-15
+
+The published v1.5.0 wheel at `7fa31ab` has now repeated the full mechanical solve
+and corrected output projection together. All available measured fields have
+zero absolute difference across all 91 states, including the three initial
+states. The 88 commits contain 6,783,040 spring records. All committed iteration
+counts match, and attempt 59 stops with code -2 in both solvers. Reference files
+are unchanged. This supersedes the output-replay-only limitation for the
+released package. Native UMFPACK controls remain strategy 3, refinement 2, AMD.
+
+[Released-package evidence](../../release-evidence/dhir/2026-10-15-v1.5.0-fresh-full-chain.json)
+records the full field list and provenance. Modal validation is now recorded
+separately in [the modal benchmark](dhir-modal-native-parity.md). Post-release
+elastic branch and modal precision changes pass the 2026-10-15 full suite:
+764 tests, 1,429 subtests and 14 skips. The static full-chain run qualifies the
+released wheel; the new elastic branch has native routine and compiled lifecycle
+tests, rather than a new structural benchmark. The independent equilibrium
+qualification and unavailable native measurements remain unchanged.

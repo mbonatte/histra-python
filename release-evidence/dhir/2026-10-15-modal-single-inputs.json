@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T08:13:02.286073+00:00",
+  "source_commit": "1a25ea580bf9e0c2925c15070054c4b0b15134f6",
+  "generator": "run_dhir_modal_single_inputs.py; original Invoke-QuadMassOracle.ps1",
+  "benchmark_id": "dhir-2026.1.1-modal-default-masonry",
+  "reference_version": "2026.1.1",
+  "hrx_sha256": "c06ea59373fdf26c2d4267dab90f2e48f2e6072da1f00c56a345614f3c053c5e",
+  "results_sha256": "65aae6351c1e072f14210df9c2e20c7a22302c796ffc3bd7c0b0d194c8f89e51",
+  "fresh_python_geometry": true,
+  "foundation_state": "Default generated masonry, before material 146 mutation",
+  "converged_modes": 20,
+  "dof_count": 16408,
+  "compared_shape_values": 328160,
+  "minimum_MAC": 0.9999999999999997,
+  "max_shape_abs_difference": 5.985852438716854e-12,
+  "fields": {
+    "Wn": {
+      "max_abs_difference": 2.1032064978498966e-12,
+      "max_relative_difference": 2.5988588742232735e-14
+    },
+    "Fn": {
+      "max_abs_difference": 3.3573144264664734e-13,
+      "max_relative_difference": 2.5922465131650314e-14
+    },
+    "Tn": {
+      "max_abs_difference": 2.9837243786801082e-15,
+      "max_relative_difference": 2.596667469180094e-14
+    },
+    "GammaX": {
+      "max_abs_difference": 3.02666919305139e-12,
+      "max_relative_difference": 7.584304654206966e-10
+    },
+    "GammaY": {
+      "max_abs_difference": 2.2008089795022556e-13,
+      "max_relative_difference": 3.078340755497662e-10
+    },
+    "GammaZ": {
+      "max_abs_difference": 5.924011281521757e-12,
+      "max_relative_difference": 2.3753407866525198e-07
+    },
+    "MassaX": {
+      "max_abs_difference": 2.6290081223123707e-12,
+      "max_relative_difference": 1.516860877315241e-09
+    },
+    "MassaY": {
+      "max_abs_difference": 7.780442956573097e-13,
+      "max_relative_difference": 6.156682900097867e-10
+    },
+    "MassaZ": {
+      "max_abs_difference": 1.8243184740640572e-12,
+      "max_relative_difference": 4.750682138423269e-07
+    },
+    "MTotX": {
+      "max_abs_difference": 7.105427357601002e-15,
+      "max_relative_difference": 2.0150856014453044e-16
+    },
+    "MTotY": {
+      "max_abs_difference": 7.105427357601002e-15,
+      "max_relative_difference": 2.0150856014453044e-16
+    },
+    "MTotZ": {
+      "max_abs_difference": 7.105427357601002e-15,
+      "max_relative_difference": 2.0150856014453044e-16
+    },
+    "Mx_pcent": {
+      "max_abs_difference": 7.474909580196254e-12,
+      "max_relative_difference": 1.5168606849716103e-09
+    },
+    "My_pcent": {
+      "max_abs_difference": 2.2097879082139116e-12,
+      "max_relative_difference": 6.15668513935576e-10
+    },
+    "Mz_pcent": {
+      "max_abs_difference": 5.17985654369113e-12,
+      "max_relative_difference": 4.7506821410530553e-07
+    }
+  },
+  "release_1_5_0_max_frequency_relative_difference": 1.7349181720119595e-08,
+  "bit_exact": false,
+  "matrix_integration_qualification": "Native translational fixture and full-model modal outputs; exact rotational integration operation order is not qualified.",
+  "report_sha256": "f6f1dc574a341a2c844660bf4b90b2152aea980834f999b175ec933f42d58606",
+  "linear_controls": {
+    "backend": "umfpack",
+    "refinement": 2,
+    "strategy": 3,
+    "ordering": "AMD"
+  }
+}
