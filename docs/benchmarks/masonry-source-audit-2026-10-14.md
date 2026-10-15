@@ -23,7 +23,7 @@ The 2026-10-14 full suite passes **757 tests and 1,418 subtests**, with 14 skips
 - Zero-friction Coulomb masonry now selects the native Hysteretic diagonal, including asymmetric strengths and ultimate-strain/fracture-energy construction. Eight original-assembly cases cover rectangular/tapered geometry, ordinary/weak compression, 112 cyclic commits and rejected-trial reverts. Definitions and phases are exact; cyclic force/tangent/energy comparisons use rtol=1e-12 and atol=1e-12. Compiled coverage includes fresh preparation, a solver step, snapshots, reset, disabled springs, material changes and history-preserving rebuilds. A matching full C# structural-chain run for this branch remains separate validation.
 - Purely elastic transverse flexural laws now select `SpringLinearElastic`, including mixed elastic/hysteretic series construction. Five original-assembly factory cases cover nine cyclic commits each, scalar and compiled forces/tangents, exact phase and definition metadata. Production tests cover preparation, rebuilds and nonlinear-to-elastic material mutation with zero unmanaged elements. The compiled elastic update preserves the native incremental force calculation without hysteretic unloading phases. Broader structural validation of this branch remains separate from Dhir qualification.
 - Line-restraint flexural and sliding selection now uses the restraint axis, with the two Single normalizations in the original constructor and ReferenceSystem.Set. Twelve original-assembly cases cover distinct/oblique axes, nonlinear and mixed elastic laws; checked axes, law fields and curve selections match exactly. Scalar and batched transverse preparation share this rule. Native constructor tests also correct the vertical SlidingPlasticStiffnessRatioVer attribute and sliding U_r=1e20 / IsDuctilityFixed=false. A fresh Dhir construction check after these changes still matches all 77,080 tested spring definitions following the material-146 foundation reset.
-- Polygon and node overloads of `Interface.SetSpring` differ. Node-overload coverage must not be applied to the polygon branch without checking its construction path.
+- Polygon and node overloads of `Interface.SetSpring` differ. Source tracing confirms that the supported Quad-Quad builders accept only four-vertex contacts and do not enter the polygon constructor. Polygon construction for other element families remains outside the supported Quad/line-Restraint domain; see the contact audit below.
 - `NR=False` now has direct original-assembly routine coverage (see below). The Dhir Newton workflow does not independently exercise this branch.
 - Complete native pushover private spring histories and global displacement vectors are not saved at every step. Missing and NULL measurements remain unavailable, not inferred matches.
 
@@ -42,8 +42,8 @@ in Python.
 [Compact branch evidence](../../release-evidence/dhir/2026-10-15-masonry-branches.json)
 records fixture hashes, coverage and limitations. These checks do not repeat the
 complete Dhir nonlinear chain and do not replace a full native structural-chain
-reference for the new zero-friction branch. Polygon-interface overloads,
-NR=False normal-force evaluation and omitted material-property defaults still
+reference for the new zero-friction branch. Subsequent NR=False and polygon
+call-path checks are recorded below. Omitted material-property defaults still
 need separate native coverage.
 
 ## Linear normal-force branch, 2026-10-15
@@ -68,3 +68,31 @@ invalid local stiffness dimensions. Existing Newton evaluation is unchanged.
 The full suite passes 773 tests and 1,479 subtests, with 14 skips. These routine
 fixtures qualify this calculation branch; they do not establish end-to-end
 linear-analysis parity or extend the prior full-chain Dhir qualification.
+
+## Polygon call-path audit, 2026-10-15
+
+Checking the overloaded spring factory alone suggested an additional masonry
+construction branch. Following its callers narrows the scope: original
+`InterfaceOperations.GIQuadQuadParallel` (line 648), `GIQuadQuadSerial`
+(line 808), and `GIQuadQuadIteration` (line 968) require a positive intersection
+and exactly four output vertices before building an interface. They use the
+node-based builder. The separate builder at line 1983 dispatches lists longer
+than four vertices to `BuildInterfacePoligonal`; that does not make arbitrary
+polygon contacts part of the supported Quad-Quad path. Its triangulated spring
+factory must not be substituted for the original Quad-Quad admission rule.
+
+`Invoke-QuadContactIntersectionOracle.ps1` invokes the original
+`UtilityLibrary.Matematics.Operations.FindIntersectionBetweenQuadrilaters`
+with the recorded node tolerance. Four fixtures cover partial rectangles,
+containing and crossing diamonds, and corner overlap. Python matches the native
+admitted/rejected outcome in all four cases and the exact vertex sets for both
+admitted contacts. Native intersection itself returns an empty list for the
+crossing-diamond and corner-overlap fixtures, despite geometric overlap. These
+are observed original routine outcomes, not evidence of general-purpose polygon
+clipping correctness. No new geometry rule is introduced into Python.
+
+These selected fixtures and caller inspection do not qualify every skew contact,
+Triangle.NET polygon triangulation, or unsupported Solid/Vertex element paths.
+
+After both additions, the full suite passes 774 tests and 1,483 subtests,
+with 14 skips. No full nonlinear chain was rerun in this branch audit.

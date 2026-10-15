@@ -646,6 +646,8 @@ def _coplanar_quad_intersection_prechecked(
         (float(second[3, k0]), float(second[3, k1])),
     ]
     clipped = _clip_convex_quad_2d(subject, clipper)
+    # GIQuadQuadSerial, GIQuadQuadParallel and GIQuadQuadIteration in C#
+    # admit only four-vertex contacts; do not route these to the polygon Set.
     if len(clipped) != 4:
         return None
 
