@@ -116,3 +116,38 @@ def test_model_manager_assemble_k_symbolic_reuse() -> None:
     assert ls.factorization_count == 2
     assert ls._factorization is orig_fac
     assert orig_fac._symbolic.value == orig_sym_ptr
+
+
+def test_failed_numeric_refactor_is_not_repeated_with_fresh_symbolic(monkeypatch):
+    import pytest
+    import histra.types.linear_system as module
+    from histra.types.linear_system import LinearSolveError
+
+    if find_umfpack_library() is None:
+        pytest.skip("Native UMFPACK is not available")
+
+    class CountingFactorization(UmfpackFactorization):
+        constructions = 0
+
+        def __init__(self, *args, **kwargs):
+            type(self).constructions += 1
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(module, "UmfpackFactorization", CountingFactorization)
+    system = LinearSystem(2, backend="umfpack", precision="accurate", ordering="amd")
+    good = sp.csc_matrix([[2., 1.], [1., 2.]])
+    system.k = good.copy()
+    system.b[:] = [3., 5.]
+    system.solve()
+    expected = system.x.copy()
+    # No zero columns: this exercises the native numerical singularity path.
+    system.k = sp.csc_matrix([[1., 1.], [1., 1.]])
+    with pytest.raises(LinearSolveError):
+        system.solve()
+    assert CountingFactorization.constructions == 1
+    assert system._factorization is None
+    # A changed matrix can still recover after the failed attempt.
+    system.k = good.copy()
+    system.solve()
+    np.testing.assert_array_equal(system.x, expected)
+    assert CountingFactorization.constructions == 2

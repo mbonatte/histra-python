@@ -281,10 +281,11 @@ class LinearSystem:
                     (self.backend == "umfpack" or self._factor_backend == "umfpack")
                     and isinstance(self._factorization, UmfpackFactorization)
                 ):
-                    try:
-                        refactored = self._factorization.refactor_numeric(matrix)
-                    except Exception:
-                        refactored = False
+                    # A numeric failure on the same verified pattern must
+                    # reach StaticIntegrator's native alfa=0 fallback. Repeating
+                    # the same failed matrix with a new symbolic factorization
+                    # does not occur in the original AssembleKtang sequence.
+                    refactored = self._factorization.refactor_numeric(matrix)
                 if not refactored:
                     if self.backend == "pcg":
                         self._invalidate_factorization()

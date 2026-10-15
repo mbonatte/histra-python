@@ -209,3 +209,17 @@ a spy confirms only the recovered system is solved. An unrecoverable initial
 matrix remains an explicit error. The fresh horizontal validation has exercised
 this shortcut on global zero-based column 4874 and retains exact committed output
 matches in the prefix checked so far. Full-chain qualification is separate.
+
+## Singular numeric refactor sequence, 2026-10-15
+
+The UMFPACK wrapper previously caught a failed numeric refactor and retried the
+same matrix with a new symbolic factorization. Original AssembleKtang reports
+the numerical failure directly to StaticIntegrator.UpdateK. Python now propagates
+that failure to the existing initial-stiffness fallback without the duplicate
+factorization. A changed sparsity pattern still rebuilds its symbolic object.
+
+A native UMFPACK regression uses a singular matrix with no zero columns, counts
+factorization constructors, and verifies exact recovery on a subsequent valid
+matrix. The full suite passes 785 tests and 1,585 subtests, with 14 skips. The
+ongoing horizontal workers predate this wrapper change; their full-chain source
+boundaries must be recorded separately.
