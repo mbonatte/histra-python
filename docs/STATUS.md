@@ -5,7 +5,10 @@ see [its preparation record](release/v1.6.0-preparation.md). The
 [critical review response](release/v1.6.0-critical-review-response.md) records
 accepted findings, source-backed disagreements and the remaining Article gate.
 Current reviewed artifacts and platform verification supersede the earlier
-preparation build; broader native wall/modal outputs still await reference runs.
+preparation build. The broader native wall references have arrived and exposed
+a modal line-load mass correction; see [the wall comparison](benchmarks/masonry-wall-native-parity-2026-10-15.md).
+That correction postdates the reviewed packages. Static spring-history
+differences on two walls remain under investigation.
 
 The released package has been rerun from fresh Dhir geometry through Vert,
 constant load and the final committed pushover step. Every available measured

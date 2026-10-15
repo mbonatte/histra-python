@@ -58,6 +58,13 @@ these input conversions. Direct native-routine coverage isolates the
 translational mass block; exact rotational integration arithmetic remains an
 audit item.
 
+For HiStrA modal execution, the original load generator uses `(1, 1, 1)`
+as the direction of direct line loads, irrespective of their static direction
+or the saved analysis direction. It then multiplies each component by the
+load condition's `MassInDirX/Y/Z` factors using Single arithmetic. Python
+applies these factors before integration and regenerates the modal loads
+rather than inheriting the static predecessor's applied loads.
+
 A compatibility-sensitive source behavior is preserved: the HRX
 `MassMatrixType` and the method's `diagonal` argument are passed through the C#
 call chain, but the active Quad routine never uses them. Consequently, an HRX

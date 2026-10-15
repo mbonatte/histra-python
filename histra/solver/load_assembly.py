@@ -249,15 +249,28 @@ def generate_line_loads(model: Model, analysis_key: int, combination: int = 1) -
                     model, analysis_key, combination, item.load_condition_id, item
                 )
             )
+            modal = int(analysis.analysis_type) == 5
+            # HiStrA's GenerateLoadsForceAnalysis overrides modal directions
+            # to (1, 1, 1), irrespective of the saved IsSeismic/Dir fields.
             direction = np.asarray(
-                (analysis.dir_x, analysis.dir_y, analysis.dir_z)
-                if bool(analysis.is_seismic)
-                else item.direction_for(quad),
+                (1.0, 1.0, 1.0) if modal else (
+                    (analysis.dir_x, analysis.dir_y, analysis.dir_z)
+                    if bool(analysis.is_seismic) else item.direction_for(quad)
+                ),
                 dtype=np.float32,
             )
             value = np.float32(item.load_value)
             scaled_value = np.float32(coefficient * value)
-            endpoint += np.multiply(scaled_value, direction, dtype=np.float32)
+            force = np.multiply(scaled_value, direction, dtype=np.float32)
+            if modal:
+                condition = model.collections.load_conditions[item.load_condition_id]
+                # Original LoadTemplateManager.ComputeMassNodalForce applies
+                # each Single mass participation factor before summation.
+                force *= np.asarray(
+                    (condition.mass_in_dir_x, condition.mass_in_dir_y,
+                     condition.mass_in_dir_z), dtype=np.float32,
+                )
+            endpoint += force
 
         if not np.any(endpoint):
             continue
