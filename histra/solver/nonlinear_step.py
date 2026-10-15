@@ -35,10 +35,9 @@ from histra.solver.equilibrium_audit import run_equilibrium_audit
 from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager
 from histra.solver.program import Program
-from histra.solver.incremental_integrator import effective_tangent_alpha
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
-from histra.solver.incremental_integrator import StaticIntegrator, effective_tangent_alpha
+from histra.solver.incremental_integrator import StaticIntegrator
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
@@ -125,7 +124,6 @@ def _execute_steps(
                 result = algorithm.solve_current_step(
                     p, ls, model, analysis, combination, step, alfa
                 )
-                alfa = effective_tangent_alpha(p, alfa)
                 p.check_cancelled()
             except LinearSolveError as exc:
                 p.log(f"Linear solve failed at step {step}: {exc}")
@@ -149,7 +147,6 @@ def _execute_steps(
                 result = algorithm.solve_current_step(
                     p, ls, model, analysis, combination, step, alfa
                 )
-                alfa = effective_tangent_alpha(p, alfa)
                 p.check_cancelled()
             max_cutbacks = max(
                 0, int(getattr(analysis, "arc_length_max_cutbacks", 0))

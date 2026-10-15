@@ -196,7 +196,8 @@ class StaticIntegrator(IncrementalIntegrator):
 
     def update_k(self, p: Any, model: Any, alfa: float, compute_c: bool = False) -> int:
         del compute_c
-        alfa = effective_tangent_alpha(p, alfa)
+        alfa = float(alfa)
+        p.static_tangent_alpha = alfa
         try:
             ModelManager.compute_ktang(model, p.ls, alfa)
             # Original AssembleKtang factorizes and solves the current RHS.

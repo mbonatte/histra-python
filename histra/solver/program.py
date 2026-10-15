@@ -24,8 +24,8 @@ class Program:
     on_progress: Any | None = None
     should_cancel: CancelCheck | None = None
     diagnostics: Any | None = None
-    # C# StaticNonLinearAnalysis passes alfa by reference. It survives state
-    # rollback and remains zero after StaticIntegrator.UpdateK falls back.
+    # Newton receives alfa by value; its UpdateK fallback survives trial
+    # rollback within that call and is reset by the next Newton invocation.
     static_tangent_alpha: float | None = None
 
     def log(self, msg: str) -> None:

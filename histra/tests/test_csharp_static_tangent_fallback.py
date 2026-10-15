@@ -54,12 +54,64 @@ class NativeStaticTangentFallbackTests(unittest.TestCase):
                 if case['alpha'] == 0.:
                     self.assertEqual(program.static_tangent_alpha,0.)
                     snapshot.restore()
-                    # C# alfa is an analysis-local ref parameter, outside
+                    # C# alfa is a Newton-call-local ref parameter, outside
                     # element/integrator trial state and rollback checkpoints.
                     self.assertEqual(program.static_tangent_alpha,0.)
                     quad.spring.k_tang = 6.
-                    integrator.update_k(program,model,1.)
+                    integrator.update_k(program,model,case['next_alpha'])
                     np.testing.assert_array_equal(ls.k.toarray().ravel(),doubles(case['next_matrix_bits']))
                     np.testing.assert_allclose(ls.x,doubles(case['next_x_bits']),rtol=1e-15,atol=0.)
+                    # A later solveCurrentStep receives a fresh by-value alfa.
+                    integrator.update_k(program,model,1.)
+                    self.assertEqual(program.static_tangent_alpha,case['new_call_alpha'])
+                    np.testing.assert_array_equal(ls.k.toarray().ravel(),doubles(case['new_call_matrix_bits']))
+                    np.testing.assert_allclose(ls.x,doubles(case['new_call_x_bits']),rtol=1e-15,atol=0.)
                 else:
-                    self.assertIsNone(program.static_tangent_alpha)
+                    self.assertEqual(program.static_tangent_alpha,case['alpha'])
+
+    def test_step_controller_does_not_inherit_newton_local_fallback(self):
+        from histra.model.load import Analysis, LoadFunction, LoadFunctionItem, LoadCombination, LoadCombinationItem, LoadCondition
+        from histra.solver.load_control import LoadControl
+        from histra.solver.model_manager import ModelManager
+        from histra.solver.nonlinear_step import _execute_steps
+        from histra.types.convergence_test import ConvergenceTest
+        from histra.types.point import Point
+
+        collections=Collections()
+        analysis=Analysis(key=1,method='StandardNewtonRaphson',master_point=-10,load_combination_key=1)
+        collections.load_combinations={1:LoadCombination(key=1,items=[LoadCombinationItem(row_key=1,column_key=1,val=0.)])}
+        collections.load_conditions={1:LoadCondition(id=1,action=1)}
+        analysis.load_function=LoadFunction(key=1,discr_val=.5,items=[
+            LoadFunctionItem(pseudo_time=0.,multiplier=0.),
+            LoadFunctionItem(pseudo_time=1.,multiplier=1.)])
+        collections.analyses={1:analysis}
+        model=Model(gdl=1,collections=collections)
+        ls=LinearSystem(1,backend='superlu')
+        program=Program(gdl=1,ls=ls,u=np.zeros(1),v=np.zeros(1))
+        for name in ('_ptarget','_fext','_pq','_pq_prev'):
+            setattr(ModelManager,name,np.zeros(1))
+        ModelManager._u_total=program.u
+        integrator=LoadControl()
+        integrator.state.analysis=analysis
+        integrator.u=program.u;integrator.v=program.v;integrator.u_committed=program.u.copy()
+        integrator.domain_changed(program,model,1)
+        received=[]
+        class ConvergedWithLocalFallback:
+            the_test=ConvergenceTest()
+            the_line_search=None
+            def solve_current_step(self,p,ls,model,an,combination,step,alfa):
+                received.append(alfa)
+                p.static_tangent_alpha=0.
+                return 0
+        algorithm=ConvergedWithLocalFallback()
+        code,rows,*_= _execute_steps(model,analysis,1,p=program,ls=ls,n=1,
+            integrator=integrator,algorithm=algorithm,alfa=1.,dof=0,
+            diagnostic_writer=None,initial_reaction=Point(),
+            equilibrium_reference_load_factor=0.,equilibrium_target_force=np.zeros(3),
+            reference=[0.,0.],reference_displacement=0.,equilibrium_policy='warn',
+            equilibrium_force_absolute_tolerance=1e-6,equilibrium_force_relative_tolerance=1e-6,
+            equilibrium_residual_tolerance=1e-6,on_step_committed=None,
+            should_stop_after_commit=None,max_committed_steps=2)
+        self.assertEqual(code,0)
+        self.assertEqual(received,[1.,1.])
+        self.assertEqual([r['load_factor'] for r in rows],[.5,1.])

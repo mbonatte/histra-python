@@ -129,21 +129,28 @@ The horizontal Dhir model exposed the missing
 `StaticIntegrator.UpdateK` / `ModelManager.AssembleKtang` behavior. The original
 static integrator assembles, factorizes and solves with the requested tangent;
 if it fails and alfa is nonzero, it repeats with alfa=0. C# passes alfa by
-reference from StaticNonLinearAnalysis, retaining zero across later Newton
-iterations and steps. This controller value is outside trial-state rollback.
+reference within solveCurrentStep, retaining zero across later iterations of
+that call. solveCurrentStep itself receives alfa by value: the next step gets
+the outer procedure's argument again. This controller value is outside trial
+state rollback. The horizontal step-2 comparison caught and corrected an
+initial Python implementation that retained the fallback across steps.
 
 `Invoke-StaticTangentFallbackOracle.ps1` invokes that original routine on a
 real one-DOF Quad assembly. Cases cover a regular tangent, successful initial
 stiffness fallback and an unrecoverable zero-stiffness model. The successful
 fallback is called again after changing the current tangent to verify persistent
-alfa=0. Numeric inputs/outputs are stored as binary double patterns. Python
+alfa=0 when the same reference parameter is reused; a separate call with a
+fresh argument 1 uses the current tangent again. Numeric inputs/outputs are
+stored as binary double patterns. Python
 compares matrix assembly exactly; portable SuperLU displacement comparisons
 against the native UMFPACK solutions use rtol=1e-15 and zero absolute tolerance.
 
-Python implements the fallback on StaticIntegrator, retains its analysis-local
-parameter on Program across trial rollback, and uses the effective value in
-Newton, line-search and continuation decisions. Both failed stiffness choices
-still raise LinearSolveError. The full suite passes 779 tests and 1,563 subtests,
+Python implements the fallback on StaticIntegrator, retains its call-local
+parameter on Program across trial rollback within the current Newton call.
+Newton and line-search entry reset it from their by-value alfa argument. The
+outer continuation parameter is unchanged by an inner UpdateK fallback. Both failed stiffness choices
+still raise LinearSolveError. After the scope regression, the full suite passes
+783 tests and 1,579 subtests,
 with 14 skips. This correction alone does not qualify the horizontal model:
 Vert matches, but the subsequent horizontal step still reaches the configured
 element-displacement limit before committing. Investigation continues with the
@@ -179,3 +186,7 @@ committed-step comparison completes.
 The [post-branch full-chain rerun](dhir-full-chain-native-parity-progress.md)
 now qualifies source 8138ddd through every available output at all 88 commits.
 Its source boundary precedes the later defaults/fallback/direction corrections.
+
+A two-step controller regression also simulates a converged Newton call with
+local fallback and verifies that both steps receive the outer alfa=1 argument.
+This guards the by-value boundary independently of the horizontal benchmark.

@@ -80,6 +80,9 @@ class NewtonLineSearch(EquiSolnAlgo):
         alfa: float,
     ) -> int:
         del combination
+        # solveCurrentStep receives alfa by value; UpdateK changes only this
+        # call's local reference parameter, not the next step's argument.
+        p.static_tangent_alpha = float(alfa)
         assert self.the_integrator is not None
         assert self.the_test is not None
         if self.the_line_search is None:
