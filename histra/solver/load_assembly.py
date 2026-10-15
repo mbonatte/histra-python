@@ -311,11 +311,9 @@ def generate_self_weight_loads(
         if analysis.is_seismic
         else (0.0, 0.0, -1.0)
     )
-    dx, dy, dz = (
-        direction[0] * coefficient,
-        direction[1] * coefficient,
-        direction[2] * coefficient,
-    )
+    # ModelLoadOperations scales an XNA Vector3 by a Single coefficient.
+    # Round the components before multiplication as well as its result.
+    dx, dy, dz = np.asarray(direction, dtype=np.float32) * np.float32(coefficient)
 
     for quad in model.collections.quads.values():
         for index in range(7):

@@ -125,16 +125,47 @@ def test_native_control_python_reference_chain(tmp_path, monkeypatch, case):
     assert [factors[j] for j in (7, 15, 23, 31)] == [1.0, -1.0, 1.0, 0.0]
 
 
+def _precision_model_tree(mass_factors, fractional_direction):
+    tree = build_reference_model(DEFAULT_TEMPLATE, CASE_NAMES[0])
+    if fractional_direction:
+        for analysis in tree.getroot().findall("Analysis"):
+            analysis.set("IsSeismic", "true")
+            analysis.set("DirX", "0.123456789")
+            analysis.set("DirY", "0.234567891")
+            analysis.set("DirZ", "-0.345678912")
+        changed = 0
+        for item in tree.getroot().findall("LoadCombination/Item"):
+            if float(item.get("Val", "0")) != 0.0:
+                item.set("Val", "1.23456789")
+                changed += 1
+        assert changed > 0
+    for condition in tree.getroot().findall("LoadCondition"):
+        for axis, factor in zip("XYZ", mass_factors):
+            condition.set(f"MassInDir{axis}", str(factor))
+    return tree
+
+
+def test_fresh_load_vectors_match_native_precision_fixture(tmp_path):
+    fixture = Path(__file__).parent / "fixtures/csharp-fresh-load-precision-2026.1.1.json"
+    for index, case in enumerate(json.loads(fixture.read_text())["cases"]):
+        path = tmp_path / f"precision-{index}.hrx"
+        tree = _precision_model_tree(case["mass_factors"], case["fractional_direction"])
+        tree.write(path, encoding="utf-8", xml_declaration=True)
+        assert hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() == case["input_lf_sha256"]
+        model = load_model(path)
+        ModelManager.prepare_model(model, force=True)
+        for key, native in case["vectors"].items():
+            np.testing.assert_array_equal(assemble_load_vector(model, int(key)), native)
+
+
 @pytest.mark.parametrize("mass_factors", [(1.0, 1.0, 1.0), (0.25, 0.5, 0.0)])
-def test_original_oracle_initializes_unrun_analysis_load_state(tmp_path, mass_factors):
+@pytest.mark.parametrize("fractional_direction", [False, True])
+def test_original_oracle_initializes_unrun_analysis_load_state(tmp_path, mass_factors, fractional_direction):
     install = Path(r"C:\Program Files\Gruppo Sismica\HiStrA Bridges 2026.1.1")
     if sys.platform != "win32" or not (install / "SolverRuntime.dll").exists():
         pytest.skip("Installed original C# 2026.1.1 runtime required")
     model_path = tmp_path / "unrun.hrx"
-    tree = build_reference_model(DEFAULT_TEMPLATE, CASE_NAMES[0])
-    for condition in tree.getroot().findall("LoadCondition"):
-        for axis, factor in zip("XYZ", mass_factors):
-            condition.set(f"MassInDir{axis}", str(factor))
+    tree = _precision_model_tree(mass_factors, fractional_direction)
     tree.write(
         model_path,
         encoding="utf-8",
