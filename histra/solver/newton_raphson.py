@@ -6,6 +6,7 @@ from typing import Any
 
 from histra.model.model import Model
 from histra.solver.program import Program
+from histra.solver.incremental_integrator import effective_tangent_alpha
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.types.linear_system import LinearSolveError, LinearSystem
@@ -61,6 +62,7 @@ class NewtonRaphson(EquiSolnAlgo):
                 tangent_refresh_cadence = int(env_cadence)
 
         while result == -1:
+            alfa = effective_tangent_alpha(p, alfa)
             p.check_cancelled()
             iteration_snapshot = SolverStateSnapshot.capture(
                 model, p, ls, self.the_integrator, self.the_test, self.the_line_search

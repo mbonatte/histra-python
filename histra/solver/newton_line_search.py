@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover - optional acceleration
 
 from histra.model.model import Model
 from histra.solver.program import Program
+from histra.solver.incremental_integrator import effective_tangent_alpha
 from histra.solver.solution_algorithm import EquiSolnAlgo, _new_line_search
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
@@ -130,6 +131,7 @@ class NewtonLineSearch(EquiSolnAlgo):
         dot_fn = _csharp_dot if csharp_line_search_compatibility else np.dot
 
         while result == -1:
+            alfa = effective_tangent_alpha(p, alfa)
             p.check_cancelled()
             # Match the C# NewtonLineSearch sequence: line-search points are
             # reached incrementally from the current trial point and no full

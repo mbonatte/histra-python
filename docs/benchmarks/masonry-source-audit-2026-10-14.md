@@ -122,3 +122,29 @@ and later desktop material editing are separate behaviors.
 The XML-reader fixture also verifies that serialized `DuctilityShear` and the
 `ShearUltimateStrain` accessor share the same native backing value. Python
 resolves that alias before applying omitted-attribute defaults.
+
+## Singular tangent fallback, 2026-10-15
+
+The horizontal Dhir model exposed the missing
+`StaticIntegrator.UpdateK` / `ModelManager.AssembleKtang` behavior. The original
+static integrator assembles, factorizes and solves with the requested tangent;
+if it fails and alfa is nonzero, it repeats with alfa=0. C# passes alfa by
+reference from StaticNonLinearAnalysis, retaining zero across later Newton
+iterations and steps. This controller value is outside trial-state rollback.
+
+`Invoke-StaticTangentFallbackOracle.ps1` invokes that original routine on a
+real one-DOF Quad assembly. Cases cover a regular tangent, successful initial
+stiffness fallback and an unrecoverable zero-stiffness model. The successful
+fallback is called again after changing the current tangent to verify persistent
+alfa=0. Numeric inputs/outputs are stored as binary double patterns. Python
+compares matrix assembly exactly; portable SuperLU displacement comparisons
+against the native UMFPACK solutions use rtol=1e-15 and zero absolute tolerance.
+
+Python implements the fallback on StaticIntegrator, retains its analysis-local
+parameter on Program across trial rollback, and uses the effective value in
+Newton, line-search and continuation decisions. Both failed stiffness choices
+still raise LinearSolveError. The full suite passes 779 tests and 1,563 subtests,
+with 14 skips. This correction alone does not qualify the horizontal model:
+Vert matches, but the subsequent horizontal step still reaches the configured
+element-displacement limit before committing. Investigation continues with the
+original horizontal load-generation and constitutive-update routines.

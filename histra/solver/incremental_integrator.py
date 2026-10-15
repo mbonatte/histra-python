@@ -7,7 +7,12 @@ import numpy as np
 
 from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.types.integrator_state import IntegratorState
-from histra.types.linear_system import LinearSystem
+from histra.types.linear_system import LinearSystem, LinearSolveError
+
+
+def effective_tangent_alpha(p: Any, requested: float) -> float:
+    value = getattr(p, "static_tangent_alpha", None)
+    return float(requested if value is None else value)
 
 
 class IncrementalIntegrator(ABC):
@@ -188,6 +193,27 @@ class IncrementalIntegrator(ABC):
 
 class StaticIntegrator(IncrementalIntegrator):
     """Static-integrator base with load-domain accumulation and factory."""
+
+    def update_k(self, p: Any, model: Any, alfa: float, compute_c: bool = False) -> int:
+        del compute_c
+        alfa = effective_tangent_alpha(p, alfa)
+        try:
+            ModelManager.compute_ktang(model, p.ls, alfa)
+            # Original AssembleKtang factorizes and solves the current RHS.
+            p.ls.solve()
+        except LinearSolveError:
+            if alfa == 0.0:
+                p.index_fact_k = 1
+                raise
+            p.static_tangent_alpha = 0.0
+            ModelManager.compute_ktang(model, p.ls, 0.0)
+            try:
+                p.ls.solve()
+            except LinearSolveError:
+                p.index_fact_k = 1
+                raise
+        p.index_fact_k = 0
+        return 0
 
     def apply_load_domain(self, model: Any, incr_mult: float) -> None:
         del model
