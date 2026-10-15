@@ -62,7 +62,10 @@ forces on a physical vector scale when an individual component is near zero;
 the original resultants include Single arithmetic. The earlier componentwise
 screen and its failures remain in the experiment record. These are experiment
 limits, not blanket acceptance criteria for other models. An unchanged physical
-failure mode and the final stopping state still require examination.
+failure mode and the final stopping state still require examination. The
+[2026-10-15 library screen](../benchmarks/faster-linear-library-screen-2026-10-15.md)
+records a concrete counterexample: fast UMFPACK stops the horizontal model
+seven commits early despite extremely close response in the earlier steps.
 
 ## Deterministic event stream
 

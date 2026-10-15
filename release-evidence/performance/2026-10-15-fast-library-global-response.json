@@ -1,0 +1,632 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T17:42:23.657282+00:00",
+  "source_commit": "363675ca842e473a6306e77785a09e59fa4ee3b1",
+  "generator": "summarize_fast_globals.py",
+  "benchmark_id": "dhir-faster-linear-libraries-global-response",
+  "scope": "Global reaction, energy and model-point histories at all saved states. Global DOF vectors only where available. These screens do not qualify unmeasured private spring histories or independent strict equilibrium.",
+  "initial_displacement_envelope": {
+    "rtol": 1e-06,
+    "atol_native_units": 1e-08
+  },
+  "reaction_envelope": "L2(error) <= 1e-5 kN + 1e-8 * max(L2(reference reaction), 1 kN)",
+  "energy_envelope": {
+    "rtol": 1e-06,
+    "atol": 1e-06
+  },
+  "cases": {
+    "dhir-performance-superlu": {
+      "reference_version": "2026.1.1",
+      "reference_hrx": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-native-installed-full-chain-reference\\dhir_user_geometry_width4_tlm_20261008.hrx",
+      "reference_results": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-native-installed-full-chain-reference\\dhir_user_geometry_width4_tlm_20261008.Results",
+      "hrx_sha256_before": "c06ea59373fdf26c2d4267dab90f2e48f2e6072da1f00c56a345614f3c053c5e",
+      "results_sha256_before": "65aae6351c1e072f14210df9c2e20c7a22302c796ffc3bd7c0b0d194c8f89e51",
+      "source_files_unchanged": true,
+      "python_module": "C:\\Users\\mbonatte\\Documents\\Histra\\histra-python\\histra\\__init__.py",
+      "linear_backend": "superlu",
+      "reference_umfpack_controls": {
+        "strategy": 3,
+        "irstep": 2,
+        "ordering": "amd"
+      },
+      "elapsed_seconds": 909.6553437999999,
+      "source_provenance_note": "Horizontal observation workers launched at 0fa35bf, whose production modules are byte-identical to release source feb97f5. Older Dhir candidate harnesses did not embed a launch commit; their exact launch commit is not certified by this summary. Raw reports and observed output remain preserved.",
+      "raw_comparison_report": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-performance-superlu\\static\\comparison.json",
+      "raw_comparison_report_sha256": "e4ce55961ce627ee071f64cac33802ca065469ea28fb752445140f9f41d00f2a",
+      "raw_harness_error": null,
+      "timing_caveat": "Diagnostic runtime includes output/audit overhead and concurrent workers; not a fair backend speed comparison.",
+      "analyses": {
+        "Vert": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "committed_steps": 20,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 176
+        },
+        "TLM_Constant_UDL": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "committed_steps": 10,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 31
+        },
+        "Pushover_5Axle_P1": {
+          "outcome": "nonconverged",
+          "code": -2,
+          "message": "Analysis did not converge.",
+          "committed_steps": 58,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 1463
+        }
+      },
+      "compared_states_including_initial": 91,
+      "nonfinite_values": 0,
+      "reaction": {
+        "max_L2_difference_kN": 0.0,
+        "max_relative_L2_difference": 0.0,
+        "outside_original_vector_envelope": 0
+      },
+      "model_point_displacement": {
+        "max_absolute_difference": 0.0,
+        "max_structure_scaled_difference": 0.0,
+        "outside_initial_component_envelope": 0
+      },
+      "energy_entries_outside_original_envelope": 0,
+      "maxima_by_measured_field": {
+        "ReactionSumStates.R1": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.R2": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.R3": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Et": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Eel": {
+          "maximum_absolute_difference": 2.000888343900442e-10,
+          "state": "analysis-4-step-0054"
+        },
+        "ReactionSumStates.Ed": {
+          "maximum_absolute_difference": 7.239577826112509e-10,
+          "state": "analysis-4-step-0039"
+        },
+        "ReactionSumStates.Ei": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Evd": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ux": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Uy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Uz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vx": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ax": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ay": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Az": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DynamicVectorsState.U": {
+          "maximum_absolute_difference": 2.886579864025407e-15,
+          "state": "analysis-7-step-0010"
+        },
+        "DynamicVectorsState.V": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0020"
+        }
+      },
+      "qualification": "Complete measured global histories recorded; initial displacement-envelope exceedances remain explicit. No blanket or bit-exact fast-profile certification.",
+      "same_committed_step_history": true,
+      "qualified_across_complete_references": false
+    },
+    "dhir-performance-metis-fast": {
+      "reference_version": "2026.1.1",
+      "reference_hrx": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-native-installed-full-chain-reference\\dhir_user_geometry_width4_tlm_20261008.hrx",
+      "reference_results": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-native-installed-full-chain-reference\\dhir_user_geometry_width4_tlm_20261008.Results",
+      "hrx_sha256_before": "c06ea59373fdf26c2d4267dab90f2e48f2e6072da1f00c56a345614f3c053c5e",
+      "results_sha256_before": "65aae6351c1e072f14210df9c2e20c7a22302c796ffc3bd7c0b0d194c8f89e51",
+      "source_files_unchanged": true,
+      "python_module": "C:\\Users\\mbonatte\\Documents\\Histra\\histra-python\\histra\\__init__.py",
+      "linear_backend": "umfpack",
+      "umfpack_controls": {
+        "strategy": 3,
+        "irstep": 0,
+        "ordering": "metis"
+      },
+      "reference_umfpack_controls": {
+        "strategy": 3,
+        "irstep": 2,
+        "ordering": "amd"
+      },
+      "elapsed_seconds": 410.25845359999994,
+      "source_provenance_note": "Horizontal observation workers launched at 0fa35bf, whose production modules are byte-identical to release source feb97f5. Older Dhir candidate harnesses did not embed a launch commit; their exact launch commit is not certified by this summary. Raw reports and observed output remain preserved.",
+      "raw_comparison_report": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-performance-metis-fast\\static\\comparison.json",
+      "raw_comparison_report_sha256": "032bf5e5521716aa56be6e97d7aa9cd2ca483bf58006fed85e8c7e34dc7453ff",
+      "raw_harness_error": null,
+      "timing_caveat": "Diagnostic runtime includes output/audit overhead and concurrent workers; not a fair backend speed comparison.",
+      "analyses": {
+        "Vert": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "failed_steps": [],
+          "committed_steps": 20,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 176
+        },
+        "TLM_Constant_UDL": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "failed_steps": [],
+          "committed_steps": 10,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 31
+        },
+        "Pushover_5Axle_P1": {
+          "outcome": "nonconverged",
+          "code": -2,
+          "message": "Analysis did not converge.",
+          "failed_steps": [
+            {
+              "step": 59,
+              "status": "FAILED",
+              "exit_code": -2,
+              "load_factor": 12.702477497255277,
+              "displacement": 0.0,
+              "iterations": 3001,
+              "linear_solve_count": 28973,
+              "factorization_count": 1,
+              "convergence_criterion": "Work",
+              "convergence_tolerance": 0.002,
+              "convergence_error": 0.10147681017050689,
+              "residual_norm": 6774.145300929881,
+              "increment_norm": 0.012925300762555079,
+              "max_element_displacement": 11.133481435915247,
+              "max_element_key": 147,
+              "max_element_type": "Quad"
+            }
+          ],
+          "committed_steps": 58,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 1463
+        }
+      },
+      "compared_states_including_initial": 91,
+      "nonfinite_values": 0,
+      "reaction": {
+        "max_L2_difference_kN": 0.0,
+        "max_relative_L2_difference": 0.0,
+        "outside_original_vector_envelope": 0
+      },
+      "model_point_displacement": {
+        "max_absolute_difference": 0.0,
+        "max_structure_scaled_difference": 0.0,
+        "outside_initial_component_envelope": 0
+      },
+      "energy_entries_outside_original_envelope": 0,
+      "maxima_by_measured_field": {
+        "ReactionSumStates.R1": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.R2": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.R3": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Et": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Eel": {
+          "maximum_absolute_difference": 9.276845958083868e-11,
+          "state": "analysis-4-step-0058"
+        },
+        "ReactionSumStates.Ed": {
+          "maximum_absolute_difference": 3.2741809263825417e-10,
+          "state": "analysis-4-step-0058"
+        },
+        "ReactionSumStates.Ei": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Evd": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ux": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Uy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Uz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vx": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ax": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ay": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Az": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DynamicVectorsState.U": {
+          "maximum_absolute_difference": 2.7200464103316335e-15,
+          "state": "analysis-7-step-0010"
+        },
+        "DynamicVectorsState.V": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0020"
+        }
+      },
+      "qualification": "Complete measured global histories recorded; initial displacement-envelope exceedances remain explicit. No blanket or bit-exact fast-profile certification.",
+      "same_committed_step_history": true,
+      "qualified_across_complete_references": false
+    },
+    "horizontal-superlu-complete-observation": {
+      "reference_version": "2026.1.1",
+      "reference_hrx": "C:\\Users\\mbonatte\\Documents\\Histra\\csharp-diagnostics-2026.1.1\\model\\horizontal.hrx",
+      "reference_results": "C:\\Users\\mbonatte\\Documents\\Histra\\csharp-diagnostics-2026.1.1\\model\\horizontal.Results",
+      "hrx_sha256_before": "94f95e8171d22833e9e3945050cfd4e9e75fcdb835573baa5f998e8cbbabd45b",
+      "results_sha256_before": "1998b55dfd03dfa92281750e4dc36141c43fa34b170fd59b2bc3384de2ccf9f4",
+      "source_files_unchanged": true,
+      "python_module": "C:\\Users\\mbonatte\\Documents\\Histra\\histra-python\\histra\\__init__.py",
+      "linear_backend": "superlu",
+      "reference_umfpack_controls": {
+        "strategy": 3,
+        "irstep": 2,
+        "ordering": "amd"
+      },
+      "elapsed_seconds": 954.1164415000003,
+      "source_provenance_note": "Horizontal observation workers launched at 0fa35bf, whose production modules are byte-identical to release source feb97f5. Older Dhir candidate harnesses did not embed a launch commit; their exact launch commit is not certified by this summary. Raw reports and observed output remain preserved.",
+      "raw_comparison_report": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\horizontal-superlu-complete-observation\\static\\comparison.json",
+      "raw_comparison_report_sha256": "260830406cc65f0132ae309428cd83e8256b841ae14e09a6efa4b45d16d1a5d7",
+      "raw_harness_error": "'ReactionSumStates_csharp is not a file in the archive'",
+      "timing_caveat": "Diagnostic runtime includes output/audit overhead and concurrent workers; not a fair backend speed comparison.",
+      "analyses": {
+        "Vert": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "failed_steps": [],
+          "committed_steps": 20,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 163
+        },
+        "Pushover_5Axle_P1": {
+          "outcome": "audit_interrupted_after_extra_commit",
+          "code": null,
+          "message": "Python committed step 502; comparator interrupted because no matching C# state exists. Natural terminal state is not measured.",
+          "failed_steps": null,
+          "committed_steps": 502,
+          "same_committed_step_numbers": false,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 2125
+        }
+      },
+      "compared_states_including_initial": 524,
+      "nonfinite_values": 0,
+      "reaction": {
+        "max_L2_difference_kN": 0.06488150733018724,
+        "max_relative_L2_difference": 1.8743885074037947e-06,
+        "outside_original_vector_envelope": 88
+      },
+      "model_point_displacement": {
+        "max_absolute_difference": 0.00013488531112670898,
+        "max_structure_scaled_difference": 0.00038905970304240216,
+        "outside_initial_component_envelope": 488
+      },
+      "energy_entries_outside_original_envelope": 193,
+      "maxima_by_measured_field": {
+        "ReactionSumStates.R1": {
+          "maximum_absolute_difference": 4.4168904423713684e-05,
+          "state": "analysis-4-step-0438"
+        },
+        "ReactionSumStates.R2": {
+          "maximum_absolute_difference": 0.06488115713000298,
+          "state": "analysis-4-step-0495"
+        },
+        "ReactionSumStates.R3": {
+          "maximum_absolute_difference": 0.0008058547973632812,
+          "state": "analysis-4-step-0430"
+        },
+        "ReactionSumStates.Et": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Eel": {
+          "maximum_absolute_difference": 0.2240419420027706,
+          "state": "analysis-4-step-0497"
+        },
+        "ReactionSumStates.Ed": {
+          "maximum_absolute_difference": 0.39053927834822844,
+          "state": "analysis-4-step-0495"
+        },
+        "ReactionSumStates.Ei": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Evd": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ux": {
+          "maximum_absolute_difference": 5.610380321741104e-05,
+          "state": "analysis-4-step-0498"
+        },
+        "DisplModelPoints.Uy": {
+          "maximum_absolute_difference": 0.00013488531112670898,
+          "state": "analysis-4-step-0501"
+        },
+        "DisplModelPoints.Uz": {
+          "maximum_absolute_difference": 2.720952033996582e-05,
+          "state": "analysis-4-step-0496"
+        },
+        "DisplModelPoints.Vx": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ax": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ay": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Az": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DynamicVectorsState.U": {
+          "maximum_absolute_difference": 1.7763568394002505e-15,
+          "state": "analysis-1-step-0020"
+        },
+        "DynamicVectorsState.V": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0020"
+        }
+      },
+      "qualification": "Rejected for complete horizontal qualification: committed history and governing terminal state differ from C#.",
+      "same_committed_step_history": false,
+      "qualified_across_complete_references": false
+    },
+    "horizontal-metis-complete-observation": {
+      "reference_version": "2026.1.1",
+      "reference_hrx": "C:\\Users\\mbonatte\\Documents\\Histra\\csharp-diagnostics-2026.1.1\\model\\horizontal.hrx",
+      "reference_results": "C:\\Users\\mbonatte\\Documents\\Histra\\csharp-diagnostics-2026.1.1\\model\\horizontal.Results",
+      "hrx_sha256_before": "94f95e8171d22833e9e3945050cfd4e9e75fcdb835573baa5f998e8cbbabd45b",
+      "results_sha256_before": "1998b55dfd03dfa92281750e4dc36141c43fa34b170fd59b2bc3384de2ccf9f4",
+      "source_files_unchanged": true,
+      "python_module": "C:\\Users\\mbonatte\\Documents\\Histra\\histra-python\\histra\\__init__.py",
+      "linear_backend": "umfpack",
+      "umfpack_controls": {
+        "strategy": 3,
+        "irstep": 0,
+        "ordering": "metis"
+      },
+      "reference_umfpack_controls": {
+        "strategy": 3,
+        "irstep": 2,
+        "ordering": "amd"
+      },
+      "elapsed_seconds": 629.0907269999998,
+      "source_provenance_note": "Horizontal observation workers launched at 0fa35bf, whose production modules are byte-identical to release source feb97f5. Older Dhir candidate harnesses did not embed a launch commit; their exact launch commit is not certified by this summary. Raw reports and observed output remain preserved.",
+      "raw_comparison_report": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\horizontal-metis-complete-observation\\static\\comparison.json",
+      "raw_comparison_report_sha256": "30051135598d2fe1a673a3ebf2d9a0011220c4c44b6379f3a8acff650b3dc3f6",
+      "raw_harness_error": null,
+      "timing_caveat": "Diagnostic runtime includes output/audit overhead and concurrent workers; not a fair backend speed comparison.",
+      "analyses": {
+        "Vert": {
+          "outcome": "completed",
+          "code": 0,
+          "message": "Analysis completed.",
+          "failed_steps": [],
+          "committed_steps": 20,
+          "same_committed_step_numbers": true,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 163
+        },
+        "Pushover_5Axle_P1": {
+          "outcome": "completed_at_configured_displacement_limit",
+          "code": -3,
+          "message": "Analysis reached its configured element displacement limit.",
+          "failed_steps": [
+            {
+              "step": 495,
+              "status": "FAILED",
+              "exit_code": -3,
+              "load_factor": 59.266669764086004,
+              "displacement": 0.0,
+              "iterations": 9,
+              "linear_solve_count": 12785,
+              "factorization_count": 528,
+              "convergence_criterion": "Work",
+              "convergence_tolerance": 0.002,
+              "convergence_error": 20152.711159437677,
+              "residual_norm": 274451.2573729565,
+              "increment_norm": 48.954309451244534,
+              "max_element_displacement": 23.420853754153253,
+              "max_element_key": 494,
+              "max_element_type": "Quad"
+            }
+          ],
+          "committed_steps": 494,
+          "same_committed_step_numbers": false,
+          "initial_snapshot_is_committed": false,
+          "max_iteration_count": 2125
+        }
+      },
+      "compared_states_including_initial": 516,
+      "nonfinite_values": 0,
+      "reaction": {
+        "max_L2_difference_kN": 0.04496377605165111,
+        "max_relative_L2_difference": 1.298978594830999e-06,
+        "outside_original_vector_envelope": 61
+      },
+      "model_point_displacement": {
+        "max_absolute_difference": 3.219768404960632e-05,
+        "max_structure_scaled_difference": 9.904845638888329e-05,
+        "outside_initial_component_envelope": 356
+      },
+      "energy_entries_outside_original_envelope": 145,
+      "maxima_by_measured_field": {
+        "ReactionSumStates.R1": {
+          "maximum_absolute_difference": 4.327110946178436e-05,
+          "state": "analysis-4-step-0430"
+        },
+        "ReactionSumStates.R2": {
+          "maximum_absolute_difference": 0.04496311396360397,
+          "state": "analysis-4-step-0494"
+        },
+        "ReactionSumStates.R3": {
+          "maximum_absolute_difference": 0.0006871223449707031,
+          "state": "analysis-4-step-0430"
+        },
+        "ReactionSumStates.Et": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Eel": {
+          "maximum_absolute_difference": 0.19864416784167815,
+          "state": "analysis-4-step-0494"
+        },
+        "ReactionSumStates.Ed": {
+          "maximum_absolute_difference": 0.33196050150866085,
+          "state": "analysis-4-step-0494"
+        },
+        "ReactionSumStates.Ei": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "ReactionSumStates.Evd": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ux": {
+          "maximum_absolute_difference": 3.219768404960632e-05,
+          "state": "analysis-4-step-0469"
+        },
+        "DisplModelPoints.Uy": {
+          "maximum_absolute_difference": 1.189112663269043e-05,
+          "state": "analysis-4-step-0473"
+        },
+        "DisplModelPoints.Uz": {
+          "maximum_absolute_difference": 2.1725893020629883e-05,
+          "state": "analysis-4-step-0470"
+        },
+        "DisplModelPoints.Vx": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vy": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Vz": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ax": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Ay": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DisplModelPoints.Az": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0000"
+        },
+        "DynamicVectorsState.U": {
+          "maximum_absolute_difference": 1.4432899320127035e-15,
+          "state": "analysis-1-step-0020"
+        },
+        "DynamicVectorsState.V": {
+          "maximum_absolute_difference": 0.0,
+          "state": "analysis-1-step-0020"
+        }
+      },
+      "qualification": "Rejected for complete horizontal qualification: committed history and governing terminal state differ from C#.",
+      "same_committed_step_history": false,
+      "qualified_across_complete_references": false
+    }
+  }
+}
