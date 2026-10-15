@@ -44,7 +44,12 @@ class NativeStaticTangentFallbackTests(unittest.TestCase):
                         integrator.update_k(program,model,1.)
                     self.assertNotEqual(program.index_fact_k,0)
                     continue
-                self.assertEqual(integrator.update_k(program,model,1.),0)
+                from unittest.mock import patch
+                with patch.object(ls,'solve',wraps=ls.solve) as native_solve:
+                    self.assertEqual(integrator.update_k(program,model,1.),0)
+                # The known singular tangent is rejected without an expensive
+                # native factorization; only the recovered system is solved.
+                self.assertEqual(native_solve.call_count,1)
                 np.testing.assert_array_equal(ls.k.toarray().ravel(),doubles(case['matrix_bits']))
                 # SuperLU is the portable test backend; native fixtures use
                 # UMFPACK. Require exact assembly and near-machine solve parity.
@@ -115,3 +120,17 @@ class NativeStaticTangentFallbackTests(unittest.TestCase):
         self.assertEqual(code,0)
         self.assertEqual(received,[1.,1.])
         self.assertEqual([r['load_factor'] for r in rows],[.5,1.])
+
+    def test_exact_column_check_preserves_small_values_and_offdiagonal_rank(self):
+        import scipy.sparse as sp
+        from histra.solver.sparse_rank import first_exact_zero_column
+        cases=[([[0.,1.],[1.,0.]],-1),([[1.,1.],[1.,1.]],-1),
+               ([[1e-300,0.],[0.,1.]],-1),([[1.,0.],[0.,0.]],1),
+               ([[0.,1.],[0.,2.]],0),([[0.,0.],[0.,0.]],0)]
+        for values,expected in cases:
+            with self.subTest(matrix=values):
+                matrix=sp.csc_matrix(values)
+                self.assertEqual(first_exact_zero_column(matrix.indptr,matrix.data),expected)
+        # Stored zero entries are not evidence of nonzero column stiffness.
+        matrix=sp.csc_matrix(([0.,2.],[0,1],[0,1,2]),shape=(2,2))
+        self.assertEqual(first_exact_zero_column(matrix.indptr,matrix.data),0)

@@ -194,6 +194,20 @@ class IncrementalIntegrator(ABC):
 class StaticIntegrator(IncrementalIntegrator):
     """Static-integrator base with load-domain accumulation and factory."""
 
+    @staticmethod
+    def _solve_stiffness(ls) -> int:
+        from histra.solver.sparse_rank import first_exact_zero_column
+        matrix = getattr(ls, "k", None)
+        if first_exact_zero_column is not None and getattr(matrix, "format", None) == "csc":
+            column = first_exact_zero_column(matrix.indptr, matrix.data)
+            if column >= 0:
+                # An exactly zero column guarantees singularity. The native
+                # factorization would reject it before the next domain update.
+                raise LinearSolveError(
+                    f"Stiffness matrix is singular: global column {column+1} is exactly zero"
+                )
+        return ls.solve()
+
     def update_k(self, p: Any, model: Any, alfa: float, compute_c: bool = False) -> int:
         del compute_c
         alfa = float(alfa)
@@ -201,7 +215,7 @@ class StaticIntegrator(IncrementalIntegrator):
         try:
             ModelManager.compute_ktang(model, p.ls, alfa)
             # Original AssembleKtang factorizes and solves the current RHS.
-            p.ls.solve()
+            self._solve_stiffness(p.ls)
         except LinearSolveError:
             if alfa == 0.0:
                 p.index_fact_k = 1
@@ -209,7 +223,7 @@ class StaticIntegrator(IncrementalIntegrator):
             p.static_tangent_alpha = 0.0
             ModelManager.compute_ktang(model, p.ls, 0.0)
             try:
-                p.ls.solve()
+                self._solve_stiffness(p.ls)
             except LinearSolveError:
                 p.index_fact_k = 1
                 raise

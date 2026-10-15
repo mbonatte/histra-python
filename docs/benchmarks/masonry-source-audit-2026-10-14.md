@@ -194,3 +194,18 @@ This guards the by-value boundary independently of the horizontal benchmark.
 The direct native GetShearUltimateStrain call also checks Single promotion for
 the serialized shear-strain alias. The scalar getter now returns the native
 Single-rounded value rather than the raw XML decimal promoted as Double.
+
+## Exact singular-column shortcut, 2026-10-15
+
+StaticIntegrator now checks for an exactly zero column before requesting sparse
+factorization. A compiled scan returns the first such column; it uses no numeric
+rank tolerance. Empty columns and stored zero entries are handled, while tiny
+nonzero values, off-diagonal invertible systems and nonzero singular matrices
+continue through the existing native factorization path. This shortcut invokes
+the same native alfa=0 fallback and does not regularize or alter the matrix.
+
+The original one-DOF UpdateK fixture still matches the recovered matrix/solution;
+a spy confirms only the recovered system is solved. An unrecoverable initial
+matrix remains an explicit error. The fresh horizontal validation has exercised
+this shortcut on global zero-based column 4874 and retains exact committed output
+matches in the prefix checked so far. Full-chain qualification is separate.
