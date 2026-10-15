@@ -39,3 +39,21 @@ elastic branch and modal precision changes pass the 2026-10-15 full suite:
 released wheel; the new elastic branch has native routine and compiled lifecycle
 tests, rather than a new structural benchmark. The independent equilibrium
 qualification and unavailable native measurements remain unchanged.
+
+## Post-release branch rerun, 2026-10-15
+
+A fresh full-chain solve at `8138ddd` repeats the native comparison after the
+elastic/zero-friction/restraint-axis changes and the NR=False/contact audit.
+Vert 1-20, constant load 1-10 and pushover 1-58 match every available checked
+field exactly. All 6,783,040 committed spring records and all 91 states including
+initial states have zero numeric differences and matching available identities.
+All 88 committed iteration counts match the original trace. Both solvers stop
+at pushover attempt 59 with code -2; reference files are unchanged. The original
+UMFPACK strategy 3, refinement 2 and AMD ordering are applied explicitly.
+
+[Post-branch evidence](../../release-evidence/dhir/2026-10-15-post-branch-full-chain.json)
+records the field maxima, provenance and terminal outcomes. This run qualifies
+8138ddd. The later omitted-material defaults, shear alias, singular-tangent
+fallback and horizontal direction-selector changes have separate native tests;
+this run is not a full-chain qualification of those later commits. Missing native
+measurements and independent equilibrium limitations remain unchanged.

@@ -175,3 +175,7 @@ all 16,408 global load entries and all 425,560 stored initial-stiffness entries
 match exactly. The full suite passes 782 tests and 1,579 subtests, with 14 skips.
 Full nonlinear horizontal-chain qualification is recorded separately once its
 committed-step comparison completes.
+
+The [post-branch full-chain rerun](dhir-full-chain-native-parity-progress.md)
+now qualifies source 8138ddd through every available output at all 88 commits.
+Its source boundary precedes the later defaults/fallback/direction corrections.
