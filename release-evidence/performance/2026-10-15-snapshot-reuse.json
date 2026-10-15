@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T16:23:54.938911+00:00",
+  "source_commit": "ed8a10417e2516bcd473259738bc8a73cfe1931b",
+  "generator": "run_horizontal_reuse_profile.py; probe_snapshot_buffer_reuse.py",
+  "benchmark_id": "newton-snapshot-reuse-profile",
+  "cases": {
+    "horizontal-performance-allocate": {
+      "profiled_newton_seconds": 73.91267129999999,
+      "process_seconds": 187.44784660000005,
+      "committed_iterations": 2125,
+      "total_snapshot_seconds": 9.322253100000001,
+      "batch_snapshot_seconds": 5.9892038,
+      "all_available_fields_exact": true,
+      "compared_states": 23
+    },
+    "horizontal-performance-reuse": {
+      "profiled_newton_seconds": 67.62696910000005,
+      "process_seconds": 177.7447442,
+      "committed_iterations": 2125,
+      "total_snapshot_seconds": 5.2763610000000005,
+      "batch_snapshot_seconds": 2.0664106,
+      "all_available_fields_exact": true,
+      "compared_states": 23
+    }
+  },
+  "profiled_newton_speedup": 1.0929466791673785,
+  "profiled_newton_reduction_percent": 8.50422815120191,
+  "microbenchmark": {
+    "dofs": 16408,
+    "springs": 77080,
+    "bytes_per_snapshot": 17289024,
+    "snapshots_per_sample": 60,
+    "seconds": {
+      "allocate": [
+        0.16971030000001974,
+        0.15000290000000405,
+        0.1526474000000917,
+        0.14969569999993837,
+        0.15765759999999318,
+        0.15711700000008477,
+        0.1657970999999634,
+        0.17238900000006652
+      ],
+      "reuse": [
+        0.02998030000003382,
+        0.03046930000004977,
+        0.029981300000031297,
+        0.02968250000003536,
+        0.0346486000000823,
+        0.036178800000016054,
+        0.04210189999992053,
+        0.051521800000045914
+      ]
+    },
+    "speedup": 4.833918169956948,
+    "exact": true
+  },
+  "rejected_workspace_experiment": {
+    "matrix_dofs": 16408,
+    "matrix_entries": 425560,
+    "right_hand_sides": 32,
+    "exact": true,
+    "seconds": {
+      "solve": [
+        0.7288130000000592,
+        0.7275128999999652,
+        0.7311097000000473,
+        0.7475559000000658,
+        0.7243818000000601,
+        0.7299570000000131
+      ],
+      "workspace": [
+        0.7384309000000258,
+        0.7411633000000393,
+        0.7514955999999984,
+        0.7526771000000281,
+        0.7366155999999364,
+        0.7336109999999962
+      ]
+    },
+    "speedup": 0.9859257355834513
+  },
+  "qualification_scope": "Sequential fresh horizontal runs through Vert 20 and horizontal commit 1; all available checked fields exact. Timings are one profiled pair, not whole-chain or cross-platform speed claims.",
+  "tests": {
+    "passed": 793,
+    "skipped": 14,
+    "subtests_passed": 1585
+  }
+}
