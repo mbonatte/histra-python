@@ -1,11 +1,21 @@
 # Current feature status
 
-Release status: **v1.5.0** (2026-10-14).
+Published release: **v1.5.0** (2026-10-14). **v1.6.0 is being prepared locally**;
+see [its preparation record](release/v1.6.0-preparation.md).
 
 The released package has been rerun from fresh Dhir geometry through Vert,
 constant load and the final committed pushover step. Every available measured
 field matches C# 2026.1.1 exactly for this configuration, including all committed
 iteration counts. See [the full-chain benchmark](benchmarks/dhir-full-chain-native-parity-progress.md).
+
+The current snapshot optimization preserves every checked field in both full
+static references at source ed8a104. One sequential profiled Newton-step pair
+measures an 8.50% runtime reduction; see [the performance report](benchmarks/newton-snapshot-reuse-performance.md).
+Original C# residual assembly and convergence routines explain the independent
+equilibrium warnings in five selected states. The native norm-selector fix has
+direct bit-exact routine coverage; see [the investigation](investigations/dhir-equilibrium-diagnostics.md).
+Faster library configurations are separate global-response experiments and do
+not weaken the routine tests or independent equilibrium policy.
 
 Post-release changes cover native elastic transverse and zero-friction diagonal
 springs, compiled lifecycle coverage, and restraint-axis/material selection.

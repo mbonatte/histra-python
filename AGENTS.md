@@ -85,7 +85,7 @@ python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tes
 
 ### 1. Accuracy & C# Parity Over Raw Velocity
 - Numerical accuracy and C# parity are the highest priority; execution velocity is secondary (`_rules/accuracy-first-performance.md`).
-- Never accept an optimization that alters numerical results, changes branch selection, or weakens test assertions.
+- Preserve original numerical logic and bit-exact routine tests. Per the user's 2026-10-15 instruction, faster numerical libraries may introduce small global-analysis rounding differences when complete response histories and stopping behavior are validated. Keep those performance experiments separate from exact native regression; document local phase differences and numerical limits.
 - Hot numerical paths must use vectorized NumPy or compiled Numba routines protected by differential regression tests against C# `.Results` databases.
 
 ### 2. Compiled Backend Coverage is Mandatory

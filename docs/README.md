@@ -1,10 +1,14 @@
 # Documentation
 
-## Authoritative C# to Python Parity Audit Suite
+## Architecture audit chapters
 
-Comprehensive, line-by-line comparative audit of the `histra-python` Discrete Macro-Element Method (DMEM) implementation against the authoritative C# HiStrA structural engine (`C#_Original/`):
+These earlier source-review chapters explain the implementation and its design.
+Their coverage scores and release statements are historical audit claims, not
+complete numerical qualification of the current package. Use [current status](STATUS.md),
+the native-backed tests and identified benchmark reports for current parity scope.
+The source review compares the Python DMEM implementation with C# HiStrA:
 
-- **[Executive Summary & Architecture Review](audit/00_executive_summary.md)**: High-level parity score (100% DMEM masonry parity), C# OOP vs. Python/Numba vectorized architecture comparison, multi-chapter synthesis, V1 release readiness certification, and strategic 5-phase expansion roadmap.
+- **[Executive Summary & Architecture Review](audit/00_executive_summary.md)**: Architecture comparison, multi-chapter synthesis, historical release assessment, and expansion roadmap.
 - **[Chapter 01: Master Numerical Core File-by-File Coverage Matrix](audit/01_file_coverage_matrix.md)**: Exhaustive mapping of all 117 Python production files and 426 unique C# core files across `SolverRuntime`, `MatrixManager`, `ModelLibrary`, `ModelManagement`, `Objects`, `SectionBuilderCore`, and `AdapticIO`.
 - **[Chapter 02: Mathematical, Constitutive, and Algorithmic Parity of Elements, Springs, and Materials](audit/02_elements_and_materials_parity.md)**: Line-by-line mathematical audit of 7-DOF Quads, 12-DOF Interfaces, Mohr-Coulomb/Cacovic shear, axial hysteretic fiber springs, and unported element/material catalog.
 - **[Chapter 03: Solvers, Numerical Algorithms, and Eigenvalue Analysis](audit/03_solvers_and_algorithms_parity.md)**: Newton-Raphson tangent rebuild policies, Crisfield/Linearized Arc-Length continuation, Line Search root-finding, modal subspace iteration with Knuth PRNG seeding (MAC > 0.9999), and the independent dual-mode `EquilibriumAudit`.

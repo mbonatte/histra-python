@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.6.0 - prepared 2026-10-15
+
+- Reuse disposable Newton iteration snapshot buffers while preserving all spring state and rollback behavior. One sequential horizontal Newton-step profile measures an 8.50% runtime reduction; both complete native reference chains retain exact measured outputs at the snapshot implementation commit.
+- Match original C# vector norm selectors and ordered reductions, including positive p-norms beyond L2. Add bit-exact native routine fixtures on Windows and Linux.
+- Verify residual assembly and Work/force convergence directly with original C# routines for five Dhir states. Document force, moment and shear-angle residual units; retain independent equilibrium warnings and policies.
+- Honor native load-direction identifiers for horizontal loading. Reproduce omitted masonry defaults, serialized ductility aliases, linear normal-force evaluation and native Quad contact admission.
+- Scope the initial-stiffness fallback to the current Newton call, avoid factorizing exactly zero-column tangents, and propagate native numeric refactor failure without a duplicate retry.
+- Validate the default-material horizontal reference through Vert 20 and pushover 501, including its attempt-502 displacement limit. Preserve the separate foundation-modified 20/10/58 reference and its attempt-59 nonconvergence.
+- Keep routine parity tests exact while recording faster-library global-response experiments separately under the user's numerical-tolerance allowance. Preparation and qualification scope are recorded in [the release record](docs/release/v1.6.0-preparation.md).
+
+
 - Match line-restraint material blending against its own native axes, including repeated Single normalization. Correct vertical sliding plastic-stiffness field selection and native sliding ductility constructor flags. Twelve native cases cover flexural, in-plane and out-of-plane law selection.
 
 
