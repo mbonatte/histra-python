@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T16:06:12.432519+00:00",
+  "source_commit": "02f5f84ab9f395e4a0226bb29850ec7e11c07a42",
+  "generator": "write_oct15_chain_evidence.py; run_dhir_latest_indexed.py; stepwise_parity.py",
+  "benchmark_id": "dhir-current-fresh-full-chain",
+  "reference_version": "2026.1.1",
+  "hrx_sha256": "c06ea59373fdf26c2d4267dab90f2e48f2e6072da1f00c56a345614f3c053c5e",
+  "results_sha256": "65aae6351c1e072f14210df9c2e20c7a22302c796ffc3bd7c0b0d194c8f89e51",
+  "reference_files_unchanged": true,
+  "fresh_geometry": true,
+  "reused_native_computational_objects": false,
+  "umfpack_controls": {
+    "strategy": 3,
+    "irstep": 2,
+    "ordering": "amd"
+  },
+  "steps": {
+    "Vert": 20,
+    "TLM_Constant_UDL": 10,
+    "Pushover_5Axle_P1": 58
+  },
+  "step_zero_is_committed": false,
+  "compared_states_including_initial": 91,
+  "compared_committed_spring_records": 6783040,
+  "compared_numeric_values_including_initial": 80059459,
+  "available_field_max_abs_difference": {
+    "SpringStatesTmp": {
+      "U": 0,
+      "F": 0,
+      "Phase": 0,
+      "Fy1": 0,
+      "Fy2": 0,
+      "Up1": 0,
+      "Up2": 0,
+      "N": 0,
+      "SpringType": 0
+    },
+    "InterfaceStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0,
+      "U7": 0,
+      "U8": 0,
+      "U9": 0,
+      "U10": 0,
+      "U11": 0,
+      "U12": 0,
+      "ForceX": 0,
+      "ForceY": 0,
+      "ForceZ": 0,
+      "BendingMomentsX": 0,
+      "BendingMomentsY": 0,
+      "BendingMomentsZ": 0
+    },
+    "QuadStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0,
+      "U7": 0,
+      "K": 0
+    },
+    "RestraintStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0
+    },
+    "NodeCStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0
+    },
+    "ReactionSumStates": {
+      "R1": 0,
+      "R2": 0,
+      "R3": 0,
+      "Et": 0,
+      "Eel": 0,
+      "Ed": 0,
+      "Ei": 0,
+      "Evd": 0
+    },
+    "DisplModelPoints": {
+      "Ux": 0,
+      "Uy": 0,
+      "Uz": 0,
+      "Vx": 0,
+      "Vy": 0,
+      "Vz": 0,
+      "Ax": 0,
+      "Ay": 0,
+      "Az": 0
+    },
+    "SpringStates": {
+      "U": 0,
+      "F": 0,
+      "Phase": 0,
+      "Fy1": 0,
+      "Fy2": 0,
+      "Up1": 0,
+      "Up2": 0,
+      "N": 0,
+      "SpringType": 0,
+      "K_tang": 0,
+      "Uy1": 0,
+      "Uy2": 0,
+      "Umax1": 0,
+      "Umax2": 0,
+      "Uu1": 0,
+      "Uu2": 0,
+      "LoadIndicator": 0,
+      "ContactArea": 0,
+      "F0": 0,
+      "CmomMin": 0,
+      "CmomMax": 0,
+      "CrotLimNu": 0,
+      "CrotLimPu": 0,
+      "CrotYn": 0,
+      "CrotYp": 0,
+      "CPhaseUnload_t": 0,
+      "CPhaseUnload_c": 0,
+      "TangentReload_c": 0,
+      "TangentReload_t": 0,
+      "CplasticTensionIndicator": 0,
+      "CplasticCompressionIndicator": 0
+    },
+    "DynamicVectorsState": {
+      "U": 0,
+      "V": 0
+    }
+  },
+  "identity_failures": [],
+  "nonzero_fields": [],
+  "table_state_coverage": {
+    "SpringStatesTmp": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "InterfaceStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "QuadStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "RestraintStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "NodeCStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "ReactionSumStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "DisplModelPoints": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 59,
+        "first": 0,
+        "last": 58
+      },
+      "7": {
+        "states": 11,
+        "first": 0,
+        "last": 10
+      }
+    },
+    "SpringStates": {
+      "1": {
+        "states": 1,
+        "first": 20,
+        "last": 20
+      },
+      "7": {
+        "states": 1,
+        "first": 10,
+        "last": 10
+      }
+    },
+    "DynamicVectorsState": {
+      "1": {
+        "states": 1,
+        "first": 20,
+        "last": 20
+      },
+      "7": {
+        "states": 1,
+        "first": 10,
+        "last": 10
+      }
+    }
+  },
+  "python_terminal": {
+    "Vert": {
+      "code": 0,
+      "outcome": "completed"
+    },
+    "TLM_Constant_UDL": {
+      "code": 0,
+      "outcome": "completed"
+    },
+    "Pushover_5Axle_P1": {
+      "code": -2,
+      "outcome": "nonconverged"
+    }
+  },
+  "runtime_seconds": 1705.0637865999888,
+  "paired_states_directory": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-current-02f5f84-indexed\\static\\every-step",
+  "comparison_database": {
+    "path": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\dhir-indexed-audit.Results",
+    "construction": "SQLite backup of original; only audit indexes added; no data rows changed"
+  },
+  "independent_equilibrium_qualified": false,
+  "equilibrium_policy": "warn",
+  "independent_audit_failed_commits": {
+    "Vert": 19,
+    "TLM_Constant_UDL": 10,
+    "Pushover_5Axle_P1": 58
+  },
+  "limitations": [
+    "Native NULL per-spring E/Ed/Eel excluded.",
+    "Private pushover spring histories and full global displacement vectors are not saved at every committed step.",
+    "Available-output parity is benchmark-specific; independent equilibrium is not established."
+  ],
+  "foundation_material": 146,
+  "foundation_interfaces": 148,
+  "committed_iterations_exact": true,
+  "native_failed_attempts": [
+    [
+      "Pushover_5Axle_P1",
+      59,
+      -2
+    ]
+  ],
+  "native_trace_sha256": "f09b6be220a7cded61e3290dc6c3eab578a616b2159557f588ca7c5a52da7226",
+  "scope": "Fresh complete static chain at 02f5f84 after masonry defaults, direction-selector, fallback-scope, exact-zero-column and numeric-failure retry changes."
+}

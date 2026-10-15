@@ -17,6 +17,13 @@ Dhir reference validates all 20 virgin modes with small remaining arithmetic
 differences; see [the modal benchmark](benchmarks/dhir-modal-native-parity.md) and
 [the remaining masonry audit](benchmarks/masonry-source-audit-2026-10-14.md).
 
+The horizontal out-of-plane reference also matches every available checked
+output through Vert step 20 and pushover step 501, stopping at the native
+attempt-502 displacement limit. A fresh original-Dhir regression at 02f5f84
+checks the latest static changes through all 88 commits. See the
+[horizontal benchmark](benchmarks/dhir-horizontal-native-parity.md) for source
+boundaries and unavailable measurements.
+
 Historical Article/interface-chain evidence qualifies its recorded source and
 environment; it is not a fresh v1.5.0 rerun of those models.
 

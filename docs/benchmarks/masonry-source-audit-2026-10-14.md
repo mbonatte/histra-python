@@ -223,3 +223,16 @@ factorization constructors, and verifies exact recovery on a subsequent valid
 matrix. The full suite passes 785 tests and 1,585 subtests, with 14 skips. The
 ongoing horizontal workers predate this wrapper change; their full-chain source
 boundaries must be recorded separately.
+
+## Completed structural checks, 2026-10-15
+
+The [horizontal full-chain comparison](dhir-horizontal-native-parity.md) now
+qualifies all available checked outputs at all 521 commits (Vert 20, pushover
+501) after the load-direction, fallback-scope and exact-zero-column changes.
+The [current original-Dhir regression](dhir-full-chain-native-parity-progress.md)
+qualifies 02f5f84 through all 88 commits, including the later numeric-failure
+retry cleanup. Both comparisons regenerate from geometry; original reference
+files remain unchanged. These completed runs supersede the prefix-only and
+pre-change source limitations above for their identified configurations.
+Broader masonry branches, unavailable native histories and independent
+equilibrium remain separate qualification boundaries.

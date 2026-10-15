@@ -57,3 +57,25 @@ records the field maxima, provenance and terminal outcomes. This run qualifies
 fallback and horizontal direction-selector changes have separate native tests;
 this run is not a full-chain qualification of those later commits. Missing native
 measurements and independent equilibrium limitations remain unchanged.
+
+## Current-source regression, 2026-10-15
+
+A fresh complete run at 02f5f84 now includes the omitted-material defaults,
+shear-strain alias/Single promotion, load-direction selection, Newton-call
+fallback scope, exact-zero-column shortcut and numeric-failure retry cleanup.
+The material-146 assignment is reapplied to all 148 foundation interfaces after
+fresh geometry generation, preserving the accepted native registration strategy.
+
+All 88 committed states and all 91 states including initial states match every
+available checked field and identity exactly: 6,783,040 committed spring records
+and 80,059,459 compared numeric values. All 88 iteration counts match the original
+native trace; both solvers stop at pushover attempt 59 with code -2. Original
+reference hashes are unchanged. The read-only audit uses an indexed SQLite
+backup; only indexes are added and no data rows are changed.
+
+[Current-source evidence](../../release-evidence/dhir/2026-10-15-current-full-chain.json)
+records measured field maxima, trace hash and source provenance. This supersedes
+the source-boundary limitation of the earlier 8138ddd regression for these
+changes. The separate [horizontal reference](dhir-horizontal-native-parity.md)
+now matches all 521 commits through its final pushover step 501. Missing native
+measurements and independent equilibrium limitations remain as described above.
