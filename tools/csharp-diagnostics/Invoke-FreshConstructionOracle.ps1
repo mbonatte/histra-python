@@ -90,14 +90,24 @@ if($ExportAfference -or $ExportAssembly) {
   }
   Write-Output ('Original initial ComputeK and AssembleK succeeded; stored entries='+$ls.K.Ax.Length)
   $analysis=$model.Collections.Analyses[$AnalysisKey]
-  [void][ModelManagement.Load.ModelLoadOperations]::GenerateLoadsForPushOverAnalysis($model.Collections,$analysis,1,$false)
+  # An unrun HRX has no AnalysisState yet. The desktop initializes it before
+  # load generation; create only that empty transient state in this oracle.
+  if(!$analysis.States.ContainsKey(1)) {
+   $state=[Objects.Analyses.AnalysisState]::new()
+   $state.Key=$AnalysisKey;$state.Combination=1
+   $analysis.States.Add(1,$state)
+  }
+  $loadsGenerated=[ModelManagement.Load.ModelLoadOperations]::GenerateLoadsForPushOverAnalysis($model.Collections,$analysis,1,$false)
+  # The original method returns false even after its normal successful path.
+  # Report the result without interpreting it as a success/failure indicator.
+  Write-Output ('Original load-generation return value='+$loadsGenerated)
   [SolverRuntime.ModelManager].GetField('_Ptarget',[Reflection.BindingFlags]'Static,NonPublic').SetValue($null,[MatrixManager.Vector]::new([int]$model.GDL))
   [void][SolverRuntime.ModelManager].GetMethod('AssembleLoad',$flags).Invoke($null,[object[]]@($p,$model.Collections))
   $values=[SolverRuntime.ModelManager]::Ptarget.theData
   $bytes=New-Object byte[] ([Buffer]::ByteLength($values))
   [Buffer]::BlockCopy($values,0,$bytes,0,$bytes.Length)
   [IO.File]::WriteAllBytes((Join-Path $a 'native-Vert-Ptarget.bin'),$bytes)
-  Write-Output 'Original Vert load generation and AssembleLoad succeeded'
+  Write-Output ('Original load-generation call and AssembleLoad exported '+$values.Length+' target entries; analysis='+$AnalysisKey)
   if($TrialIncrementPath) {
    $u=[MatrixManager.Vector]::new([int]$model.GDL);$v=[MatrixManager.Vector]::new([int]$model.GDL)
    [void][SolverRuntime.CommonOperations].GetMethod('SetInitial',$flags).Invoke($null,[object[]]@($model.Collections,$ls,$u,$v))
