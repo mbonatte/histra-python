@@ -151,9 +151,9 @@ class ModalMode:
             "Mx_pcent": float(self.mass_percent_x),
             "My_pcent": float(self.mass_percent_y),
             "Mz_pcent": float(self.mass_percent_z),
-            "UmaxX": float(self.max_displacement_x),
-            "UmaxY": float(self.max_displacement_y),
-            "UmaxZ": float(self.max_displacement_z),
+            "UMaxX": float(self.max_displacement_x),
+            "UMaxY": float(self.max_displacement_y),
+            "UMaxZ": float(self.max_displacement_z),
             "ResidualNorm": float(self.residual_norm),
         }
 
@@ -779,7 +779,9 @@ def _compute_mode(
     participations = np.asarray(shape @ mass_directions, dtype=float)
     effective = participations * participations
     percentages = effective / total_masses * 100.0
-    maxima = np.max(np.abs(shape[:, None] * directions), axis=0)
+    # ModalValues.Set persists ComputeUmax's Double results in an XNA
+    # Vector3 (Single); this boundary is separate from Double eigenvectors.
+    maxima = np.max(np.abs(shape[:, None] * directions), axis=0).astype(np.float32)
 
     k_shape = np.asarray(stiffness @ shape, dtype=float)
     m_shape = np.asarray(mass @ shape, dtype=float)

@@ -203,6 +203,7 @@ def test_wall_modal_native_reference(tmp_path, monkeypatch, case):
         assert result.converged_modes == len(modes) < result.requested_modes
         for mode, native in zip(result.modes, modes):
             actual = mode.as_modal_values_row(analysis_key=key)
+            assert set(native["values"]) - {"Id"} <= set(actual)
             for field, value in actual.items():
                 if field in native["values"] and field != "ResidualNorm":
                     np.testing.assert_allclose(value, native["values"][field], rtol=1e-11, atol=1e-12, err_msg=field)
