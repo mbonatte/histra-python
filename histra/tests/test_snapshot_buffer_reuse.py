@@ -1,0 +1,65 @@
+"""Reusable storage must preserve complete reversible constitutive state."""
+from pathlib import Path
+import numpy as np
+import pytest
+from histra.io.hr_loader import load_model
+from histra.solver.model_manager import ModelManager
+from histra.solver.hysteretic_runtime import build_hysteretic_batch
+
+
+@pytest.fixture
+def runtime():
+    model = load_model(Path(__file__).resolve().parents[1] / "model-live/model.hrx")
+    ModelManager.prepare_model(model, force=True)
+    result = build_hysteretic_batch(model)
+    assert result is not None
+    return result
+
+
+def test_reused_snapshot_matches_fresh_snapshot_and_reverts_trial(runtime):
+    buffers = runtime.snapshot()
+    independent = runtime.snapshot()
+    original = tuple(value.copy() for value in independent)
+    state = type("State", (), {"step": 1})()
+    increment = np.linspace(-1e-4, 2e-4, runtime.model.gdl)
+    # Include committed history, reversal and subsequent rejected trial.
+    runtime.update_domain(increment, state)
+    runtime.commit(sync_objects=False)
+    runtime.update_domain(-2.5 * increment, state)
+    expected = runtime.snapshot()
+    captured = runtime.snapshot(reuse=buffers)
+    assert captured is buffers
+    for actual, reference in zip(captured, expected):
+        np.testing.assert_array_equal(actual, reference)
+    for actual, reference in zip(independent, original):
+        np.testing.assert_array_equal(actual, reference)
+    runtime.update_domain(0.75 * increment, state)
+    runtime.restore(captured)
+    for actual, reference in zip(runtime.snapshot(), expected):
+        np.testing.assert_array_equal(actual, reference)
+
+
+@pytest.mark.parametrize("invalid", ["count", "shape", "dtype", "readonly", "live", "overlap"])
+def test_invalid_reuse_is_rejected_before_modifying_buffers(runtime, invalid):
+    buffers = list(runtime.snapshot())
+    if invalid == "count":
+        buffers.pop()
+    elif invalid == "shape":
+        buffers[-1] = np.empty((1,))
+    elif invalid == "dtype":
+        buffers[-1] = buffers[-1].astype(np.float32)
+    elif invalid == "readonly":
+        buffers[-1].flags.writeable = False
+    elif invalid == "live":
+        buffers[0] = runtime.committed
+    else:
+        # Equal-sized slices of one backing allocation are invalid storage.
+        size = max(buffers[0].size, buffers[1].size)
+        shared = np.empty(size)
+        buffers[0] = shared[:buffers[0].size].reshape(buffers[0].shape)
+        buffers[1] = shared[:buffers[1].size].reshape(buffers[1].shape)
+    before = [value.copy() for value in buffers]
+    with pytest.raises(ValueError, match="Snapshot buffer"):
+        runtime.snapshot(reuse=tuple(buffers))
+    for actual, reference in zip(buffers, before):
+        np.testing.assert_array_equal(actual, reference)

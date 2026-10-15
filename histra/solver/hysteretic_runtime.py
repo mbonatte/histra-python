@@ -3192,14 +3192,37 @@ class HystereticBatchRuntime:
         if sync_objects:
             self.sync_all_to_objects()
 
-    def snapshot(self) -> tuple[np.ndarray, ...]:
-        return (
-            self.committed.copy(), self.trial.copy(), self.targets.copy(),
-            self.coulomb_state.copy(), self.coulomb_targets.copy(),
-            self.coulomb_dns.copy(), self._local_u.copy(),
-            self._quad_local_u.copy(), self._quad_sigma_initial.copy(),
-            self.quad_state.copy(),
+    def snapshot(
+        self, *, reuse: tuple[np.ndarray, ...] | None = None
+    ) -> tuple[np.ndarray, ...]:
+        """Copy reversible state, optionally consuming a previous snapshot's buffers.
+
+        Reuse overwrites that snapshot; independent step/line-search snapshots
+        must keep their own buffers. All fields are still copied losslessly.
+        """
+        sources = (
+            self.committed, self.trial, self.targets,
+            self.coulomb_state, self.coulomb_targets,
+            self.coulomb_dns, self._local_u,
+            self._quad_local_u, self._quad_sigma_initial, self.quad_state,
         )
+        if reuse is None:
+            return tuple(source.copy() for source in sources)
+        if len(reuse) != len(sources):
+            raise ValueError("Snapshot buffer count does not match runtime state")
+        # Validate the complete buffer set before overwriting any saved state.
+        for target, source in zip(reuse, sources):
+            if (target.shape != source.shape or target.dtype != source.dtype
+                    or not target.flags.writeable):
+                raise ValueError("Snapshot buffer shape, dtype or writability differs")
+        for index, target in enumerate(reuse):
+            if any(np.shares_memory(target, source) for source in sources):
+                raise ValueError("Snapshot buffers must not alias live runtime state")
+            if any(np.shares_memory(target, other) for other in reuse[:index]):
+                raise ValueError("Snapshot buffers must not alias each other")
+        for target, source in zip(reuse, sources):
+            np.copyto(target, source)
+        return reuse
 
     def restore(self, state: tuple[np.ndarray, ...]) -> None:
         (
