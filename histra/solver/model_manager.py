@@ -376,7 +376,7 @@ class ModelManager:
                                 dtype=np.float32,
                             )
                             if bool(getattr(analysis, "is_seismic", False))
-                            else np.asarray(item.direction, dtype=np.float32)
+                            else np.asarray(item.direction_for(quad), dtype=np.float32)
                         )
                         force = (
                             np.float32(item.load_value)

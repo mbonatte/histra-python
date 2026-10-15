@@ -2964,7 +2964,7 @@ class HystereticBatchRuntime:
                     )
                 )
                 direction = seismic_direction if is_seismic else np.asarray(
-                    item.direction, dtype=np.float32
+                    item.direction_for(quad), dtype=np.float32
                 )
                 item_forces.append(
                     (

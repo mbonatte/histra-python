@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$ModelPath,[Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$InstallDirectory='C:\Program Files\Gruppo Sismica\HiStrA Bridges 2026.1.1',[switch]$ReapplySavedMaterials,[switch]$ExportAfference,[switch]$ExportAssembly,[string]$TrialIncrementPath)
+param([Parameter(Mandatory=$true)][string]$ModelPath,[Parameter(Mandatory=$true)][string]$OutputDirectory,[string]$InstallDirectory='C:\Program Files\Gruppo Sismica\HiStrA Bridges 2026.1.1',[switch]$ReapplySavedMaterials,[switch]$ExportAfference,[switch]$ExportAssembly,[string]$TrialIncrementPath,[int]$AnalysisKey=1)
 $ErrorActionPreference='Stop'
 $a=[IO.Path]::GetFullPath($OutputDirectory);$i=$InstallDirectory
 [void][IO.Directory]::CreateDirectory($a)
@@ -89,7 +89,7 @@ if($ExportAfference -or $ExportAssembly) {
    [IO.File]::WriteAllBytes((Join-Path $a ('native-K-'+$field+'.bin')),$bytes)
   }
   Write-Output ('Original initial ComputeK and AssembleK succeeded; stored entries='+$ls.K.Ax.Length)
-  $analysis=$model.Collections.Analyses[1]
+  $analysis=$model.Collections.Analyses[$AnalysisKey]
   [void][ModelManagement.Load.ModelLoadOperations]::GenerateLoadsForPushOverAnalysis($model.Collections,$analysis,1,$false)
   [SolverRuntime.ModelManager].GetField('_Ptarget',[Reflection.BindingFlags]'Static,NonPublic').SetValue($null,[MatrixManager.Vector]::new([int]$model.GDL))
   [void][SolverRuntime.ModelManager].GetMethod('AssembleLoad',$flags).Invoke($null,[object[]]@($p,$model.Collections))

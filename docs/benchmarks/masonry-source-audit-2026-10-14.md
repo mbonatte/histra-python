@@ -148,3 +148,30 @@ with 14 skips. This correction alone does not qualify the horizontal model:
 Vert matches, but the subsequent horizontal step still reaches the configured
 element-displacement limit before committing. Investigation continues with the
 original horizontal load-generation and constitutive-update routines.
+
+## Load direction selection, 2026-10-15
+
+The horizontal HRX selects `IdLoadDirection=2` (global +Y) while its serialized
+DirX/DirY/DirZ vector still contains (0,0,-1). Original LoadTemplateItem.Dir
+resolves the direction code first and normalizes with XNA Single arithmetic.
+Python previously read the raw vector, applying this particular load vertically.
+The loaded model therefore exposes a load-definition error before constitutive
+parity can be assessed.
+
+Python now preserves IdLoadDirection through XML loading and resolves codes 0-3
+(global axes), 4-6 (element axes), and 7 (custom vector), with native Single
+normalization. Static line-load assembly and scalar/compiled P-Delta line-load
+preparation share that resolution. Programmatic LoadTemplateItem construction
+keeps custom-vector mode by default for existing callers; missing XML attributes
+use C#'s default code 0. Explicit invalid codes, degenerate vectors and missing
+elements for local directions fail explicitly.
+
+`Invoke-LoadDirectionOracle.ps1` invokes the original Dir(Element) for all eight
+codes with ordinary and oblique axes: all 16 normalized direction vectors match
+exactly. A parser regression reproduces the horizontal HRX's stale stored vector.
+`Invoke-FreshConstructionOracle.ps1 -AnalysisKey 4 -ExportAssembly` independently
+checks fresh native construction and horizontal load generation. After the fix,
+all 16,408 global load entries and all 425,560 stored initial-stiffness entries
+match exactly. The full suite passes 782 tests and 1,579 subtests, with 14 skips.
+Full nonlinear horizontal-chain qualification is recorded separately once its
+committed-step comparison completes.

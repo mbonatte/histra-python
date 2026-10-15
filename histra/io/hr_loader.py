@@ -256,6 +256,7 @@ def load_model(path: Union[str, Path]) -> Model:
                         _attr(elem, "IsProjected", default="false")
                     ),
                     load_type=_attr(elem, "IdTypeLoad", default="Force"),
+                    load_direction=_safe_int(_attr(elem, "IdLoadDirection", default="0")),
                 )
             )
             elem.clear()

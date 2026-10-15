@@ -252,7 +252,7 @@ def generate_line_loads(model: Model, analysis_key: int, combination: int = 1) -
             direction = np.asarray(
                 (analysis.dir_x, analysis.dir_y, analysis.dir_z)
                 if bool(analysis.is_seismic)
-                else item.direction,
+                else item.direction_for(quad),
                 dtype=np.float32,
             )
             value = np.float32(item.load_value)

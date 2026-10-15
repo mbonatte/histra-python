@@ -104,6 +104,27 @@ class LoadTemplateItem:
     psi2: float = 0.0
     is_projected: bool = False
     load_type: str = "Force"
+    # Existing programmatic clients supply a custom vector. The XML reader
+    # supplies the native IdLoadDirection value (default 0) explicitly.
+    load_direction: int = 7
+
+    def direction_for(self, element) -> tuple[float, float, float]:
+        """Original LoadTemplateItem.Dir(Element), including Single normalization."""
+        import numpy as np
+        from histra.preprocessing.quad_geometry import _unit
+
+        code = int(self.load_direction)
+        if 0 <= code <= 3:
+            vector = ((0.,0.,-1.),(1.,0.,0.),(0.,1.,0.),(0.,0.,1.))[code]
+        elif 4 <= code <= 6:
+            if element is None:
+                raise ValueError("An element is required for a local load direction")
+            vector = getattr(element, ("reference_e1","reference_e2","reference_e3")[code-4])
+        elif code == 7:
+            vector = self.direction
+        else:
+            raise ValueError(f"Unsupported IdLoadDirection={code}")
+        return tuple(float(v) for v in _unit(np.asarray(vector,dtype=np.float32)))
 
     @property
     def direction(self) -> tuple[float, float, float]:
