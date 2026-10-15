@@ -12,6 +12,11 @@ from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
+# Small snapshots copy faster than validating reusable buffers. Keep validation
+# intact for large snapshots; this threshold only selects the storage strategy.
+_BATCH_SNAPSHOT_REUSE_MIN_BYTES = 1 << 20
+
+
 def _is_standard_method(an: Any) -> bool:
     return str(getattr(an, "method", "")).startswith("Standard")
 
@@ -65,6 +70,7 @@ class NewtonRaphson(EquiSolnAlgo):
                 tangent_refresh_cadence = int(env_cadence)
 
         iteration_batch_state = None
+        reuse_iteration_batch_buffers = None
         while result == -1:
             alfa = effective_tangent_alpha(p, alfa)
             p.check_cancelled()
@@ -72,7 +78,15 @@ class NewtonRaphson(EquiSolnAlgo):
                 model, p, ls, self.the_integrator, self.the_test, self.the_line_search,
                 reuse_batch_state=iteration_batch_state,
             )
-            iteration_batch_state = iteration_snapshot.batch_state
+            if reuse_iteration_batch_buffers is None:
+                buffers = iteration_snapshot.batch_state
+                reuse_iteration_batch_buffers = (
+                    buffers is not None
+                    and sum(value.nbytes for value in buffers) >= _BATCH_SNAPSHOT_REUSE_MIN_BYTES
+                )
+            iteration_batch_state = (
+                iteration_snapshot.batch_state if reuse_iteration_batch_buffers else None
+            )
             current_it = self.the_test.current_iter
 
             refresh_tangent = False

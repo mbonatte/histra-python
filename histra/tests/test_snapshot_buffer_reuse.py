@@ -65,18 +65,25 @@ def test_invalid_reuse_is_rejected_before_modifying_buffers(runtime, invalid):
         np.testing.assert_array_equal(actual, reference)
 
 
-def test_newton_reuses_only_disposable_iteration_buffers(monkeypatch):
+@pytest.mark.parametrize("minimum_bytes, expected_reuse", [(0, True), (1 << 20, False)])
+def test_newton_selects_lossless_iteration_storage(monkeypatch, minimum_bytes, expected_reuse):
     import warnings
     from histra.solver.state_snapshot import SolverStateSnapshot
     from histra.solver.session import AnalysisSession
     from histra.solver.equilibrium import UnsafeEquilibriumWarning
 
+    import histra.solver.newton_raphson as newton_module
+
+    monkeypatch.setattr(newton_module, "_BATCH_SNAPSHOT_REUSE_MIN_BYTES", minimum_bytes)
     original = SolverStateSnapshot.capture.__func__
     reused = []
+    iteration_states = []
 
     def capture(cls, model, *args, **kwargs):
         buffers = kwargs.get("reuse_batch_state")
         result = original(cls, model, *args, **kwargs)
+        if "reuse_batch_state" in kwargs:
+            iteration_states.append(result.batch_state)
         if buffers is not None:
             reused.append(buffers)
             assert result.batch_state is buffers
@@ -96,4 +103,9 @@ def test_newton_reuses_only_disposable_iteration_buffers(monkeypatch):
             strategy_policy="off",
         ).run("Vert", max_committed_steps=1)
     assert len(execution.committed_steps) == 1
-    assert reused
+    assert len(iteration_states) > 1
+    assert bool(reused) is expected_reuse
+    if not expected_reuse:
+        for previous, current in zip(iteration_states, iteration_states[1:]):
+            for before, after in zip(previous, current):
+                assert not np.shares_memory(before, after)
