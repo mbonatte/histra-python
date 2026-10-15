@@ -97,6 +97,28 @@ def _blend_hysteretic_laws(primary: _HystereticLaw, secondary: _HystereticLaw,
     return replace(primary, **changes)
 
 
+def _restraint_reference_e1(model: Model, key: int) -> np.ndarray:
+    """Original line-Restraint constructor: Normalize(p2 - p1) in Single."""
+    from histra.preprocessing.contact_geometry import _unit_f32, _v
+    try:
+        restraint = model.collections.restraints[key]
+        first, second = (model.collections.nodes[k].point for k in restraint.node_keys)
+    except KeyError as exc:
+        raise ModelPreparationError(f"Restraint {key} references missing geometry.") from exc
+    delta = np.asarray(_v(second), dtype=np.float32) - np.asarray(_v(first), dtype=np.float32)
+    axis = _unit_f32(delta, label=f"Restraint {key} reference axis")
+    # The line constructor normalizes, then ReferenceSystem.Set normalizes again.
+    return _unit_f32(axis, label=f"Restraint {key} reference system")
+
+
+def _restraint_flex_law(model: Model, key: int, material: MasonryMaterial,
+                         intf: Interface, *, cache=None) -> _HystereticLaw:
+    horizontal = _cached_flex_law(material, vertical=False, cache=cache)
+    vertical = _cached_flex_law(material, vertical=True, cache=cache)
+    c1, c2 = _flex_alignment(intf.reference_e1, _restraint_reference_e1(model, key))
+    return _blend_hysteretic_laws(horizontal, vertical, c1, c2)
+
+
 def _interface_flex_law(material: MasonryMaterial, intf: Interface, quad,
                         face: int, *, cache=None) -> _HystereticLaw:
     horizontal = _cached_flex_law(material, vertical=False, cache=cache)
@@ -191,12 +213,12 @@ def _interface_sliding_law(
     if parent_type == "Quad":
         quad = model.collections.quads[parent_key]
     elif parent_type == "Restraint":
-        if intf.parent_type_element1 == "Quad":
-            quad = model.collections.quads[intf.parent_element_key1]
-            effective_face = int(intf.face1)
-        elif intf.parent_type_element2 == "Quad":
-            quad = model.collections.quads[intf.parent_element_key2]
-            effective_face = int(intf.face2)
+        # Interface.SetSpring takes the non-Quad branch for a restraint.
+        # Neither the adjacent Quad's axes nor its broad-face slot applies.
+        horizontal = _cached_sliding_law(material, out_of_plane=out_of_plane, direction="hor", cache=cache)
+        vertical_law = _cached_sliding_law(material, out_of_plane=out_of_plane, direction="vert", cache=cache)
+        c1, c2 = _flex_alignment(intf.reference_e1, _restraint_reference_e1(model, parent_key))
+        return _blend_coulomb_laws(horizontal, vertical_law, c1, c2)
 
     # C# ``MasonryMaterial.SlidingOrthotropyType`` is a read-only property
     # that always returns true. ``ortsc`` only controls whether SetIsotropic

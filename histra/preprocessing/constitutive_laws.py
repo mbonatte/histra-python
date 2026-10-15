@@ -343,7 +343,7 @@ def sliding_law(
         cohesion=material_float(material, f"CohesionSliding{suffix}"),
         mu=material_float(material, f"FrictionRatioSliding{suffix}"),
         plastic_stiffness_ratio=material_float(
-            material, f"SlidingPlasticStiffnessRatio{suffix}"
+            material, "SlidingPlasticStiffnessRatioVer" if normalized == "vert" else f"SlidingPlasticStiffnessRatio{suffix}"
         ),
         max_tensile_ratio=material_float(material, max_tensile_name, 0.8),
         sub_law=material_enum(
@@ -352,8 +352,9 @@ def sliding_law(
         hysteretic_type="Initial",
         fracture_energy=material_bool(material, fracture_name, False),
         G=material_float(material, energy_name),
-        ductility=100000.0,
-        is_ductility_fixed=True,
+        # Native sliding constructors receive IsDuctility=True.
+        ductility=1.0e20,
+        is_ductility_fixed=False,
         check_contact_area=material_bool(material, "CheckContactArea", False),
         is_elastic=not material_bool(material, enabled_name, False),
     )

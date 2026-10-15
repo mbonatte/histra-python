@@ -54,6 +54,7 @@ from histra.preprocessing.material_selection import (
     _cached_flex_law,
     _interface_sliding_law,
     _interface_flex_law,
+    _restraint_flex_law,
     _material,
 )
 from histra.springs.coulomb03 import SpringCoulomb03
@@ -151,13 +152,14 @@ def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, fac
         sp.k = -1.0
         sp.area = _polygon_area_3d(cell)
         if material_override is not None:
-            return sp, _flex_law(material_override)
+            return sp, _restraint_flex_law(model, parent_key, material_override, intf)
         quad_key = (
             intf.parent_element_key1
             if intf.parent_type_element1 == "Quad"
             else intf.parent_element_key2
         )
-        return sp, _flex_law(_material(model, model.collections.quads[quad_key].material_key))
+        material = _material(model, model.collections.quads[quad_key].material_key)
+        return sp, _restraint_flex_law(model, parent_key, material, intf)
     quad = model.collections.quads[parent_key]
     material = material_override if material_override is not None else _material(model, quad.material_key)
     law = _interface_flex_law(material, intf, quad, face)
@@ -300,9 +302,7 @@ def _transverse_side_properties_batch(
         props[:, 0] = -1.0
         props[:, 1] = _polygon_areas_3d(cells)
         if material_override is not None:
-            law = _cached_flex_law(
-                material_override, vertical=False, cache=law_cache
-            )
+            law = _restraint_flex_law(model, parent_key, material_override, intf, cache=law_cache)
         else:
             quad_key = (
                 intf.parent_element_key1
@@ -312,9 +312,7 @@ def _transverse_side_properties_batch(
             material = _material(
                 model, model.collections.quads[quad_key].material_key
             )
-            law = _cached_flex_law(
-                material, vertical=False, cache=law_cache
-            )
+            law = _restraint_flex_law(model, parent_key, material, intf, cache=law_cache)
         return props, law
     quad = model.collections.quads[parent_key]
     material = (

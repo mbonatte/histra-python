@@ -253,7 +253,7 @@ def test_orthotropic_blend_keeps_primary_runtime_law_type():
     )
 
 
-def test_restraint_parent_resolves_the_quad_side_for_law_selection():
+def test_restraint_parent_uses_its_own_axis_for_law_selection():
     material = _material()
     model = _model_with_quad(3, (1.0, 0.0, 0.0))
     restraint_parent = _interface((1.0, 0.0, 0.0), parent_type1="Restraint")
@@ -263,6 +263,11 @@ def test_restraint_parent_resolves_the_quad_side_for_law_selection():
     restraint_parent.parent_element_key2 = 3
     restraint_parent.face2 = 2
 
+    from histra.model.restraint import Restraint
+    from histra.model.node import Node
+    from histra.types.point import Point
+    model.collections.nodes = {1: Node(point=Point()), 2: Node(point=Point(0.,1.,0.))}
+    model.collections.restraints[99] = Restraint(key=99, node_keys=[1,2])
     via_restraint = ms._interface_sliding_law(
         model,
         restraint_parent,
@@ -286,7 +291,8 @@ def test_restraint_parent_resolves_the_quad_side_for_law_selection():
         cache={},
     )
 
-    assert via_restraint == via_quad
+    assert via_restraint.cohesion == float(np.float32(.5))
+    assert via_quad.cohesion == float(np.float32(.3))
 
 
 def test_missing_material_key_fails_explicitly():

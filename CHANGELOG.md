@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match line-restraint material blending against its own native axes, including repeated Single normalization. Correct vertical sliding plastic-stiffness field selection and native sliding ductility constructor flags. Twelve native cases cover flexural, in-plane and out-of-plane law selection.
+
+
 - Match C# zero-friction Coulomb masonry with a Hysteretic diagonal, including asymmetric strengths, fracture-energy/ultimate-strain construction and compiled trial/commit/revert lifecycle. Native routine fixtures cover eight geometry/material cases; production coverage includes material mutation and runtime rebuilds.
 
 
