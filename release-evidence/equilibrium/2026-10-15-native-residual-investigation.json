@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T16:49:08.390816+00:00",
+  "benchmark_id": "dhir-original-equilibrium-investigation",
+  "generator": "Invoke-ResidualAssemblyOracle.ps1; actual committed residual/correction exports; original fresh afference export",
+  "groups": "Translations kN; rigid rotations and internal shear-angle generalized force kN*cm; raw total norm mixes units.",
+  "cases": [
+    {
+      "native_b_norm": 1469.1394967066576,
+      "CTestEnergyIncr_error_bits": "4566678070376789996",
+      "CTestNormUnbalance_error_bits": "4654176159284167674",
+      "CTestNormUnbalance_result": -1,
+      "name": "1-20",
+      "native_work": 0.0019652889777708096,
+      "step": 20,
+      "analysis_key": 1,
+      "spring_records": 77080,
+      "CTestEnergyIncr_result": 1,
+      "id": "horizontal-1-20",
+      "raw_norm": 1469.139496706657,
+      "translation_norm_kN": 28.373064615779462,
+      "translation_max_kN": 3.0770355303153254,
+      "rotation_norm_kN_cm": 713.5755361209484,
+      "rotation_max_kN_cm": 83.01853444494986,
+      "shear_generalized_norm_kN_cm": 1283.8908770754233,
+      "shear_generalized_max_kN_cm": 833.4885205888422,
+      "work": 0.0019652889777708096,
+      "sum_absolute_work_terms": 0.0034267985390484534,
+      "work_cancellation_ratio": 0.5735058409113618,
+      "top_residual_dofs": [
+        {
+          "dof_one_based": 3409,
+          "residual": 833.4885205888422,
+          "quad": 487,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 9961,
+          "residual": 832.5878442479952,
+          "quad": 1423,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 7777,
+          "residual": 174.94828780811804,
+          "quad": 1111,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 5593,
+          "residual": 174.15202170843986,
+          "quad": 799,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 651,
+          "residual": 120.98605175803641,
+          "quad": 93,
+          "local_dof": 6
+        }
+      ]
+    },
+    {
+      "native_b_norm": 4535.046676163362,
+      "CTestEnergyIncr_error_bits": "4566741214072052731",
+      "CTestNormUnbalance_error_bits": "4661708351254041380",
+      "CTestNormUnbalance_result": -1,
+      "name": "4-1",
+      "native_work": 0.0019926731904038575,
+      "step": 1,
+      "analysis_key": 4,
+      "spring_records": 77080,
+      "CTestEnergyIncr_result": 1,
+      "id": "horizontal-4-1",
+      "raw_norm": 4535.046676163362,
+      "translation_norm_kN": 12.528239260543167,
+      "translation_max_kN": 2.8093870686955236,
+      "rotation_norm_kN_cm": 377.99954478361997,
+      "rotation_max_kN_cm": 75.03805237480805,
+      "shear_generalized_norm_kN_cm": 4519.24858160566,
+      "shear_generalized_max_kN_cm": 2206.820986370294,
+      "work": 0.0019926731904038575,
+      "sum_absolute_work_terms": 0.014412857755798184,
+      "work_cancellation_ratio": 0.1382566333593503,
+      "top_residual_dofs": [
+        {
+          "dof_one_based": 3409,
+          "residual": -2206.820986370294,
+          "quad": 487,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 5593,
+          "residual": -2165.0843476814553,
+          "quad": 799,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 7777,
+          "residual": -2004.8929947031866,
+          "quad": 1111,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 9961,
+          "residual": -1797.2681697299922,
+          "quad": 1423,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 5089,
+          "residual": 1211.2521893417797,
+          "quad": 727,
+          "local_dof": 6
+        }
+      ]
+    },
+    {
+      "native_b_norm": 1505.137755862571,
+      "CTestEnergyIncr_error_bits": "4566750996777114333",
+      "CTestNormUnbalance_error_bits": "4654334481302254157",
+      "CTestNormUnbalance_result": -1,
+      "name": "1-20",
+      "native_work": 0.001996915762436087,
+      "step": 20,
+      "analysis_key": 1,
+      "spring_records": 77080,
+      "CTestEnergyIncr_result": 1,
+      "id": "dhir-1-20",
+      "raw_norm": 1505.1377558625718,
+      "translation_norm_kN": 29.528230202643964,
+      "translation_max_kN": 3.9458205031139784,
+      "rotation_norm_kN_cm": 814.6399596974679,
+      "rotation_max_kN_cm": 187.65899629071964,
+      "shear_generalized_norm_kN_cm": 1265.2784214583864,
+      "shear_generalized_max_kN_cm": 812.1022966799501,
+      "work": 0.001996915762436087,
+      "sum_absolute_work_terms": 0.00312317281563156,
+      "work_cancellation_ratio": 0.6393868928550711,
+      "top_residual_dofs": [
+        {
+          "dof_one_based": 3409,
+          "residual": 812.1022966799501,
+          "quad": 487,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 9961,
+          "residual": 811.661267143194,
+          "quad": 1423,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 7777,
+          "residual": 217.34989038998174,
+          "quad": 1111,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 5593,
+          "residual": 217.0763618954079,
+          "quad": 799,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 15664,
+          "residual": -187.65899629071964,
+          "quad": 2238,
+          "local_dof": 4
+        }
+      ]
+    },
+    {
+      "native_b_norm": 1421.012951103997,
+      "CTestEnergyIncr_error_bits": "4566756194615980376",
+      "CTestNormUnbalance_error_bits": "4653964496498188405",
+      "CTestNormUnbalance_result": -1,
+      "name": "7-10",
+      "native_work": 0.0019991699657124044,
+      "step": 10,
+      "analysis_key": 7,
+      "spring_records": 77080,
+      "CTestEnergyIncr_result": 1,
+      "id": "dhir-7-10",
+      "raw_norm": 1421.012951103997,
+      "translation_norm_kN": 28.562947934256815,
+      "translation_max_kN": 9.503472841631492,
+      "rotation_norm_kN_cm": 953.3659412734319,
+      "rotation_max_kN_cm": 452.2909562918917,
+      "shear_generalized_norm_kN_cm": 1053.3543312819381,
+      "shear_generalized_max_kN_cm": 612.4971296110671,
+      "work": 0.0019991699657124044,
+      "sum_absolute_work_terms": 0.003088912086823402,
+      "work_cancellation_ratio": 0.6472084376374484,
+      "top_residual_dofs": [
+        {
+          "dof_one_based": 3409,
+          "residual": 612.4971296110671,
+          "quad": 487,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 5089,
+          "residual": -599.5063949022006,
+          "quad": 727,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 15580,
+          "residual": -452.2909562918917,
+          "quad": 2226,
+          "local_dof": 4
+        },
+        {
+          "dof_one_based": 15622,
+          "residual": -384.4236548302906,
+          "quad": 2232,
+          "local_dof": 4
+        },
+        {
+          "dof_one_based": 2905,
+          "residual": -322.57578452089365,
+          "quad": 415,
+          "local_dof": 6
+        }
+      ]
+    },
+    {
+      "native_b_norm": 1334.1303582633325,
+      "CTestEnergyIncr_error_bits": "4566665207401956161",
+      "CTestNormUnbalance_error_bits": "4653582382813869851",
+      "CTestNormUnbalance_result": -1,
+      "name": "4-1",
+      "native_work": 0.0019597105516670215,
+      "step": 1,
+      "analysis_key": 4,
+      "spring_records": 77080,
+      "CTestEnergyIncr_result": 1,
+      "id": "dhir-4-1",
+      "raw_norm": 1334.1303582633345,
+      "translation_norm_kN": 36.96178352488074,
+      "translation_max_kN": 11.672951531909774,
+      "rotation_norm_kN_cm": 1160.3509507465978,
+      "rotation_max_kN_cm": 557.8255097989236,
+      "shear_generalized_norm_kN_cm": 657.3608677887506,
+      "shear_generalized_max_kN_cm": 519.7882393610344,
+      "work": 0.0019597105516670215,
+      "sum_absolute_work_terms": 0.0024637009425358927,
+      "work_cancellation_ratio": 0.795433616894219,
+      "top_residual_dofs": [
+        {
+          "dof_one_based": 15279,
+          "residual": 557.8255097989236,
+          "quad": 2183,
+          "local_dof": 4
+        },
+        {
+          "dof_one_based": 3409,
+          "residual": 519.7882393610344,
+          "quad": 487,
+          "local_dof": 6
+        },
+        {
+          "dof_one_based": 15321,
+          "residual": 479.59269636398676,
+          "quad": 2189,
+          "local_dof": 4
+        },
+        {
+          "dof_one_based": 15272,
+          "residual": -425.9218432080045,
+          "quad": 2182,
+          "local_dof": 4
+        },
+        {
+          "dof_one_based": 15286,
+          "residual": 262.6414094679683,
+          "quad": 2184,
+          "local_dof": 4
+        }
+      ]
+    }
+  ],
+  "source_commit": "e7fb3893251e02f858dbaccfe2ca02170b093aa3",
+  "reference_version": "2026.1.1",
+  "solver_runtime_sha256": "042588ca92cc15aaf8b76467a67951aeb56394f3758cb38b6f458b2bcbd3b0bf",
+  "model_library_sha256": "a981364ef5b6e3fde2c65d7994eb4a0f60132ded61cf8edac9a98a061b1a5a9b",
+  "native_residual_entries_compared": 82040,
+  "native_residual_max_abs_difference": 0.0,
+  "scope": "Original native force-assembly and convergence routine replay, driven by saved native spring forces plus exported Python Fext/correction. Not an independent native nonlinear run.",
+  "tests": {
+    "passed": 796,
+    "skipped": 14,
+    "subtests_passed": 1614
+  },
+  "policies_changed": false,
+  "fixture_npz_sha256": "2bf864683999be0b45de1639edd6713971c6128e40fb349d3e59a0636648eb13"
+}

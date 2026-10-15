@@ -29,6 +29,11 @@ The small Work value says only that the last correction performed little
 incremental work against the residual. It does not say that the structure is
 in equilibrium. The large support reaction is therefore not valid capacity.
 
+The separate [Dhir native-routine investigation](investigations/dhir-equilibrium-diagnostics.md)
+reproduces the original residual assembly and acceptance on actual committed
+states. It also separates translational forces from rigid-rotation and internal
+shear-angle generalized moments; the raw residual norm is not a total force.
+
 ## Available HiStrA criteria and units
 
 HiStrA models in this repository use kN and cm. The C# implementation uses
