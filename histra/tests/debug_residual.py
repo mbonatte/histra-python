@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 sys.path.insert(0, r"C:\Users\mbonatte\Documents\Coding\histra-python")
 import numpy as np
 from histra.io.hr_loader import load_model
@@ -103,7 +104,7 @@ print(f"  ||lambda*P|| = {np.linalg.norm(lambdaP):.6e}")
 print(f"\n  ||quad_F|| (scattered) = {np.linalg.norm(quad_F):.6e}")
 print(f"  -quad_F (which should be K_quad·Du) = {np.linalg.norm(-quad_F):.6e}")
 print(f"  ||intf_F|| (scattered) = {np.linalg.norm(intf_F):.6e}")
-print(f"  ||K_quad_only@u|| = not computed separately")
+print("  ||K_quad_only@u|| = not computed separately")
 print(f"  ||K@u (full)|| = {np.linalg.norm(K @ u_total):.6e}")
 # Test: build K from quads only
 K_quad_only = assemble_global_k.__wrapped__(model, 0.0) if hasattr(assemble_global_k, '__wrapped__') else None
@@ -201,7 +202,7 @@ for d in fixed:
     if d < n: ls.b[d] = 0.0
 
 R_norm_new = np.linalg.norm(ls.b)
-print(f"\nAfter Newton correction (du_star):")
+print("\nAfter Newton correction (du_star):")
 print(f"  ||R|| = {R_norm_new:.6e}")
 print(f"  max|R_i| = {np.max(np.abs(ls.b)):.6e}")
 print(f"  Ratio: {R_norm_new/R_norm:.6f}")

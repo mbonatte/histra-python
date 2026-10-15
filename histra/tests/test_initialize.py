@@ -1,5 +1,7 @@
 """Test programmatic creation of SpringHysteretic via initialize()."""
-import os, sys, math
+import os
+import sys
+import math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from histra.model.spring import SpringHysteretic, PhaseEnum

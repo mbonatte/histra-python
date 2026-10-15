@@ -1,5 +1,7 @@
 """Direct unit test of the SpringCoulomb03 Takeda state machine."""
-import os, sys, math
+import os
+import sys
+import math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from histra.model.spring import SpringCoulomb03, PhaseEnum

@@ -7,7 +7,9 @@ Per the task specification:
 4. Test an elastic trial strain (within elastic range)
 """
 
-import os, sys, math
+import os
+import sys
+import math
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

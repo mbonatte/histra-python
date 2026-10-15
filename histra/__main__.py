@@ -36,7 +36,7 @@ def main():
           f"NodeCs={len(model.collections.node_c)}, "
           f"Restraints={len(model.collections.restraints)}")
 
-    print(f"\nAssembling K (alfa=0)...")
+    print("\nAssembling K (alfa=0)...")
     t0 = time.time()
     K = assemble_global_k(model, alfa=0.0)
     t1 = time.time()

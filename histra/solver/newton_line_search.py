@@ -96,6 +96,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             with diagnostics.timed("residual_assembly"):
                 self.the_integrator.form_unbalance(p, model, an)
         result = -1
+        previous_error = 1.0
         error = 1.0
         last_error: float | None = None
         last_contraction: float = 1.0
@@ -292,6 +293,7 @@ class NewtonLineSearch(EquiSolnAlgo):
             if last_error is not None and last_error > 0.0:
                 last_contraction = error / last_error
             last_error = error
+            previous_error = error
 
             if p.to_stop:
                 return -4

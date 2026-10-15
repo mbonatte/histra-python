@@ -33,7 +33,7 @@ import platform
 import sys
 import sqlite3
 import time
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 import warnings
 
 import numpy as np

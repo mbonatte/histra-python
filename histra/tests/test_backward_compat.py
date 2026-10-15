@@ -1,5 +1,6 @@
 """Check that existing spring types still work after adding SpringHysteretic."""
-import os, sys
+import os
+import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import xml.etree.ElementTree as ET

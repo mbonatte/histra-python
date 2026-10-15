@@ -1,4 +1,6 @@
-import sys, os, threading
+import sys
+import os
+import threading
 sys.path.insert(0, r"C:\Users\mbonatte\Documents\Coding\histra-python")
 from histra.io.hr_loader import load_model
 from histra.solver.nonlinear_solver import solve_static_nonlinear

@@ -124,7 +124,8 @@ class LoadTemplateItem:
             vector = self.direction
         else:
             raise ValueError(f"Unsupported IdLoadDirection={code}")
-        return tuple(float(v) for v in _unit(np.asarray(vector,dtype=np.float32)))
+        norm_vec = _unit(np.asarray(vector, dtype=np.float32))
+        return (float(norm_vec[0]), float(norm_vec[1]), float(norm_vec[2]))
 
     @property
     def direction(self) -> tuple[float, float, float]:

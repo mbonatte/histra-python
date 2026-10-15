@@ -27,6 +27,15 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]
 release = ["build>=1.2,<2", "twine>=6,<7"]
+lint = ["ruff>=0.9.0", "mypy>=1.14.0"]
+dev = [
+  "pytest>=8,<10",
+  "build>=1.2,<2",
+  "twine>=6,<7",
+  "ruff>=0.9.0",
+  "mypy>=1.14.0",
+  "pre-commit>=4.0.0",
+]
 
 [project.scripts]
 histra-article-benchmark = "histra.tools.article_models_benchmark:main"
@@ -45,3 +54,36 @@ testpaths = ["histra/tests"]
 markers = [
   "integration: regression tests requiring external representative HRX/Results files",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle errors
+  "F",     # pyflakes
+  "W",     # pycodestyle warnings
+]
+ignore = [
+  "E501",  # line too long (handled by formatter)
+  "E402",  # module level import not at top of file
+  "E701",  # multiple statements on one line (colon)
+  "E702",  # multiple statements on one line (semicolon)
+  "E712",  # comparison to True/False
+  "E722",  # bare except
+  "E731",  # lambda assignment
+  "E741",  # ambiguous variable name
+  "F401",  # unused import
+  "F841",  # local variable unused
+  "W291",  # trailing whitespace
+  "W293",  # blank line contains whitespace
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["histra/model", "histra/__init__.py"]
+ignore_missing_imports = true
+follow_imports = "skip"
+warn_unused_configs = true
+warn_redundant_casts = true

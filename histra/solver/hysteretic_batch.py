@@ -60,6 +60,7 @@ from histra.solver.hysteretic_runtime import (  # noqa: F401
     _quad_tau_limit,
     _quad_yield_compression,
     _quad_yield_tension,
+    _quad_revert_trial,
     _refresh_global_resisting_force,
     _refresh_global_resisting_force_by_dof,
     _refresh_max_u_cache,

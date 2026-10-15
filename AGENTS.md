@@ -33,18 +33,27 @@ For structural definitions and full feature scope, see [Supported Features](docs
 ### Environment Setup
 The development environment uses Python 3.12–3.14 on Linux 64-bit with a local virtual environment in `.venv/`.
 ```bash
-# Activate existing virtual environment
-source .venv/bin/activate
+# Idempotent setup script (creates/activates .venv, installs .[dev], sets up pre-commit)
+./bin/setup
+# Or via make:
+make setup
 
-# Or install editable package with test and release dependencies
-python -m pip install -e ".[test,release]"
+# Manual activation & installation:
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 ```
 
-### Verification Commands
-Always verify changes with the existing test suite:
+### Verification & Quality Commands
+Always verify changes with the lint, type-check, and test suite:
 ```bash
-# Run full unit and regression test suite
-python -m pytest -q
+# Unified check: runs lint (ruff), typecheck (mypy), and fast release tests
+make check
+
+# Individual checks:
+make lint       # ruff check histra
+make format     # ruff format --check histra
+make typecheck  # mypy
+make test       # python -m pytest -q
 
 # Run targeted fast release-critical checks (backend coverage, API, metadata, benchmark harnesses)
 python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tests/test_article_models_benchmark.py histra/tests/test_package_metadata.py histra/tests/test_backend_api.py

@@ -236,6 +236,7 @@ from histra.solver.hysteretic_kernels.quad_takeda import (
     _quad_tangent_reload_t,
     _quad_yield_compression,
     _quad_yield_tension,
+    _quad_revert_trial,
 )
 from histra.solver.hysteretic_topology import (
     _InterfaceSlice,

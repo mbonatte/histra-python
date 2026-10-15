@@ -65,7 +65,7 @@ def _execute_steps(
     algorithm: EquiSolnAlgo,
     alfa: float,
     dof: int,
-    diagnostic_writer: DiagnosticOptions | None,
+    diagnostic_writer: Any,
     initial_reaction: Any,
     equilibrium_reference_load_factor: float,
     equilibrium_target_force: Any,
