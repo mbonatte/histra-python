@@ -96,3 +96,25 @@ Triangle.NET polygon triangulation, or unsupported Solid/Vertex element paths.
 
 After both additions, the full suite passes 774 tests and 1,483 subtests,
 with 14 skips. No full nonlinear chain was rerun in this branch audit.
+
+## Omitted material attributes, 2026-10-15
+
+`Invoke-MasonryDefaultsOracle.ps1` invokes the original MasonryMaterial
+constructor, SerializeXmlReader.ReadFromString and the four original material
+law builders. The fixture records 68 consumed property defaults and nine law
+slots after reading a material that supplies stiffness/strength inputs while
+omitting the optional constitutive attributes. Python now uses these native
+constructor defaults whenever the corresponding serialized attribute is absent;
+explicit zero/false values retain precedence. The raw HRX attributes are kept.
+
+Corrections include finite ductility flags and zero default ductilities, shear
+plastic/max-tensile parameters, sliding yielding domains and plastic ratios,
+fracture energy and direction-3 sliding energy. Default metadata attributes in
+the C# source are not assumed to equal constructor values: the fixture exercises
+the actual reader. Native law stiffness, flexural strengths, ultimate strains,
+curve types and selected runtime classes are checked. Existing authored models
+with explicit attributes retain their values.
+
+All 777 tests and 1,560 subtests pass, with 14 skips. This validates omission
+handling for the recorded constructor/reader path; malformed serialized values
+and later desktop material editing are separate behaviors.
