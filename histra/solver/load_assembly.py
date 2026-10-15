@@ -62,20 +62,20 @@ def _coefficient_factor(
     """Evaluate one non-GC C# ``TypeDataEnum`` coefficient."""
 
     if type_data == "Number":
-        return float(number)
+        return float(np.float32(number))
     gamma_field = _GAMMA_FIELDS.get(type_data)
     if gamma_field is not None:
-        return float(getattr(condition, gamma_field))
+        return float(np.float32(getattr(condition, gamma_field)))
     psi_field = _PSI_FIELDS.get(type_data)
     if psi_field is not None:
         if template_item is None:
             raise ValueError(f"{type_data} coefficient requires a load-template item")
-        return float(getattr(template_item, psi_field))
+        return float(np.float32(getattr(template_item, psi_field)))
     gamma_field = _GAMMA_PSI0_FIELDS.get(type_data)
     if gamma_field is not None:
         if template_item is None:
             raise ValueError(f"{type_data} coefficient requires a load-template item")
-        return float(getattr(condition, gamma_field)) * float(template_item.psi0)
+        return float(np.float32(getattr(condition, gamma_field)) * np.float32(template_item.psi0))
     raise NotImplementedError(f"Unsupported load-combination coefficient type: {type_data}")
 
 
@@ -96,13 +96,13 @@ def _resolve_coefficient(
     if type_data == "GammaFavSTR_Psi1_GC" or type_data == "GammaUnfavSTR_Psi1_GC":
         if template_item is None:
             raise ValueError(f"{type_data} coefficient requires a load-template item")
-        primary = float(condition.gamma_unfav_str) * float(template_item.psi1)
-        return primary * _coefficient_factor(
+        primary = np.float32(condition.gamma_unfav_str) * np.float32(template_item.psi1)
+        return float(np.float32(primary * np.float32(_coefficient_factor(
             str(item.secondary_type_data),
             condition,
             template_item,
             number=float(item.val),
-        )
+        ))))
 
     primary_type = _GC_PRIMARY_TYPES.get(type_data)
     if primary_type is None:
@@ -126,7 +126,7 @@ def _resolve_coefficient(
         template_item,
         number=float(item.val),
     )
-    return primary * secondary
+    return float(np.float32(primary) * np.float32(secondary))
 
 
 def _get_comb_coeff_gravity(model: Model, analysis_key: int, combination: int) -> float:
