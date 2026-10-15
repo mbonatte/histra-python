@@ -30,3 +30,5 @@ scratch/
 benchmark_outputs/
 docs/PhD-Thesis/
 .agents/
+model/
+*.Results
