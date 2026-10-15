@@ -131,8 +131,8 @@ def _b_matrices(quad: Any, natural: np.ndarray, positions: np.ndarray, node0: np
     cos1 = float(quad.cos[0])
     first = (-length4 * sin4 * sin2 / sin3) * m2 + (-length4 * sin1) * m3
     second = (-length4 * sin4 * cos2 / sin3) * m2 + (length4 * cos1) * m3
-    e1 = np.asarray(quad.reference_e1, dtype=float)
-    e2 = np.asarray(quad.reference_e2, dtype=float)
+    e1 = np.asarray(quad.reference_e1, dtype=np.float32).astype(float)
+    e2 = np.asarray(quad.reference_e2, dtype=np.float32).astype(float)
     result[:, :, 3] = first[:, None] * e1 + second[:, None] * e2
     return result
 
@@ -157,9 +157,11 @@ def compute_quad_local_mass(
             f"Quad {quad.key} references missing masonry material {quad.material_key}."
         ) from exc
 
-    mid_surface = np.asarray([(point.x, point.y, point.z) for point in nodes], dtype=float)
-    normals = np.asarray([(point.x, point.y, point.z) for point in quad.normal], dtype=float)
-    thickness = np.asarray(quad.thickness, dtype=float)
+    # Native Node.Point, Quad.Normal/Thickness and reference axes are Single
+    # storage, promoted before the Point3d/Double mass integration arithmetic.
+    mid_surface = np.asarray([(point.x, point.y, point.z) for point in nodes], dtype=np.float32).astype(float)
+    normals = np.asarray([(point.x, point.y, point.z) for point in quad.normal], dtype=np.float32).astype(float)
+    thickness = np.asarray(quad.thickness, dtype=np.float32).astype(float)
     if mid_surface.shape != (4, 3) or normals.shape != (4, 3) or thickness.shape != (4,):
         raise MassMatrixError(f"Quad {quad.key} has incomplete geometry for mass integration.")
 
@@ -169,7 +171,7 @@ def compute_quad_local_mass(
             mid_surface - normals * thickness[:, None] / 2.0,
         )
     )
-    centre = np.asarray((quad.g.x, quad.g.y, quad.g.z), dtype=float)
+    centre = np.asarray((quad.g.x, quad.g.y, quad.g.z), dtype=np.float32).astype(float)
     centre_natural = _invert_hexahedron(centre, volume_nodes)
 
     positions = _N8 @ volume_nodes

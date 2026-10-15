@@ -64,12 +64,29 @@ def test_quad_mass_matches_physical_translational_mass() -> None:
 
     local = compute_quad_local_mass(quad, model)
 
-    expected_mass = 1.0 * 1.0 * 0.2 * 2.0 / GRAVITY_ACCELERATION
+    expected_mass = 1.0 * 1.0 * float(np.float32(0.2)) * 2.0 / GRAVITY_ACCELERATION
     assert local.shape == (7, 7)
     assert np.allclose(local, local.T, rtol=0.0, atol=1.0e-15)
     assert local[0, 0] == pytest.approx(expected_mass, rel=1.0e-12)
     assert local[1, 1] == pytest.approx(expected_mass, rel=1.0e-12)
     assert local[2, 2] == pytest.approx(expected_mass, rel=1.0e-12)
+
+
+def test_mass_input_precision_matches_native_geometry_storage():
+    import json
+
+    fixture = Path(__file__).parent / "fixtures/csharp-mass-input-precision-2026.1.1.json"
+    for case in json.loads(fixture.read_text())["cases"]:
+        model = _single_quad_model()
+        quad = model.collections.quads[1]
+        model.collections.materials[1].w = case["input_weight"]
+        quad.thickness = [case["input_thickness"]] * 4
+        quad.normal = [Point(*case["input_normal"]) for _ in range(4)]
+        quad.length, quad.cos, quad.sin = case["length"], case["cos"], case["sin"]
+        quad.g = Point(*case["centre"])
+        native = np.asarray(case["mass"]).reshape(7, 7)
+        actual = compute_quad_local_mass(quad, model)
+        np.testing.assert_allclose(actual, native, rtol=3e-13, atol=1e-22)
 
 
 def test_global_mass_preserves_active_csharp_consistent_behavior() -> None:
@@ -85,7 +102,7 @@ def test_global_mass_preserves_active_csharp_consistent_behavior() -> None:
     assert assembly.matrix.shape == (7, 7)
     assert np.allclose(directions[:3], np.eye(3))
     assert np.allclose(mass_directions, assembly.matrix @ directions)
-    expected_mass = 0.4 / GRAVITY_ACCELERATION
+    expected_mass = float(np.float32(0.2)) * 2.0 / GRAVITY_ACCELERATION
     assert np.allclose(totals, expected_mass, rtol=1.0e-12, atol=0.0)
 
 
