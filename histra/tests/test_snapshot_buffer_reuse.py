@@ -63,3 +63,37 @@ def test_invalid_reuse_is_rejected_before_modifying_buffers(runtime, invalid):
         runtime.snapshot(reuse=tuple(buffers))
     for actual, reference in zip(buffers, before):
         np.testing.assert_array_equal(actual, reference)
+
+
+def test_newton_reuses_only_disposable_iteration_buffers(monkeypatch):
+    import warnings
+    from histra.solver.state_snapshot import SolverStateSnapshot
+    from histra.solver.session import AnalysisSession
+    from histra.solver.equilibrium import UnsafeEquilibriumWarning
+
+    original = SolverStateSnapshot.capture.__func__
+    reused = []
+
+    def capture(cls, model, *args, **kwargs):
+        buffers = kwargs.get("reuse_batch_state")
+        result = original(cls, model, *args, **kwargs)
+        if buffers is not None:
+            reused.append(buffers)
+            assert result.batch_state is buffers
+            runtime = ModelManager.hysteretic_batch_for(model)
+            for actual, expected in zip(result.batch_state, runtime.snapshot()):
+                np.testing.assert_array_equal(actual, expected)
+        return result
+
+    monkeypatch.setattr(SolverStateSnapshot, "capture", classmethod(capture))
+    model = load_model(Path(__file__).resolve().parents[1] / "model-live/model.hrx")
+    analysis = next(a for a in model.collections.analyses.values() if a.name == "Vert")
+    analysis.method = "ModifiedNewtonRaphson"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UnsafeEquilibriumWarning)
+        execution = AnalysisSession(
+            model, equilibrium_policy="warn", linear_solver_backend="superlu",
+            strategy_policy="off",
+        ).run("Vert", max_committed_steps=1)
+    assert len(execution.committed_steps) == 1
+    assert reused

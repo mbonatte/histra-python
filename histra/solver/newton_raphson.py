@@ -64,12 +64,15 @@ class NewtonRaphson(EquiSolnAlgo):
             if env_cadence is not None and env_cadence.isdigit():
                 tangent_refresh_cadence = int(env_cadence)
 
+        iteration_batch_state = None
         while result == -1:
             alfa = effective_tangent_alpha(p, alfa)
             p.check_cancelled()
             iteration_snapshot = SolverStateSnapshot.capture(
-                model, p, ls, self.the_integrator, self.the_test, self.the_line_search
+                model, p, ls, self.the_integrator, self.the_test, self.the_line_search,
+                reuse_batch_state=iteration_batch_state,
             )
+            iteration_batch_state = iteration_snapshot.batch_state
             current_it = self.the_test.current_iter
 
             refresh_tangent = False

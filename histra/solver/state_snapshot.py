@@ -300,6 +300,8 @@ class SolverStateSnapshot:
         integrator: Any,
         convergence_test: Any | None = None,
         line_search: Any | None = None,
+        *,
+        reuse_batch_state: tuple[np.ndarray, ...] | None = None,
     ) -> "SolverStateSnapshot":
         program_state = {
             key: _copy_array(getattr(p, key))
@@ -381,7 +383,14 @@ class SolverStateSnapshot:
                 interfaces=interface_spring_sources,
             )
         ]
-        batch_state = runtime.snapshot() if runtime is not None else None
+        batch_state = None
+        if runtime is not None:
+            # Only disposable iteration snapshots may consume prior buffers;
+            # independent step/line-search snapshots use fresh storage.
+            batch_state = (
+                runtime.snapshot() if reuse_batch_state is None
+                else runtime.snapshot(reuse=reuse_batch_state)
+            )
         return cls(
             p=p,
             ls=ls,
