@@ -17,6 +17,8 @@ from histra.types.pcg import (
     PCGConvergenceError,
     PCGFactorization,
 )
+from histra.types.vector_norm import csharp_vector_norm
+
 from histra.types.umfpack import (
     UmfpackError,
     UmfpackFactorization,
@@ -100,18 +102,10 @@ class LinearSystem:
         self.b[i] += v
 
     def get_b_norm(self, norm_type: int = 2) -> float:
-        if self.b.size == 0:
-            return 0.0
-        if norm_type == 2:
-            return float(np.linalg.norm(self.b))
-        return float(np.max(np.abs(self.b)))
+        return float(csharp_vector_norm(self.b, norm_type))
 
     def get_x_norm(self, norm_type: int = 2) -> float:
-        if self.x.size == 0:
-            return 0.0
-        if norm_type == 2:
-            return float(np.linalg.norm(self.x))
-        return float(np.max(np.abs(self.x)))
+        return float(csharp_vector_norm(self.x, norm_type))
 
     def get_x_per_b(self) -> float:
         # C# MatrixManager.Vector.operator ^ is a left-associated scalar loop.
