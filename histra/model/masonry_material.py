@@ -106,6 +106,11 @@ class MasonryMaterial:
     def value(self, name: str, default: Any = 0.0) -> Any:
         """Return a typed material property from the original HRX attributes."""
         raw = self.properties.get(name)
+        if raw is None and name in {"DuctilityShear", "ShearUltimateStrain"}:
+            # Both C# accessors address _ShearUltimateStrain; only
+            # DuctilityShear is serialized by the original XML reader.
+            alias = "DuctilityShear" if name == "ShearUltimateStrain" else "ShearUltimateStrain"
+            raw = self.properties.get(alias)
         if raw is None:
             return _NATIVE_CONSTITUTIVE_DEFAULTS.get(name, default)
         if isinstance(default, bool):

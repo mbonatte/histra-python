@@ -118,3 +118,7 @@ with explicit attributes retain their values.
 All 777 tests and 1,560 subtests pass, with 14 skips. This validates omission
 handling for the recorded constructor/reader path; malformed serialized values
 and later desktop material editing are separate behaviors.
+
+The XML-reader fixture also verifies that serialized `DuctilityShear` and the
+`ShearUltimateStrain` accessor share the same native backing value. Python
+resolves that alias before applying omitted-attribute defaults.

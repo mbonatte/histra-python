@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+
+import numpy as np
 import xml.etree.ElementTree as ET
 
 from histra.io.hr_loader import load_model
@@ -72,3 +74,14 @@ class NativeMasonryDefaultsTests(unittest.TestCase):
         for name, value in [('ShearMaxTensileRatio',0.),('SlidingPlasticStiffnessRatioVer',0.),('GsDir3',.125)]:
             self.assertEqual(material_float(material,name), value)
         self.assertEqual(material.value('SlidingYieldingDomainHor', ''), 'Linear')
+
+    def test_serialized_ductility_and_ultimate_strain_share_the_native_value(self):
+        data = fixture()
+        material = MasonryMaterial(properties=dict(ET.fromstring(data['alias_xml']).attrib))
+        self.assertNotIn('ShearUltimateStrain',material.properties)
+        for name, bits in data['alias_values_bits'].items():
+            expected = np.array([int(bits)],dtype=np.int64).view(np.float64)[0]
+            self.assertEqual(material_float(material,name),expected)
+        # The scalar material path reads the same value as the law builder.
+        self.assertEqual(material.get_shear_ultimate_strain(1.,0.,1.,0.),
+                         float(material.value('DuctilityShear',0.)))
