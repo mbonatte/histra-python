@@ -212,9 +212,8 @@ class Quad(
 
     def compute_dn(self, collections, ls=None, nr: bool = False) -> tuple[float, float]:
         """Port of C# ``Quad.ComputeDN`` using cached interface relationships."""
-        del ls
         if not nr:
-            raise NotImplementedError("Quad.ComputeDN with NR=False is not implemented")
+            return self._compute_linear_normal_force(collections, ls)
         self._ensure_dn_cache(collections)
         assert self._perf_dn_edges is not None
         assert self._perf_dn_areas is not None
@@ -239,6 +238,36 @@ class Quad(
         sigma = 0.5 * (committed_stress[0] + committed_stress[2]) + 0.5 * (committed_stress[1] + committed_stress[3])
         dn = 0.5 * (normal_increment[0] + normal_increment[2]) + 0.5 * (normal_increment[1] + normal_increment[3])
         return dn, sigma
+
+    def _compute_linear_normal_force(self, collections, ls) -> tuple[float, float]:
+        from histra.solver.hysteretic_kernels.kinematics import _quad_linear_normal_force
+        if _quad_linear_normal_force is None:
+            raise RuntimeError("NR=False requires the compiled Numba backend")
+        self._ensure_dn_cache(collections)
+        interfaces, edges = [], [0]
+        for refs in self._perf_dn_edges:
+            interfaces.extend(intf for intf, _ in refs)
+            edges.append(len(interfaces))
+        dns = np.fromiter((intf.compute_dn(ls, nr=False) for intf in interfaces), dtype=np.float64)
+        offsets, forces, increments = [0], [], []
+        for intf in interfaces:
+            runtime = getattr(intf, "_perf_hysteretic_batch", None)
+            if runtime is not None and runtime.manages(intf):
+                start, stop = intf._perf_hysteretic_slice
+                trial = runtime.trial[start:stop, 6]
+                delta = trial - runtime.committed[start:stop, 6]
+            else:
+                trial = np.fromiter((s.get_force() for s in intf.trasv_1), dtype=np.float64)
+                delta = np.fromiter((s.get_incr_force() for s in intf.trasv_1), dtype=np.float64)
+            forces.append(trial)
+            increments.append(delta)
+            offsets.append(offsets[-1] + len(trial))
+        return _quad_linear_normal_force(
+            np.asarray(edges, dtype=np.int64), dns, np.asarray(offsets, dtype=np.int64),
+            np.concatenate(forces) if forces else np.empty(0),
+            np.concatenate(increments) if increments else np.empty(0),
+            np.asarray(self._perf_dn_areas, dtype=np.float64),
+        )
 
     def _local_increment(self, x: np.ndarray) -> list[float]:
         if self._perf_aff_pairs is None:

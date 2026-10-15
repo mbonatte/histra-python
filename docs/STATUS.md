@@ -9,6 +9,7 @@ iteration counts. See [the full-chain benchmark](benchmarks/dhir-full-chain-nati
 
 Post-release changes cover native elastic transverse and zero-friction diagonal
 springs, compiled lifecycle coverage, and restraint-axis/material selection.
+Linear normal-force evaluation (`NR=False`) also has native routine coverage.
 Modal mass assembly preserves C# Single gravity and masonry weight. The existing
 Dhir reference validates all 20 virgin modes with small remaining arithmetic
 differences; see [the modal benchmark](benchmarks/dhir-modal-native-parity.md) and

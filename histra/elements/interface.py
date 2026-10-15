@@ -128,22 +128,46 @@ class Interface:
         self._perf_area = float(abs(np.float32(twice * np.float32(0.5))))
         return self._perf_area
 
+    def _linear_normal_projection(self, ls):
+        if ls is None or not hasattr(ls, "x"):
+            raise ValueError("NR=False requires a linear system with its current x correction")
+        if len(self.aff) < 6:
+            raise ValueError("NR=False requires six flexural afference rows")
+        rows = self.aff[:6]
+        offsets = np.r_[0, np.cumsum([len(row) for row in rows])].astype(np.int64)
+        gdls = np.fromiter((entry.gdl - 1 for row in rows for entry in row), dtype=np.int64)
+        coefficients = np.fromiter((entry.alfa for row in rows for entry in row), dtype=np.float64)
+        return (np.asarray(ls.x, dtype=np.float64), offsets, gdls, coefficients,
+                float(self.length), self.interfaccia_vincolata_computed())
+
+    def compute_flex_def(self, ls) -> tuple[float, float, float]:
+        """Original ComputeFlexdef, using the current global correction only."""
+        from histra.solver.hysteretic_kernels.kinematics import _interface_flex_from_global
+        if _interface_flex_from_global is None:
+            raise RuntimeError("ComputeFlexdef requires the compiled Numba backend")
+        return _interface_flex_from_global(*self._linear_normal_projection(ls))
+
     def compute_dn(self, ls: Any = None, nr: bool = False) -> float:
         """Port of C# ``Interface.ComputeDN``.
 
-        The nonlinear Newton path used by this benchmark passes ``NR=True``;
+        The nonlinear Newton path passes ``NR=True``;
         in that path the normal-force increment is the negative sum of the
         transverse springs' incremental forces.
+        With ``NR=False``, project the current global correction and apply
+        the current local flexural stiffness, as in C# ComputeFlexdef.
         """
         if nr:
             result = 0.0
             for spring in self.trasv_1:
                 result -= float(spring.get_incr_force())
             return result
-        raise NotImplementedError(
-            "Interface.ComputeDN with NR=False requires the flexural "
-            "deformation path, which is not used by the selected benchmark."
-        )
+        from histra.solver.hysteretic_kernels.kinematics import _interface_linear_normal_increment
+        if _interface_linear_normal_increment is None:
+            raise RuntimeError("NR=False requires the compiled Numba backend")
+        k = np.asarray(self.status.k, dtype=np.float64)
+        if k.shape != (6, 6):
+            raise ValueError("NR=False requires the current 6-by-6 flexural stiffness block")
+        return float(_interface_linear_normal_increment(*self._linear_normal_projection(ls), k))
 
     def compute_area_corr(self) -> float:
         """Port of the contact-area sum used by Coulomb sliding springs."""

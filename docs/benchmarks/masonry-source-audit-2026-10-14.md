@@ -24,7 +24,7 @@ The 2026-10-14 full suite passes **757 tests and 1,418 subtests**, with 14 skips
 - Purely elastic transverse flexural laws now select `SpringLinearElastic`, including mixed elastic/hysteretic series construction. Five original-assembly factory cases cover nine cyclic commits each, scalar and compiled forces/tangents, exact phase and definition metadata. Production tests cover preparation, rebuilds and nonlinear-to-elastic material mutation with zero unmanaged elements. The compiled elastic update preserves the native incremental force calculation without hysteretic unloading phases. Broader structural validation of this branch remains separate from Dhir qualification.
 - Line-restraint flexural and sliding selection now uses the restraint axis, with the two Single normalizations in the original constructor and ReferenceSystem.Set. Twelve original-assembly cases cover distinct/oblique axes, nonlinear and mixed elastic laws; checked axes, law fields and curve selections match exactly. Scalar and batched transverse preparation share this rule. Native constructor tests also correct the vertical SlidingPlasticStiffnessRatioVer attribute and sliding U_r=1e20 / IsDuctilityFixed=false. A fresh Dhir construction check after these changes still matches all 77,080 tested spring definitions following the material-146 foundation reset.
 - Polygon and node overloads of `Interface.SetSpring` differ. Node-overload coverage must not be applied to the polygon branch without checking its construction path.
-- `NR=False` normal-force evaluation is not covered by the selected Newton workflow.
+- `NR=False` now has direct original-assembly routine coverage (see below). The Dhir Newton workflow does not independently exercise this branch.
 - Complete native pushover private spring histories and global displacement vectors are not saved at every step. Missing and NULL measurements remain unavailable, not inferred matches.
 
 Tiny arithmetic differences can affect force-sign-dependent phase transitions. Numeric tolerance alone therefore does not establish phase parity. The strict gate retained exact phase comparisons throughout the successful Dhir comparison. See [Dhir progress](dhir-full-chain-native-parity-progress.md) for the latest completed run and output replay.
@@ -45,3 +45,26 @@ complete Dhir nonlinear chain and do not replace a full native structural-chain
 reference for the new zero-friction branch. Polygon-interface overloads,
 NR=False normal-force evaluation and omitted material-property defaults still
 need separate native coverage.
+
+## Linear normal-force branch, 2026-10-15
+
+The original `Interface.ComputeFlexdef`, `Interface.ComputeDN(A, false)` and
+`Quad.ComputeDN(..., false)` are invoked by
+`tools/csharp-diagnostics/Invoke-LinearNormalForceOracle.ps1`. The committed
+`csharp_linear_normal_force_2026_1_1.json` fixture records original assembly
+provenance and doubles as binary bit patterns. Nine cases cover free interfaces,
+each restraint side, empty afference rows, repeated global DOFs, cancellation,
+repeated edge registrations, missing interfaces and unrelated-parent area.
+
+Python now evaluates this formerly rejected branch using compiled kernels,
+the current global correction and the current local stiffness. It preserves
+C# projection and reduction order, including `force - increment` cancellation.
+Tests compare all checked local flexural corrections, interface normal increments,
+Quad increments and stresses exactly. Dense-runtime coverage deliberately leaves
+object spring forces stale to verify that authoritative trial/committed buffers
+are used. Input validation rejects missing displacement data, invalid DOFs and
+invalid local stiffness dimensions. Existing Newton evaluation is unchanged.
+
+The full suite passes 773 tests and 1,479 subtests, with 14 skips. These routine
+fixtures qualify this calculation branch; they do not establish end-to-end
+linear-analysis parity or extend the prior full-chain Dhir qualification.
