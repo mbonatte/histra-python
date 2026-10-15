@@ -7,11 +7,11 @@ constant load and the final committed pushover step. Every available measured
 field matches C# 2026.1.1 exactly for this configuration, including all committed
 iteration counts. See [the full-chain benchmark](benchmarks/dhir-full-chain-native-parity-progress.md).
 
-Post-release changes cover native elastic transverse spring construction and
-compiled cyclic updates, including material mutation. Modal mass assembly now
-preserves C# Single gravity and masonry weight. The existing Dhir reference
-validates all 20 virgin modes with small remaining arithmetic differences;
-see [the modal benchmark](benchmarks/dhir-modal-native-parity.md) and
+Post-release changes cover native elastic transverse and zero-friction diagonal
+springs, compiled lifecycle coverage, and restraint-axis/material selection.
+Modal mass assembly preserves C# Single gravity and masonry weight. The existing
+Dhir reference validates all 20 virgin modes with small remaining arithmetic
+differences; see [the modal benchmark](benchmarks/dhir-modal-native-parity.md) and
 [the remaining masonry audit](benchmarks/masonry-source-audit-2026-10-14.md).
 
 Historical Article/interface-chain evidence qualifies its recorded source and

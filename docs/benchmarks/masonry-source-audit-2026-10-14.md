@@ -15,7 +15,7 @@ The Dhir reference now matches every available committed output through pushover
 | Trial, commit and revert | Hysteretic and Coulomb routines; solver trace | Native routine fixtures and selected recorded histories; rollback and reopened-history defects are kept separate from intended constitutive behavior |
 | Global outputs | New installed-run Dhir `.Results` and trace | Every available spring field and identity, local element output, reactions and model-point displacement at every compared state; step zero is not committed |
 
-The latest 2026-10-14 full suite passes **757 tests and 1,418 subtests**, with 14 skips. The compiled numerical backend remains in use. Small commits separate orientation, ultimate displacement, kinematics, local stiffness, force reconstruction, diagonal geometry, controller and output changes. See the [native construction and update audit](dhir-native-construction-and-update-audit.md) for whole-model binary comparisons and direct original routine fixtures.
+The 2026-10-14 full suite passes **757 tests and 1,418 subtests**, with 14 skips. The compiled numerical backend remains in use. Small commits separate orientation, ultimate displacement, kinematics, local stiffness, force reconstruction, diagonal geometry, controller and output changes. See the [native construction and update audit](dhir-native-construction-and-update-audit.md) for whole-model binary comparisons and direct original routine fixtures.
 
 ## Limits and remaining branches
 
@@ -28,3 +28,20 @@ The latest 2026-10-14 full suite passes **757 tests and 1,418 subtests**, with 1
 - Complete native pushover private spring histories and global displacement vectors are not saved at every step. Missing and NULL measurements remain unavailable, not inferred matches.
 
 Tiny arithmetic differences can affect force-sign-dependent phase transitions. Numeric tolerance alone therefore does not establish phase parity. The strict gate retained exact phase comparisons throughout the successful Dhir comparison. See [Dhir progress](dhir-full-chain-native-parity-progress.md) for the latest completed run and output replay.
+
+
+## Additional branch validation, 2026-10-15
+
+Commits `1169a0f` and `19e9412` add zero-friction hysteretic diagonals and native
+restraint-axis/material-constructor corrections. The full suite passes 771
+tests and 1,470 subtests, with 14 skips. A fresh Dhir model with foundation
+material 146 still matches all 77,080 checked native spring definitions and
+the tested geometry fields exactly. No native computational objects are reused
+in Python.
+
+[Compact branch evidence](../../release-evidence/dhir/2026-10-15-masonry-branches.json)
+records fixture hashes, coverage and limitations. These checks do not repeat the
+complete Dhir nonlinear chain and do not replace a full native structural-chain
+reference for the new zero-friction branch. Polygon-interface overloads,
+NR=False normal-force evaluation and omitted material-property defaults still
+need separate native coverage.

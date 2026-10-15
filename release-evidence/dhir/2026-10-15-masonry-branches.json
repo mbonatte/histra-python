@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T08:57:58.104534+00:00",
+  "source_commit": "19e9412ebff49fa1600ca82553b9e83642875e38",
+  "generator": "Invoke-ZeroFrictionDiagonalOracle.ps1; Invoke-RestraintOrientationOracle.ps1; compare_native_fresh_restraint_2026_10_15.py; pytest",
+  "benchmark_id": "masonry-zero-friction-and-restraint-orientation-2026-1-1",
+  "native_model_library_sha256": "a981364ef5b6e3fde2c65d7994eb4a0f60132ded61cf8edac9a98a061b1a5a9b",
+  "zero_friction": {
+    "native_cases": 8,
+    "cyclic_commits": 112,
+    "failed_trial_reverts": 8,
+    "exact_definition_fields": true,
+    "exact_phases": true,
+    "cyclic_rtol": 1e-12,
+    "cyclic_atol": 1e-12,
+    "compiled_lifecycle_covered": [
+      "fresh preparation",
+      "actual solver step",
+      "commit",
+      "revert",
+      "snapshot/restore",
+      "reset",
+      "disabled springs",
+      "material mutation",
+      "runtime rebuild"
+    ],
+    "fixture_sha256": "422880c27b83a3734fbc2902ab2e4d5d438bc22465f39c24853541d83625c7bc"
+  },
+  "restraint_orientation": {
+    "native_cases": 12,
+    "native_axes_and_checked_law_fields_exact": true,
+    "scalar_and_batch_transverse_covered": true,
+    "native_constructor_fields_corrected": [
+      "SlidingPlasticStiffnessRatioVer",
+      "U_r=1e20",
+      "IsDuctilityFixed=false"
+    ],
+    "fixture_sha256": "dfc26ad85c96345ebdbc3540d365a18faa6c39d8431320711ba2b575aa2461a8"
+  },
+  "dhir_fresh_definitions": {
+    "foundation_material": 146,
+    "foundation_interfaces": 148,
+    "quads": 2344,
+    "interfaces": 6228,
+    "springs": 77080,
+    "tested_fields": [
+      "K",
+      "Area",
+      "Fy",
+      "Ur",
+      "available E3p"
+    ],
+    "tested_geometry_fields": [
+      "Length",
+      "Diago",
+      "Cos",
+      "Sin",
+      "thickness"
+    ],
+    "differences": {},
+    "raw_report_sha256": "857e2b9caacf263e75a9faacb3f5f41aa8402079023b22c0ef91027fcf2a3a8e",
+    "native_reference_sha256": "a40722fa4e04aacfa8a9f24f53a9a690a8c14c1d12a8c8bee85d69452d2e648c"
+  },
+  "tests": {
+    "passed": 771,
+    "skipped": 14,
+    "subtests_passed": 1470,
+    "log_sha256": "a3d7dd4ac4383cf723a38f4757f842fc025b5b2640da529f189add48d7d70ab9"
+  },
+  "qualification_limits": [
+    "No new full C# structural-chain reference for zero-friction branch.",
+    "The full Dhir nonlinear chain has not been rerun after these commits; fresh geometry and definition comparisons were repeated.",
+    "Original v1.5.0 full-chain evidence remains qualification of its recorded release commit."
+  ]
+}
