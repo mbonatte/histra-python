@@ -1,0 +1,2570 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T22:34:01.490832+00:00",
+  "source_commit": "d6e79dec65050600af0693dc7c411342f6bb7cdd",
+  "generator": "summarize_four_wall_comparison.py",
+  "benchmark_id": "four-wall-native-static-modal-2026.1.1",
+  "static_unique_commits": 296,
+  "static_unique_spring_records": 100640,
+  "cases": {
+    "01_isotropic_reversal": {
+      "results_sha256": "436a124635ac3d784a9a9c0845b40f591c7897d4d7b433ef13a47cf44fb4792c",
+      "reference_unchanged": true,
+      "static_fields": {
+        "SpringStatesTmp.U": {
+          "values": 25160,
+          "max_abs_difference": 1.0408340855860843e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.F": {
+          "values": 25160,
+          "max_abs_difference": 2.788880237858393e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Phase": {
+          "values": 25160,
+          "max_abs_difference": 6.0,
+          "outside_audit_envelope": 9,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy1": {
+          "values": 25160,
+          "max_abs_difference": 2.842170943040401e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy2": {
+          "values": 25160,
+          "max_abs_difference": 2.842170943040401e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up1": {
+          "values": 25160,
+          "max_abs_difference": 4.591774807899561e-41,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up2": {
+          "values": 25160,
+          "max_abs_difference": 4.591774807899561e-41,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.N": {
+          "values": 25160,
+          "max_abs_difference": 1.1368683772161603e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.SpringType": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U1": {
+          "values": 296,
+          "max_abs_difference": 2.0816681711721685e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U2": {
+          "values": 296,
+          "max_abs_difference": 2.1163626406917047e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U3": {
+          "values": 296,
+          "max_abs_difference": 2.42861286636753e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U4": {
+          "values": 296,
+          "max_abs_difference": 2.3592239273284576e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U5": {
+          "values": 296,
+          "max_abs_difference": 1.1973043612480757e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U6": {
+          "values": 296,
+          "max_abs_difference": 1.3253161186603973e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U7": {
+          "values": 296,
+          "max_abs_difference": 4.649058915617843e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U8": {
+          "values": 296,
+          "max_abs_difference": 4.579669976578771e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U9": {
+          "values": 296,
+          "max_abs_difference": 1.530772144969089e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U10": {
+          "values": 296,
+          "max_abs_difference": 1.530772144969089e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U11": {
+          "values": 296,
+          "max_abs_difference": 1.5307722194153442e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U12": {
+          "values": 296,
+          "max_abs_difference": 1.5307722194153442e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceX": {
+          "values": 296,
+          "max_abs_difference": 1.1501910535116622e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceZ": {
+          "values": 296,
+          "max_abs_difference": 6.617444900424221e-22,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsY": {
+          "values": 296,
+          "max_abs_difference": 7.169167906648555e-27,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U1": {
+          "values": 296,
+          "max_abs_difference": 5.689893001203927e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U2": {
+          "values": 296,
+          "max_abs_difference": 1.833883836401745e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U3": {
+          "values": 296,
+          "max_abs_difference": 4.163336342344337e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U4": {
+          "values": 296,
+          "max_abs_difference": 1.3253161186603973e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U5": {
+          "values": 296,
+          "max_abs_difference": 4.87890977618477e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U6": {
+          "values": 296,
+          "max_abs_difference": 1.1838772498839887e-32,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U7": {
+          "values": 296,
+          "max_abs_difference": 8.538092108323347e-19,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.K": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U4": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U5": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U6": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U1": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U2": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U3": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U4": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U5": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U6": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R1": {
+          "values": 74,
+          "max_abs_difference": 2.6867397195928788e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R2": {
+          "values": 74,
+          "max_abs_difference": 2.5849394142282115e-22,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Et": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Eel": {
+          "values": 74,
+          "max_abs_difference": 7.771561172376096e-15,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ed": {
+          "values": 74,
+          "max_abs_difference": 1.176836406102666e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ei": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Evd": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ux": {
+          "values": 74,
+          "max_abs_difference": 5.551115123125783e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uy": {
+          "values": 74,
+          "max_abs_difference": 1.7763568394002505e-15,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vx": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ax": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ay": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Az": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.U": {
+          "values": 1020,
+          "max_abs_difference": 3.122502256758253e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F": {
+          "values": 1020,
+          "max_abs_difference": 1.1501910535116622e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Phase": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy1": {
+          "values": 1020,
+          "max_abs_difference": 2.842170943040401e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy2": {
+          "values": 1020,
+          "max_abs_difference": 2.842170943040401e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up1": {
+          "values": 1020,
+          "max_abs_difference": 4.591774807899561e-41,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up2": {
+          "values": 1020,
+          "max_abs_difference": 4.591774807899561e-41,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.N": {
+          "values": 1020,
+          "max_abs_difference": 7.105427357601002e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.SpringType": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.K_tang": {
+          "values": 1020,
+          "max_abs_difference": 1.1368683772161603e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax1": {
+          "values": 1020,
+          "max_abs_difference": 0.00025501906386937376,
+          "outside_audit_envelope": 2,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax2": {
+          "values": 1020,
+          "max_abs_difference": 0.00013201744447084718,
+          "outside_audit_envelope": 2,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu1": {
+          "values": 1020,
+          "max_abs_difference": 1.2923689896027213e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu2": {
+          "values": 1020,
+          "max_abs_difference": 1.0408340855860843e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.E": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Ed": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Eel": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.LoadIndicator": {
+          "values": 1020,
+          "max_abs_difference": 1.0,
+          "outside_audit_envelope": 1,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.ContactArea": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F0": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMin": {
+          "values": 1020,
+          "max_abs_difference": 0.29337211135160857,
+          "outside_audit_envelope": 2,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMax": {
+          "values": 1020,
+          "max_abs_difference": 0.5667090550203042,
+          "outside_audit_envelope": 2,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimNu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimPu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYn": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYp": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_t": {
+          "values": 1020,
+          "max_abs_difference": 2222.000094883323,
+          "outside_audit_envelope": 2,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticTensionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticCompressionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.U": {
+          "values": 56,
+          "max_abs_difference": 1.1250226754471593e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.V": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        }
+      },
+      "identical_duplicate_global_rows": 28,
+      "identity_errors": [],
+      "modal": {
+        "3": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.1142336017229064e-14,
+          "minimum_MAC": 0.9999999999999998
+        },
+        "4": {
+          "converged_modes": 5,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.1142336017229064e-14,
+          "minimum_MAC": 0.9999999999999998
+        }
+      },
+      "vert_original_routine_replay": {
+        "increments": 10,
+        "spring_records": 3400,
+        "differences": {
+          "1": {},
+          "2": {},
+          "3": {},
+          "4": {},
+          "5": {},
+          "6": {},
+          "7": {},
+          "8": {},
+          "9": {},
+          "10": {}
+        }
+      }
+    },
+    "02_orthotropic_reversal": {
+      "results_sha256": "b3b7baa19c7ff723a96c13d66ffebfe61b7db69c93b0b4014f1571e757c32598",
+      "reference_unchanged": true,
+      "static_fields": {
+        "SpringStatesTmp.U": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.F": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Phase": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy1": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy2": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up1": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up2": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.N": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.SpringType": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U1": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U2": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U3": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U4": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U5": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U6": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U7": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U8": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U9": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U10": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U11": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U12": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U1": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U2": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U3": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U4": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U5": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U6": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U7": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.K": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U4": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U5": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U6": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U1": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U2": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U3": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U4": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U5": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U6": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Et": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Eel": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ed": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ei": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Evd": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ux": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vx": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ax": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ay": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Az": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.U": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Phase": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.N": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.SpringType": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.K_tang": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.E": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Ed": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Eel": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.LoadIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.ContactArea": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F0": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMin": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMax": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimNu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimPu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYn": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYp": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticTensionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticCompressionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.U": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.V": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        }
+      },
+      "identical_duplicate_global_rows": 28,
+      "identity_errors": [],
+      "modal": {
+        "3": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 6.553754645733528e-15,
+          "minimum_MAC": 0.9999999999999999
+        },
+        "4": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 6.553754645733528e-15,
+          "minimum_MAC": 0.9999999999999999
+        }
+      },
+      "vert_original_routine_replay": {
+        "increments": 10,
+        "spring_records": 3400,
+        "differences": {
+          "1": {},
+          "2": {},
+          "3": {},
+          "4": {},
+          "5": {},
+          "6": {},
+          "7": {},
+          "8": {},
+          "9": {},
+          "10": {}
+        }
+      }
+    },
+    "03_elastic_transverse_reversal": {
+      "results_sha256": "9c9b55a381ed7abc860eea97395694747d6858dee4871adb7a0887ee0d6c0c6a",
+      "reference_unchanged": true,
+      "static_fields": {
+        "SpringStatesTmp.U": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.F": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Phase": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy1": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy2": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up1": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up2": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.N": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.SpringType": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U1": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U2": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U3": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U4": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U5": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U6": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U7": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U8": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U9": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U10": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U11": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U12": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U1": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U2": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U3": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U4": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U5": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U6": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U7": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.K": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U4": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U5": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U6": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U1": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U2": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U3": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U4": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U5": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U6": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Et": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Eel": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ed": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ei": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Evd": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ux": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vx": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ax": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ay": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Az": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.U": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Phase": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.N": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.SpringType": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.K_tang": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.E": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Ed": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Eel": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.LoadIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.ContactArea": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F0": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMin": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMax": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimNu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimPu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYn": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYp": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticTensionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticCompressionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.U": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.V": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        }
+      },
+      "identical_duplicate_global_rows": 28,
+      "identity_errors": [],
+      "modal": {
+        "3": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.1142336017229064e-14,
+          "minimum_MAC": 0.9999999999999998
+        },
+        "4": {
+          "converged_modes": 5,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.1142336017229064e-14,
+          "minimum_MAC": 0.9999999999999998
+        }
+      },
+      "vert_original_routine_replay": {
+        "increments": 10,
+        "spring_records": 3400,
+        "differences": {
+          "1": {},
+          "2": {},
+          "3": {},
+          "4": {},
+          "5": {},
+          "6": {},
+          "7": {},
+          "8": {},
+          "9": {},
+          "10": {}
+        }
+      }
+    },
+    "04_zero_friction_reversal": {
+      "results_sha256": "15259988c1fc6523c50b13de1a4b157ebe75238e682ea17e891f7d9e85fa4e4e",
+      "reference_unchanged": true,
+      "static_fields": {
+        "SpringStatesTmp.U": {
+          "values": 25160,
+          "max_abs_difference": 1.0408340855860843e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.F": {
+          "values": 25160,
+          "max_abs_difference": 4.334310688136611e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Phase": {
+          "values": 25160,
+          "max_abs_difference": 6.0,
+          "outside_audit_envelope": 16,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy1": {
+          "values": 25160,
+          "max_abs_difference": 1.4210854715202004e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Fy2": {
+          "values": 25160,
+          "max_abs_difference": 1.4210854715202004e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up1": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.Up2": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.N": {
+          "values": 25160,
+          "max_abs_difference": 5.684341886080802e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStatesTmp.SpringType": {
+          "values": 25160,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U1": {
+          "values": 296,
+          "max_abs_difference": 2.0816681711721685e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U2": {
+          "values": 296,
+          "max_abs_difference": 2.0643209364124004e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U3": {
+          "values": 296,
+          "max_abs_difference": 2.463307335887066e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U4": {
+          "values": 296,
+          "max_abs_difference": 2.3592239273284576e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U5": {
+          "values": 296,
+          "max_abs_difference": 1.1686469086460263e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U6": {
+          "values": 296,
+          "max_abs_difference": 1.3861271027234516e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U7": {
+          "values": 296,
+          "max_abs_difference": 4.510281037539698e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U8": {
+          "values": 296,
+          "max_abs_difference": 4.579669976578771e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U9": {
+          "values": 296,
+          "max_abs_difference": 8.510532435546551e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U10": {
+          "values": 296,
+          "max_abs_difference": 8.510532435546551e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U11": {
+          "values": 296,
+          "max_abs_difference": 8.510532600982673e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.U12": {
+          "values": 296,
+          "max_abs_difference": 8.510532600982673e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceX": {
+          "values": 296,
+          "max_abs_difference": 1.2168044349891716e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceY": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.ForceZ": {
+          "values": 296,
+          "max_abs_difference": 8.581998855237662e-22,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsX": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsY": {
+          "values": 296,
+          "max_abs_difference": 6.462348535570529e-27,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "InterfaceStates.BendingMomentsZ": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U1": {
+          "values": 296,
+          "max_abs_difference": 5.689893001203927e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U2": {
+          "values": 296,
+          "max_abs_difference": 1.1975850432754545e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U3": {
+          "values": 296,
+          "max_abs_difference": 3.469446951953614e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U4": {
+          "values": 296,
+          "max_abs_difference": 1.3861271027234516e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U5": {
+          "values": 296,
+          "max_abs_difference": 4.87890977618477e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U6": {
+          "values": 296,
+          "max_abs_difference": 9.844143278156676e-33,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.U7": {
+          "values": 296,
+          "max_abs_difference": 8.605854744103691e-19,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "QuadStates.K": {
+          "values": 296,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U1": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U2": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U4": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U5": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "RestraintStates.U6": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U1": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U2": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U3": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U4": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U5": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "NodeCStates.U6": {
+          "values": 148,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R1": {
+          "values": 74,
+          "max_abs_difference": 2.7644553313166398e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R2": {
+          "values": 74,
+          "max_abs_difference": 3.722313008924114e-22,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.R3": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Et": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Eel": {
+          "values": 74,
+          "max_abs_difference": 7.771561172376096e-15,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ed": {
+          "values": 74,
+          "max_abs_difference": 1.176836406102666e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Ei": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "ReactionSumStates.Evd": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ux": {
+          "values": 74,
+          "max_abs_difference": 5.551115123125783e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uy": {
+          "values": 74,
+          "max_abs_difference": 1.7763568394002505e-15,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Uz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vx": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vy": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Vz": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ax": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Ay": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DisplModelPoints.Az": {
+          "values": 74,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.U": {
+          "values": 1020,
+          "max_abs_difference": 2.42861286636753e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F": {
+          "values": 1020,
+          "max_abs_difference": 6.306066779870889e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Phase": {
+          "values": 1020,
+          "max_abs_difference": 2.0,
+          "outside_audit_envelope": 1,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy1": {
+          "values": 1020,
+          "max_abs_difference": 1.4210854715202004e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Fy2": {
+          "values": 1020,
+          "max_abs_difference": 1.4210854715202004e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Up2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.N": {
+          "values": 1020,
+          "max_abs_difference": 4.263256414560601e-14,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.SpringType": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.K_tang": {
+          "values": 1020,
+          "max_abs_difference": 1.9895196601282805e-13,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy1": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uy2": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax1": {
+          "values": 1020,
+          "max_abs_difference": 0.010062305446769134,
+          "outside_audit_envelope": 1,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Umax2": {
+          "values": 1020,
+          "max_abs_difference": 1.0408340855860843e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu1": {
+          "values": 1020,
+          "max_abs_difference": 1.6132928326584306e-16,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.Uu2": {
+          "values": 1020,
+          "max_abs_difference": 6.938893903907228e-18,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.E": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Ed": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.Eel": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 1020,
+          "unavailable_nonfinite": 1020
+        },
+        "SpringStates.LoadIndicator": {
+          "values": 1020,
+          "max_abs_difference": 1.0,
+          "outside_audit_envelope": 1,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.ContactArea": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.F0": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMin": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CmomMax": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimNu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotLimPu": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYn": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CrotYp": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CPhaseUnload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_c": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.TangentReload_t": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticTensionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "SpringStates.CplasticCompressionIndicator": {
+          "values": 1020,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.U": {
+          "values": 56,
+          "max_abs_difference": 5.551115123125783e-17,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        },
+        "DynamicVectorsState.V": {
+          "values": 56,
+          "max_abs_difference": 0,
+          "outside_audit_envelope": 0,
+          "unavailable_nonfinite": 0
+        }
+      },
+      "identical_duplicate_global_rows": 28,
+      "identity_errors": [],
+      "modal": {
+        "3": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.1142336017229064e-14,
+          "minimum_MAC": 0.9999999999999998
+        },
+        "4": {
+          "converged_modes": 4,
+          "requested_modes": 6,
+          "max_relative_frequency_difference": 2.894873700820595e-14,
+          "minimum_MAC": 0.9999999999999998
+        }
+      },
+      "vert_original_routine_replay": {
+        "increments": 10,
+        "spring_records": 3400,
+        "differences": {
+          "1": {},
+          "2": {},
+          "3": {},
+          "4": {},
+          "5": {},
+          "6": {},
+          "7": {},
+          "8": {},
+          "9": {},
+          "10": {}
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Step zero excluded from committed counts.",
+    "Native intermediate private histories, NULL spring energies and absent global vectors are unavailable.",
+    "Raw equality differences retained; no global rounding waiver declares a full internal-state pass.",
+    "Vert replay receives recorded Python Newton increments, not independent C# nonlinear solves.",
+    "Article-model inputs remain on another computer."
+  ]
+}

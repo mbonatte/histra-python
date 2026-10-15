@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match modal direct-line-load directions and directional mass factors against the original C# generator. Four native wall references cover virgin and post-reversal modes.
+- Preserve native Single polygon projection and area accumulation for restraint spring construction in both scalar and compiled batch preparation.
+
 ## 1.6.0 - prepared 2026-10-15
 
 - Reuse disposable Newton iteration snapshot buffers while preserving all spring state and rollback behavior. One sequential horizontal Newton-step profile measures an 8.50% runtime reduction; both complete native reference chains retain exact measured outputs at the snapshot implementation commit.
