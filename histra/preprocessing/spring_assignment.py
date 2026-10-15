@@ -125,10 +125,10 @@ def _quad_spring(
 
 def _side_transverse_spring(model: Model, parent_type: str, parent_key: int, face: int,
                             intf: Interface, cell: Sequence[np.ndarray],
-                            material_override: MasonryMaterial | None = None) -> tuple[SpringHysteretic, _HystereticLaw]:
+                            material_override: MasonryMaterial | None = None) -> tuple[SpringHysteretic | SpringElastic, _HystereticLaw]:
     assert model.collections is not None
     if parent_type == "Restraint":
-        sp = _new_hysteretic_spring()
+        sp = SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic")
         sp.k = -1.0
         sp.area = _polygon_area_3d(cell)
         if material_override is not None:
@@ -363,7 +363,7 @@ def _create_interface_springs(
             k2, area2, length2 = map(float, props2[index])
 
             if k1 == -1.0:
-                sp1 = _new_hysteretic_spring()
+                sp1 = SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic")
                 sp1.k, sp1.area = -1.0, area1
             else:
                 try:
@@ -375,7 +375,7 @@ def _create_interface_springs(
                         f"face {intf.face1}): {exc}"
                     ) from exc
             if k2 == -1.0:
-                sp2 = _new_hysteretic_spring()
+                sp2 = SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic")
                 sp2.k, sp2.area = -1.0, area2
             else:
                 try:
@@ -401,7 +401,8 @@ def _create_interface_springs(
             spring.parent_key = intf.key
             spring.parent_type = "Interface"
             spring.spring_purpose = "Transversal1"
-            spring.length = 0.0
+            if not isinstance(spring, SpringElastic):
+                spring.length = 0.0
             append_transverse(spring)
     area = intf.area()
     material1 = _interface_parent_material(

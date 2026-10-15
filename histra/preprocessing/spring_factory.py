@@ -140,7 +140,7 @@ def _set_coulomb_ultimate(
     spring.revert_to_start()
     spring.revert_to_last_commit()
 
-def _configure_hysteretic(k: float, area: float, length: float, law: _HystereticLaw) -> SpringHysteretic:
+def _configure_hysteretic(k: float, area: float, length: float, law: _HystereticLaw) -> SpringHysteretic | SpringElastic:
     if not math.isfinite(k) or k <= 0.0:
         raise ModelPreparationError(
             f"Cannot create a transverse hysteretic spring with stiffness K={k!r}."
@@ -153,10 +153,14 @@ def _configure_hysteretic(k: float, area: float, length: float, law: _Hysteretic
         raise ModelPreparationError(
             f"Cannot create a transverse hysteretic spring with length={length!r}."
         )
+    if law.is_elastic:
+        return SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic",
+                             k=float(k), k_tang=float(k), area=float(area), length=float(length))
     spring = _new_hysteretic_spring()
     spring.k = float(k)
     spring.area = float(area)
-    spring.length = float(length)
+    # Original SpringHysteretic.SetQuadTrasvSpring does not assign Length.
+    spring.length = 0.0
     spring.tensile_curve_type = law.tensile_curve
     spring.compressive_curve_type = law.compressive_curve
     spring.fy = [area * law.fy_t, -area * law.fy_c]
@@ -293,7 +297,7 @@ def _hysteretic_side_definition(
         kt_c = -fy_c / (ultimate_c - fy_c / k)
 
     return (
-        float(k), float(area), float(length),
+        float(k), float(area), 0.0,
         float(fy_t), float(fy_c), float(kt_t), float(kt_c),
         float(law.alfa_r_t), float(law.alfa_r_c),
         float(law.alfa_u_t), float(law.alfa_u_c),
@@ -311,6 +315,11 @@ def _configure_combined_hysteretic(
     ``_combine_hysteretic``.  It avoids two temporary SpringHysteretic objects
     and two full envelope initializations per generated fibre.
     """
+    if law1.is_elastic or law2.is_elastic:
+        return _combine_hysteretic(
+            _configure_hysteretic(k1, area1, length1, law1),
+            _configure_hysteretic(k2, area2, length2, law2), False, law1, law2,
+        )
     (
         s1_k, s1_area, s1_length, s1_fy_t, s1_fy_c, s1_kt_t, s1_kt_c,
         s1_alfa_r_t, s1_alfa_r_c, s1_alfa_u_t, s1_alfa_u_c,
@@ -516,6 +525,17 @@ def _configure_combined_hysteretic_batch(
     n = p1.shape[0]
     if n == 0:
         return []
+    if law1.is_elastic or law2.is_elastic:
+        if interface is not None:
+            interface._transverse_batch_params = None
+            interface._transverse_k = None
+        springs = []
+        for index, (side1, side2) in enumerate(zip(p1, p2)):
+            spring = _configure_combined_hysteretic(*map(float, side1), law1, *map(float, side2), law2)
+            spring.key, spring.parent_key = index, interface_key
+            spring.parent_type, spring.spring_purpose = "Interface", "Transversal1"
+            springs.append(spring)
+        return springs
 
     # Fast path: skip expensive column_stack and flatnonzero if all properties are positive and finite.
     if not (
@@ -879,7 +899,7 @@ def _configure_combined_hysteretic_batch(
         alfar=(alfar_t, alfar_c),
     )
 
-def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:
+def _copy_hysteretic_spring(sp: SpringHysteretic | SpringElastic) -> SpringHysteretic | SpringElastic:
     """Copy one configured hysteretic spring without recursive deepcopy.
 
     All non-scalar mutable state in ``SpringHysteretic`` is held by the base
@@ -890,6 +910,8 @@ def _copy_hysteretic_spring(sp: SpringHysteretic) -> SpringHysteretic:
     """
     out = copy.copy(sp)
     out.extra = sp.extra.copy()
+    if isinstance(sp, SpringElastic):
+        return out
     out.fy = sp.fy.copy()
     out.kt = sp.kt.copy()
     out.ur = sp.ur.copy()
@@ -910,12 +932,26 @@ def _copy_coulomb_spring(sp: SpringCoulomb03) -> SpringCoulomb03:
     return out
 
 
-def _combine_hysteretic(sp1: SpringHysteretic, sp2: SpringHysteretic, restrained: bool,
-                        law1: _HystereticLaw, law2: _HystereticLaw) -> SpringHysteretic:
+def _combine_hysteretic(sp1: SpringHysteretic | SpringElastic, sp2: SpringHysteretic | SpringElastic, restrained: bool,
+                        law1: _HystereticLaw, law2: _HystereticLaw) -> SpringHysteretic | SpringElastic:
+    if isinstance(sp1, SpringElastic) and isinstance(sp2, SpringElastic):
+        k = _series(sp1.k, sp2.k, restrained)
+        return SpringElastic(type_of="HiStrA.Objects.SpringLinearElastic", k=k, k_tang=k, area=sp1.area,
+                             length=sp1.length + sp2.length)
     if sp1.k == -1.0:
         out = _copy_hysteretic_spring(sp2)
     elif sp2.k == -1.0:
         out = _copy_hysteretic_spring(sp1)
+    elif isinstance(sp1, SpringElastic) or isinstance(sp2, SpringElastic):
+        elastic, nonlinear = (sp1, sp2) if isinstance(sp1, SpringElastic) else (sp2, sp1)
+        out = _new_hysteretic_spring()
+        out.k = _series(elastic.k, nonlinear.k, restrained)
+        out.fy, out.area = nonlinear.fy.copy(), nonlinear.area
+        out.alfar, out.alfau = nonlinear.alfar.copy(), nonlinear.alfau.copy()
+        out.tensile_curve_type, out.compressive_curve_type = nonlinear.tensile_curve_type, nonlinear.compressive_curve_type
+        out.kt = [out.k if curve == "Elastic" else _series(kt, elastic.k, restrained)
+                  for curve, kt in zip((out.tensile_curve_type, out.compressive_curve_type), nonlinear.kt)]
+        out.length = sp1.length + sp2.length
     else:
         out = _new_hysteretic_spring()
         out.k = _series(sp1.k, sp2.k, restrained)

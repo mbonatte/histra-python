@@ -503,7 +503,7 @@ def _force_general_hysteretic_batch() -> bool:
 def _uses_simple_hysteretic_parameters(spring: Any) -> bool:
     """Return the exact predicate used by the specialized dense kernel."""
     if not isinstance(spring, SpringHysteretic):
-        return True
+        return False  # LinearElastic uses its native incremental update.
     return (
         spring.pinch_xp == 0.0
         and spring.pinch_yp == 0.0
@@ -3060,8 +3060,10 @@ class HystereticBatchRuntime:
                             spring.f = float(trial[6])
                             spring.u = float(trial[7])
                         else:
-                            spring.f = float(committed[6])
-                            spring.u = float(committed[7])
+                            spring._cstress, spring._cstrain = float(committed[6]), float(committed[7])
+                            spring._tstress, spring._tstrain = float(trial[6]), float(trial[7])
+                            spring.f = float(trial[6])
+                            spring.u = float(trial[7])
                             spring.k_tang = float(trial[9])
                             spring.k_tang_committed = float(trial[9])
         else:
@@ -3092,8 +3094,10 @@ class HystereticBatchRuntime:
                     spring.f = float(trial[6])
                     spring.u = float(trial[7])
                 else:
-                    spring.f = float(committed[6])
-                    spring.u = float(committed[7])
+                    spring._cstress, spring._cstrain = float(committed[6]), float(committed[7])
+                    spring._tstress, spring._tstrain = float(trial[6]), float(trial[7])
+                    spring.f = float(trial[6])
+                    spring.u = float(trial[7])
                     spring.k_tang = float(trial[9])
                     spring.k_tang_committed = float(trial[9])
         for i, spring in enumerate(self.coulomb_springs):

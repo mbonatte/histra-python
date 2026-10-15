@@ -92,6 +92,7 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
         "eps_u_t": 0.75,
         "eps_u_c": 5.25,
         "law_type": "ElastoPlasticDuctilityFixed",
+        "is_elastic": False,
     }
     assert asdict(flex_law(material, vertical=True)) == {
         "E": 16.0,
@@ -110,6 +111,7 @@ def test_horizontal_and_vertical_flex_laws_map_every_csharp_constructor_field():
         "eps_u_t": 1.25,
         "eps_u_c": 6.75,
         "law_type": "ElastoPlasticDuctilityFixed",
+        "is_elastic": False,
     }
 
 

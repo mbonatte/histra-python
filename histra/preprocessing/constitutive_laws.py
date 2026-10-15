@@ -119,6 +119,7 @@ class HystereticLaw:
     eps_u_t: float
     eps_u_c: float
     law_type: str
+    is_elastic: bool = False
 
 
 @dataclass(frozen=True)
@@ -220,6 +221,7 @@ def flex_law(material: MasonryMaterial, *, vertical: bool = False) -> Hysteretic
         eps_u_t=eps_t,
         eps_u_c=eps_c,
         law_type=law_type,
+        is_elastic=(tensile_curve == compressive_curve == "Elastic"),
     )
 
 

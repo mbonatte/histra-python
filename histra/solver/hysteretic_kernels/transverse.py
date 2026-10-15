@@ -44,6 +44,7 @@ RUPTURE_C = int(PhaseEnum.RuptureComp)
 
 # Positive-envelope dispatch stored in the final dense parameter column.
 # Existing numeric parameter indices remain unchanged.
+TENSILE_ELASTIC = -1  # SpringLinearElastic, without hysteretic phase/history.
 TENSILE_LINEAR = 0
 TENSILE_EXPONENTIAL = 1
 TENSILE_CURVE_TYPE_PARAM = 32
@@ -283,6 +284,13 @@ if njit is not None:
         n = targets.size
         for i in prange(n):
             if not enabled[i]:
+                continue
+            if (params.shape[1] > TENSILE_CURVE_TYPE_PARAM
+                    and params[i, TENSILE_CURVE_TYPE_PARAM] == TENSILE_ELASTIC):
+                # Original SpringLinearElastic.setTrialStrain is incremental.
+                trial[i, 6] = committed[i, 6] + trial[i, 9] * (targets[i] - committed[i, 7])
+                trial[i, 7] = targets[i]
+                trial[i, 8] = ELASTIC
                 continue
             previous_tload = int(trial[i, 5])
             strain = targets[i]

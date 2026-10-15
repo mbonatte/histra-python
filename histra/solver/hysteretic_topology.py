@@ -23,6 +23,7 @@ from histra.solver.hysteretic_kernels.transverse import (
     SIMPLE_PARAM_NAMES,
     TENSILE_EXPONENTIAL,
     TENSILE_LINEAR,
+    TENSILE_ELASTIC,
     _PARAM_NAMES,
 )
 from histra.types.phase_enum import PhaseEnum
@@ -110,7 +111,7 @@ def _extract_spring_params(spring: Any, is_compact: bool) -> tuple:
             )
         else:
             return (
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 huge, huge * k, huge, 0.0, 0.0, 0.0,
                 -huge * k, -huge, 0.0, 0.0, 0.0, 0.0,
                 k, k, 0.0, 0.0, 0.0, 0.0, k, k,
@@ -128,7 +129,7 @@ def _extract_spring_committed(spring: Any) -> tuple:
     else:
         k = float(spring.k)
         u = float(spring.u)
-        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, k * u, u, int(PhaseEnum.Elastic))
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, float(spring._cstress), float(spring._cstrain), int(PhaseEnum.Elastic))
 
 def _extract_spring_trial(spring: Any) -> tuple:
     if isinstance(spring, SpringHysteretic):
@@ -141,7 +142,7 @@ def _extract_spring_trial(spring: Any) -> tuple:
     else:
         k = float(spring.k)
         u = float(spring.u)
-        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, k * u, u, int(PhaseEnum.Elastic), k)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0, float(spring._tstress), float(spring._tstrain), int(PhaseEnum.Elastic), float(spring.k_tang))
 
 def _extract_spring_target(spring: Any) -> float:
     if isinstance(spring, SpringHysteretic):
@@ -149,6 +150,8 @@ def _extract_spring_target(spring: Any) -> float:
     return float(spring.u)
 
 def _extract_spring_curve_type(spring: Any) -> float:
+    if not isinstance(spring, SpringHysteretic):
+        return float(TENSILE_ELASTIC)
     if isinstance(spring, SpringHysteretic) and spring.tensile_curve_type == "Exponential":
         return float(TENSILE_EXPONENTIAL)
     return float(TENSILE_LINEAR)
