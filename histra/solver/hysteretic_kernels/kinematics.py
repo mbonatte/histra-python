@@ -26,6 +26,44 @@ except Exception:  # pragma: no cover - exercised when numba is unavailable
 
 if njit is not None:
     @njit(cache=True, nogil=True)
+    def _interface_flex_from_global(x, offsets, gdls, coefficients, length, restrained):
+        du = np.zeros(6, dtype=np.float64)
+        for i in range(6):
+            for j in range(offsets[i], offsets[i+1]):
+                gdl = gdls[j]
+                if gdl < 0 or gdl >= x.size:
+                    raise IndexError("Interface afference DOF outside the displacement vector")
+                du[i] += x[gdl] * coefficients[j]
+        if restrained:
+            # ComputeFlexdef multiplies by Length before dividing by two.
+            return (du[3] - du[0] + du[1] * length / 2.0,
+                    du[2] - du[0] - du[1] * length / 2.0, du[5] - du[4])
+        return du[3] - du[0], du[2] - du[1], du[5] - du[4]
+
+    @njit(cache=True, nogil=True)
+    def _interface_linear_normal_increment(x, offsets, gdls, coefficients, length, restrained, k):
+        f0, f1, f2 = _interface_flex_from_global(x, offsets, gdls, coefficients, length, restrained)
+        return -((k[2,2] + k[3,2]) * f0 + (k[2,3] + k[3,3]) * f1
+                 + (k[2,5] + k[3,5]) * f2)
+
+    @njit(cache=True, nogil=True)
+    def _quad_linear_normal_force(edges, dns, spring_offsets, forces, increments, areas):
+        normal = np.zeros(4, dtype=np.float64)
+        stress = np.zeros(4, dtype=np.float64)
+        for edge in range(4):
+            force = 0.0
+            for i in range(edges[edge], edges[edge+1]):
+                normal[edge] += dns[i]
+                interface_force = 0.0
+                for j in range(spring_offsets[i], spring_offsets[i+1]):
+                    interface_force += forces[j] - increments[j]
+                force += interface_force
+            if areas[edge] > 0.0:
+                stress[edge] = force / areas[edge]
+        return ((normal[0] + normal[2]) / 2.0 + (normal[1] + normal[3]) / 2.0,
+                (stress[0] + stress[2]) / 2.0 + (stress[1] + stress[3]) / 2.0)
+
+    @njit(cache=True, nogil=True)
     def _map_global_to_local(x, offsets, gdls, coefficients, out, local_u=None):
         flat = out.reshape(out.size)
         state = local_u.reshape(local_u.size) if local_u is not None else None
@@ -163,6 +201,9 @@ if njit is not None:
 
 else:  # pragma: no cover - exercised when numba is unavailable
     _map_global_to_local = None
+    _interface_flex_from_global = None
+    _interface_linear_normal_increment = None
+    _quad_linear_normal_force = None
     _prepare_interface_kinematics = None
     _map_and_prepare_interface_kinematics = None
     _prepare_quad_kinematics = None
