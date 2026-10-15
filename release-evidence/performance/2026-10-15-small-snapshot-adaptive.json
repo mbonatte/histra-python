@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-15T21:50:46.852797+00:00",
+  "source_commit": "199ff70608774fbfa17561a7ee12d8c576dd9a8f",
+  "generator": "reproduce_review_small_snapshot.py; compare_adaptive_snapshot_small.py",
+  "benchmark_id": "small-newton-adaptive-snapshot",
+  "review_commit": "6d8e49111bafe48b024e258286856dddba4d8a2f",
+  "microbenchmark": {
+    "payload_bytes": 419856,
+    "snapshots_per_block": 300,
+    "samples_seconds": {
+      "fresh": [
+        0.0045013000000153625,
+        0.0035977999999659005,
+        0.0040065000000026885,
+        0.0037209999999845422,
+        0.004382700000007844,
+        0.004028199999993376,
+        0.0036740999999551605,
+        0.0034929999999917527
+      ],
+      "reuse": [
+        0.025175199999978304,
+        0.014582600000039747,
+        0.013297700000009627,
+        0.013742100000001756,
+        0.02444839999998294,
+        0.02742760000000999,
+        0.014031100000011065,
+        0.013666100000023107
+      ]
+    },
+    "median_seconds": {
+      "fresh": 0.0038637499999936153,
+      "reuse": 0.014306850000025406
+    },
+    "reuse_over_fresh": 3.7028405047037327
+  },
+  "global_comparison": {
+    "model": "model-live, ModifiedNewtonRaphson, five Vert commits",
+    "sample_runtime_seconds": {
+      "reuse": [
+        0.20303350000006049,
+        0.10132399999997688,
+        0.09697380000000067,
+        0.09967919999996866
+      ],
+      "adaptive": [
+        0.08284209999999348,
+        0.08273950000000241,
+        0.08529209999994691,
+        0.08476999999993495
+      ]
+    },
+    "median_seconds": {
+      "reuse": 0.10050159999997277,
+      "adaptive": 0.08380604999996422
+    },
+    "all_committed_fields_bit_identical": true,
+    "compared_complete_runs": 8,
+    "scope": "One small model and explicit Newton method; not a universal solver speedup."
+  },
+  "policy": "Newton uses fresh independent copies below 1 MiB, full validated buffer reuse at or above it. Public explicit reuse still validates every call.",
+  "unit_tests": {
+    "passed": 16,
+    "subtests_passed": 36,
+    "raw_log_sha256": "ac6ff7770c944db56ab9a9fc32c8bee729f9c7c5e6f861eee2068863702e28d2"
+  },
+  "limit": "One small model, alternating samples. No broad speedup or additional full Dhir solve is claimed."
+}
