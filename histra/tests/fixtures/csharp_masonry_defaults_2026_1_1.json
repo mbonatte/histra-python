@@ -141,8 +141,9 @@
                         "DuctComprRockingVer":  0,
                         "GcVer":  0
                     },
+    "alias_ultimate_bits":  "4585493083063320576",
     "assembly_sha256":  "a981364ef5b6e3fde2c65d7994eb4a0f60132ded61cf8edac9a98a061b1a5a9b",
-    "generated_at":  "2026-10-15T11:53:27.4047057Z",
+    "generated_at":  "2026-10-15T12:37:00.0742756Z",
     "generator":  "tools/csharp-diagnostics/Invoke-MasonryDefaultsOracle.ps1",
     "alias_xml":  "\u003cMaterial Ehor=\"500\" Ever=\"400\" Gd=\"200\" FmHor=\"3\" FmVer=\"4\" FtmHor=\"0.2\" FtmVer=\"0.3\" fvk0d=\"0.1\" AlfaShearUser=\"0.7\"  DuctilityShear=\"0.037\" /\u003e",
     "alias_values_bits":  {

@@ -181,7 +181,9 @@ class MasonryMaterial:
                         energy = y0 + (y1 - y0) * (x - x0) / (x1 - x0)
                         break
         else:
-            return float(self.value("ShearUltimateStrain", 0.0))
+            # The original accessor is Single before promotion to Double.
+            import numpy as np
+            return float(np.float32(self.value("ShearUltimateStrain", 0.0)))
 
         numerator = energy * float(volume)
         denominator = float(f_limit)

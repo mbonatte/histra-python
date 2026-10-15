@@ -190,3 +190,7 @@ Its source boundary precedes the later defaults/fallback/direction corrections.
 A two-step controller regression also simulates a converged Newton call with
 local fallback and verifies that both steps receive the outer alfa=1 argument.
 This guards the by-value boundary independently of the horizontal benchmark.
+
+The direct native GetShearUltimateStrain call also checks Single promotion for
+the serialized shear-strain alias. The scalar getter now returns the native
+Single-rounded value rather than the raw XML decimal promoted as Double.

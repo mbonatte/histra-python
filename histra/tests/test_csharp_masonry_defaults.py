@@ -83,5 +83,5 @@ class NativeMasonryDefaultsTests(unittest.TestCase):
             expected = np.array([int(bits)],dtype=np.int64).view(np.float64)[0]
             self.assertEqual(material_float(material,name),expected)
         # The scalar material path reads the same value as the law builder.
-        self.assertEqual(material.get_shear_ultimate_strain(1.,0.,1.,0.),
-                         float(material.value('DuctilityShear',0.)))
+        native = np.array([int(data['alias_ultimate_bits'])],dtype=np.int64).view(np.float64)[0]
+        self.assertEqual(material.get_shear_ultimate_strain(1.,0.,1.,0.),native)
