@@ -36,6 +36,7 @@ from histra.solver.load_control import LoadControl
 from histra.solver.model_manager import ModelManager
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
+from histra.solver.secant_stiffness import SecantStiffnessPolicy
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.solver.incremental_integrator import StaticIntegrator
 from histra.types.linear_system import LinearSolveError, LinearSystem
@@ -93,6 +94,7 @@ def _execute_steps(
     step = 0
     continue_steps = True
     max_force_change = 0.0
+    secant_policy = SecantStiffnessPolicy(analysis, reference)
     energy_elastic = 0.0
     energy_dissipated = 0.0
     p.log(
@@ -379,6 +381,7 @@ def _execute_steps(
             f"displacement={displacement:.6e}, "
             f"iterations={algorithm.the_test.current_iter}"
         )
+        alfa = secant_policy.update(step, values, alfa, p, model, integrator)
         force_change = abs(values[0] - reference[0])
         max_force_change = max(max_force_change, force_change)
         load_reduction_ratio = force_change / max(max_force_change, 1e-30)

@@ -33,7 +33,8 @@ class TestNewLineSearchFactory(unittest.TestCase):
         self.assertIs(type(ls), LineSearch)
         self.assertEqual(ls.tolerance, 0.5)
         self.assertEqual(ls.max_eta, 5.0)
-        self.assertEqual(ls.min_eta, 0.2)
+        # Analysis.LineSearchMinEta is Single before the factory promotes it.
+        self.assertEqual(ls.min_eta, 0.20000000298023224)
         self.assertEqual(ls.max_iter, 50)
 
     def test_rejects_method_name_that_only_contains_supported_suffix(self):

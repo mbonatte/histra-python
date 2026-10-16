@@ -35,3 +35,14 @@ def test_native_analysis_settings_and_arc_commit():
         assert _load_reduction_stop_reached(an, np.nextafter(threshold, -np.inf))
         assert not _load_reduction_stop_reached(an, threshold)
         assert not _load_reduction_stop_reached(an, np.nextafter(threshold, np.inf))
+
+
+def test_stable_arc_commit_retains_explicit_squared_radius_cap():
+    an = SimpleNamespace(is_max_arc_length_ray=True, max_arc_length_ray=0.1, update_dr2=False)
+    arc = ArcLength(constraint_mode="stable")
+    arc._lf_items = [(0.0, 0.0), (1.0, 1.0)]
+    arc._target_displacement = 1.0
+    arc._arc_length2 = 0.5
+    assert not arc.commit(None, an, 0.0, 0, [False])
+    radius = float(np.float32(0.1))
+    assert arc._arc_length2 == radius * radius
