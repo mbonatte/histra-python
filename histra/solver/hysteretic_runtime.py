@@ -1683,7 +1683,9 @@ class HystereticBatchRuntime:
                 if not is_dirty:
                     self.committed[start:stop, :].fill(0.0)
                     self.trial[start:stop, :].fill(0.0)
-                    self.trial[start:stop, 9] = self._transverse_k[start:stop]
+                    # Native revertToStart uses the envelope E1p tangent;
+                    # Fy / (Fy / K) can differ from nominal K in the last bits.
+                    self.trial[start:stop, 9] = group._trial[:, 9]
                     self.targets[start:stop].fill(0.0)
                     self.enabled[start:stop].fill(True)
                 else:
@@ -1732,7 +1734,10 @@ class HystereticBatchRuntime:
             if not is_dirty:
                 self.committed[start:stop, :].fill(0.0)
                 self.trial[start:stop, :].fill(0.0)
-                self.trial[start:stop, 9] = self._transverse_k[start:stop]
+                self.trial[start:stop, 9] = np.fromiter(
+                    (spring.k_tang for spring in group), dtype=np.float64,
+                    count=group_count,
+                )
                 self.targets[start:stop].fill(0.0)
                 self.enabled[start:stop].fill(True)
             else:
