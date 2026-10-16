@@ -210,6 +210,95 @@ class LinearSystem:
         except Exception:
             pass
 
+    def _ensure_factorization(self, matrix: sp.csc_matrix) -> None:
+        """Ensure a valid factorization exists for the given matrix, refactoring if possible."""
+        same_matrix = (
+            self._factorization is not None
+            and self._factor_backend in (self.backend, "umfpack", "superlu", "cholmod")
+            and self._factor_matrix_id == id(self.k)
+            and self._factor_matrix_version == self._matrix_version
+        )
+        if same_matrix:
+            return
+
+        refactored = False
+        if (
+            self.backend == "pcg"
+            and isinstance(self._factorization, PCGFactorization)
+            and self._factor_backend == "pcg"
+        ):
+            try:
+                refactored = self._factorization.refactor_numeric(matrix)
+            except Exception:
+                refactored = False
+        elif (
+            self.backend == "cholmod"
+            and self._factor_backend == "cholmod"
+            and isinstance(self._factorization, CholmodFactorization)
+        ):
+            try:
+                refactored = self._factorization.refactor_numeric(matrix)
+            except Exception:
+                refactored = False
+        elif (
+            (self.backend == "umfpack" or self._factor_backend == "umfpack")
+            and isinstance(self._factorization, UmfpackFactorization)
+        ):
+            # A numeric failure on the same verified pattern must
+            # reach StaticIntegrator's native alfa=0 fallback. Repeating
+            # the same failed matrix with a new symbolic factorization
+            # does not occur in the original AssembleKtang sequence.
+            refactored = self._factorization.refactor_numeric(matrix)
+
+        if not refactored:
+            self._create_factorization(matrix)
+
+        self.factorization_count += 1
+        self._factor_matrix_id = id(self.k)
+        self._factor_matrix_version = self._matrix_version
+
+    def _create_factorization(self, matrix: sp.csc_matrix) -> None:
+        """Create a fresh factorization based on the active backend configuration."""
+        if self.backend == "pcg":
+            self._invalidate_factorization()
+            self._factorization = PCGFactorization(matrix)
+            self._factor_backend = "pcg"
+        elif self.backend == "cholmod":
+            chol_ok = False
+            try:
+                self._invalidate_factorization()
+                self._factorization = CholmodFactorization(matrix)
+                self._factor_backend = "cholmod"
+                chol_ok = True
+            except (CholmodError, CholmodUnavailable):
+                chol_ok = False
+            if not chol_ok:
+                # Indefinite matrix (cracking / softening): fall back to UMFPACK or SuperLU
+                if find_umfpack_library() is not None:
+                    self._invalidate_factorization()
+                    self._factorization = UmfpackFactorization(
+                        matrix, irstep=self.irstep, ordering=self.ordering
+                    )
+                    self._factor_backend = "umfpack"
+                else:
+                    self._invalidate_factorization()
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("error", MatrixRankWarning)
+                        self._factorization = splu(matrix)
+                    self._factor_backend = "superlu"
+        elif self.backend == "umfpack":
+            self._invalidate_factorization()
+            self._factorization = UmfpackFactorization(
+                matrix, irstep=self.irstep, ordering=self.ordering
+            )
+            self._factor_backend = "umfpack"
+        else:
+            self._invalidate_factorization()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", MatrixRankWarning)
+                self._factorization = splu(matrix)
+            self._factor_backend = "superlu"
+
     def solve(self, rhs: np.ndarray | None = None) -> int:
         """Solve ``K x = rhs`` and store the result in ``x``.
 
@@ -240,89 +329,8 @@ class LinearSystem:
                 f"expected {(self.n, self.n)}"
             )
 
-        # Every solver-side stiffness mutation either replaces ``k`` or calls
-        # ``_invalidate_factorization``.  Identity is therefore sufficient and
-        # avoids comparing the complete sparse index/data arrays on every one
-        # of the tens of thousands of fixed-stiffness ArcLength solves.
-        same_matrix = (
-            self._factorization is not None
-            and self._factor_backend in (self.backend, "umfpack", "superlu", "cholmod")
-            and self._factor_matrix_id == id(self.k)
-            and self._factor_matrix_version == self._matrix_version
-        )
         try:
-            if not same_matrix:
-                refactored = False
-                if (
-                    self.backend == "pcg"
-                    and isinstance(self._factorization, PCGFactorization)
-                    and self._factor_backend == "pcg"
-                ):
-                    try:
-                        refactored = self._factorization.refactor_numeric(matrix)
-                    except Exception:
-                        refactored = False
-                elif (
-                    self.backend == "cholmod"
-                    and self._factor_backend == "cholmod"
-                    and isinstance(self._factorization, CholmodFactorization)
-                ):
-                    try:
-                        refactored = self._factorization.refactor_numeric(matrix)
-                    except Exception:
-                        refactored = False
-                elif (
-                    (self.backend == "umfpack" or self._factor_backend == "umfpack")
-                    and isinstance(self._factorization, UmfpackFactorization)
-                ):
-                    # A numeric failure on the same verified pattern must
-                    # reach StaticIntegrator's native alfa=0 fallback. Repeating
-                    # the same failed matrix with a new symbolic factorization
-                    # does not occur in the original AssembleKtang sequence.
-                    refactored = self._factorization.refactor_numeric(matrix)
-                if not refactored:
-                    if self.backend == "pcg":
-                        self._invalidate_factorization()
-                        self._factorization = PCGFactorization(matrix)
-                        self._factor_backend = "pcg"
-                    elif self.backend == "cholmod":
-                        chol_ok = False
-                        try:
-                            self._invalidate_factorization()
-                            self._factorization = CholmodFactorization(matrix)
-                            self._factor_backend = "cholmod"
-                            chol_ok = True
-                        except (CholmodError, CholmodUnavailable):
-                            chol_ok = False
-                        if not chol_ok:
-                            # Indefinite matrix (cracking / softening): fall back to UMFPACK or SuperLU
-                            if find_umfpack_library() is not None:
-                                self._invalidate_factorization()
-                                self._factorization = UmfpackFactorization(
-                                    matrix, irstep=self.irstep, ordering=self.ordering
-                                )
-                                self._factor_backend = "umfpack"
-                            else:
-                                self._invalidate_factorization()
-                                with warnings.catch_warnings():
-                                    warnings.simplefilter("error", MatrixRankWarning)
-                                    self._factorization = splu(matrix)
-                                self._factor_backend = "superlu"
-                    elif self.backend == "umfpack":
-                        self._invalidate_factorization()
-                        self._factorization = UmfpackFactorization(
-                            matrix, irstep=self.irstep, ordering=self.ordering
-                        )
-                        self._factor_backend = "umfpack"
-                    else:
-                        self._invalidate_factorization()
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("error", MatrixRankWarning)
-                            self._factorization = splu(matrix)
-                        self._factor_backend = "superlu"
-                self.factorization_count += 1
-                self._factor_matrix_id = id(self.k)
-                self._factor_matrix_version = self._matrix_version
+            self._ensure_factorization(matrix)
             effective_backend = self._factor_backend or self.backend
             if effective_backend in ("umfpack", "cholmod", "pcg"):
                 solution = self._factorization.solve(vector, out=self.x)

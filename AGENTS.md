@@ -56,9 +56,36 @@ For structural definitions and full feature scope, see [Supported Features](docs
 - Never cite or link files in `docs/archive/` as current guidance; archived files exist solely for historical record.
 - Maintain accurate module invocation commands (`python -m histra.tools.<module>`).
 
+## 3. Code Structure & Agent Readability Guidelines
+
+To ensure code remains navigable, robust, and maintainable by both human engineers and AI coding agents:
+
+### 1. Small, Single-Responsibility Functions
+- Target 4–20 lines for helper and operational logic; avoid mega-functions that sprawl across multiple screens.
+- Extract self-contained logic steps (e.g., configuration resolution, convergence checks, clipping routines, boundary condition filtering) into focused private helpers.
+
+### 2. Guard Clauses & Flat Nesting
+- Prefer early returns, guard clauses, and dispatch helpers over deeply nested `if/elif/else` ladders.
+- Keep control-flow nesting to a maximum of 2–3 indentation levels.
+
+### 3. Modular File Decomposition & Facade Parity
+- Decompose multi-concern modules into focused single-responsibility files (e.g., separating geometric routines into `polygon_clipping.py` or system setup into `boundary_conditions.py`).
+- Re-export extracted functions from original facade modules (`__all__` / module imports) to preserve backwards compatibility for existing callers and tests.
+
+### 4. Greppable, Descriptive Naming
+- Use unambiguous, domain-accurate names for functions, types, and variables.
+- Avoid vague abbreviations; choose searchable names reflecting structural mechanics or solver semantics.
+
+### 5. "Why", Not "What" Documentation
+- Write docstrings and comments explaining *why* an algorithm choice, numerical tolerance, or branch exists (citing C# HiStrA parity, physical assumptions, or matrix properties).
+- Do not restate syntax. Preserve domain invariants and gotcha warnings near the code.
+
+### 6. Strict Numerical & Parity Invariance
+- Refactoring must strictly preserve numerical and behavioral parity. Never modify constitutive formulas, solver thresholds, or data models without differential regression validation.
+
 ---
 
-## 3. Known Gotchas & Common Traps
+## 4. Known Gotchas & Common Traps
 
 ### 1. Benchmark 3 Serialized HRX State Trap
 - **Gotcha**: A historical diagnostic reported a false 100,000× stiffness discrepancy on pier foundation interface 682.
@@ -94,7 +121,7 @@ For structural definitions and full feature scope, see [Supported Features](docs
 
 ---
 
-## 4. ai-memory Tooling Protocol
+## 5. ai-memory Tooling Protocol
 
 The project maintains persistent knowledge across agent sessions using the `ai-memory` MCP server. Future agents must consult memory before making architectural decisions or modifying numerical routines.
 
@@ -122,7 +149,7 @@ The project maintains persistent knowledge across agent sessions using the `ai-m
 
 ---
 
-## 5. Document Map & Reference Links
+## 6. Document Map & Reference Links
 
 | Category | Document | Description |
 |---|---|---|
