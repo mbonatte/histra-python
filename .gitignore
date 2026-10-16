@@ -30,3 +30,4 @@ scratch/
 benchmark_outputs/
 docs/PhD-Thesis/
 .agents/
+csharp_runner/

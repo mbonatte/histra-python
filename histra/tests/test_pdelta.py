@@ -176,6 +176,8 @@ def test_pdelta_computation_on_benchmark():
     session.run("Vert")
     session.run("scour_1")
 
+    ModelManager.refresh_saved_interface_forces(model)
+
     pq = ModelManager.compute_and_assemble_pdelta_load(model)
     assert isinstance(pq, np.ndarray)
     assert len(pq) == model.gdl
@@ -241,6 +243,8 @@ def test_pdelta_compiled_plan_matches_scalar_path_exactly():
     runtime.trial[:, 6] = 50.0
     runtime.coulomb_state[:, 11] = 10.0
     runtime.coulomb_state[:, 29] = 10.0
+
+    ModelManager.refresh_saved_interface_forces(model)
 
     analysis = next(iter(model.collections.analyses.values()))
     pq_compiled = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis, combination=1)

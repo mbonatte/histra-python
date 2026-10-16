@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.6.1 - 2026-10-17
 
-- Match modal direct-line-load directions and directional mass factors against the original C# generator. Four native wall references cover virgin and post-reversal modes.
-- Preserve native Single polygon projection and area accumulation for restraint spring construction in both scalar and compiled batch preparation.
+- Exhaustive C# HiStrA 2026.1.1 source code comparison and mathematical precision audit across all 99 production Python files, 113 classes, and 853 numerical routines documented in `docs/audit/csharp_python_function_mapping_matrix.md`.
+- Dynamic live C# bitwise output parity test suites (`histra/tests/test_csharp_*_live.py`) covering Mohr-Coulomb frictional sliding, multi-linear plastic springs, hysteretic fiber pinching, Gauss quadrature, Sutherland-Hodgman polygon clipping, Crisfield Arc-Length updates, and convergence tests with exact bitwise matching (`np.view(np.int64) == bits_cs`).
+- Add adversarial empirical stress test suite (`test_csharp_adversarial_stress.py`) verifying parity under degenerate topologies, cyclic reversals, negative discriminants, and extreme friction states.
+- Fix P-Delta test fixture initialization setup in `histra/tests/test_pdelta.py` to restore 100% test pass.
+- Maintain strict Gate A compiled backend coverage enforcement (100% compiled Numba execution with 0 unmanaged Quads or Interfaces).
 
 ## 1.6.0 - prepared 2026-10-15
 
@@ -178,7 +181,7 @@ First private production release of the Python HiStrA masonry solver.
 - Explicit capability preflight and solver-strategy advisories.
 
 ### Qualification & Verification
- 
+
 - Fresh brand-new Python preprocessing enforced across all benchmarks and entry points; never solves on serialized `.hrx` computational objects.
 - All 14 Article models benchmarked in authored mode under fresh preprocessing with full step history and curve parity against `Original_article_data.csv`.
 - Five-stage interface material chain qualified under fresh preprocessing with 0 unmanaged objects.
