@@ -35,6 +35,7 @@ excluded from committed counts.
 | `LineSearch.NewLineSearch`: tolerance / min/max eta Single | `_new_line_search`; native analysis-setting fixture and existing search traces | Corrected factory promotion; direct search defaults retain their native Double values. |
 | `Analysis.MaxArcLengthRay` Single; `ArcLength.Commit` | `arc_length`; native analysis-setting fixture | Default C# mode caps squared state by the native field directly. Explicit stable mode retains its alternative squared-radius cap. |
 | `LoadReductionRatioToStopValue` Single | `nonlinear_step`; native setting and adjacent-double boundary tests | Strict comparison uses promoted Single threshold. |
+| `ComputePDeltaLoads`, `Quad.DisplacementsCurrent`, `MatrixPerVector3` | scalar `model_manager`, compiled runtime/scatter kernels; `test_csharp_pdelta` | Original routines supply 24 cases covering seismic/nonseismic direction, zero/ordinary/large translation, interface force inputs and oblique force frames. Corrected template direction, translation-add/subtract rounding and Single force-frame multiplication. All 28 global entries match exactly in scalar and compiled paths. |
 | `StaticNonLinearAnalysis.Execute`: `CheckSecantStiffness` / Single `SecantStiffnessRatio` | `secant_stiffness`, called before integrator commit | Found parsed-but-unused setting. Implemented source branch, first graph-column slope, negative/softening/recovery and UpdateK fallback propagation. Tests are source-derived; an independent native whole-Execute fixture for this setting remains outstanding. |
 | `ModalValues.Set`, `Pseudovectors.ComputeUmax` | `modal`; four native wall modal fixtures | Modal UMax is stored Single, eigenvectors remain Double. Corrected native `UMaxX/Y/Z` column spelling and require every available native field to be present. |
 
@@ -51,13 +52,12 @@ Implicit promotions and overloaded operators still require source review.
 The inventory, including model-load regeneration, contains 317 files and 14,690 candidate lines. Those
 numbers describe the search surface, not completed manual review.
 
-The remaining audit includes P-Delta load regeneration, less-used supported
-input branches and fractional-tolerance contact outcomes. Source inspection
-has already identified a P-Delta direction discrepancy requiring a native
-regression: `ModelLoadOperations.ComputePDeltaLoads` uses template `Dir(quad)`
-for line loads, while Python's scalar and compiled-plan builders substitute the
-analysis direction when `IsSeismic` is true. Its displacement subtraction also
-needs checking against `Quad.DisplacementsCurrent` before changing formulas.
+The remaining audit includes P-Delta full-analysis histories, less-used supported
+input branches and fractional-tolerance contact outcomes. The P-Delta routine
+fixture provides imposed local displacements and interface resultants on a
+freshly constructed model. It does not qualify an independently converged
+P-Delta structural chain, general shared-DOF reduction order or arbitrary
+contact-centre geometry.
 Dynamic/Adaptic and
 non-masonry properties stay outside this task. Fields such as
 `ReduceRayArcLength` must not be implemented solely because they exist in the

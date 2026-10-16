@@ -344,8 +344,9 @@ class ModelManager:
                 local_u = np.asarray(quad.status.u, dtype=np.float64)
                 if len(local_u) < 6:
                     continue
-                # System.Numerics.Vector3 is single precision in the C# path.
+                # XNA Vector3 is Single precision in the C# path.
                 phi_g = np.asarray(local_u[3:6], dtype=np.float32)
+                translation = np.asarray(local_u[:3], dtype=np.float32)
                 if phi_g[0] == 0.0 and phi_g[1] == 0.0 and phi_g[2] == 0.0:
                     continue
                 g_quad = np.asarray([quad.g.x, quad.g.y, quad.g.z], dtype=np.float32)
@@ -359,7 +360,7 @@ class ModelManager:
                     point2 = np.asarray(load.point2, dtype=np.float32)
                     midpoint = np.float32(0.5) * (point1 + point2)
                     length = np.float32(np.linalg.norm(point1 - point2))
-                    delta_u = np.cross(phi_g, midpoint - g_quad).astype(np.float32)
+                    delta_u = (translation + np.cross(phi_g, midpoint - g_quad)) - translation
                     for item in template.items:
                         coefficient = np.float32(
                             _get_load_template_coefficient(
@@ -370,14 +371,10 @@ class ModelManager:
                                 item,
                             )
                         )
-                        direction = (
-                            np.asarray(
-                                (analysis.dir_x, analysis.dir_y, analysis.dir_z),
-                                dtype=np.float32,
-                            )
-                            if bool(getattr(analysis, "is_seismic", False))
-                            else np.asarray(item.direction_for(quad), dtype=np.float32)
-                        )
+                        # ComputePDeltaLoads uses template.Dir(quad), including
+                        # seismic analyses; its force-generation override is a
+                        # different original routine.
+                        direction = np.asarray(item.direction_for(quad), dtype=np.float32)
                         force = (
                             np.float32(item.load_value)
                             * length
@@ -395,9 +392,10 @@ class ModelManager:
                         from histra.postprocessing import _interface_local_resultant
                         f_local = _interface_local_resultant(intf)
 
-                        e1 = np.array(intf.reference_e1, dtype=np.float64)
-                        e2 = np.array(intf.reference_e2, dtype=np.float64)
-                        e3 = np.array(intf.reference_e3, dtype=np.float64)
+                        # MatrixPerVector3 multiplies/adds Single components.
+                        e1 = np.array(intf.reference_e1, dtype=np.float32)
+                        e2 = np.array(intf.reference_e2, dtype=np.float32)
+                        e3 = np.array(intf.reference_e3, dtype=np.float32)
                         f_global = np.asarray(
                             sign * (f_local[0] * e1 + f_local[1] * e2 + f_local[2] * e3),
                             dtype=np.float32,
@@ -412,7 +410,7 @@ class ModelManager:
                             continue
 
                         r = np.asarray(g_intf, dtype=np.float32) - g_quad
-                        delta_u = np.cross(phi_g, r).astype(np.float32)
+                        delta_u = (translation + np.cross(phi_g, r)) - translation
                         moment = np.cross(delta_u, f_global)
                         pq_quad[3:] += moment
 

@@ -21,6 +21,16 @@ except Exception:  # pragma: no cover - exercised when numba is unavailable
     prange = None
 
 
+def _pdelta_displacement_component(translation, rotation):
+    """Keep C# DisplacementsCurrent(point) - DisplacementsCurrent(G) rounding."""
+    translation = np.float32(translation)
+    return np.float32(np.float32(translation + rotation) - translation)
+
+
+if njit is not None:
+    _pdelta_displacement_component = njit(cache=True, inline="always")(_pdelta_displacement_component)
+
+
 if njit is not None:
     @njit(cache=True, nogil=True)
     def _scatter_local_forces(local_forces, offsets, gdls, coefficients, global_force):
@@ -169,6 +179,10 @@ if njit is not None:
             du_y = phi_z * rx - phi_x * rz
             du_z = phi_x * ry - phi_y * rx
 
+            du_x = _pdelta_displacement_component(quad_local_u[q, 0], du_x)
+            du_y = _pdelta_displacement_component(quad_local_u[q, 1], du_y)
+            du_z = _pdelta_displacement_component(quad_local_u[q, 2], du_z)
+
             intf_idx = intf_indices[m]
             fl_x = all_res_forces[intf_idx, 0]
             fl_y = all_res_forces[intf_idx, 1]
@@ -228,6 +242,10 @@ if njit is not None:
             du_x = phi_y * rz - phi_z * ry
             du_y = phi_z * rx - phi_x * rz
             du_z = phi_x * ry - phi_y * rx
+
+            du_x = _pdelta_displacement_component(quad_local_u[q, 0], du_x)
+            du_y = _pdelta_displacement_component(quad_local_u[q, 1], du_y)
+            du_z = _pdelta_displacement_component(quad_local_u[q, 2], du_z)
 
             mx = np.float64(0.0)
             my = np.float64(0.0)
@@ -315,6 +333,10 @@ else:  # pragma: no cover - exercised when numba is unavailable
             du_y = phi_z * rx - phi_x * rz
             du_z = phi_x * ry - phi_y * rx
 
+            du_x = _pdelta_displacement_component(quad_local_u[q, 0], du_x)
+            du_y = _pdelta_displacement_component(quad_local_u[q, 1], du_y)
+            du_z = _pdelta_displacement_component(quad_local_u[q, 2], du_z)
+
             intf_idx = intf_indices[m]
             fl_x = all_res_forces[intf_idx, 0]
             fl_y = all_res_forces[intf_idx, 1]
@@ -349,7 +371,8 @@ else:  # pragma: no cover - exercised when numba is unavailable
             phi = np.asarray(quad_local_u[q, 3:6], dtype=np.float32)
             if not np.any(phi):
                 continue
-            delta_u = np.cross(phi, load_r_arr[load_index]).astype(np.float32)
+            translation = np.asarray(quad_local_u[q, :3], dtype=np.float32)
+            delta_u = (translation + np.cross(phi, load_r_arr[load_index])) - translation
             moment = np.zeros(3, dtype=np.float64)
             for item_index in range(item_offsets[load_index], item_offsets[load_index + 1]):
                 moment += np.cross(delta_u, item_forces[item_index]).astype(np.float32)

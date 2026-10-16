@@ -2838,9 +2838,9 @@ class HystereticBatchRuntime:
                     if intf_idx is None:
                         continue
                     sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
-                    e1 = np.array(intf.reference_e1, dtype=np.float64)
-                    e2 = np.array(intf.reference_e2, dtype=np.float64)
-                    e3 = np.array(intf.reference_e3, dtype=np.float64)
+                    e1 = np.array(intf.reference_e1, dtype=np.float32)
+                    e2 = np.array(intf.reference_e2, dtype=np.float32)
+                    e3 = np.array(intf.reference_e3, dtype=np.float32)
                     R = sign * np.column_stack([e1, e2, e3])
 
                     intf_nodes = [collections.nodes[nk].point for nk in intf.node_keys if nk in collections.nodes]
@@ -2886,9 +2886,9 @@ class HystereticBatchRuntime:
                 else np.empty((0, 3), dtype=np.float32)
             ),
             R_arr=(
-                np.asarray(R_list, dtype=np.float64)
+                np.asarray(R_list, dtype=np.float32)
                 if R_list
-                else np.empty((0, 3, 3), dtype=np.float64)
+                else np.empty((0, 3, 3), dtype=np.float32)
             ),
             scatter_quad_idx=np.asarray(scatter_quad_idx, dtype=np.int32),
             scatter_comp=np.asarray(scatter_comp, dtype=np.int32),
@@ -2929,10 +2929,6 @@ class HystereticBatchRuntime:
         load_r: list[np.ndarray] = []
         item_offsets = [0]
         item_forces: list[np.ndarray] = []
-        seismic_direction = np.asarray(
-            (analysis.dir_x, analysis.dir_y, analysis.dir_z), dtype=np.float32
-        )
-        is_seismic = bool(getattr(analysis, "is_seismic", False))
 
         for load in collections.line_loads.values():
             if load.element_type != "Quad":
@@ -2964,9 +2960,7 @@ class HystereticBatchRuntime:
                         item,
                     )
                 )
-                direction = seismic_direction if is_seismic else np.asarray(
-                    item.direction_for(quad), dtype=np.float32
-                )
+                direction = np.asarray(item.direction_for(quad), dtype=np.float32)
                 item_forces.append(
                     (
                         np.float32(item.load_value)
