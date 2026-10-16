@@ -37,11 +37,37 @@ class AnalysisSessionError(RuntimeError):
 
 
 class AnalysisSession:
-    """Keep model and constitutive state alive across HRX analyses.
+    """Stateful multi-analysis execution manager with in-memory state preservation.
 
-    The HRX remains authoritative for each analysis' predecessor, method,
-    integration settings, load combinations and stopping criteria.  This class
-    only manages the in-memory committed state and boundary mutations.
+    Manages chained HRX analyses (e.g. Gravity -> Scour -> Lateral Pushover)
+    without reloading the model or serializing intermediate state to disk.
+    Preserves committed element deformations and constitutive histories across
+    analysis boundaries, and supports boundary material mutations via
+    ``change_interface_materials``.
+
+    Parameters
+    ----------
+    model : Model
+        The freshly prepared or loaded HiStrA Model.
+    combination_row : int, default=1
+        1-based index of the load combination to evaluate.
+    on_log : Callable[[str], None], optional
+        Callback receiving solver progress and diagnostic log messages.
+    on_progress : Callable[[float], None], optional
+        Callback receiving numerical step progress (0.0 to 100.0).
+    equilibrium_policy : {"warn", "strict", "off"}, default="warn"
+        Policy for independent equilibrium force residual balance auditing.
+    performance_policy : {"compiled", "warn", "off"}, default="compiled"
+        Policy enforcing compiled Numba backend execution.
+
+    Examples
+    --------
+    >>> from histra import load_model, AnalysisSession
+    >>> model = load_model("path/to/model.hrx")
+    >>> session = AnalysisSession(model)
+    >>> execution = session.run_analysis("Vert")
+    >>> execution.outcome.name
+    'CONVERGED'
     """
 
     def __init__(

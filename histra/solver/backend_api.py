@@ -84,11 +84,50 @@ def run_python_solver_job(
     strategy_policy: str = "warn",
     performance_policy: str = "compiled",
 ) -> PythonSolverJobResult:
-    """Run an HRX analysis plan entirely in process.
+    """Run an HRX analysis plan entirely in process with deadline enforcement.
 
-    The mutation mapping deliberately uses concrete interface/material keys.
-    Translation from bridge/pier scour semantics remains an orchestration concern
-    until those bridge entities are represented by the Python domain model.
+    Loads the HRX once, resolves predecessor dependency chains, executes analyses
+    in memory, enforces cooperative timeouts, and projects C#-compatible output rows.
+    Supports intermediate interface material mutations (e.g. Scour stages) across
+    analysis boundaries.
+
+    Parameters
+    ----------
+    model_path : str or Path
+        Path to the target ``.hrx`` model file.
+    analyses : Iterable[PythonAnalysisRequest]
+        Sequence of analysis requests specifying analysis names and required output rows.
+    timeout_seconds : float
+        Overall job deadline in seconds.
+    interface_mutations : Mapping[str, ConcreteInterfaceMutation | Iterable[...]], optional
+        Optional material mutations keyed by analysis name, applied before that analysis starts.
+    combination_row : int, default=1
+        1-based load combination row to evaluate.
+    on_log : Callable[[str], None], optional
+        Logger callback for progress and diagnostic output.
+    on_progress : Callable[[float], None], optional
+        Progress callback reporting completion percentage.
+    should_cancel : CancelCheck, optional
+        Cooperative cancellation callback invoked at step and iteration checkpoints.
+    equilibrium_policy : {"error", "warn", "strict", "off"}, default="error"
+        Independent static equilibrium audit policy.
+    strategy_policy : {"warn", "error", "off"}, default="warn"
+        Solver strategy advisor warning/enforcement policy.
+    performance_policy : {"compiled", "warn", "off"}, default="compiled"
+        Compiled backend coverage enforcement policy.
+
+    Returns
+    -------
+    PythonSolverJobResult
+        Contains results keyed by analysis name, overall execution outcomes, and captured logs.
+
+    Examples
+    --------
+    >>> from histra import PythonAnalysisRequest, run_python_solver_job
+    >>> req = PythonAnalysisRequest(name="Vert", timeout_seconds=300)
+    >>> job = run_python_solver_job("path/to/model.hrx", [req], timeout_seconds=600)
+    >>> "vert" in job.results
+    True
     """
     job_timeout = float(timeout_seconds)
     if job_timeout <= 0.0:

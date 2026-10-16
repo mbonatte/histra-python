@@ -1,6 +1,6 @@
 # HiStrA-Python Agent Operating Manual
 
-Quick-start guide and operating rules for AI agents working in `histra-python`. For in-depth derivations, benchmark logs, and release evidence, consult the linked documents under [`docs/`](docs/README.md).
+Operating manual and rules for AI agents working in `histra-python`. For in-depth derivations, benchmark logs, and release evidence, consult the linked documents under [`docs/`](docs/README.md).
 
 ---
 
@@ -28,73 +28,11 @@ For structural definitions and full feature scope, see [Supported Features](docs
 
 ---
 
-## 2. Environment & Quick Start
-
-### Environment Setup
-The development environment uses Python 3.12–3.14 on Linux 64-bit with a local virtual environment in `.venv/`.
-```bash
-# Idempotent setup script (creates/activates .venv, installs .[dev], sets up pre-commit)
-./bin/setup
-# Or via make:
-make setup
-
-# Manual activation & installation:
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
-
-### Verification & Quality Commands
-Always verify changes with the lint, type-check, and test suite:
-```bash
-# Unified check: runs lint (ruff), typecheck (mypy), and fast release tests
-make check
-
-# Individual checks:
-make lint       # ruff check histra
-make format     # ruff format --check histra
-make typecheck  # mypy
-make test       # python -m pytest -q
-
-# Run targeted fast release-critical checks (backend coverage, API, metadata, benchmark harnesses)
-python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tests/test_article_models_benchmark.py histra/tests/test_package_metadata.py histra/tests/test_backend_api.py
-```
-
-### Benchmark and Tool Entry Points
-- **Standalone Nonlinear Analysis**:
-  ```bash
-  python -m histra.tools.run_vert_live path/to/model.hrx --output-dir python-results
-  ```
-  See [Standalone Analysis Guide](docs/guides/standalone-analysis.md).
-- **Article Models Release Gate (14 canonical models)**:
-  ```bash
-  python -m histra.tools.article_models_benchmark --models-dir my_model/Article_Models_Benchmark --model all --run-mode authored --max-workers 4 --output-dir release-evidence/article-models
-  ```
-  *(Also available as console script `histra-article-benchmark`).*
-  See [Article Models Release Gate](docs/benchmarks/article-models-release-gate.md).
-- **Strategy Benchmark**:
-  ```bash
-  python -m histra.tools.strategy_benchmark release-evidence/strategy/matrices/coarse-gravity.json --output release-evidence/strategy/benchmark-results.json
-  ```
-  *(Also available as console script `histra-strategy-benchmark`).*
-  See [Solver Strategy Methodology](docs/benchmarks/solver-strategy-methodology.md).
-- **Batch Modal C#/Python Parity**:
-  ```bash
-  python -m histra.tools.run_modal path/to/models --analysis 30
-  ```
-  See [Modal Analysis Guide](docs/guides/modal-analysis.md).
-- **Interface Chain Benchmark**:
-  ```bash
-  python -m histra.tools.interface_chain_benchmark
-  ```
-  See [Analysis Chains Guide](docs/guides/analysis-chains.md).
-
----
-
-## 3. Core Development Rules & Non-Negotiable Invariants
+## 2. Core Development Rules & Non-Negotiable Invariants
 
 ### 1. Accuracy & C# Parity Over Raw Velocity
 - Numerical accuracy and C# parity are the highest priority; execution velocity is secondary (`_rules/accuracy-first-performance.md`).
-- Preserve original numerical logic and bit-exact routine tests. Per the user's 2026-10-15 instruction, faster numerical libraries may introduce small global-analysis rounding differences when complete response histories and stopping behavior are validated. Keep those performance experiments separate from exact native regression; document local phase differences and numerical limits.
+- Preserve original numerical logic and bit-exact routine tests. Faster numerical libraries may introduce small global-analysis rounding differences when complete response histories and stopping behavior are validated. Keep those performance experiments separate from exact native regression; document local phase differences and numerical limits.
 - Hot numerical paths must use vectorized NumPy or compiled Numba routines protected by differential regression tests against C# `.Results` databases.
 
 ### 2. Compiled Backend Coverage is Mandatory
@@ -117,6 +55,33 @@ python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tes
 - Follow [Documentation Policy](docs/DOCUMENTATION_POLICY.md): delegate deep architectural explanations and evidence to canonical guides under `docs/`.
 - Never cite or link files in `docs/archive/` as current guidance; archived files exist solely for historical record.
 - Maintain accurate module invocation commands (`python -m histra.tools.<module>`).
+
+## 3. Code Structure & Agent Readability Guidelines
+
+To ensure code remains navigable, robust, and maintainable by both human engineers and AI coding agents:
+
+### 1. Small, Single-Responsibility Functions
+- Target 4–20 lines for helper and operational logic; avoid mega-functions that sprawl across multiple screens.
+- Extract self-contained logic steps (e.g., configuration resolution, convergence checks, clipping routines, boundary condition filtering) into focused private helpers.
+
+### 2. Guard Clauses & Flat Nesting
+- Prefer early returns, guard clauses, and dispatch helpers over deeply nested `if/elif/else` ladders.
+- Keep control-flow nesting to a maximum of 2–3 indentation levels.
+
+### 3. Modular File Decomposition & Facade Parity
+- Decompose multi-concern modules into focused single-responsibility files (e.g., separating geometric routines into `polygon_clipping.py` or system setup into `boundary_conditions.py`).
+- Re-export extracted functions from original facade modules (`__all__` / module imports) to preserve backwards compatibility for existing callers and tests.
+
+### 4. Greppable, Descriptive Naming
+- Use unambiguous, domain-accurate names for functions, types, and variables.
+- Avoid vague abbreviations; choose searchable names reflecting structural mechanics or solver semantics.
+
+### 5. "Why", Not "What" Documentation
+- Write docstrings and comments explaining *why* an algorithm choice, numerical tolerance, or branch exists (citing C# HiStrA parity, physical assumptions, or matrix properties).
+- Do not restate syntax. Preserve domain invariants and gotcha warnings near the code.
+
+### 6. Strict Numerical & Parity Invariance
+- Refactoring must strictly preserve numerical and behavioral parity. Never modify constitutive formulas, solver thresholds, or data models without differential regression validation.
 
 ---
 

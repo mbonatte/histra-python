@@ -196,7 +196,42 @@ def inspect_solver_strategy(
     *,
     strategy_evidence: Any | None = None,
 ) -> SolverStrategyReport:
-    """Inspect named analyses without mutating the model."""
+    """Inspect named analyses without mutating the model.
+
+    Evaluates the solver configurations (integration method, nonlinear algorithm,
+    and convergence criterion) against safety and convergence heuristics. The advisor
+    is read-only: it warns about potentially unsafe or non-convergent settings (such
+    as unverified line-search or deceptive work-norm convergence) and certifies models
+    with signed strategy evidence.
+
+    Parameters
+    ----------
+    model : Model
+        Structural model containing configured analyses in its collection.
+    analysis_names : Iterable[int | str | Any]
+        One or more analysis identifiers (keys, names, or Analysis instances) to inspect.
+    strategy_evidence : ModelStrategyEvidence | None, optional
+        Optional model strategy evidence container. If omitted, checks registered
+        or bundled evidence.
+
+    Returns
+    -------
+    SolverStrategyReport
+        Summary report containing advisories and certified analysis names.
+
+    Raises
+    ------
+    ValueError
+        If an analysis key or name cannot be found or resolves ambiguously.
+
+    Examples
+    --------
+    >>> from histra import load_model, inspect_solver_strategy
+    >>> model = load_model("path/to/model.hrx")  # doctest: +SKIP
+    >>> report = inspect_solver_strategy(model, ["Vert", "Live"])  # doctest: +SKIP
+    >>> report.has_advisories  # doctest: +SKIP
+    False
+    """
     collections = getattr(model, "collections", None)
     if collections is None:
         raise ValueError("Model.collections is not initialized.")

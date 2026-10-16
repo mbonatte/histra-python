@@ -45,6 +45,98 @@ See [current status](docs/STATUS.md) for benchmark scope and
 [the v1.6.0 preparation record](docs/release/v1.6.0-preparation.md) for artifacts
 and platform evidence.
 
+## Architecture & System Workflow
+
+The following diagram illustrates the flow from source inputs through preprocessing, mechanics assembly, numerical solution, and output projection:
+
+```mermaid
+graph TD
+    subgraph Inputs["Inputs"]
+        HRX["Model File (.hrx)"]
+        Results["C# Reference (.Results SQLite)"]
+    end
+
+    subgraph IO["IO & Parsing (histra.io)"]
+        Loader["load_model() / HRX Parser"]
+        ResultsReader["ResultsReader / C# Verification"]
+    end
+
+    subgraph Preprocessing["Preprocessing (histra.preprocessing)"]
+        Prepare["prepare_model(force=True)"]
+        Geometry["Contact Geometry & Faces"]
+        SpringFactory["Spring Factory & Restraints"]
+    end
+
+    subgraph Mechanics["Core Mechanics & Assembly (histra.elements / solver)"]
+        ModelManager["ModelManager (State & Orchestration)"]
+        Assembler["assembler (Global K & Load Vectors)"]
+        HystereticRuntime["hysteretic_runtime (Compiled Numba Kernels)"]
+        LinearSystem["LinearSystem (SuperLU / UMFPACK)"]
+    end
+
+    subgraph Solvers["Solvers & Strategy (histra.solver)"]
+        Session["AnalysisSession (Multi-Stage Execution)"]
+        Nonlinear["Nonlinear Solvers (Newton-Raphson, Arc-Length, Line Search, ALS)"]
+        Modal["solve_modal_analysis() (SubSpaceIteration2 & MAC)"]
+        Audit["Equilibrium Audit (Independent Residual Balance)"]
+    end
+
+    subgraph Outputs["Projection & API (histra)"]
+        BackendAPI["run_python_solver_job()"]
+        Projection["project_displacements() / project_reactions()"]
+    end
+
+    HRX --> Loader
+    Loader --> Prepare
+    Prepare --> Geometry
+    Geometry --> SpringFactory
+    SpringFactory --> ModelManager
+    ModelManager --> Assembler
+    ModelManager --> HystereticRuntime
+    Assembler --> LinearSystem
+    HystereticRuntime --> LinearSystem
+    LinearSystem --> Session
+    Session --> Nonlinear
+    Session --> Modal
+    Nonlinear --> Audit
+    Audit --> Projection
+    Modal --> Projection
+    Results --> ResultsReader
+    ResultsReader -.-> Audit
+    Session --> BackendAPI
+```
+
+### Multi-Stage Stateful Analysis Chains
+
+`AnalysisSession` coordinates chained multi-analysis runs, retaining committed element and constitutive state in memory across analysis boundaries:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Caller
+    participant Session as AnalysisSession
+    participant Model as Model & HystereticRuntime
+    participant Solver as Nonlinear / Modal Solver
+    participant Audit as Equilibrium Audit
+
+    Caller->>Session: init(model)
+    Caller->>Session: run_analysis("Vert") [Gravity]
+    Session->>Model: assemble initial tangent & loads
+    Session->>Solver: Newton-Raphson solve to completion
+    Solver->>Audit: audit force balance & residuals
+    Audit-->>Session: equilibrium verified
+    Session->>Model: commit global & constitutive state in memory
+
+    Caller->>Session: change_interface_materials(...) [e.g. Scour]
+    Session->>Model: mutate affected interface springs (preserves unaffected history)
+
+    Caller->>Session: run_analysis("Live") [Lateral Pushover]
+    Session->>Solver: continuation solve from in-memory pre-state
+    Solver->>Audit: audit force balance & residuals
+    Audit-->>Session: equilibrium verified
+    Session-->>Caller: AnalysisExecution (converged steps & projected outputs)
+```
+
 ## Public API
 
 The stable root package exports:
