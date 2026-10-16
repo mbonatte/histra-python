@@ -1,5 +1,20 @@
 # Native C# restart diagnostics
 
+`Invoke-NativeAnalysisOracle.ps1` calls the original complete analysis routines
+on fresh HRX geometry, creating a new Results database in a new output directory.
+It refuses an existing output directory. Use `-AnalysisKeys '1,2'` for an ordered
+chain and `-InstallDirectory` to select an isolated diagnostic assembly copy.
+The source model and saved reference Results remain read-only.
+
+The trace helper also accepts `HISTRA_PARITY_CAPTURE_DIR`. When set, each original
+`Program.NewGraphError` entry writes complete binary Ap/Ai/Ax, residual and
+increment arrays. Use a new capture directory for each process. The initial
+error event precedes the Newton solve; the next event retains its solved matrix
+and increment after residual evaluation. This permits locating differences
+before constitutive updates. Without this variable, binary capture is disabled.
+An isolated helper build reproduced all 4,251 rows of an original isotropic Vert
+run exactly, excluding surrogate IDs.
+
 This development tool adds calls to an independently compiled C# trace helper around twelve methods in the original HiStrA 2026.1.1 `SolverRuntime.dll`. It preserves the original solver instructions and branches, rather than rebuilding numerical methods from decompiled source. The installed application and reference models are not modified. Use only a separate application copy and separate model/results copies.
 
 The helper always appends and immediately flushes TSV records, including successful runs, to `app/parity-logs/trace-<UTC>-<PID>.tsv`. It records restart and resisting-force baseline preparation; both load-step overloads; Newton convergence messages, errors and return codes; rollback; commits; and result-save calls. Step-zero result-save calls remain explicitly identifiable by their original arguments.

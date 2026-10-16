@@ -9,6 +9,26 @@ public static class ParityTrace
 {
     static readonly object Gate = new object();
     static StreamWriter Writer;
+    static int LinearSequence;
+    static void CaptureLinear(string label, object instance)
+    {
+        string directory = Environment.GetEnvironmentVariable("HISTRA_PARITY_CAPTURE_DIR");
+        if (String.IsNullOrEmpty(directory) || label != "SolverRuntime.Program.NewGraphError/enter") return;
+        object system = Get(instance, "LS");
+        if (system == null) return;
+        Directory.CreateDirectory(directory);
+        string prefix = Path.Combine(directory, "newton-" + (LinearSequence++).ToString("D5"));
+        object matrix = Get(system, "K");
+        foreach (string name in new[] { "Ap", "Ai", "Ax", "b", "x" })
+        {
+            object value = name == "b" || name == "x" ? Get(Get(system, name), "theData") : Get(matrix, name);
+            Array array = value as Array;
+            if (array == null) continue;
+            byte[] bytes = new byte[Buffer.ByteLength(array)];
+            Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
+            File.WriteAllBytes(prefix + "-" + name + ".bin", bytes);
+        }
+    }
     static object Get(object value, string name)
     {
         if (value == null) return null;
@@ -82,6 +102,7 @@ public static class ParityTrace
         {
             lock (Gate)
             {
+                CaptureLinear(label, instance);
                 if (Writer == null)
                 {
                     string dir = Path.Combine(Path.GetDirectoryName(typeof(ParityTrace).Assembly.Location), "parity-logs");
