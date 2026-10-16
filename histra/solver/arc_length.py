@@ -32,7 +32,8 @@ class ArcLength(StaticIntegrator):
     it can produce different last bits and branch decisions.
 
     The predictor resets the squared radius from ``Analysis.Dr2`` as in C#.
-    Commit-time radius limiting retains Python's comparison with radius-squared.
+    Commit-time radius limiting follows C# in the default mode; stable mode
+    retains Python's comparison with radius-squared.
     """
 
     def __init__(self, *, constraint_mode: str = "csharp") -> None:
@@ -495,7 +496,7 @@ class ArcLength(StaticIntegrator):
             # Despite the property name, C# caps the predictor load increment,
             # not the geometric radius.  Preserve that behavior for reference
             # compatibility with ArcLength analyses already stored in SQLite.
-            max_delta_lambda = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
+            max_delta_lambda = abs(float(np.float32(getattr(an, "max_arc_length_ray", 1.0))))
             if max_delta_lambda > 0.0 and delta_lambda > max_delta_lambda:
                 if "controlpoint" in procedure:
                     radius2 = abs(
@@ -682,9 +683,9 @@ class ArcLength(StaticIntegrator):
             return False
         an.dr2 = reduced * reduced
         if bool(getattr(an, "is_max_arc_length_ray", False)):
-            max_ray = float(getattr(an, "max_arc_length_ray", 0.0))
+            max_ray = float(np.float32(getattr(an, "max_arc_length_ray", 0.0)))
             if max_ray > 0.0:
-                an.max_arc_length_ray = max_ray * factor
+                an.max_arc_length_ray = float(np.float32(max_ray * factor))
         return True
 
     def commit(
@@ -715,8 +716,10 @@ class ArcLength(StaticIntegrator):
             self._arc_length2 *= (desired / actual) ** self._adapt_exponent
 
         if bool(getattr(an, "is_max_arc_length_ray", False)):
-            max_radius = abs(float(getattr(an, "max_arc_length_ray", 1.0)))
-            if max_radius > 0.0:
+            max_radius = float(np.float32(getattr(an, "max_arc_length_ray", 1.0)))
+            if self.constraint_mode == "csharp":
+                self._arc_length2 = min(self._arc_length2, max_radius)
+            elif max_radius > 0.0:
                 self._arc_length2 = min(self._arc_length2, max_radius * max_radius)
         return reached
 

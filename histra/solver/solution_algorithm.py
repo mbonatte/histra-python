@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 from histra.solver.incremental_integrator import IncrementalIntegrator, StaticIntegrator
 from histra.solver.line_search import (
     BisectionLineSearch,
@@ -55,9 +57,9 @@ def _new_line_search(an: Any) -> LineSearch:
     else:
         raise ValueError(f"Unsupported nonlinear solution method: {method}")
 
-    search.tolerance = float(getattr(an, "line_search_tolerance", 0.8))
-    search.max_eta = float(getattr(an, "line_search_max_eta", 10.0))
-    search.min_eta = float(getattr(an, "line_search_min_eta", 0.1))
+    search.tolerance = float(np.float32(getattr(an, "line_search_tolerance", 0.8)))
+    search.max_eta = float(np.float32(getattr(an, "line_search_max_eta", 10.0)))
+    search.min_eta = float(np.float32(getattr(an, "line_search_min_eta", 0.1)))
     search.max_iter = int(getattr(an, "line_search_max_iterations", 100))
     search.print_flag = 0
     return search

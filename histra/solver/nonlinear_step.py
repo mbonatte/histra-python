@@ -41,6 +41,12 @@ from histra.solver.incremental_integrator import StaticIntegrator
 from histra.types.linear_system import LinearSolveError, LinearSystem
 
 
+def _load_reduction_stop_reached(analysis: Any, ratio: float) -> bool:
+    return bool(getattr(analysis, "load_reduction_ratio_to_stop", False)) and ratio < float(
+        np.float32(getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1))
+    )
+
+
 def _cutback_tangent_alfa(analysis: Any) -> float:
     """Retain the selected Newton tangent policy during opt-in cutbacks.
 
@@ -424,10 +430,8 @@ def _execute_steps(
             p.log(f"Requested committed-step limit reached at step {step}")
             continue_steps = False
 
-        if bool(getattr(analysis, "load_reduction_ratio_to_stop", False)):
-            threshold = float(getattr(analysis, "load_reduction_ratio_to_stop_value", 0.1))
-            if load_reduction_ratio < threshold:
-                continue_steps = False
+        if _load_reduction_stop_reached(analysis, load_reduction_ratio):
+            continue_steps = False
 
 
     return final_code, step_data, unsafe_equilibrium_steps, step
