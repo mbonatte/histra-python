@@ -35,6 +35,16 @@ def test_first_native_newton_matrix_preserves_virgin_envelope_tangent(tmp_path, 
             np.testing.assert_array_equal(actual, native[name], err_msg=name)
         np.testing.assert_array_equal(0.1 * assemble_load_vector(model, 1, 1), native["b"])
         initial_tangent = runtime.trial[:, 9].copy()
+        initial = runtime.snapshot()
+        runtime.trial[0, 6] = 0.123
+        runtime._interface_resultants_valid = False
+        # Trial forces cannot implicitly replace C#'s saved-result force cache.
+        np.testing.assert_array_equal(runtime._pdelta_saved_resultants, 0.0)
+        ModelManager.refresh_saved_interface_forces(model)
+        assert np.any(runtime._pdelta_saved_resultants != 0.0)
+        runtime.restore(initial)
+        np.testing.assert_array_equal(runtime._pdelta_saved_resultants, 0.0)
+        assert all(interface.status.forces == (0.0, 0.0, 0.0) for interface in model.collections.interfaces.values())
         runtime.reset_to_initial_state()
         np.testing.assert_array_equal(runtime.trial[:, 9], initial_tangent)
     finally:

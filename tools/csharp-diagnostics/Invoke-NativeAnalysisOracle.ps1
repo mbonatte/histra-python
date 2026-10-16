@@ -42,11 +42,12 @@ try {
   } finally {$lock.Dispose()}
   [DBManagement.DatabaseManager]::database.FlushAndWait()
   $states+=@{key=$key;step=$state.Step;state=[string]$state.State;exit=[string]$state.Exit}
-  Write-Output "Analysis $key finished: step=$($state.Step), exit=$($state.Exit)"
+  Write-Output "Analysis $key finished: state_saved_step=$($state.Step), exit=$($state.Exit)"
  }
  @{schema_version=1;generated_at=[DateTime]::UtcNow.ToString('o');source_commit=(& git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD);
  generator='tools/csharp-diagnostics/Invoke-NativeAnalysisOracle.ps1';benchmark_id='independent-native-analysis-2026.1.1';
  model_sha256=(Get-FileHash $ModelPath -Algorithm SHA256).Hash.ToLowerInvariant();
  assembly_sha256=(Get-FileHash (Join-Path $InstallDirectory 'SolverRuntime.dll') -Algorithm SHA256).Hash.ToLowerInvariant();
- analyses=$states} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $out 'execution.json') -Encoding UTF8
+  state_step_semantics='AnalysisState.Step is the last regular saved step, not necessarily the final committed step.';
+  process_id=$PID;analyses=$states} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $out 'execution.json') -Encoding UTF8
 } finally {[DBManagement.DatabaseManager]::Close()}

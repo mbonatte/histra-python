@@ -33,7 +33,7 @@ from histra.solver.diagnostics import DiagnosticOptions
 from histra.solver.equilibrium import UNSAFE_EQUILIBRIUM_EXIT_CODE
 from histra.solver.equilibrium_audit import run_equilibrium_audit
 from histra.solver.load_control import LoadControl
-from histra.solver.model_manager import ModelManager
+from histra.solver.model_manager import ModelManager, pdelta_enabled
 from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.secant_stiffness import SecantStiffnessPolicy
@@ -95,6 +95,13 @@ def _execute_steps(
     continue_steps = True
     max_force_change = 0.0
     secant_policy = SecantStiffnessPolicy(analysis, reference)
+    has_pdelta = pdelta_enabled(getattr(analysis, "pdelta_effect", None))
+    save_interval = int(getattr(analysis, "step_save", 1))
+    if has_pdelta:
+        if save_interval <= 0:
+            raise ValueError("StepSave must be positive")
+        # The native step-zero save refreshes Interface.Status.Forces too.
+        ModelManager.refresh_saved_interface_forces(model)
     energy_elastic = 0.0
     energy_dissipated = 0.0
     p.log(
@@ -336,6 +343,8 @@ def _execute_steps(
         )
         commit_started = time.perf_counter()
         _commit_state(model, ls)
+        if has_pdelta and step % save_interval == 0:
+            ModelManager.refresh_saved_interface_forces(model)
         if diagnostic_writer is not None:
             diagnostic_writer.add_timing("commit", time.perf_counter() - commit_started)
 

@@ -133,6 +133,7 @@ def test_pdelta_interface_moments_use_only_first_four_quad_faces():
             trasv_2=[],
             slid=[],
             slid_out_plan=[spring],
+            status=SimpleNamespace(forces=(0.0, 0.0, -force)),
         )
 
     quad = SimpleNamespace(

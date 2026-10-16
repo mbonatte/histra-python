@@ -308,6 +308,21 @@ class ModelManager:
             dirty_interfaces.clear()
 
     @classmethod
+    def refresh_saved_interface_forces(cls, model: Model) -> None:
+        """Mirror the force cache written by C# AddStateElements."""
+        runtime = cls.hysteretic_batch_for(model)
+        if runtime is not None:
+            np.copyto(runtime._pdelta_saved_resultants, runtime.all_resultant_forces())
+            for row, record in zip(runtime._pdelta_saved_resultants, runtime.records):
+                record.interface.status.forces = tuple(float(value) for value in row)
+            interfaces = runtime.unmanaged_interfaces
+        else:
+            interfaces = model.collections.interfaces.values()
+        from histra.postprocessing import _interface_local_resultant
+        for interface in interfaces:
+            interface.status.forces = tuple(float(value) for value in _interface_local_resultant(interface))
+
+    @classmethod
     def compute_and_assemble_pdelta_load(
         cls,
         model: Model,
@@ -389,8 +404,7 @@ class ModelManager:
                         if intf is None:
                             continue
                         sign = 1.0 if (intf.parent_element_key1 == quad.key and intf.parent_type_element1 == "Quad") else -1.0
-                        from histra.postprocessing import _interface_local_resultant
-                        f_local = _interface_local_resultant(intf)
+                        f_local = np.asarray(intf.status.forces, dtype=np.float32)
 
                         # MatrixPerVector3 multiplies/adds Single components.
                         e1 = np.array(intf.reference_e1, dtype=np.float32)

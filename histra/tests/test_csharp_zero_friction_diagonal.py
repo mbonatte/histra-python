@@ -91,9 +91,10 @@ class NativeZeroFrictionDiagonalTests(unittest.TestCase):
                     np.testing.assert_array_equal([spring._cstress, spring._cstrain, spring.cenergy_d], row[[qk.QCSTRESS,qk.QCSTRAIN,qk.QCENERGY]])
                     np.testing.assert_array_equal(spring.fy, doubles(case['initial']['Fy']))
                     saved = runtime.snapshot()
+                    expected_quad = runtime.quad_state.copy()
                     runtime.quad_state[:] = 123.
                     runtime.restore(saved)
-                    np.testing.assert_array_equal(runtime.quad_state, saved[-1])
+                    np.testing.assert_array_equal(runtime.quad_state, expected_quad)
                 runtime.reset_to_initial_state()
                 np.testing.assert_array_equal(runtime.quad_state, initial_state)
                 saved = runtime.quad_state.copy()

@@ -47,7 +47,8 @@ def test_invalid_reuse_is_rejected_before_modifying_buffers(runtime, invalid):
     elif invalid == "shape":
         buffers[-1] = np.empty((1,))
     elif invalid == "dtype":
-        buffers[-1] = buffers[-1].astype(np.float32)
+        wrong_dtype = np.float64 if buffers[-1].dtype == np.float32 else np.float32
+        buffers[-1] = buffers[-1].astype(wrong_dtype)
     elif invalid == "readonly":
         buffers[-1].flags.writeable = False
     elif invalid == "live":

@@ -231,6 +231,7 @@ class Analysis:
     load_reduction_ratio_to_stop_value: float = 0.1
     check_secant_stiffness: bool = False
     secant_stiffness_ratio: float = 0.0
+    step_save: int = 1
     active_model_points: dict[int, bool] = field(default_factory=dict)
 
     # Populated by ``load_model`` after all top-level entities are parsed.

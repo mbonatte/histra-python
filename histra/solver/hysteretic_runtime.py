@@ -1305,6 +1305,9 @@ class HystereticBatchRuntime:
         self._max_u_cache = np.zeros(5, dtype=np.float64)
         self._interface_resultants = np.zeros((len(self.records), 3), dtype=np.float32)
         self._interface_resultants_valid = False
+        self._pdelta_saved_resultants = np.asarray(
+            [record.interface.status.forces for record in self.records], dtype=np.float32,
+        ).reshape((-1, 3))
         self._e1 = (
             np.asarray([record.interface.reference_e1 for record in self.records], dtype=np.float32)
             if self.records else np.empty((0, 3), dtype=np.float32)
@@ -2907,7 +2910,9 @@ class HystereticBatchRuntime:
         plan = self.get_pdelta_plan()
         if len(plan.quad_indices) == 0:
             return
-        all_res = self.all_resultant_forces()
+        # ComputePDeltaLoads reads Interface.Status.Forces, refreshed by
+        # CommonOperations.AddStateElements at save boundaries, not each trial.
+        all_res = self._pdelta_saved_resultants
         _eval_pdelta_interfaces_kernel(
             self._quad_local_u,
             all_res,
@@ -3205,6 +3210,7 @@ class HystereticBatchRuntime:
             self.coulomb_state, self.coulomb_targets,
             self.coulomb_dns, self._local_u,
             self._quad_local_u, self._quad_sigma_initial, self.quad_state,
+            self._pdelta_saved_resultants,
         )
         if reuse is None:
             return tuple(source.copy() for source in sources)
@@ -3228,7 +3234,7 @@ class HystereticBatchRuntime:
         (
             committed, trial, targets, coulomb_state, coulomb_targets,
             coulomb_dns, local_u, quad_local_u, quad_sigma_initial,
-            quad_state,
+            quad_state, saved_resultants,
         ) = state
         self.committed[...] = committed
         self.trial[...] = trial
@@ -3240,6 +3246,9 @@ class HystereticBatchRuntime:
         self._quad_local_u[...] = quad_local_u
         self._quad_sigma_initial[...] = quad_sigma_initial
         self.quad_state[...] = quad_state
+        self._pdelta_saved_resultants[...] = saved_resultants
+        for row, record in zip(self._pdelta_saved_resultants, self.records):
+            record.interface.status.forces = tuple(float(value) for value in row)
         self._pending_values.fill(0.0)
         self._refresh_transverse_cache()
         self._objects_trial_synced = False

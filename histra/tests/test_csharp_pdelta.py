@@ -38,15 +38,14 @@ def test_original_pdelta_loads_with_translation_and_seismic_direction(tmp_path, 
                 force = forces[key]
                 interface = model.collections.interfaces[key]
                 interface.reference_e1, interface.reference_e2, interface.reference_e3 = row["axes"]
-                runtime._interface_resultants[runtime._record_by_id[id(interface)]] = force
-            runtime._interface_resultants_valid = True
+                interface.status.forces = tuple(force)
+                runtime._pdelta_saved_resultants[runtime._record_by_id[id(interface)]] = force
             if compiled:
                 actual = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis)
             else:
                 # The fixture supplies original Interface.Status.Forces as the
                 # input to this routine; resultant construction has its own tests.
-                with patch.object(ModelManager, "hysteretic_batch_for", return_value=None), \
-                     patch("histra.postprocessing._interface_local_resultant", side_effect=lambda item: forces[item.key]):
+                with patch.object(ModelManager, "hysteretic_batch_for", return_value=None):
                     actual = ModelManager.compute_and_assemble_pdelta_load(model, analysis=analysis)
             np.testing.assert_array_equal(actual, case["global"])
     ModelManager.clear_hysteretic_batch()

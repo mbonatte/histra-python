@@ -270,6 +270,7 @@ def _parse_analysis(elem: ET.Element) -> Analysis:
         load_reduction_ratio_to_stop_value=_safe_float(_attr(elem, "LoadReductionRatioToStopValue", default="0.1"), 0.1),
         check_secant_stiffness=_safe_bool(_attr(elem, "CheckSecantStiffness", default="false")),
         secant_stiffness_ratio=_safe_float(_attr(elem, "SecantStiffnessRatio", default="0")),
+        step_save=_safe_int(_attr(elem, "StepSave", default="1")),
         active_model_points={
             _safe_int(_attr(child, "Key", default="0")): _safe_bool(_attr(child, "Value", default="false"))
             for child in elem.findall("./ActiveModelPoints/ActiveModelPoint")
