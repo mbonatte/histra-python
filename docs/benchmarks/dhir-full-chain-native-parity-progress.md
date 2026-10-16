@@ -89,3 +89,20 @@ hashes are unchanged. [Evidence](../../release-evidence/dhir/2026-10-15-snapshot
 and the [performance report](newton-snapshot-reuse-performance.md) record source
 boundaries and timing scope. Later norm-helper corrections have original-routine
 bit-exact tests and do not alter this model's Work convergence decision.
+
+## Virgin tangent and precision audit regression, 2026-10-16
+
+A fresh full-chain run at 97a8cd5 retains exact equality for every available
+checked output through Vert 20, TLM_Constant_UDL 10 and pushover 58. All 88
+committed iteration counts match the original trace, and both solvers stop at
+attempt 59 with code -2. The audit covers 6,783,040 committed spring records;
+step zero remains an initial snapshot. The original HRX and Results hashes
+are unchanged. Foundation material 146 is applied to all 148 selected fresh
+interfaces before Vert.
+
+[Evidence](../../release-evidence/dhir/2026-10-16-virgin-tangent-full-chain.json)
+records field maxima, coverage and source provenance. This run includes the
+virgin E1p tangent correction and prior precision fixes. The later 9c622b4
+saved-force cache change has separate native P-Delta chain coverage; this Dhir
+reference has no P-Delta updates. Independent equilibrium warnings and missing
+native measurements remain outside the available-output parity conclusion.

@@ -30,13 +30,14 @@ excluded from committed counts.
 | `GenerateLoadsForceAnalysis`, `Quad.ComputeNodalForce` | `load_assembly`, `quad_loads`; native direction/line-load tests and `test_masonry_reference_models` | Self-weight direction multiplication rounds before promotion. 448 fresh original load-vector entries cover fractional coefficients, oblique directions, static and modal loads. |
 | Modal load direction and directional mass inputs | `load_assembly`; wall modal and fresh-load fixtures | Native modal direction is (1,1,1); line loads carry all specified directional mass factors. Corrected prior missing horizontal mass. |
 | `Quad.ComputeLocalMassfromSelfWeight`, `ComputeLocalMass` | `mass_matrix`; `test_modal_analysis` | Node coordinates, normals, thickness, centre and axes stored Single then promoted. Length/cos/sin and integration remain Double. Mass integration tests retain documented floating-point tolerances. |
-| `SpringHysteretic`, `SpringCoulomb03`, elastic spring updates | scalar springs and `hysteretic_batch`; native cyclic/update/commit/energy fixtures | Core state is Double. Display-only Single plasticity/ductility getters are not grounds for rounding core history. Independent wall phase/history differences remain open. |
+| `SpringHysteretic`, `SpringCoulomb03`, elastic spring updates | scalar springs and `hysteretic_batch`; native cyclic/update/commit/energy fixtures | Core state is Double. Display-only Single getters do not justify rounding history. Correcting batch import of virgin E1p resolves all four walls' checked phase/history differences. |
 | Interface local stiffness, forces, normal-force cache and global assembly | scalar elements and compiled assembly; native interface-stiffness/normal-force/local-displacement fixtures | Preserve ordered reductions, projection increments and force-minus-increment cancellation. Initial wall K and first native linear solve matched exactly in the preceding wall audit. |
 | `LineSearch.NewLineSearch`: tolerance / min/max eta Single | `_new_line_search`; native analysis-setting fixture and existing search traces | Corrected factory promotion; direct search defaults retain their native Double values. |
 | `Analysis.MaxArcLengthRay` Single; `ArcLength.Commit` | `arc_length`; native analysis-setting fixture | Default C# mode caps squared state by the native field directly. Explicit stable mode retains its alternative squared-radius cap. |
 | `LoadReductionRatioToStopValue` Single | `nonlinear_step`; native setting and adjacent-double boundary tests | Strict comparison uses promoted Single threshold. |
 | `ComputePDeltaLoads`, `Quad.DisplacementsCurrent`, `MatrixPerVector3` | scalar `model_manager`, compiled runtime/scatter kernels; `test_csharp_pdelta` | Original routines supply 24 cases covering seismic/nonseismic direction, zero/ordinary/large translation, interface force inputs and oblique force frames. Corrected template direction, translation-add/subtract rounding and Single force-frame multiplication. All 28 global entries match exactly in scalar and compiled paths. |
-| `StaticNonLinearAnalysis.Execute`: `CheckSecantStiffness` / Single `SecantStiffnessRatio` | `secant_stiffness`, called before integrator commit | Found parsed-but-unused setting. Implemented source branch, first graph-column slope, negative/softening/recovery and UpdateK fallback propagation. Tests are source-derived; an independent native whole-Execute fixture for this setting remains outstanding. |
+| `StaticNonLinearAnalysis.Execute`: `CheckSecantStiffness` / Single `SecantStiffnessRatio` | `secant_stiffness`, called before integrator commit | Two independent native chains match every available checked output, actual alpha choices and iteration counts. Ratios 0.4 and 1.1 exercise current and initial stiffness. Negative/recovery branches retain source-derived boundary tests. |
+| `CommonOperations.AddStateElements`, `ComputePDeltaLoads`: saved force cache | `nonlinear_step`, `model_manager`, dense runtime; `test_pdelta_native_execution` | Native P-Delta reads Interface.Status.Forces saved at output boundaries. Four complete chains cover EachStep/EachIteration and StepSave 1/2; all checked available fields match exactly. Saved-force state participates in snapshot/revert/reset. |
 | `ModalValues.Set`, `Pseudovectors.ComputeUmax` | `modal`; four native wall modal fixtures | Modal UMax is stored Single, eigenvectors remain Double. Corrected native `UMaxX/Y/Z` column spelling and require every available native field to be present. |
 
 ## Inventory and remaining work
@@ -52,20 +53,22 @@ Implicit promotions and overloaded operators still require source review.
 The inventory, including model-load regeneration, contains 317 files and 14,690 candidate lines. Those
 numbers describe the search surface, not completed manual review.
 
-The remaining audit includes P-Delta full-analysis histories, less-used supported
-input branches and fractional-tolerance contact outcomes. The P-Delta routine
-fixture provides imposed local displacements and interface resultants on a
-freshly constructed model. It does not qualify an independently converged
-P-Delta structural chain, general shared-DOF reduction order or arbitrary
-contact-centre geometry.
+The remaining audit includes less-used supported input branches, general
+shared-DOF P-Delta reduction order and fractional-tolerance contact outcomes.
+P-Delta now has both imposed-input routine fixtures and four independently
+converged small structural chains. These do not cover arbitrary contact-centre
+geometry. Material-mutation metadata restoration also needs a direct native
+differential check: `SpringStateDBclass.SetSpring` restores saved tangent and
+yield metadata, while the numeric group's optimized copy currently regenerates
+some of those values from the target definition. Treat this as a source-review
+finding pending native qualification.
 Dynamic/Adaptic and
 non-masonry properties stay outside this task. Fields such as
 `ReduceRayArcLength` must not be implemented solely because they exist in the
 model: a numerical consumer must first be established in the original code.
 
-The four wall references do not currently establish full internal-history
-parity for the isotropic and zero-friction cases. Preserve raw phase/history
-differences in the [wall comparison report](masonry-wall-native-parity-2026-10-15.md).
+All four wall references now match every checked available internal history;
+see the dated resolution in the [wall comparison report](masonry-wall-native-parity-2026-10-15.md).
 The Article model gate remains unavailable on this computer. Current package
 artifacts predate these fixes and need rebuilding before release qualification.
 
@@ -84,3 +87,43 @@ it does not waive the previously reported internal-history differences.
 Local diagnostic evidence is stored in
 `four-wall-precision-merged-static-comparison/comparison.json` under the
 comparison directory, separate from the original saved results.
+
+## Subsequent full-execution resolution
+
+The E1p import correction supersedes the remaining differences in the preceding
+merge-only regression. Current exact evidence is in
+`four-wall-virgin-tangent-static-comparison/comparison.json`; original native
+Newton captures and the complete saved-state fingerprints are protected by
+committed fixtures. All 296 unique wall states have zero measured differences
+in every available checked table/field.
+
+The native secant chains each have 10 Vert and 7 ArcLength commits. Four native
+P-Delta chains have the same actual committed counts. With StepSave=2, C# reports
+AnalysisState.Step=6 but stores the final private spring state at step 7:
+`StaticNonLinearAnalysis.Execute` truncates that metadata to the regular save
+boundary. Tests count the actual terminal state and exclude step zero.
+
+P-Delta force-cache timing follows the authoritative implementation, including
+its dependence on StepSave. It is not interchangeable with recomputing current
+trial resultants. Independent equilibrium diagnostics remain active: matching
+the original Work convergence decision does not establish a separate
+force-equilibrium pass.
+
+## Verification of the current changes
+
+At 9c622b4, the complete Windows suite passes with 826 tests and 1,662 subtests
+(14 skips); Linux passes with 789 tests and 1,461 subtests (51 skips). Native
+Windows-library integration cases are explicitly skipped where that library
+is unavailable. The two Windows warnings are expected independent-equilibrium
+diagnostics in the native P-Delta cases. Ruff and the configured mypy checks
+also pass.
+
+The large fresh Dhir chain independently retains exact available-field and
+committed-iteration parity through all 88 commits after the virgin tangent
+correction; see its [dated regression](dhir-full-chain-native-parity-progress.md).
+The [horizontal chain](dhir-horizontal-native-parity.md) also retains exact
+available-field parity through all 521 commits and the attempt-502 stop.
+The numerical source boundary of that longer run is 97a8cd5. The subsequent
+saved-force cache bookkeeping has separate complete native P-Delta chain
+tests. These are explicit qualification boundaries, rather than a claim that
+all supported inputs have now been exhaustively validated.

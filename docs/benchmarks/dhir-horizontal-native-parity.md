@@ -80,3 +80,18 @@ buffers. Every available checked output and identity remains exact across all
 [Evidence](../../release-evidence/dhir/2026-10-15-horizontal-snapshot-reuse-full-chain.json)
 and the [performance report](newton-snapshot-reuse-performance.md) describe the
 source boundary; faster library configurations are evaluated separately.
+
+## Virgin tangent and precision audit regression, 2026-10-16
+
+A fresh chain at 97a8cd5 preserves exact equality for every available checked
+field and identity across Vert 20 and horizontal pushover 501. Step zero is
+excluded from the 521 commits. Python retains committed step 501 and stops
+at attempt 502 with code -3, reaching the same displacement limit as C#.
+Original reference hashes are unchanged.
+
+[Evidence](../../release-evidence/dhir/2026-10-16-horizontal-virgin-tangent-full-chain.json)
+records the measured coverage and source boundary after the virgin tangent
+and precision corrections. The subsequent 9c622b4 saved-force cache change
+has separate native P-Delta chain tests; this reference has no P-Delta updates.
+Unavailable private histories, the absent native iteration trace, and the
+independent equilibrium limitations described above still apply.

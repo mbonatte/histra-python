@@ -7,15 +7,22 @@ accepted findings, source-backed disagreements and the remaining Article gate.
 Current reviewed artifacts and platform verification supersede the earlier
 preparation build. The broader native wall references have arrived and exposed
 a modal line-load mass correction; see [the wall comparison](benchmarks/masonry-wall-native-parity-2026-10-15.md).
-That correction postdates the reviewed packages. Static spring-history
-differences on two walls remain under investigation.
+The reviewed packages predate these corrections. All four walls now match every
+available checked static output through Vert and both reversal combinations,
+including phases and private spring histories. The initial envelope-tangent
+correction and native regression fixtures are recorded in that comparison.
 
 A [systematic precision-boundary audit](benchmarks/masonry-precision-audit-2026-10-16.md)
 now tracks source types, native fixtures and remaining checks across the masonry
 pipeline. Recent fixes include load coefficients, oblique self-weight, mass
 inputs, modal output storage, analysis controls and geometry tolerances.
-Source-defined secant stiffness switching is implemented with control tests;
-native whole-analysis qualification of that setting remains open.
+Native whole-analysis tests now cover secant stiffness switching and P-Delta
+updates, including the original saved-force cache and sparse result saving.
+These qualify their recorded inputs; the wider source audit remains ongoing.
+Fresh large-model regressions after the virgin tangent correction retain exact
+available-field parity through all 88 Dhir and 521 horizontal commits, with
+the original stopping behavior. Their benchmark reports record the numerical
+source boundary and unavailable measurements.
 
 The released package has been rerun from fresh Dhir geometry through Vert,
 constant load and the final committed pushover step. Every available measured

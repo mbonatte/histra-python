@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-16T09:57:52.468569+00:00",
+  "source_commit": "97a8cd5fc6a71295d4b1dfda1136f00869b6c8bc",
+  "generator": "write_oct16_chain_evidence.py; run_horizontal_performance_full.py; stepwise_parity.py",
+  "benchmark_id": "dhir-horizontal-virgin-tangent-full-chain",
+  "reference_version": "2026.1.1",
+  "hrx_sha256": "94f95e8171d22833e9e3945050cfd4e9e75fcdb835573baa5f998e8cbbabd45b",
+  "results_sha256": "1998b55dfd03dfa92281750e4dc36141c43fa34b170fd59b2bc3384de2ccf9f4",
+  "reference_files_unchanged": true,
+  "fresh_geometry": true,
+  "reused_native_computational_objects": false,
+  "umfpack_controls": {
+    "strategy": 3,
+    "irstep": 2,
+    "ordering": "amd"
+  },
+  "steps": {
+    "Vert": 20,
+    "Pushover_5Axle_P1": 501
+  },
+  "step_zero_is_committed": false,
+  "compared_states_including_initial": 523,
+  "compared_committed_spring_records": 40158680,
+  "compared_numeric_values_including_initial": 434705854,
+  "available_field_max_abs_difference": {
+    "SpringStatesTmp": {
+      "U": 0,
+      "F": 0,
+      "Phase": 0,
+      "Fy1": 0,
+      "Fy2": 0,
+      "Up1": 0,
+      "Up2": 0,
+      "N": 0,
+      "SpringType": 0
+    },
+    "InterfaceStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0,
+      "U7": 0,
+      "U8": 0,
+      "U9": 0,
+      "U10": 0,
+      "U11": 0,
+      "U12": 0,
+      "ForceX": 0,
+      "ForceY": 0,
+      "ForceZ": 0,
+      "BendingMomentsX": 0,
+      "BendingMomentsY": 0,
+      "BendingMomentsZ": 0
+    },
+    "QuadStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0,
+      "U7": 0,
+      "K": 0
+    },
+    "RestraintStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0
+    },
+    "NodeCStates": {
+      "U1": 0,
+      "U2": 0,
+      "U3": 0,
+      "U4": 0,
+      "U5": 0,
+      "U6": 0
+    },
+    "ReactionSumStates": {
+      "R1": 0,
+      "R2": 0,
+      "R3": 0,
+      "Et": 0,
+      "Eel": 0,
+      "Ed": 0,
+      "Ei": 0,
+      "Evd": 0
+    },
+    "DisplModelPoints": {
+      "Ux": 0,
+      "Uy": 0,
+      "Uz": 0,
+      "Vx": 0,
+      "Vy": 0,
+      "Vz": 0,
+      "Ax": 0,
+      "Ay": 0,
+      "Az": 0
+    },
+    "SpringStates": {
+      "U": 0,
+      "F": 0,
+      "Phase": 0,
+      "Fy1": 0,
+      "Fy2": 0,
+      "Up1": 0,
+      "Up2": 0,
+      "N": 0,
+      "SpringType": 0,
+      "K_tang": 0,
+      "Uy1": 0,
+      "Uy2": 0,
+      "Umax1": 0,
+      "Umax2": 0,
+      "Uu1": 0,
+      "Uu2": 0,
+      "LoadIndicator": 0,
+      "ContactArea": 0,
+      "F0": 0,
+      "CmomMin": 0,
+      "CmomMax": 0,
+      "CrotLimNu": 0,
+      "CrotLimPu": 0,
+      "CrotYn": 0,
+      "CrotYp": 0,
+      "CPhaseUnload_t": 0,
+      "CPhaseUnload_c": 0,
+      "TangentReload_c": 0,
+      "TangentReload_t": 0,
+      "CplasticTensionIndicator": 0,
+      "CplasticCompressionIndicator": 0
+    },
+    "DynamicVectorsState": {
+      "U": 0,
+      "V": 0
+    }
+  },
+  "identity_failures": [],
+  "nonzero_fields": [],
+  "table_state_coverage": {
+    "SpringStatesTmp": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "InterfaceStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "QuadStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "RestraintStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "NodeCStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "ReactionSumStates": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "DisplModelPoints": {
+      "1": {
+        "states": 21,
+        "first": 0,
+        "last": 20
+      },
+      "4": {
+        "states": 502,
+        "first": 0,
+        "last": 501
+      }
+    },
+    "SpringStates": {
+      "1": {
+        "states": 1,
+        "first": 20,
+        "last": 20
+      }
+    },
+    "DynamicVectorsState": {
+      "1": {
+        "states": 1,
+        "first": 20,
+        "last": 20
+      }
+    }
+  },
+  "python_terminal": {
+    "Vert": {
+      "code": 0,
+      "outcome": "completed"
+    },
+    "Pushover_5Axle_P1": {
+      "code": -3,
+      "outcome": "completed_at_configured_displacement_limit"
+    }
+  },
+  "runtime_seconds": 2458.3871692000002,
+  "paired_states_directory": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\horizontal-virgin-tangent-regression\\static\\every-step",
+  "comparison_database": {
+    "path": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\horizontal-indexed-audit.Results",
+    "construction": "SQLite backup of original; only audit indexes added; no data rows changed"
+  },
+  "independent_equilibrium_qualified": false,
+  "equilibrium_policy": "warn",
+  "independent_audit_failed_commits": {
+    "Vert": 18,
+    "Pushover_5Axle_P1": 501
+  },
+  "limitations": [
+    "Native NULL per-spring E/Ed/Eel excluded.",
+    "Private pushover spring histories and full global displacement vectors are not saved at every committed step.",
+    "Available-output parity is benchmark-specific; independent equilibrium is not established.",
+    "No native horizontal iteration trace: matching saved states does not establish every iteration count or private trial state."
+  ],
+  "foundation_materials": "default generated masonry throughout, confirmed by user",
+  "native_terminal_states": [
+    {
+      "Id": "1",
+      "Key": "1",
+      "Combination": "1",
+      "Step": "20",
+      "State": "ExecutedCompleted",
+      "Fo": "34599.7",
+      "Exit": "Converged",
+      "ExitDescription": "Step 20 converged at iteration 163, error = 0.0019653 < tol = 0.0020000@ > F = 34599.56 kN, target load Fo=34599.70 kN@ > Load multiplier F/Fo=100.00 %"
+    },
+    {
+      "Id": "1",
+      "Key": "4",
+      "Combination": "1",
+      "Step": "501",
+      "State": "ExecutedNotCompleted",
+      "Fo": "17.9738",
+      "Exit": "LargeDisplacement",
+      "ExitDescription": "Analysis interrupted at step 502 due to large displacements@ > Displacement=18.69 cm > Max displacement=10.00 cm at element Quad (135)@ > Iterations=6 < Max Iterations=3000, error=13023.3995, toll=0.0020@ >@ > NOTES:@ >@ > If you want to get further steps and push the analysis@ > change the value of the Max displacements allowed for this analysis:@ > In order to do it go to main menu:@ > Define > Analysis > Convergence criteria > Max displacement"
+    }
+  ],
+  "python_failed_attempt": 502,
+  "native_failed_attempt": 502,
+  "native_committed_iterations_available": false,
+  "fresh_native_load_and_initial_stiffness": {
+    "shape": [
+      16408,
+      16408
+    ],
+    "native_entries": 425560,
+    "different_entries": 0,
+    "max_abs_difference": 0.0,
+    "load_vector_max_abs": 0.0
+  },
+  "scope": "Fresh horizontal chain at 97a8cd5 after virgin envelope-tangent import, P-Delta arithmetic and secant native-execution qualification. All available checked fields exact through step 501. Later 9c622b4 saved-force cache bookkeeping is qualified separately on P-Delta chains; this reference has no P-Delta updates.",
+  "loaded_quad_keys": [
+    1771,
+    1776,
+    1857,
+    1801,
+    1827,
+    1832
+  ],
+  "load_direction_code": 2,
+  "global_load_direction": [
+    0,
+    1,
+    0
+  ]
+}
