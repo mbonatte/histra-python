@@ -262,6 +262,57 @@ def solve_modal_analysis(
     analysis chained to a nonlinear predecessor uses that predecessor's
     committed constitutive state. Modes are mass-normalized before modal
     participation quantities are evaluated.
+
+    Parameters
+    ----------
+    model : Model
+        Structural model containing nodes, quads, interfaces, restraints, and
+        assigned analyses.
+    analysis : Analysis | Any
+        The modal analysis configuration object (AnalysisType == 5) or
+        corresponding analysis specification.
+    combination : int, default 1
+        Load combination key for dead-load mass contributions.
+    on_log : Callable[[str], None] | None, optional
+        Callback invoked with informative log messages during eigensolving.
+    on_progress : Callable[[float], None] | None, optional
+        Callback receiving normalized solver progress in [0.0, 1.0].
+    results_path : str | Path | None, optional
+        Path to authoritative C# ``.Results`` SQLite database for predecessor
+        state recovery when solving chained modal analyses standalone.
+    initial_displacement : np.ndarray | None, optional
+        Initial displacement vector to establish the tangent stiffness base state.
+    restart_from_current_state : bool, default False
+        When True, preserves current element damage/stress state in-place without
+        resetting or reloading from external results.
+    auto_prepare : bool, default True
+        Automatically execute fresh Python model preparation if the model is not
+        marked solver-ready.
+    should_cancel : CancelCheck | None, optional
+        Callable polled between subspace iterations for cooperative cancellation.
+    eigensolver_tolerance : float | None, optional
+        Custom convergence tolerance override for subspace/inverse iterations.
+
+    Returns
+    -------
+    ModalAnalysisResult
+        Container with mass-normalized modes, frequencies, periods, effective
+        mass participation percentages, and full mode shapes.
+
+    Raises
+    ------
+    ModalAnalysisError
+        If the model or analysis configuration fails modal validation or if
+        the eigensolver fails to converge.
+
+    Examples
+    --------
+    >>> from histra import load_model, solve_modal_analysis
+    >>> model = load_model("path/to/model.hrx")  # doctest: +SKIP
+    >>> modal_analysis = model.analyses[30]      # doctest: +SKIP
+    >>> result = solve_modal_analysis(model, modal_analysis)  # doctest: +SKIP
+    >>> result.modes[0].frequency                # doctest: +SKIP
+    3.84
     """
     with exclusive_solver_access(should_cancel):
         return _solve_modal_analysis_impl(

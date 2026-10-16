@@ -1,6 +1,6 @@
 # HiStrA-Python Agent Operating Manual
 
-Quick-start guide and operating rules for AI agents working in `histra-python`. For in-depth derivations, benchmark logs, and release evidence, consult the linked documents under [`docs/`](docs/README.md).
+Operating manual and rules for AI agents working in `histra-python`. For in-depth derivations, benchmark logs, and release evidence, consult the linked documents under [`docs/`](docs/README.md).
 
 ---
 
@@ -28,73 +28,11 @@ For structural definitions and full feature scope, see [Supported Features](docs
 
 ---
 
-## 2. Environment & Quick Start
-
-### Environment Setup
-The development environment uses Python 3.12–3.14 on Linux 64-bit with a local virtual environment in `.venv/`.
-```bash
-# Idempotent setup script (creates/activates .venv, installs .[dev], sets up pre-commit)
-./bin/setup
-# Or via make:
-make setup
-
-# Manual activation & installation:
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
-
-### Verification & Quality Commands
-Always verify changes with the lint, type-check, and test suite:
-```bash
-# Unified check: runs lint (ruff), typecheck (mypy), and fast release tests
-make check
-
-# Individual checks:
-make lint       # ruff check histra
-make format     # ruff format --check histra
-make typecheck  # mypy
-make test       # python -m pytest -q
-
-# Run targeted fast release-critical checks (backend coverage, API, metadata, benchmark harnesses)
-python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tests/test_article_models_benchmark.py histra/tests/test_package_metadata.py histra/tests/test_backend_api.py
-```
-
-### Benchmark and Tool Entry Points
-- **Standalone Nonlinear Analysis**:
-  ```bash
-  python -m histra.tools.run_vert_live path/to/model.hrx --output-dir python-results
-  ```
-  See [Standalone Analysis Guide](docs/guides/standalone-analysis.md).
-- **Article Models Release Gate (14 canonical models)**:
-  ```bash
-  python -m histra.tools.article_models_benchmark --models-dir my_model/Article_Models_Benchmark --model all --run-mode authored --max-workers 4 --output-dir release-evidence/article-models
-  ```
-  *(Also available as console script `histra-article-benchmark`).*
-  See [Article Models Release Gate](docs/benchmarks/article-models-release-gate.md).
-- **Strategy Benchmark**:
-  ```bash
-  python -m histra.tools.strategy_benchmark release-evidence/strategy/matrices/coarse-gravity.json --output release-evidence/strategy/benchmark-results.json
-  ```
-  *(Also available as console script `histra-strategy-benchmark`).*
-  See [Solver Strategy Methodology](docs/benchmarks/solver-strategy-methodology.md).
-- **Batch Modal C#/Python Parity**:
-  ```bash
-  python -m histra.tools.run_modal path/to/models --analysis 30
-  ```
-  See [Modal Analysis Guide](docs/guides/modal-analysis.md).
-- **Interface Chain Benchmark**:
-  ```bash
-  python -m histra.tools.interface_chain_benchmark
-  ```
-  See [Analysis Chains Guide](docs/guides/analysis-chains.md).
-
----
-
-## 3. Core Development Rules & Non-Negotiable Invariants
+## 2. Core Development Rules & Non-Negotiable Invariants
 
 ### 1. Accuracy & C# Parity Over Raw Velocity
 - Numerical accuracy and C# parity are the highest priority; execution velocity is secondary (`_rules/accuracy-first-performance.md`).
-- Preserve original numerical logic and bit-exact routine tests. Per the user's 2026-10-15 instruction, faster numerical libraries may introduce small global-analysis rounding differences when complete response histories and stopping behavior are validated. Keep those performance experiments separate from exact native regression; document local phase differences and numerical limits.
+- Preserve original numerical logic and bit-exact routine tests. Faster numerical libraries may introduce small global-analysis rounding differences when complete response histories and stopping behavior are validated. Keep those performance experiments separate from exact native regression; document local phase differences and numerical limits.
 - Hot numerical paths must use vectorized NumPy or compiled Numba routines protected by differential regression tests against C# `.Results` databases.
 
 ### 2. Compiled Backend Coverage is Mandatory
@@ -120,7 +58,7 @@ python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tes
 
 ---
 
-## 4. Known Gotchas & Common Traps
+## 3. Known Gotchas & Common Traps
 
 ### 1. Benchmark 3 Serialized HRX State Trap
 - **Gotcha**: A historical diagnostic reported a false 100,000× stiffness discrepancy on pier foundation interface 682.
@@ -156,7 +94,7 @@ python -m pytest -q histra/tests/test_backend_coverage_enforcement.py histra/tes
 
 ---
 
-## 5. ai-memory Tooling Protocol
+## 4. ai-memory Tooling Protocol
 
 The project maintains persistent knowledge across agent sessions using the `ai-memory` MCP server. Future agents must consult memory before making architectural decisions or modifying numerical routines.
 
@@ -184,7 +122,7 @@ The project maintains persistent knowledge across agent sessions using the `ai-m
 
 ---
 
-## 6. Document Map & Reference Links
+## 5. Document Map & Reference Links
 
 | Category | Document | Description |
 |---|---|---|

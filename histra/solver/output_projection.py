@@ -44,7 +44,28 @@ class ModelPointDisplacement:
 
 
 def project_reactions(execution: AnalysisExecution, request: Any) -> list[dict[str, Any]]:
-    """Project reactions using the Job Runner's ``ReactionSumStates`` shape."""
+    """Project reactions using the Job Runner's ``ReactionSumStates`` shape.
+
+    Extracts base reaction sums (R1, R2, R3) across selected committed solver
+    steps matching the C# ``ReactionSumStates`` schema.
+
+    Parameters
+    ----------
+    execution : AnalysisExecution
+        Execution record containing committed analysis steps and reactions.
+    request : Any
+        Request specification with optional ``all_steps`` or ``step`` filters.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        List of dictionaries with keys ``Step``, ``R1``, ``R2``, and ``R3``.
+
+    Raises
+    ------
+    OutputProjectionError
+        If an expected reaction component is missing from a committed step.
+    """
     selected = _select_steps(execution.output_steps, request)
     rows: list[dict[str, Any]] = []
     for step in selected:
@@ -182,6 +203,27 @@ def project_displacements(
     execution: AnalysisExecution,
     request: Any,
 ) -> list[dict[str, float | int]]:
+    """Project model point displacements into C# ``DisplModelPoints`` rows.
+
+    Interpolates global displacement vectors to HRX model points (nodes and quad
+    centers/vertices), returning ordered records formatted for the Job Runner.
+
+    Parameters
+    ----------
+    model : Model
+        Structural model containing nodes, quads, and model points.
+    execution : AnalysisExecution
+        Execution record containing committed analysis steps with displacement vectors.
+    request : Any
+        Request specification with optional ``model_point_ids``, ``all_steps``, or
+        ``step`` filters.
+
+    Returns
+    -------
+    list[dict[str, float | int]]
+        List of dictionaries with keys ``IdElement``, ``ParentKey``, ``Step``,
+        ``Ux``, ``Uy``, and ``Uz``.
+    """
     selected = _select_steps(execution.output_steps, request)
     ids = tuple(int(value) for value in getattr(request, "model_point_ids", ()) or ())
     rows: list[ModelPointDisplacement] = []
@@ -205,7 +247,33 @@ def project_analysis_outputs(
     execution: AnalysisExecution,
     request: Any,
 ) -> dict[str, Any]:
-    """Project supported outputs without depending on Job Runner classes."""
+    """Project supported outputs without depending on Job Runner classes.
+
+    Extracts displacements, reactions, and modal analysis outcomes requested by
+    a backend execution request.
+
+    Parameters
+    ----------
+    model : Model
+        Structural model containing elements and collections.
+    execution : AnalysisExecution
+        Execution record containing step history and modal outcomes.
+    request : Any
+        Request container specifying which output families (displacements, reactions,
+        modal_shapes) are enabled.
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary with enabled keys such as ``modal_analysis``, ``displacements``,
+        and ``reactions``.
+
+    Raises
+    ------
+    UnsupportedOutputError
+        If an unsupported output family (such as response-spectrum modal contributions)
+        is requested.
+    """
     result: dict[str, Any] = {}
 
     if execution.modal_result is not None:

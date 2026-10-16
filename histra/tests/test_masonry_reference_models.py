@@ -218,6 +218,8 @@ def test_wall_modal_native_reference(tmp_path, monkeypatch, case):
     reference = fixture["cases"][case]
     path = tmp_path / (case + ".hrx")
     build_reference_model(DEFAULT_TEMPLATE, case).write(path, encoding="utf-8", xml_declaration=True)
+    raw = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+    path.write_bytes(raw)
     assert hashlib.sha256(path.read_bytes()).hexdigest() == reference["input_sha256"]
     for key in (3, 4):
         model = load_model(path)

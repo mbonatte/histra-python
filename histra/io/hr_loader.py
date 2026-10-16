@@ -71,7 +71,31 @@ def _record_unsupported(model: Model, category: str, value: str) -> None:
 
 
 def load_model(path: Union[str, Path]) -> Model:
-    """Load a ``.hrx`` file into the translated Python model."""
+    """Load a HiStrA ``.hrx`` model file into an in-process Python ``Model``.
+
+    Parses XML geometry, materials, analyses, load functions, and boundary conditions.
+    The returned model retains its source HRX path for differential auditing. Serialized
+    computational springs in the HRX are reference snapshots from past C# runs; solvers
+    will freshly prepare the mesh and topology via ``prepare_model`` before solving.
+
+    Parameters
+    ----------
+    path : str or Path
+        Filesystem path to the input ``.hrx`` XML model file.
+
+    Returns
+    -------
+    Model
+        The parsed domain model entity containing collections of nodes, quads,
+        interfaces, materials, loads, and analysis definitions.
+
+    Examples
+    --------
+    >>> from histra import load_model
+    >>> model = load_model("path/to/structure.hrx")
+    >>> len(model.collections.quads) > 0
+    True
+    """
 
     source_path = Path(path).resolve()
     model = Model(source_path=str(source_path))
