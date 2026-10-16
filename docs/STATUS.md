@@ -10,6 +10,13 @@ a modal line-load mass correction; see [the wall comparison](benchmarks/masonry-
 That correction postdates the reviewed packages. Static spring-history
 differences on two walls remain under investigation.
 
+A [systematic precision-boundary audit](benchmarks/masonry-precision-audit-2026-10-16.md)
+now tracks source types, native fixtures and remaining checks across the masonry
+pipeline. Recent fixes include load coefficients, oblique self-weight, mass
+inputs, modal output storage, analysis controls and geometry tolerances.
+Source-defined secant stiffness switching is implemented with control tests;
+native whole-analysis qualification of that setting remains open.
+
 The released package has been rerun from fresh Dhir geometry through Vert,
 constant load and the final committed pushover step. Every available measured
 field matches C# 2026.1.1 exactly for this configuration, including all committed

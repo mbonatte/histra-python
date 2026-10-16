@@ -39,6 +39,7 @@ The source review compares the Python DMEM implementation with C# HiStrA:
 - [Dhir full static-chain parity](benchmarks/dhir-full-chain-native-parity-progress.md)
 - [Dhir horizontal out-of-plane parity](benchmarks/dhir-horizontal-native-parity.md)
 - [Masonry original-source audit](benchmarks/masonry-source-audit-2026-10-14.md)
+- [Masonry precision-boundary audit](benchmarks/masonry-precision-audit-2026-10-16.md)
 - [Solver Strategy Methodology](benchmarks/solver-strategy-methodology.md)
 - [Article Models Release Gate](benchmarks/article-models-release-gate.md)
 - [Wall Overturning Benchmark](benchmarks/wall_6_rows_benchmark.md)
