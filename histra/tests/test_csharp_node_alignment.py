@@ -21,5 +21,5 @@ class CSharpNodeAlignmentTests(unittest.TestCase):
             path=Path(folder)/"geometry.hrx"
             path.write_text('<HiStrA><AdvancedOptionsDefault ToleranceNode="0.01" TolerancePlane="0.02"/></HiStrA>',encoding="utf-8")
             model=load_model(path)
-        self.assertEqual(model.geometry_tolerance_node,0.01)
-        self.assertEqual(model.geometry_tolerance_plane,0.02)
+        self.assertEqual(model.geometry_tolerance_node,0.009999999776482582)
+        self.assertEqual(model.geometry_tolerance_plane,0.019999999552965164)

@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Union
 
+import numpy as np
+
 from histra.model.interface import Interface
 from histra.model.load import (
     Analysis,
@@ -78,14 +80,14 @@ def _parse_model_root(elem: ET.Element, model: Model) -> None:
 
 
 def _parse_advanced_options(elem: ET.Element, model: Model) -> None:
-    model.geometry_tolerance_node = _safe_float(
+    model.geometry_tolerance_node = float(np.float32(_safe_float(
         _attr(elem, "ToleranceNode", default=str(model.geometry_tolerance_node)),
         model.geometry_tolerance_node,
-    )
-    model.geometry_tolerance_plane = _safe_float(
+    )))
+    model.geometry_tolerance_plane = float(np.float32(_safe_float(
         _attr(elem, "TolerancePlane", default=str(model.geometry_tolerance_plane)),
         model.geometry_tolerance_plane,
-    )
+    )))
     model.interface_nrow = _safe_int(
         _attr(elem, "InterfaceNrow", default=str(model.interface_nrow)),
         model.interface_nrow,

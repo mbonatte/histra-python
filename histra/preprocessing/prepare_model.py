@@ -256,6 +256,11 @@ def prepare_model(
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
 
+    # AdvancedOptionsDefault stores both tolerances as Single. Normalize
+    # programmatically supplied settings before contact and node comparisons.
+    model.geometry_tolerance_node = float(np.float32(model.geometry_tolerance_node))
+    model.geometry_tolerance_plane = float(np.float32(model.geometry_tolerance_plane))
+
     from .cache import is_cache_enabled, load_prepared_cache, save_prepared_cache
 
     cache_active = is_cache_enabled(use_cache)
