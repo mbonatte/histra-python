@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-17T09:53:35.089303+00:00",
+  "source_commit": "9f6573078523996805ad42418bb0b458100641b8",
+  "generator": "Read-only paired NPZ audit (stepwise_wall_parity_dedup.py) and histra/tests/test_material_modal_native_gui.py",
+  "benchmark_id": "explicit-csharp-spring-type-reset-2026-10-17",
+  "native_fixture_sha256": "475b28bbce5f2a45b7b157598eeb6c39342245db9b8b4895e45759f84ec1ef1b",
+  "default_policy": "reject",
+  "explicit_policy": "csharp_reset",
+  "cases": {
+    "01_foundation_stiffness_return": {
+      "committed_static_steps": 42,
+      "iteration_counts_exact": true,
+      "tables": {
+        "SpringStatesTmp": {
+          "saved_steps": 42,
+          "rows": 14280,
+          "compared_values": 128520,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "InterfaceStates": {
+          "saved_steps": 42,
+          "rows": 168,
+          "compared_values": 3024,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "QuadStates": {
+          "saved_steps": 42,
+          "rows": 168,
+          "compared_values": 1344,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "RestraintStates": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 252,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "NodeCStates": {
+          "saved_steps": 42,
+          "rows": 84,
+          "compared_values": 504,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "ReactionSumStates": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 336,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "DisplModelPoints": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 378,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "SpringStates": {
+          "saved_steps": 2,
+          "rows": 680,
+          "compared_values": 21080,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": [
+            "E",
+            "Ed",
+            "Eel"
+          ]
+        },
+        "DynamicVectorsState": {
+          "saved_steps": 2,
+          "rows": 56,
+          "compared_values": 112,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        }
+      },
+      "modal": [
+        {
+          "analysis": 3,
+          "native_modes": 4,
+          "python_modes": 4,
+          "max_frequency_difference_Hz": 1.1546319456101628e-13,
+          "max_shape_difference": 2.494994109852826e-14
+        },
+        {
+          "analysis": 4,
+          "native_modes": 4,
+          "python_modes": 4,
+          "max_frequency_difference_Hz": 1.1546319456101628e-13,
+          "max_shape_difference": 2.4949941057376026e-14
+        },
+        {
+          "analysis": 5,
+          "native_modes": 5,
+          "python_modes": 5,
+          "max_frequency_difference_Hz": 1.0302869668521453e-13,
+          "max_shape_difference": 4.145353266420845e-14
+        }
+      ],
+      "native_trace": "trace-20261017-091426-014-3732.tsv",
+      "reference_results_sha256": "ee0a956444fce6b3d5a89a5af0cb3d067a2b243d70a994af580acd84aaf24589",
+      "history_reset_counts": {
+        "to_B": 0,
+        "return_A": 0
+      },
+      "return_attempt": {
+        "python_code": -3,
+        "native_exit": "LargeDisplacement",
+        "committed_steps": 0
+      },
+      "paired_archives": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\material-modal-oct17\\01_foundation_stiffness_return\\python-csharp-reset\\every-step"
+    },
+    "02_foundation_elastic_return": {
+      "committed_static_steps": 42,
+      "iteration_counts_exact": true,
+      "tables": {
+        "SpringStatesTmp": {
+          "saved_steps": 42,
+          "rows": 14280,
+          "compared_values": 128520,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "InterfaceStates": {
+          "saved_steps": 42,
+          "rows": 168,
+          "compared_values": 3024,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "QuadStates": {
+          "saved_steps": 42,
+          "rows": 168,
+          "compared_values": 1344,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "RestraintStates": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 252,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "NodeCStates": {
+          "saved_steps": 42,
+          "rows": 84,
+          "compared_values": 504,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "ReactionSumStates": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 336,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "DisplModelPoints": {
+          "saved_steps": 42,
+          "rows": 42,
+          "compared_values": 378,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        },
+        "SpringStates": {
+          "saved_steps": 2,
+          "rows": 680,
+          "compared_values": 21080,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": [
+            "E",
+            "Ed",
+            "Eel"
+          ]
+        },
+        "DynamicVectorsState": {
+          "saved_steps": 2,
+          "rows": 56,
+          "compared_values": 112,
+          "exact": true,
+          "max_abs_difference": 0.0,
+          "unavailable_fields": []
+        }
+      },
+      "modal": [
+        {
+          "analysis": 3,
+          "native_modes": 4,
+          "python_modes": 4,
+          "max_frequency_difference_Hz": 1.1546319456101628e-13,
+          "max_shape_difference": 2.494994109852826e-14
+        },
+        {
+          "analysis": 4,
+          "native_modes": 4,
+          "python_modes": 4,
+          "max_frequency_difference_Hz": 1.1546319456101628e-13,
+          "max_shape_difference": 2.4949941057376026e-14
+        },
+        {
+          "analysis": 5,
+          "native_modes": 5,
+          "python_modes": 5,
+          "max_frequency_difference_Hz": 1.580957587066223e-13,
+          "max_shape_difference": 2.4949941089287103e-14
+        }
+      ],
+      "native_trace": "trace-20261017-091439-482-21520.tsv",
+      "reference_results_sha256": "96dcf71ba5f778fceef29bcbc7ec8d4cca0d15f60543586a1bacfdd5e792d570",
+      "history_reset_counts": {
+        "to_B": 81,
+        "return_A": 81
+      },
+      "return_attempt": {
+        "python_code": -3,
+        "native_exit": "LargeDisplacement",
+        "committed_steps": 0
+      },
+      "paired_archives": "C:\\Users\\mbonatte\\Downloads\\_Organized_Downloads\\Software\\dnSpy-net-win64\\histra\\python-comparison-2026-10-13\\material-modal-oct17\\02_foundation_elastic_return\\python-csharp-reset\\every-step"
+    }
+  },
+  "verification": {
+    "windows_full": "929 passed, 14 skipped, 1665 subtests passed; two existing P-Delta equilibrium warnings",
+    "ubuntu_targeted": "20 passed, 10 skipped (9 native Windows UMFPACK cases and 1 optional benchmark)",
+    "ruff": "passed",
+    "mypy": "12 configured source files passed"
+  },
+  "limitations": [
+    "Compatibility reproduces observed history loss, not physical validation.",
+    "No native committed return-cycle results or final modal results exist.",
+    "NULL private fields and missing vectors remain unmeasured.",
+    "No new large Dhir/horizontal or remote Article rerun."
+  ]
+}
