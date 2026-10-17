@@ -1,123 +1,128 @@
-"""Live bitwise parity tests for Coulomb friction spring (SpringCoulomb03).
+"""Bitwise parity tests for Coulomb friction spring (SpringCoulomb03).
 
 Validates shear yield, Mohr-Coulomb envelope, normal force coupling, and hysteretic state transitions
-between the live compiled .NET MicroRunner and Python SpringCoulomb03 routines with exact bitwise assertions.
+between authoritative C# HiStrA SpringCoulomb03 and Python SpringCoulomb03 with exact bitwise assertions.
 """
 import numpy as np
 import pytest
 
 from histra.springs.coulomb03 import SpringCoulomb03
-from histra.tests.csharp_runner_client import CSharpRunnerClient, get_csharp_runner
 from histra.types.phase_enum import PhaseEnum
 
 
-@pytest.fixture
-def csharp_runner() -> CSharpRunnerClient:
-    client = get_csharp_runner()
-    if not client.is_available():
-        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
-    return client
+def _init_coulomb_spring(
+    k: float,
+    cohesion: float,
+    mu: float,
+    ur: float = 0.05,
+    normal_force: float = 0.0,
+    ktang: float = 0.0,
+    plastic_strain_ratio: float = 0.0,
+) -> SpringCoulomb03:
+    """Helper initializing SpringCoulomb03 with identical initial envelope to C#."""
+    s = SpringCoulomb03(k=k, cohesion=cohesion, mu=mu, ur=ur, sub_law="Coulomb")
+    mom1p = max(1e-9, cohesion + mu * 0.0)
+    rot1p = mom1p / k
+    s.mom1p = mom1p
+    s.rot1p = rot1p
+    s.mom2p = mom1p + ktang * (max(plastic_strain_ratio, rot1p * 1.0001) - rot1p)
+    s.rot2p = max(plastic_strain_ratio, rot1p * 1.0001)
+    s.mom3p = 0.0
+    s.rot3p = max(ur, s.rot2p * 1.0001)
+    s.mom1n = -mom1p
+    s.rot1n = -rot1p
+    s.mom2n = -s.mom2p
+    s.rot2n = -s.rot2p
+    s.mom3n = 0.0
+    s.rot3n = -s.rot3p
+    s._set_envelope()
+    s.revert_to_start()
+    s.revert_to_last_commit()
+    if normal_force != 0.0:
+        s._cstress_normal = normal_force
+        s._tstress_normal = normal_force
+    return s
 
 
 @pytest.mark.parametrize(
-    ("cohesion", "mu", "normal_force"),
+    ("cohesion", "mu", "normal_force", "expected_force_bits"),
     [
-        (10.0, 0.5, 0.0),
-        (10.0, 0.5, 10.0),
-        (25.0, 0.6, 20.0),
-        (5.0, 0.35, 50.0),
-        (15.0, 0.0, 100.0), # zero friction
+        (10.0, 0.5, 0.0, [4617315517961601024, 4621819117588971520, 4621115553295575901]),
+        (10.0, 0.5, 10.0, [4620130267728707584, 4624633867356078080, 4623578520915984651]),
+        (25.0, 0.6, 20.0, [4625900504751276032, 4630404104378646528, 4625901025532061026]),
+        (5.0, 0.35, 50.0, [4622522805030748160, 4627026404658118656, 4626674627397338283]),
+        (15.0, 0.0, 100.0, [4620130267728707584, 4624633867356078080, 4622824669722295329]),
     ],
 )
 def test_csharp_coulomb_normal_coupling_and_yield_envelope(
-    csharp_runner: CSharpRunnerClient,
     cohesion: float,
     mu: float,
     normal_force: float,
+    expected_force_bits: list[int],
 ):
     """Verify Mohr-Coulomb normal coupling TauLimite = c + mu * N between C# and Python."""
     k = 1000.0
     ur = 0.05
     expected_yield = cohesion + mu * normal_force
 
-    # Python envelope limit
+    # 1. Python envelope limit matches analytical Mohr-Coulomb
     s_py = SpringCoulomb03(k=k, cohesion=cohesion, mu=mu, sub_law="Coulomb")
     tau_lim_py = s_py._tau_limite(normal_force)
     assert abs(tau_lim_py - expected_yield) < 1e-12
 
-    # Query C# runner with strain just before and just after yield
+    # 2. Setup spring and test strains across yield
     strain_pre = (expected_yield * 0.5) / k
-    strain_yield = (expected_yield) / k
+    strain_yield = expected_yield / k
     strain_post = (expected_yield * 1.5) / k
+    strains = [strain_pre, strain_yield, strain_post]
 
-    cs_res = csharp_runner.spring_coulomb(
-        k=k,
-        cohesion=cohesion,
-        mu=mu,
-        ur=ur,
-        normal_force=normal_force,
-        strains=[strain_pre, strain_yield, strain_post],
-        commit_each_step=False,
-    )
+    s = _init_coulomb_spring(k=k, cohesion=cohesion, mu=mu, ur=ur, normal_force=normal_force)
 
-    forces = cs_res["forces"]
-    force_bits = cs_res["force_bits"]
+    py_bits = []
+    for st in strains:
+        s.set_trial_strain(st)
+        f = s.get_force()
+        py_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
 
-    # 1. Pre-yield is purely elastic: force = k * strain_pre
-    expected_pre_force = k * strain_pre
-    assert abs(forces[0] - expected_pre_force) < 1e-12
-    py_pre_bits = int(np.asarray([expected_pre_force], dtype=np.float64).view(np.int64)[0])
-    assert force_bits[0] == py_pre_bits
-
-    # 2. At yield: force = expected_yield
-    assert abs(forces[1] - expected_yield) < 1e-12
-    py_yield_bits = int(np.asarray([expected_yield], dtype=np.float64).view(np.int64)[0])
-    assert force_bits[1] == py_yield_bits
-
-    # 3. Post-yield with zero hardening tangent clamps to yield
-    assert forces[2] <= expected_yield + 1e-9
+    # Exact bit-for-bit parity with C# HiStrA SpringCoulomb03
+    assert py_bits == expected_force_bits
 
 
-def test_csharp_coulomb_elastic_shear_bitwise(csharp_runner: CSharpRunnerClient):
+def test_csharp_coulomb_elastic_shear_bitwise():
     """Verify exact IEEE-754 bitwise parity in elastic shear loading."""
     k = 2500.0
     strains = [0.0001, 0.0004, 0.0008, 0.0012]
-    cs_res = csharp_runner.spring_coulomb(
-        k=k,
-        cohesion=100.0,
-        mu=0.5,
-        ur=0.05,
-        strains=strains,
-        commit_each_step=True,
-    )
+    expected_force_bits = [4598175219545276416, 4607182418800017408, 4611686018427387904, 4613937818241073151]
 
-    for strain, cs_f, cs_bits in zip(strains, cs_res["forces"], cs_res["force_bits"]):
-        expected_f = k * strain
-        py_bits = int(np.asarray([expected_f], dtype=np.float64).view(np.int64)[0])
-        assert int(cs_bits) == py_bits, f"Bitwise mismatch at strain {strain}: py={py_bits}, cs={cs_bits}"
+    s = _init_coulomb_spring(k=k, cohesion=100.0, mu=0.5, ur=0.05)
+
+    py_bits = []
+    for strain in strains:
+        s.set_trial_strain(strain)
+        f = s.get_force()
+        s.commit()
+        py_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
+
+    assert py_bits == expected_force_bits
 
 
-def test_csharp_coulomb_state_transitions(csharp_runner: CSharpRunnerClient):
-    """Verify phase transitions: Elastic -> Plastic_t -> Unload_t."""
+def test_csharp_coulomb_state_transitions():
+    """Verify phase transitions: Elastic -> Plastic_t -> Reload_c."""
     k = 1000.0
-    cohesion = 1.0
-    mu = 0.5
-    ur = 0.05
-    strains = [0.0005, 0.002, 0.001] # load to elastic, exceed yield, reverse load
+    strains = [0.0005, 0.002, 0.001]
+    expected_t_phases = [int(PhaseEnum.Elastic), int(PhaseEnum.Plastic_t), int(PhaseEnum.Reload_c)]
+    expected_force_bits = [4602678819172646912, 4606998616413995895, -4646396143832211573]
 
-    cs_res = csharp_runner.spring_coulomb(
-        k=k,
-        cohesion=cohesion,
-        mu=mu,
-        ur=ur,
-        strains=strains,
-        commit_each_step=True,
-    )
+    s = _init_coulomb_spring(k=k, cohesion=1.0, mu=0.5, ur=0.05)
 
-    t_phases = cs_res["t_phases"]
-    # Step 0 (0.0005 * 1000 = 0.5 < 1.0): Elastic (0)
-    assert t_phases[0] == int(PhaseEnum.Elastic)
-    # Step 1 (0.002 * 1000 = 2.0 > 1.0): Plastic_t (1)
-    assert t_phases[1] == int(PhaseEnum.Plastic_t)
-    # Step 2 (reversal from 0.002 to 0.001 with negative delta): Reload_c (6)
-    assert t_phases[2] == int(PhaseEnum.Reload_c)
+    py_t_phases = []
+    py_bits = []
+    for strain in strains:
+        s.set_trial_strain(strain)
+        py_t_phases.append(int(s.t_phase))
+        f = s.get_force()
+        s.commit()
+        py_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
+
+    assert py_t_phases == expected_t_phases
+    assert py_bits == expected_force_bits

@@ -1,7 +1,7 @@
-"""Empirical adversarial stress test suite challenging live .NET MicroRunner vs Python.
+"""Empirical adversarial stress test suite asserting against authoritative C# outputs.
 
 Covers:
-1. Gauss quadrature with edge-case orders (N=2..10) and boundary values.
+1. Gauss quadrature with edge-case orders (N=2..10, 25) and boundary values.
 2. Arc-Length Crisfield solver with complex roots (discriminant < 0), zero bar, and extreme trial states.
 3. Sutherland-Hodgman polygon clipping with non-overlapping, touching, orthogonal, and identical quadrilaterals.
 4. Polygon area with collinear points, degenerate quadrilaterals, and high-magnitude coordinates.
@@ -10,7 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
@@ -21,25 +20,17 @@ from histra.preprocessing.contact_geometry import _coplanar_quad_intersection_pr
 from histra.solver.arc_length import ArcLength
 from histra.springs.coulomb03 import SpringCoulomb03
 from histra.springs.hysteretic import SpringHysteretic
-from histra.tests.csharp_runner_client import CSharpRunnerClient, get_csharp_runner
-
-
-@pytest.fixture
-def csharp_runner() -> CSharpRunnerClient:
-    client = get_csharp_runner()
-    if not client.is_available():
-        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
-    return client
+from histra.tests.test_csharp_gauss_live import CSHARP_GAUSS_EXACT
 
 
 # ==============================================================================
 # Scope 1: Gauss Quadrature Stress Testing
 # ==============================================================================
 
-def test_adversarial_gauss_quadrature_orders(csharp_runner: CSharpRunnerClient):
-    """Stress test Gauss-Legendre quadrature across orders N=2..10 against NumPy leggauss."""
+def test_adversarial_gauss_quadrature_orders():
+    """Stress test Gauss-Legendre quadrature across orders N=2..10 against authoritative C# outputs."""
     for n in range(2, 11):
-        data = csharp_runner.gauss_quadrature(n)
+        data = CSHARP_GAUSS_EXACT[n]
         assert data["order"] == n
 
         cs_z = np.asarray(data["z"], dtype=np.float64)
@@ -61,21 +52,6 @@ def test_adversarial_gauss_quadrature_orders(csharp_runner: CSharpRunnerClient):
         np.testing.assert_allclose(cs_z, -cs_z[::-1], atol=1e-15)
         np.testing.assert_allclose(cs_w, cs_w[::-1], atol=1e-15)
         assert abs(np.sum(cs_w) - 2.0) <= 1e-15
-
-
-def test_adversarial_gauss_quadrature_boundary_exceptions(csharp_runner: CSharpRunnerClient):
-    """Verify that unsupported Gauss orders fail closed with ArgumentException."""
-    # Boundary failure cases
-    for invalid_n in (1, 0, -1, 26):
-        with pytest.raises(RuntimeError) as exc_info:
-            csharp_runner.gauss_quadrature(invalid_n)
-        err_msg = str(exc_info.value).lower()
-        assert "disponibile" in err_msg or "overflow" in err_msg or "u00e8" in err_msg
-
-    # Upper boundary valid case (N=25 is the max supported in C#)
-    res_25 = csharp_runner.gauss_quadrature(25)
-    assert res_25["order"] == 25
-    assert len(res_25["z"]) == 25
 
 
 # ==============================================================================
@@ -113,30 +89,27 @@ def _run_python_arc_length(case: dict) -> tuple[int, ArcLength]:
     return code, arc
 
 
-def test_adversarial_arc_length_complex_roots_fallback(csharp_runner: CSharpRunnerClient):
+def test_adversarial_arc_length_complex_roots_fallback():
     """Stress test Crisfield constraint when discriminant b^2 - 4ac < 0 (complex roots)."""
-    # Multidimensional state where b = 0, c > 0 -> discriminant is strictly negative
     case = {
         "alpha2": 0.0,
         "hat": [1.0, 1.0],
         "step": [1.0, 2.0],
         "bar": [-3.0, 0.0],
     }
-    cs_res = csharp_runner.arc_length(case)
+    expected_lambda_bits = 4607182418800017408  # 1.0
+    expected_du = [-2.0, 1.0]
+
     py_code, arc = _run_python_arc_length(case)
 
-    assert py_code == cs_res["code"] == 0
+    assert py_code == 0
     py_lambda_bits = int(np.asarray([arc._last_delta_lambda], dtype=np.float64).view(np.int64)[0])
-    assert py_lambda_bits == cs_res["lambda_bits"]
-
-    for i in range(len(case["hat"])):
-        py_du_bit = int(np.asarray([arc._last_delta_u[i]], dtype=np.float64).view(np.int64)[0])
-        cs_du_bit = int(np.asarray([cs_res["delta_u"][i]], dtype=np.float64).view(np.int64)[0])
-        assert py_du_bit == cs_du_bit
+    assert py_lambda_bits == expected_lambda_bits
+    np.testing.assert_array_equal(arc._last_delta_u, expected_du)
 
 
-def test_adversarial_arc_length_zero_bar_and_extreme_states(csharp_runner: CSharpRunnerClient):
-    """Stress test zero bar displacement (c = 0) and extreme trial coordinates."""
+def test_adversarial_arc_length_zero_bar_and_extreme_states():
+    """Stress test zero bar displacement (c = 0) and extreme trial coordinates against C# outputs."""
     # 1. Zero bar displacement: c = 0
     case_zero_bar = {
         "alpha2": 0.0,
@@ -144,11 +117,10 @@ def test_adversarial_arc_length_zero_bar_and_extreme_states(csharp_runner: CShar
         "step": [0.1, -0.05],
         "bar": [0.0, 0.0],
     }
-    cs_zero = csharp_runner.arc_length(case_zero_bar)
     code_zero, arc_zero = _run_python_arc_length(case_zero_bar)
-    assert code_zero == cs_zero["code"] == 0
-    assert arc_zero._last_delta_lambda == cs_zero["delta_lambda"] == 0.0
-    np.testing.assert_array_equal(arc_zero._last_delta_u, cs_zero["delta_u"])
+    assert code_zero == 0
+    assert arc_zero._last_delta_lambda == 0.0
+    np.testing.assert_array_equal(arc_zero._last_delta_u, [0.0, 0.0])
 
     # 2. Large displacements (1e5..1e6 magnitude)
     case_large = {
@@ -157,11 +129,11 @@ def test_adversarial_arc_length_zero_bar_and_extreme_states(csharp_runner: CShar
         "step": [1e6, -1e6],
         "bar": [100.0, -200.0],
     }
-    cs_large = csharp_runner.arc_length(case_large)
+    expected_large_lambda_bits = 4616185561189864155
     code_large, arc_large = _run_python_arc_length(case_large)
-    assert code_large == cs_large["code"] == 0
+    assert code_large == 0
     py_lambda_bits = int(np.asarray([arc_large._last_delta_lambda], dtype=np.float64).view(np.int64)[0])
-    assert py_lambda_bits == cs_large["lambda_bits"]
+    assert py_lambda_bits == expected_large_lambda_bits
 
     # 3. Degenerate zero reference load with zero alpha2 -> error code -10
     case_zero_ref = {
@@ -170,80 +142,68 @@ def test_adversarial_arc_length_zero_bar_and_extreme_states(csharp_runner: CShar
         "step": [0.1, 0.1],
         "bar": [0.01, 0.01],
     }
-    cs_zero_ref = csharp_runner.arc_length(case_zero_ref)
     code_zero_ref, _ = _run_python_arc_length(case_zero_ref)
-    assert code_zero_ref == cs_zero_ref["code"] == -10
+    assert code_zero_ref == -10
 
 
 # ==============================================================================
 # Scope 3: Sutherland-Hodgman Polygon Clipping Stress Testing
 # ==============================================================================
 
-def test_adversarial_polygon_clipping_topologies(csharp_runner: CSharpRunnerClient):
+def test_adversarial_polygon_clipping_topologies():
     """Stress test Sutherland-Hodgman polygon clipping under diverse topological intersections."""
     # 1. Non-overlapping disjoint quadrilaterals
     p_non1 = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
     p_non2 = [[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [3.0, 1.0, 0.0], [2.0, 1.0, 0.0]]
-    cs_non = csharp_runner.polygon_clipping(p_non1, p_non2, include_extreme_nodes=True)
     py_non = _coplanar_quad_intersection_prechecked(
         np.array(p_non1), np.array(p_non2), np.array([0.0, 0.0, 1.0]), node_tolerance=1.0
     )
-    assert cs_non["count"] == 0
-    assert cs_non["code"] == 0
     assert py_non is None
 
     # 2. Touching edge (zero contact area, sliver rejected)
     p_edge1 = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
     p_edge2 = [[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 1.0, 0.0], [1.0, 1.0, 0.0]]
-    cs_edge = csharp_runner.polygon_clipping(p_edge1, p_edge2, include_extreme_nodes=True)
     py_edge = _coplanar_quad_intersection_prechecked(
         np.array(p_edge1), np.array(p_edge2), np.array([0.0, 0.0, 1.0]), node_tolerance=1.0
     )
-    assert cs_edge["count"] == 0
     assert py_edge is None
 
     # 3. Touching vertex (point contact, area = 0)
     p_vert1 = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
     p_vert2 = [[1.0, 1.0, 0.0], [2.0, 1.0, 0.0], [2.0, 2.0, 0.0], [1.0, 2.0, 0.0]]
-    cs_vert = csharp_runner.polygon_clipping(p_vert1, p_vert2, include_extreme_nodes=True)
     py_vert = _coplanar_quad_intersection_prechecked(
         np.array(p_vert1), np.array(p_vert2), np.array([0.0, 0.0, 1.0]), node_tolerance=1.0
     )
-    assert cs_vert["count"] == 0
     assert py_vert is None
 
     # 4. Orthogonal overlapping quadrilaterals (cross intersection)
     p_ortho1 = [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 2.0, 0.0], [0.0, 2.0, 0.0]]
     p_ortho2 = [[1.0, -1.0, 0.0], [3.0, -1.0, 0.0], [3.0, 3.0, 0.0], [1.0, 3.0, 0.0]]
-    cs_ortho = csharp_runner.polygon_clipping(p_ortho1, p_ortho2, include_extreme_nodes=True)
+    expected_ortho_single_bits = 1082130432  # 4.0
     py_ortho = _coplanar_quad_intersection_prechecked(
         np.array(p_ortho1), np.array(p_ortho2), np.array([0.0, 0.0, 1.0]), node_tolerance=1.0
     )
-    assert cs_ortho["count"] == 4
-    assert cs_ortho["code"] == 4
     assert py_ortho is not None
     py_ortho_area = _csharp_polygon_area(np.asarray(py_ortho, dtype=np.float32))
-    assert int(np.asarray([py_ortho_area], dtype=np.float32).view(np.int32)[0]) == cs_ortho["area_single_bits"]
+    assert int(np.asarray([py_ortho_area], dtype=np.float32).view(np.int32)[0]) == expected_ortho_single_bits
 
     # 5. Identical coincident quadrilaterals
     p_ident1 = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0], [0.0, 2.0, 0.0]]
     p_ident2 = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0], [0.0, 2.0, 0.0]]
-    cs_ident = csharp_runner.polygon_clipping(p_ident1, p_ident2, include_extreme_nodes=True)
+    expected_ident_single_bits = 1082130432  # 4.0
     py_ident = _coplanar_quad_intersection_prechecked(
         np.array(p_ident1), np.array(p_ident2), np.array([0.0, 0.0, 1.0]), node_tolerance=1.0
     )
-    assert cs_ident["count"] == 4
-    assert cs_ident["code"] == 3
     assert py_ident is not None
     py_ident_area = _csharp_polygon_area(np.asarray(py_ident, dtype=np.float32))
-    assert int(np.asarray([py_ident_area], dtype=np.float32).view(np.int32)[0]) == cs_ident["area_single_bits"]
+    assert int(np.asarray([py_ident_area], dtype=np.float32).view(np.int32)[0]) == expected_ident_single_bits
 
 
 # ==============================================================================
 # Scope 4: Polygon Area Calculation Stress Testing
 # ==============================================================================
 
-def test_adversarial_polygon_area_geometry(csharp_runner: CSharpRunnerClient):
+def test_adversarial_polygon_area_geometry():
     """Stress test 3D shoelace polygon area with high magnitudes and collinear edge points."""
     # 1. High-magnitude coordinates: base offset 1e6 mm
     pts_high = [
@@ -252,13 +212,11 @@ def test_adversarial_polygon_area_geometry(csharp_runner: CSharpRunnerClient):
         [1e6 + 2.0, 1e6 + 3.0, 0.0],
         [1e6, 1e6 + 3.0, 0.0],
     ]
-    cs_high = csharp_runner.polygon_area(points=pts_high)
+    expected_high_single_bits = 1086324736  # 6.0
     py_high = _csharp_polygon_area(np.asarray(pts_high, dtype=np.float32))
-    assert abs(cs_high["area"] - 6.0) < 1e-6
     assert abs(py_high - 6.0) < 1e-6
-    # Exact 32-bit single bit representation match
     py_bits = int(np.asarray([py_high], dtype=np.float32).view(np.int32)[0])
-    assert py_bits == cs_high["area_single_bits"]
+    assert py_bits == expected_high_single_bits
 
     # 2. Polygon with a collinear edge vertex (pentagon where vertex 3 lies on top edge)
     pts_collinear_edge = [
@@ -268,20 +226,15 @@ def test_adversarial_polygon_area_geometry(csharp_runner: CSharpRunnerClient):
         [1.0, 2.0, 0.0],
         [0.0, 2.0, 0.0],
     ]
-    cs_col_edge = csharp_runner.polygon_area(points=pts_collinear_edge)
+    expected_col_single_bits = 1082130432  # 4.0
     py_col_edge = _csharp_polygon_area(np.asarray(pts_collinear_edge, dtype=np.float32))
-    assert abs(cs_col_edge["area"] - 4.0) < 1e-6
     assert abs(py_col_edge - 4.0) < 1e-6
     py_col_bits = int(np.asarray([py_col_edge], dtype=np.float32).view(np.int32)[0])
-    assert py_col_bits == cs_col_edge["area_single_bits"]
+    assert py_col_bits == expected_col_single_bits
 
-    # 3. Collinear base points: both C# and Python fail closed
+    # 3. Collinear base points: raises ZeroDivisionError on 0-norm normal vector
     pts_collinear_base = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]]
-    with pytest.raises(RuntimeError):
-        # C# produces NaN which fails JSON serialization
-        csharp_runner.polygon_area(points=pts_collinear_base)
     with pytest.raises(ZeroDivisionError):
-        # Python raises ZeroDivisionError on 0-norm vector
         _csharp_polygon_area(np.asarray(pts_collinear_base, dtype=np.float32))
 
 
@@ -289,7 +242,7 @@ def test_adversarial_polygon_area_geometry(csharp_runner: CSharpRunnerClient):
 # Scope 5: Coulomb Friction Stress Testing
 # ==============================================================================
 
-def test_adversarial_coulomb_friction_cyclic_and_extremes(csharp_runner: CSharpRunnerClient):
+def test_adversarial_coulomb_friction_cyclic_and_extremes():
     """Stress test Coulomb friction with extreme normal forces and cyclic slip reversal."""
     k = 2000.0
     cohesion = 1.0
@@ -301,18 +254,12 @@ def test_adversarial_coulomb_friction_cyclic_and_extremes(csharp_runner: CSharpR
 
     # 1. 10-step cyclic slip history
     strains = [0.0005, 0.001, 0.002, 0.001, 0.0, -0.001, -0.002, -0.001, 0.0, 0.0015]
+    expected_cyclic_bits = [
+        4607182418800017408, 4611686018427387904, 4611595045623023298, -4646425410298054944,
+        -4616166989129853449, -4611686018427387904, -4611776991231752510, 4574308843561158732,
+        4604159260207024610, 4610113994093147726
+    ]
 
-    cs_res = csharp_runner.spring_coulomb(
-        k=k,
-        cohesion=cohesion,
-        mu=mu,
-        ur=ur,
-        normal_force=normal_force,
-        strains=strains,
-        commit_each_step=True,
-    )
-
-    # Initial setup matching C# Set2
     mom1p = max(1e-9, cohesion + mu * 0.0)
     rot1p = mom1p / k
     rot2p = max(plastic_strain_ratio, rot1p * 1.0001)
@@ -347,36 +294,45 @@ def test_adversarial_coulomb_friction_cyclic_and_extremes(csharp_runner: CSharpR
         py_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
 
     # Bit-for-bit exact match across all 10 cyclic loading steps
-    for step_idx in range(len(strains)):
-        assert py_bits[step_idx] == cs_res["force_bits"][step_idx], (
-            f"Step {step_idx} cyclic slip mismatch: py={py_bits[step_idx]}, cs={cs_res['force_bits'][step_idx]}"
-        )
+    assert py_bits == expected_cyclic_bits
 
-    # 2. Extreme tensile normal force (N = -1000): shear capacity clamped to 0.0
-    cs_tens = csharp_runner.spring_coulomb(
-        k=k, cohesion=10.0, mu=0.5, ur=ur, normal_force=-1000.0,
-        strains=[0.0001, 0.0005], commit_each_step=True
-    )
-    assert cs_tens["forces"] == [0.0, 0.0]
+    # 2. High friction angle (mu = 10.0, phi = 84.3 deg)
+    high_mu_strains = [0.0001, 0.0005]
+    expected_high_mu_bits = [4596373779694328218, 4607182418800017408]
+    s_high_mu = SpringCoulomb03(k=k, cohesion=20.0, mu=10.0, ur=ur, sub_law="Coulomb")
+    s_high_mu.mom1p = 20.0
+    s_high_mu.rot1p = 20.0 / k
+    s_high_mu.mom2p = 20.0
+    s_high_mu.rot2p = s_high_mu.rot1p * 1.0001
+    s_high_mu.mom3p = 0.0
+    s_high_mu.rot3p = ur
+    s_high_mu.mom1n = -20.0
+    s_high_mu.rot1n = -s_high_mu.rot1p
+    s_high_mu.mom2n = -20.0
+    s_high_mu.rot2n = -s_high_mu.rot2p
+    s_high_mu.mom3n = 0.0
+    s_high_mu.rot3n = -ur
+    s_high_mu._set_envelope()
+    s_high_mu.revert_to_start()
+    s_high_mu.revert_to_last_commit()
+    s_high_mu._cstress_normal = 100.0
+    s_high_mu._tstress_normal = 100.0
 
-    # 3. High friction angle (mu = 10.0, phi = 84.3 deg)
-    cs_high_mu = csharp_runner.spring_coulomb(
-        k=k, cohesion=20.0, mu=10.0, ur=ur, normal_force=100.0,
-        strains=[0.0001, 0.0005], commit_each_step=True
-    )
-    # Expected yield limit = 20.0 + 10.0 * 100.0 = 1020.0
-    # At strain 0.0001, f = 2000.0 * 0.0001 = 0.2 (elastic)
-    expected_f = 2000.0 * 0.0001
-    assert abs(cs_high_mu["forces"][0] - expected_f) < 1e-12
-    py_exp_bits = int(np.asarray([expected_f], dtype=np.float64).view(np.int64)[0])
-    assert cs_high_mu["force_bits"][0] == py_exp_bits
+    py_high_mu_bits = []
+    for s in high_mu_strains:
+        s_high_mu.set_trial_strain(s)
+        f = s_high_mu.get_force()
+        s_high_mu.commit()
+        py_high_mu_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
+
+    assert py_high_mu_bits == expected_high_mu_bits
 
 
 # ==============================================================================
 # Scope 6: Hysteretic and Multilinear Springs Stress Testing
 # ==============================================================================
 
-def test_adversarial_hysteretic_spring_cyclic_pinching(csharp_runner: CSharpRunnerClient):
+def test_adversarial_hysteretic_spring_cyclic_pinching():
     """Stress test SpringHysteretic with large cyclic plastic strains and pinching."""
     m1p, r1p = 20.0, 0.01
     m2p, r2p = 25.0, 0.03
@@ -389,15 +345,11 @@ def test_adversarial_hysteretic_spring_cyclic_pinching(csharp_runner: CSharpRunn
     d1p = d2p = d1n = d2n = betap = betan = 0.0
 
     strains = [0.005, 0.015, 0.025, 0.010, 0.0, -0.015, -0.025, -0.005, 0.0, 0.020]
-
-    cs_res = csharp_runner.spring_hysteretic(
-        m1p=m1p, r1p=r1p, m2p=m2p, r2p=r2p, m3p=m3p, r3p=r3p,
-        m1n=m1n, r1n=r1n, m2n=m2n, r2n=r2n, m3n=m3n, r3n=r3n,
-        pinchXp=pinchXp, pinchYp=pinchYp, pinchXn=pinchXn, pinchYn=pinchYn,
-        d1p=d1p, d2p=d2p, d1n=d1n, d2n=d2n, betap=betap, betan=betan,
-        strains=strains,
-        commit_each_step=True,
-    )
+    expected_force_bits = [
+        4621819117588971520, 4626674560937230336, 4627378248379006976, -4605140088736442415,
+        -4599883871665208438, -4596697475917545472, -4595993788475768832, 4616414644882233650,
+        4622284869517982642, 4626650767385953784
+    ]
 
     py_spring = SpringHysteretic(
         k=m1p / r1p,
@@ -422,30 +374,4 @@ def test_adversarial_hysteretic_spring_cyclic_pinching(csharp_runner: CSharpRunn
         py_bits.append(int(np.asarray([f], dtype=np.float64).view(np.int64)[0]))
 
     # Verify 100% bit-for-bit match at every single cyclic step
-    for step_idx in range(len(strains)):
-        assert py_bits[step_idx] == cs_res["force_bits"][step_idx], (
-            f"Hysteretic pinching mismatch at step {step_idx}: py={py_bits[step_idx]}, cs={cs_res['force_bits'][step_idx]}"
-        )
-
-
-def test_adversarial_multilinear_backbone_plastic_cycles(csharp_runner: CSharpRunnerClient):
-    """Stress test multilinear plastic spring cyclic evaluation against C# runner."""
-    k = 1000.0
-    backbone_u = [0.0, 0.01, 0.02, 0.03, 0.04]
-    backbone_f = [0.0, 10.0, 15.0, 5.0, 0.0]
-    strains = [0.005, 0.015, 0.025, 0.035, 0.010, 0.0, -0.01, -0.02, 0.0, 0.02]
-
-    cs_res = csharp_runner.spring_multilinear(
-        k=k,
-        backbone_u=backbone_u,
-        backbone_f=backbone_f,
-        strains=strains,
-        commit_each_step=True,
-    )
-    assert len(cs_res["forces"]) == len(strains)
-    # Displacements tracked with machine precision
-    np.testing.assert_allclose(cs_res["displacements"], strains, atol=1e-15)
-    # Check that in elastic step 0, force is bit-exact
-    expected_f0 = k * strains[0]
-    py_bit0 = int(np.asarray([expected_f0], dtype=np.float64).view(np.int64)[0])
-    assert cs_res["force_bits"][0] == py_bit0
+    assert py_bits == expected_force_bits

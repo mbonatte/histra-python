@@ -1,7 +1,6 @@
 """Single polygon projection used by the original restraint spring factory."""
 import json
 from pathlib import Path
-import pytest
 
 import numpy as np
 
@@ -37,20 +36,15 @@ def test_elastic_foundation_springs_keep_native_area(tmp_path):
     np.testing.assert_array_equal(areas, [c["area"] for c in cases[:81]])
 
 
-def test_polygon_area_live_bitwise_runner():
-    """Verify polygon area against live C# micro-runner with exact 32-bit single bit parity."""
-    from histra.tests.csharp_runner_client import CSharpRunnerClient
-    client = CSharpRunnerClient()
-    if not client.is_available():
-        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+def test_polygon_area_authoritative_bitwise():
+    """Verify polygon area against authoritative C# output with exact 32-bit single bit parity."""
     fixture = Path(__file__).parent / "fixtures/csharp-polygon-area-2026.1.1.json"
-    cases = json.loads(fixture.read_text(encoding="utf-8-sig"))["cases"][:20]
+    cases = json.loads(fixture.read_text(encoding="utf-8-sig"))["cases"][:50]
 
     for i, c in enumerate(cases):
-        cs_res = client.polygon_area(points=c["points"])
         py_area = _csharp_polygon_area(np.asarray(c["points"], dtype=np.float32))
 
-        # Check IEEE-754 Single precision 32-bit representation
+        # Check IEEE-754 Single precision 32-bit representation against authoritative C# area
         py_bits = int(np.asarray([py_area], dtype=np.float32).view(np.int32)[0])
-        cs_bits = int(cs_res["area_single_bits"])
+        cs_bits = int(np.asarray([c["area"]], dtype=np.float32).view(np.int32)[0])
         assert py_bits == cs_bits, f"Case {i} area_single_bits mismatch: py={py_bits}, cs={cs_bits}"

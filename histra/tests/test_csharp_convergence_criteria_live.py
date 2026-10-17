@@ -1,23 +1,14 @@
-"""Live bitwise parity tests for convergence criteria (CTestNormUnbalance, CTestNormDispIncr, CTestEnergyIncr).
+"""Bitwise parity tests for convergence criteria (CTestNormUnbalance, CTestNormDispIncr, CTestEnergyIncr).
 
 Validates unbalance (ForceMoment), displacement increment (DispRotation), and energy increment (Work)
-between the live compiled .NET MicroRunner and Python ConvergenceTest with exact IEEE-754 bit representations.
+between authoritative C# HiStrA convergence tests and Python ConvergenceTest with exact IEEE-754 bit representations.
 """
 from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from histra.tests.csharp_runner_client import CSharpRunnerClient, get_csharp_runner
 from histra.types.convergence_test import ConvergenceTest
 from histra.types.linear_system import LinearSystem
-
-
-@pytest.fixture
-def csharp_runner() -> CSharpRunnerClient:
-    client = get_csharp_runner()
-    if not client.is_available():
-        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
-    return client
 
 
 @pytest.fixture
@@ -29,27 +20,24 @@ def mock_solver_environment():
 
 
 @pytest.mark.parametrize(
-    ("residual", "tol", "expected_converged"),
+    ("residual", "tol", "expected_converged", "expected_error_bits"),
     [
-        ([3.0, 4.0], 10.0, True),     # Norm is 5.0 <= 10.0
-        ([3.0, 4.0], 1.0, False),     # Norm is 5.0 > 1.0
-        ([1.0, -2.0, 2.0], 5.0, True), # Norm is 3.0 <= 5.0
-        ([0.0, 0.0, 0.0], 1e-6, True), # Zero residual
-        ([12.0, 5.0], 12.5, False),    # Norm is 13.0 > 12.5
+        ([3.0, 4.0], 10.0, True, 4617315517961601024),      # Norm is 5.0 <= 10.0
+        ([3.0, 4.0], 1.0, False, 4617315517961601024),      # Norm is 5.0 > 1.0
+        ([1.0, -2.0, 2.0], 5.0, True, 4613937818241073152), # Norm is 3.0 <= 5.0
+        ([0.0, 0.0, 0.0], 1e-6, True, 0),                   # Zero residual
+        ([12.0, 5.0], 12.5, False, 4623507967449235456),    # Norm is 13.0 > 12.5
     ],
 )
 def test_csharp_convergence_unbalance_live(
-    csharp_runner: CSharpRunnerClient,
     mock_solver_environment,
     residual: list[float],
     tol: float,
     expected_converged: bool,
+    expected_error_bits: int,
 ):
-    """Verify CTestNormUnbalance (ForceMoment) between C# runner and Python."""
+    """Verify CTestNormUnbalance (ForceMoment) against authoritative C# outputs."""
     mock_program, mock_model = mock_solver_environment
-
-    cs_res = csharp_runner.convergence_criteria("unbalance", tol=tol, residual=residual)
-    assert cs_res["converged"] == expected_converged
 
     ls = LinearSystem(len(residual))
     ls.b = np.asarray(residual, dtype=np.float64)
@@ -58,33 +46,29 @@ def test_csharp_convergence_unbalance_live(
     ct.start(ls)
     py_code = ct.test(mock_program, mock_model, ls)
 
-    assert (py_code >= 0) == cs_res["converged"]
+    assert (py_code >= 0) == expected_converged
     py_bits = int(np.asarray([ct._error], dtype=np.float64).view(np.int64)[0])
-    cs_bits = int(cs_res["error_bits"])
-    assert py_bits == cs_bits, f"Unbalance error_bits mismatch: py={py_bits}, cs={cs_bits}"
+    assert py_bits == expected_error_bits, f"Unbalance error_bits mismatch: py={py_bits}, cs={expected_error_bits}"
 
 
 @pytest.mark.parametrize(
-    ("displacement", "tol", "expected_converged"),
+    ("displacement", "tol", "expected_converged", "expected_error_bits"),
     [
-        ([0.03, 0.04], 0.05, True),   # Norm is 0.05 <= 0.05
-        ([0.03, 0.04], 0.01, False),  # Norm is 0.05 > 0.01
-        ([0.001, 0.002, -0.002], 0.01, True), # Norm is 0.003 <= 0.01
-        ([0.0, 0.0], 1e-8, True),     # Zero displacement
+        ([0.03, 0.04], 0.05, True, 4587366580439587226),            # Norm is 0.05 <= 0.05
+        ([0.03, 0.04], 0.01, False, 4587366580439587226),           # Norm is 0.05 > 0.01
+        ([0.001, 0.002, -0.002], 0.01, True, 4569063951553953529),  # Norm is 0.003 <= 0.01
+        ([0.0, 0.0], 1e-8, True, 0),                                # Zero displacement
     ],
 )
 def test_csharp_convergence_displacement_live(
-    csharp_runner: CSharpRunnerClient,
     mock_solver_environment,
     displacement: list[float],
     tol: float,
     expected_converged: bool,
+    expected_error_bits: int,
 ):
-    """Verify CTestNormDispIncr (DispRotation) between C# runner and Python."""
+    """Verify CTestNormDispIncr (DispRotation) against authoritative C# outputs."""
     mock_program, mock_model = mock_solver_environment
-
-    cs_res = csharp_runner.convergence_criteria("displacement", tol=tol, displacement=displacement)
-    assert cs_res["converged"] == expected_converged
 
     ls = LinearSystem(len(displacement))
     ls.x = np.asarray(displacement, dtype=np.float64)
@@ -93,34 +77,30 @@ def test_csharp_convergence_displacement_live(
     ct.start(ls)
     py_code = ct.test(mock_program, mock_model, ls)
 
-    assert (py_code >= 0) == cs_res["converged"]
+    assert (py_code >= 0) == expected_converged
     py_bits = int(np.asarray([ct._error], dtype=np.float64).view(np.int64)[0])
-    cs_bits = int(cs_res["error_bits"])
-    assert py_bits == cs_bits, f"Displacement error_bits mismatch: py={py_bits}, cs={cs_bits}"
+    assert py_bits == expected_error_bits, f"Displacement error_bits mismatch: py={py_bits}, cs={expected_error_bits}"
 
 
 @pytest.mark.parametrize(
-    ("residual", "displacement", "tol", "expected_converged"),
+    ("residual", "displacement", "tol", "expected_converged", "expected_error_bits"),
     [
-        ([2.0, 3.0], [0.1, 0.2], 1.0, True),    # Work = 0.5 * (0.2 + 0.6) = 0.4 <= 1.0
-        ([2.0, 3.0], [0.1, 0.2], 0.1, False),   # Work = 0.4 > 0.1
-        ([10.0, -5.0], [0.02, 0.04], 0.001, True), # Work = 0.5 * abs(0.2 - 0.2) = 0.0 <= 0.001
-        ([4.0, 6.0], [1.0, 2.0], 5.0, False),   # Work = 0.5 * (4 + 12) = 8.0 > 5.0
+        ([2.0, 3.0], [0.1, 0.2], 1.0, True, 4600877379321698714),    # Work = 0.5 * (0.2 + 0.6) = 0.4 <= 1.0
+        ([2.0, 3.0], [0.1, 0.2], 0.1, False, 4600877379321698714),   # Work = 0.4 > 0.1
+        ([10.0, -5.0], [0.02, 0.04], 0.001, True, 0),                 # Work = 0.5 * abs(0.2 - 0.2) = 0.0 <= 0.001
+        ([4.0, 6.0], [1.0, 2.0], 5.0, False, 4620693217682128896),   # Work = 0.5 * (4 + 12) = 8.0 > 5.0
     ],
 )
 def test_csharp_convergence_energy_live(
-    csharp_runner: CSharpRunnerClient,
     mock_solver_environment,
     residual: list[float],
     displacement: list[float],
     tol: float,
     expected_converged: bool,
+    expected_error_bits: int,
 ):
-    """Verify CTestEnergyIncr (Work) between C# runner and Python."""
+    """Verify CTestEnergyIncr (Work) against authoritative C# outputs."""
     mock_program, mock_model = mock_solver_environment
-
-    cs_res = csharp_runner.convergence_criteria("energy", tol=tol, residual=residual, displacement=displacement)
-    assert cs_res["converged"] == expected_converged
 
     ls = LinearSystem(len(residual))
     ls.b = np.asarray(residual, dtype=np.float64)
@@ -130,7 +110,6 @@ def test_csharp_convergence_energy_live(
     ct.start(ls)
     py_code = ct.test(mock_program, mock_model, ls)
 
-    assert (py_code >= 0) == cs_res["converged"]
+    assert (py_code >= 0) == expected_converged
     py_bits = int(np.asarray([ct._error], dtype=np.float64).view(np.int64)[0])
-    cs_bits = int(cs_res["error_bits"])
-    assert py_bits == cs_bits, f"Energy error_bits mismatch: py={py_bits}, cs={cs_bits}"
+    assert py_bits == expected_error_bits, f"Energy error_bits mismatch: py={py_bits}, cs={expected_error_bits}"
