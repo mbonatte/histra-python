@@ -3,7 +3,7 @@
 ## 1.6.1 - 2026-10-17
 
 - Exhaustive C# HiStrA 2026.1.1 source code comparison and mathematical precision audit across all 99 production Python files, 113 classes, and 853 numerical routines documented in `docs/audit/csharp_python_function_mapping_matrix.md`.
-- Dynamic live C# bitwise output parity test suites (`histra/tests/test_csharp_*_live.py`) covering Mohr-Coulomb frictional sliding, multi-linear plastic springs, hysteretic fiber pinching, Gauss quadrature, Sutherland-Hodgman polygon clipping, Crisfield Arc-Length updates, and convergence tests with exact bitwise matching (`np.view(np.int64) == bits_cs`).
+- Embedded authoritative C# bitwise output parity test suites (`histra/tests/test_csharp_*_live.py`) covering Mohr-Coulomb frictional sliding, multi-linear plastic springs, hysteretic fiber pinching, Gauss quadrature, Sutherland-Hodgman polygon clipping, Crisfield Arc-Length updates, and convergence tests with exact bitwise matching (`np.view(np.int64) == bits_cs`) and zero external binary dependencies.
 - Add adversarial empirical stress test suite (`test_csharp_adversarial_stress.py`) verifying parity under degenerate topologies, cyclic reversals, negative discriminants, and extreme friction states.
 - Fix P-Delta test fixture initialization setup in `histra/tests/test_pdelta.py` to restore 100% test pass.
 - Maintain strict Gate A compiled backend coverage enforcement (100% compiled Numba execution with 0 unmanaged Quads or Interfaces).
