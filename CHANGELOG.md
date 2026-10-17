@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.6.2 - 2026-10-17
+
+- Reject interface spring-class changes by default. Add explicit `spring_type_change="csharp_reset"` compatibility through the session, free mutation function and backend job API, warning about discarded histories and reporting every reset spring. Matching classes retain their committed histories; failed mutations restore the prior model.
+- Preserve C# elastic trial/committed field semantics in scalar springs and compiled runtime projections. Retain actual elastic Quad histories and restored tangent during runtime import.
+- Validate the two new loaded-foundation GUI references against original C# 2026.1.1: 84 committed static steps match checked saved fields and iteration counts; all six available modal comparisons pass. Both return attempts stop before committing, as in C#, so successful return-stage validation remains open.
 - Replace formula-only multilinear tests with original C# masonry `SpringHysteretic` backbone, trial, commit and reversal fixtures, checked against scalar and compiled execution. Generic `SpringMultiLinearPlastic` remains unimplemented; the legacy Python container now rejects numerical evaluation instead of silently returning a linear response.
 - Preserve the predecessor tangent, yield metadata and F0 across numeric-fibre material resets. Native DB restoration checks cover virgin/plastic/reversed histories and repeated resets. Python's lossless cumulative-energy policy remains an explicit difference.
 - Initialize dense constitutive arrays for topologies containing only numeric fibre groups, with native-state checks and poisoned-buffer regression coverage.
@@ -10,7 +15,7 @@
 ## 1.6.1 - 2026-10-17
 
 - Add a function inventory and proposed C# mappings. Subsequent review found nonexistent source references and an incorrect blanket parity claim; the corrected scope is recorded in `docs/audit/csharp_python_function_mapping_matrix.md`.
-- Add offline expected-output regressions for friction, hysteresis, quadrature, clipping, Arc-Length and convergence. Some expectations are analytical or use tolerances; these do not establish universal bitwise parity. The original multilinear tests exercised a test-only helper and are superseded by the Unreleased corrections.
+- Add offline expected-output regressions for friction, hysteresis, quadrature, clipping, Arc-Length and convergence. Some expectations are analytical or use tolerances; these do not establish universal bitwise parity. The original multilinear tests exercised a test-only helper and are superseded by the 1.6.2 corrections.
 - Add adversarial regressions for selected degenerate geometries, reversals and Arc-Length states. Native provenance and coverage are limited to identified fixtures and checks.
 - Fix P-Delta test fixture initialization setup in `histra/tests/test_pdelta.py` to restore 100% test pass.
 - Retain compiled backend coverage enforcement; this release did not change the production solver implementation.

@@ -1,6 +1,11 @@
 # Current feature status
 
-The package metadata is now 1.6.1. Corrections after that tag are **unreleased**.
+The package metadata is now 1.6.2. This patch includes the reviewed native
+material-transfer and initialization corrections, elastic state-field fixes,
+and explicit C# spring-type history-reset compatibility with rejection by default.
+The [loaded foundation reference](benchmarks/material-modal-gui-2026-10-17.md)
+qualifies 84 committed static steps and six available modal comparisons;
+successful return-stage results remain absent from the native references.
 The [2026-10-17 audit correction](audit/csharp_python_function_mapping_matrix.md)
 replaces the blanket verification claim with evidence boundaries. Native-backed
 material transfer and all-numeric runtime initialization regressions now cover
