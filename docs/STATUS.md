@@ -1,7 +1,15 @@
 # Current feature status
 
-Published release: **v1.5.0** (2026-10-14). **v1.6.0 is being prepared locally**;
-see [its preparation record](release/v1.6.0-preparation.md). The
+The package metadata is now 1.6.1. Corrections after that tag are **unreleased**.
+The [2026-10-17 audit correction](audit/csharp_python_function_mapping_matrix.md)
+replaces the blanket verification claim with evidence boundaries. Native-backed
+material transfer and all-numeric runtime initialization regressions now cover
+two additional gaps; complete parity for every supported masonry input is not
+established.
+
+Historical release context: **v1.5.0** was published on 2026-10-14;
+the **v1.6.0** [preparation record](release/v1.6.0-preparation.md) describes
+its earlier local qualification. The
 [critical review response](release/v1.6.0-critical-review-response.md) records
 accepted findings, source-backed disagreements and the remaining Article gate.
 Current reviewed artifacts and platform verification supersede the earlier

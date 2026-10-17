@@ -48,7 +48,7 @@ def test_adversarial_gauss_quadrature_orders():
             for val_py, bits_cs in zip(py_w, data["w_bits"]):
                 assert int(np.asarray([val_py], dtype=np.float64).view(np.int64)[0]) == int(bits_cs)
 
-        # For all N=2..10: agree within theoretical numerical precision bounds (<= 1e-15)
+        # Compare using the explicit absolute/relative bounds below.
         np.testing.assert_allclose(cs_z, py_z, atol=1e-15, rtol=1e-15)
         np.testing.assert_allclose(cs_w, py_w, atol=1e-15, rtol=1e-15)
 

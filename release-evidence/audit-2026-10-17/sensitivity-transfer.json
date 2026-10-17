@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-17T08:29:23.990976+00:00",
-  "source_commit": "f5a49f45b731c06b080a46073264322b6640751e",
+  "generated_at": "2026-10-17T08:34:38.652556+00:00",
+  "source_commit": "47b559c2de087b99557386fccf46d6dc2cfb8af3",
   "generator": "tools/benchmarks/probe_native_test_sensitivity.py",
   "benchmark_id": "native-test-sensitivity-transfer",
   "scenario": "transfer",

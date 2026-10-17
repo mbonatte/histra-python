@@ -1,12 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Replace formula-only multilinear tests with original C# masonry `SpringHysteretic` backbone, trial, commit and reversal fixtures, checked against scalar and compiled execution. Generic `SpringMultiLinearPlastic` remains unimplemented; the legacy Python container now rejects numerical evaluation instead of silently returning a linear response.
+- Preserve the predecessor tangent, yield metadata and F0 across numeric-fibre material resets. Native DB restoration checks cover virgin/plastic/reversed histories and repeated resets. Python's lossless cumulative-energy policy remains an explicit difference.
+- Initialize dense constitutive arrays for topologies containing only numeric fibre groups, with native-state checks and poisoned-buffer regression coverage.
+- Replace the unsubstantiated full-parity audit with a reproducible source inventory, bounded native source bindings, and an explicit remaining-validation register.
+
 ## 1.6.1 - 2026-10-17
 
-- Exhaustive C# HiStrA 2026.1.1 source code comparison and mathematical precision audit across all 99 production Python files, 113 classes, and 853 numerical routines documented in `docs/audit/csharp_python_function_mapping_matrix.md`.
-- Embedded authoritative C# bitwise output parity test suites (`histra/tests/test_csharp_*_live.py`) covering Mohr-Coulomb frictional sliding, multi-linear plastic springs, hysteretic fiber pinching, Gauss quadrature, Sutherland-Hodgman polygon clipping, Crisfield Arc-Length updates, and convergence tests with exact bitwise matching (`np.view(np.int64) == bits_cs`) and zero external binary dependencies.
-- Add adversarial empirical stress test suite (`test_csharp_adversarial_stress.py`) verifying parity under degenerate topologies, cyclic reversals, negative discriminants, and extreme friction states.
+- Add a function inventory and proposed C# mappings. Subsequent review found nonexistent source references and an incorrect blanket parity claim; the corrected scope is recorded in `docs/audit/csharp_python_function_mapping_matrix.md`.
+- Add offline expected-output regressions for friction, hysteresis, quadrature, clipping, Arc-Length and convergence. Some expectations are analytical or use tolerances; these do not establish universal bitwise parity. The original multilinear tests exercised a test-only helper and are superseded by the Unreleased corrections.
+- Add adversarial regressions for selected degenerate geometries, reversals and Arc-Length states. Native provenance and coverage are limited to identified fixtures and checks.
 - Fix P-Delta test fixture initialization setup in `histra/tests/test_pdelta.py` to restore 100% test pass.
-- Maintain strict Gate A compiled backend coverage enforcement (100% compiled Numba execution with 0 unmanaged Quads or Interfaces).
+- Retain compiled backend coverage enforcement; this release did not change the production solver implementation.
 
 ## 1.6.0 - prepared 2026-10-15
 

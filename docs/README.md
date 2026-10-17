@@ -1,5 +1,7 @@
 # Documentation
 
+- [Current source inventory, audit corrections and remaining validation](audit/csharp_python_function_mapping_matrix.md)
+
 ## Architecture audit chapters
 
 These earlier source-review chapters explain the implementation and its design.

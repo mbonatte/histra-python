@@ -93,7 +93,7 @@ def test_csharp_gauss_quadrature_live(order: int):
         for val_py, bits_cs in zip(py_w, data["w_bits"]):
             assert int(np.asarray([val_py], dtype=np.float64).view(np.int64)[0]) == int(bits_cs)
 
-    # For all orders N=2..10, verify precision within 1e-15 (1-2 ULPs from floating point polynomial roots)
+    # Explicit absolute/relative bounds; this is not a fixed-ULP or bitwise bound.
     np.testing.assert_allclose(py_z, cs_z, atol=1e-15, rtol=1e-15)
     np.testing.assert_allclose(py_w, cs_w, atol=1e-15, rtol=1e-15)
 

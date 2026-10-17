@@ -57,11 +57,13 @@ The remaining audit includes less-used supported input branches, general
 shared-DOF P-Delta reduction order and fractional-tolerance contact outcomes.
 P-Delta now has both imposed-input routine fixtures and four independently
 converged small structural chains. These do not cover arbitrary contact-centre
-geometry. Material-mutation metadata restoration also needs a direct native
-differential check: `SpringStateDBclass.SetSpring` restores saved tangent and
-yield metadata, while the numeric group's optimized copy currently regenerates
-some of those values from the target definition. Treat this as a source-review
-finding pending native qualification.
+geometry. A direct native material-mutation metadata differential check was
+pending at this report's original source boundary.
+The 2026-10-17 correction now calls original `SpringStateDBclass.SetSpring`
+and fixes numeric-group tangent/yield/F0 restoration for its recorded cases.
+Python deliberately retains predecessor energy, which native DB restoration
+omits. Complete staged structural validation of this correction remains open;
+see the [current validation register](../audit/csharp_python_function_mapping_matrix.md).
 Dynamic/Adaptic and
 non-masonry properties stay outside this task. Fields such as
 `ReduceRayArcLength` must not be implemented solely because they exist in the
