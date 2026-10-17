@@ -13,6 +13,7 @@ from histra.solver.interface_material import (
     InterfaceMaterialMutationReport,
     change_interface_materials,
     normalize_interface_registration,
+    normalize_spring_type_change,
     _backup_quad_links,
     _restore_quad_links,
 )
@@ -175,11 +176,16 @@ class AnalysisSession:
         material_key: int,
         *,
         preserve_committed_state: bool = True,
+        spring_type_change: str = "reject",
     ) -> InterfaceMaterialMutationReport:
         self._require_usable()
+        policy = normalize_spring_type_change(spring_type_change)
         keys = tuple(dict.fromkeys(int(key) for key in interface_keys))
         if not keys:
-            return InterfaceMaterialMutationReport(int(material_key), (), self.interface_registration)
+            return InterfaceMaterialMutationReport(
+                int(material_key), (), self.interface_registration,
+                spring_type_change=policy, preserve_committed_state=preserve_committed_state,
+            )
 
         if self.model.collections is None:
             from histra.solver.interface_material import InterfaceMaterialMutationError
@@ -213,6 +219,7 @@ class AnalysisSession:
                 material_key,
                 preserve_committed_state=preserve_committed_state,
                 interface_registration=self.interface_registration,
+                spring_type_change=policy,
             )
             if self.performance_policy == "compiled":
                 from histra.solver.backend_coverage import inspect_solver_backend
@@ -240,7 +247,9 @@ class AnalysisSession:
                 f"Changed {report.interface_count} interfaces to material "
                 f"{report.material_key}; rebuilt {report.spring_count} springs; "
                 f"registration={report.interface_registration}, "
-                f"added Quad links={report.added_quad_links}"
+                f"added Quad links={report.added_quad_links}; "
+                f"spring_type_change={report.spring_type_change}, "
+                f"reset spring histories={report.reset_spring_count}"
             )
         return report
 

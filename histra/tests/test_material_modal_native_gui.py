@@ -9,6 +9,7 @@ import pytest
 from histra import AnalysisSession, load_model
 from histra.io.results_reader import ResultsStateError
 from histra.solver.model_manager import ModelManager
+from histra.solver.interface_material import SpringHistoryResetWarning
 from histra.types.umfpack import find_umfpack_library
 from tools.benchmarks.build_material_modal_reference_models import (
     CASES, DEFAULT_TEMPLATE, build_material_modal_model,
@@ -34,8 +35,8 @@ def _session(tmp_path, monkeypatch, case):
                            umfpack_irstep=2, equilibrium_policy="warn", strategy_policy="off")
 
 
-def test_loaded_stiffness_change_every_native_spring_commit_and_return_failure(tmp_path, monkeypatch):
-    case = CASES[0]
+@pytest.mark.parametrize("case", CASES)
+def test_loaded_material_change_every_native_spring_commit_and_return_failure(tmp_path, monkeypatch, case):
     session = _session(tmp_path, monkeypatch, case)
     expected = {(s["analysis"], s["step"]): s["tables"] for s in NATIVE["cases"][case]["states"]}
     reactions = {(s["AnalysisKey"], s["Step"]): s for s in NATIVE["cases"][case]["reaction_history"]}
@@ -61,9 +62,22 @@ def test_loaded_stiffness_change_every_native_spring_commit_and_return_failure(t
         checked.add(key)
 
     assert session.run(1, on_step_committed=committed).code == 0
-    session.change_interface_materials([4], 19)
+    def change(material):
+        if case == CASES[1]:
+            with pytest.warns(SpringHistoryResetWarning, match="81 incompatible"):
+                report = session.change_interface_materials([4], material, spring_type_change="csharp_reset")
+            assert report.spring_type_change == "csharp_reset"
+            assert report.reset_spring_count == 81
+            assert {r.group for r in report.history_resets} == {"transverse"}
+            assert [r.id_local for r in report.history_resets] == list(range(81))
+            assert {r.interface_key for r in report.history_resets} == {4}
+        else:
+            report = session.change_interface_materials([4], material)
+            assert report.reset_spring_count == 0
+
+    change(19)
     assert session.run(2, on_step_committed=committed).code == 0
-    session.change_interface_materials([4], 18)
+    change(18)
     result = session.run(6, on_step_committed=committed)
     assert result.code == -3
     assert not result.committed_steps
@@ -72,13 +86,17 @@ def test_loaded_stiffness_change_every_native_spring_commit_and_return_failure(t
     assert native_state["Exit"] == "LargeDisplacement" and native_state["Step"] == "0"
 
 
-@pytest.mark.parametrize("case,key", [(CASES[0], 3), (CASES[0], 4), (CASES[0], 5), (CASES[1], 3), (CASES[1], 4)])
+@pytest.mark.parametrize("case,key", [(CASES[0], 3), (CASES[0], 4), (CASES[0], 5), (CASES[1], 3), (CASES[1], 4), (CASES[1], 5)])
 def test_native_gui_modal_shapes_and_all_available_modal_values(tmp_path, monkeypatch, case, key):
     session = _session(tmp_path, monkeypatch, case)
     if key in (4, 5):
         assert session.run(1).code == 0
     if key == 5:
-        session.change_interface_materials([4], 19)
+        if case == CASES[1]:
+            with pytest.warns(SpringHistoryResetWarning):
+                session.change_interface_materials([4], 19, spring_type_change="csharp_reset")
+        else:
+            session.change_interface_materials([4], 19)
         assert session.run(2).code == 0
     result = session.run(key).modal_result
     native = NATIVE["cases"][case]["modal"][str(key)]

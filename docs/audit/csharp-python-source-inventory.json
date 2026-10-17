@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-17T09:43:22.152280+00:00",
-  "source_commit": "f34bcebdbba8cf6b721f242c83eb993b26553f04",
+  "generated_at": "2026-10-17T09:52:47.113994+00:00",
+  "source_commit": "d0ad2574ce00208e794f0d4b8bc644ebfb4f6b9f",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 99,
-    "classes": 113,
-    "function_definitions": 856
+    "classes": 115,
+    "function_definitions": 858
   },
   "files": [
     {
@@ -2216,7 +2216,7 @@
     {
       "path": "histra/solver/backend_api.py",
       "status": "inventory_only",
-      "lf_sha256": "46cb25c1d67166c8e92628befe0872b4bb4ab87ddd3335981317ed9f9f7b7101",
+      "lf_sha256": "b2d424dcf9c6c0be9d74ee457410650e753f18cec8f51e59178fb25fbfc6542b",
       "classes": [
         {
           "name": "ConcreteInterfaceMutation",
@@ -2224,53 +2224,53 @@
         },
         {
           "name": "PythonAnalysisRequest",
-          "line": 28
+          "line": 29
         },
         {
           "name": "PythonAnalysisResult",
-          "line": 35
+          "line": 36
         },
         {
           "name": "PythonSolverJobResult",
-          "line": 47
+          "line": 48
         },
         {
           "name": "PythonSolverJobError",
-          "line": 55
+          "line": 56
         },
         {
           "name": "PythonSolverTimeout",
-          "line": 67
+          "line": 68
         }
       ],
       "functions": [
         {
           "name": "PythonAnalysisResult.mutation",
-          "line": 41
+          "line": 42
         },
         {
           "name": "PythonSolverJobError.__init__",
-          "line": 58
+          "line": 59
         },
         {
           "name": "run_python_solver_job",
-          "line": 71
+          "line": 72
         },
         {
           "name": "run_python_solver_job.log",
-          "line": 165
+          "line": 166
         },
         {
           "name": "run_python_solver_job.analysis_cancelled",
-          "line": 211
+          "line": 213
         },
         {
           "name": "_dependency_order",
-          "line": 256
+          "line": 258
         },
         {
           "name": "_normalize_mutations",
-          "line": 271
+          "line": 273
         }
       ]
     },
@@ -3468,69 +3468,85 @@
     {
       "path": "histra/solver/interface_material.py",
       "status": "inventory_only",
-      "lf_sha256": "4b5719eb580918037b9fba7f76f5caccf45cdea801f31102971714239831b946",
+      "lf_sha256": "cb01eb33bc80c1055d2b699f0795699ae5f0669dd91b3c6981292df563f1d11f",
       "classes": [
         {
           "name": "InterfaceMaterialMutationError",
-          "line": 14
+          "line": 15
         },
         {
           "name": "InterfaceRegistrationWarning",
-          "line": 18
+          "line": 19
+        },
+        {
+          "name": "SpringHistoryResetWarning",
+          "line": 23
         },
         {
           "name": "InterfaceMaterialMutationRecord",
-          "line": 84
+          "line": 98
+        },
+        {
+          "name": "InterfaceSpringHistoryReset",
+          "line": 108
         },
         {
           "name": "InterfaceMaterialMutationReport",
-          "line": 94
+          "line": 117
         }
       ],
       "functions": [
         {
+          "name": "normalize_spring_type_change",
+          "line": 27
+        },
+        {
           "name": "normalize_interface_registration",
-          "line": 22
+          "line": 36
         },
         {
           "name": "_backup_quad_links",
-          "line": 32
-        },
-        {
-          "name": "_invalidate_quad_links",
           "line": 46
         },
         {
+          "name": "_invalidate_quad_links",
+          "line": 60
+        },
+        {
           "name": "_restore_quad_links",
-          "line": 51
+          "line": 65
         },
         {
           "name": "_register_material_resets",
-          "line": 59
+          "line": 73
+        },
+        {
+          "name": "InterfaceMaterialMutationReport.reset_spring_count",
+          "line": 127
         },
         {
           "name": "InterfaceMaterialMutationReport.interface_count",
-          "line": 101
+          "line": 131
         },
         {
           "name": "InterfaceMaterialMutationReport.spring_count",
-          "line": 105
+          "line": 135
         },
         {
           "name": "_backup_interface",
-          "line": 112
+          "line": 142
         },
         {
           "name": "_groups",
-          "line": 128
+          "line": 158
         },
         {
           "name": "_transfer_groups",
-          "line": 132
+          "line": 162
         },
         {
           "name": "change_interface_materials",
-          "line": 152
+          "line": 198
         }
       ]
     },
@@ -4299,7 +4315,7 @@
     {
       "path": "histra/solver/restart.py",
       "status": "inventory_only",
-      "lf_sha256": "46e5e1286d901f0e0f9d7ca96297d56a073151a151324687593695cc976ce28f",
+      "lf_sha256": "f0a181d741baf424c4374587af38c9998ea9cb936638e5d76bd66836d087dbb7",
       "classes": [
         {
           "name": "RestartSummary",
@@ -4349,7 +4365,7 @@
         },
         {
           "name": "restore_committed_analysis_state",
-          "line": 224
+          "line": 225
         }
       ]
     },
@@ -4381,57 +4397,57 @@
     {
       "path": "histra/solver/session.py",
       "status": "inventory_only",
-      "lf_sha256": "725ea62aa083ec1e775a07c113ac2c148cdc3bb3d1feb5816a6f4168bb0376c6",
+      "lf_sha256": "334d8ca99c22c426253c5168c3a4ad6ba3b7c84d26a12ac122aef72e9a777fbf",
       "classes": [
         {
           "name": "AnalysisSessionError",
-          "line": 35
+          "line": 36
         },
         {
           "name": "AnalysisSession",
-          "line": 39
+          "line": 40
         }
       ],
       "functions": [
         {
           "name": "AnalysisSession.__init__",
-          "line": 73
+          "line": 74
         },
         {
           "name": "AnalysisSession.usable",
-          "line": 141
+          "line": 142
         },
         {
           "name": "AnalysisSession._require_usable",
-          "line": 145
+          "line": 146
         },
         {
           "name": "AnalysisSession.resolve_analysis",
-          "line": 152
+          "line": 153
         },
         {
           "name": "AnalysisSession.change_interface_materials",
-          "line": 172
+          "line": 173
         },
         {
           "name": "AnalysisSession.run",
-          "line": 247
+          "line": 256
         },
         {
           "name": "AnalysisSession.dependency_chain",
-          "line": 400
+          "line": 409
         },
         {
           "name": "AnalysisSession.run_to",
-          "line": 426
+          "line": 435
         },
         {
           "name": "AnalysisSession.run_sequence",
-          "line": 441
+          "line": 450
         },
         {
           "name": "_outcome_message",
-          "line": 452
+          "line": 461
         }
       ]
     },

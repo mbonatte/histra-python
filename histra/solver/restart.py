@@ -195,6 +195,7 @@ def transfer_committed_spring_state(source: Any, target: Any) -> None:
     For compatible laws this mirrors native ``SpringStateDBclass.SetSpring``.
     The guarded DB restart skips incompatible types before that call; the
     Elastic/Coulomb history-preserving Python policy below is distinct.
+    Interface mutations guard type changes before invoking this helper.
     """
     values = capture_committed_spring_state(source)
     if isinstance(target, SpringHysteretic) and isinstance(source, SpringHysteretic):

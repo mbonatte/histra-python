@@ -37,13 +37,40 @@ This is an analysis-boundary operation. It is not a substitute for arbitrary
 stage mutation inside a load-control step.
 
 Changing parameters within the same spring law is distinct from changing the
-spring class. Loaded Hysteretic/Elastic transverse changes are explicitly
-rejected and rolled back. The original C# database restart instead logs a type
-mismatch and skips those histories; calling its lower-level `SetSpring` alone
-does not reproduce that path. Existing Elastic/Coulomb transfers in Python
-preserve history, which is a Python policy rather than evidence of guarded
-C# cross-law restart parity. See the
-[loaded foundation reference](../benchmarks/material-modal-gui-2026-10-17.md).
+spring class. With the default `preserve_committed_state=True`, changed spring
+classes are rejected and the mutation is rolled back. This also applies to
+Elastic/Coulomb changes; low-level restoration helpers are not a substitute
+for the guarded native restart.
+
+To reproduce C# 2026.1.1's history loss explicitly:
+
+```python
+report = session.change_interface_materials(
+    interface_keys=[4],
+    material_key=19,
+    spring_type_change="csharp_reset",
+)
+print(report.reset_spring_count)
+print(report.history_resets)
+```
+
+This emits `SpringHistoryResetWarning` if any types change. Each reset record
+identifies the interface, group, zero-based local spring index and old/new
+spring classes. Only mismatched springs keep their newly constructed virgin
+state; matching spring histories and interface/global displacements are retained.
+The warning concerns potentially lost preload, not an alternative constitutive
+formula. Same-class changes emit no reset warning.
+
+The free `change_interface_materials` function accepts the same keyword.
+Backend jobs can set `ConcreteInterfaceMutation(..., spring_type_change="csharp_reset")`;
+their mutation reports and captured logs expose the selected policy and count.
+The option applies to that mutation only. Its default is `"reject"`.
+
+`preserve_committed_state=False` remains an explicit reset of all affected
+springs, including matching types; it does not use the selective type guard.
+Independent equilibrium policies remain in effect during subsequent analyses.
+See the [loaded foundation reference](../benchmarks/material-modal-gui-2026-10-17.md)
+for native execution evidence and missing return-stage results.
 
 ## Material-reset registration strategy
 

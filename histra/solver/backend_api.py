@@ -22,6 +22,7 @@ class ConcreteInterfaceMutation:
     interface_keys: tuple[int, ...]
     material_key: int
     preserve_committed_state: bool = True
+    spring_type_change: str = "reject"
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,7 @@ def run_python_solver_job(
                     mutation.interface_keys,
                     mutation.material_key,
                     preserve_committed_state=mutation.preserve_committed_state,
+                    spring_type_change=mutation.spring_type_change,
                 )
             )
 

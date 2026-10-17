@@ -9,6 +9,7 @@ from typing import Iterable, Any
 from histra.preprocessing.prepare_model import rebuild_interface_springs
 from histra.solver.model_manager import ModelManager
 from histra.solver.restart import transfer_committed_spring_state
+from histra.io.results_reader import ResultsStateError
 
 
 class InterfaceMaterialMutationError(RuntimeError):
@@ -17,6 +18,19 @@ class InterfaceMaterialMutationError(RuntimeError):
 
 class InterfaceRegistrationWarning(UserWarning):
     """A selected material-reset strategy differs from C# registration."""
+
+
+class SpringHistoryResetWarning(UserWarning):
+    """Explicit native compatibility discarded incompatible spring histories."""
+
+
+def normalize_spring_type_change(value: str) -> str:
+    policy = str(value).strip().lower()
+    if policy not in {"reject", "csharp_reset"}:
+        raise ValueError(
+            f"Unknown spring_type_change {value!r}; expected 'reject' or 'csharp_reset'."
+        )
+    return policy
 
 
 def normalize_interface_registration(value: str) -> str:
@@ -91,11 +105,27 @@ class InterfaceMaterialMutationRecord:
 
 
 @dataclass(frozen=True)
+class InterfaceSpringHistoryReset:
+    interface_key: int
+    group: str
+    id_local: int
+    source_law: str
+    target_law: str
+
+
+@dataclass(frozen=True)
 class InterfaceMaterialMutationReport:
     material_key: int
     records: tuple[InterfaceMaterialMutationRecord, ...]
     interface_registration: str = "csharp"
     added_quad_links: int = 0
+    spring_type_change: str = "reject"
+    history_resets: tuple[InterfaceSpringHistoryReset, ...] = ()
+    preserve_committed_state: bool = True
+
+    @property
+    def reset_spring_count(self) -> int:
+        return len(self.history_resets)
 
     @property
     def interface_count(self) -> int:
@@ -129,10 +159,11 @@ def _groups(interface: Any) -> tuple[list[Any], list[Any], list[Any]]:
     return interface.trasv_1, interface.slid, interface.slid_out_plan
 
 
-def _transfer_groups(old: Any, new: Any) -> None:
+def _transfer_groups(old: Any, new: Any, policy: str) -> list[InterfaceSpringHistoryReset]:
     old_groups = _groups(old)
     new_groups = _groups(new)
     labels = ("transverse", "in-plane", "out-of-plane")
+    resets = []
     for label, source_group, target_group in zip(labels, old_groups, new_groups):
         if len(source_group) != len(target_group):
             raise InterfaceMaterialMutationError(
@@ -145,8 +176,23 @@ def _transfer_groups(old: Any, new: Any) -> None:
         ):
             target_group.copy_committed_state_from(source_group)
             continue
-        for source, target in zip(source_group, target_group):
+        for index, (source, target) in enumerate(zip(source_group, target_group)):
+            if type(source) is not type(target):
+                if policy == "reject":
+                    raise ResultsStateError(
+                        "Cannot transfer committed spring state across different laws: "
+                        f"{type(source).__name__} -> {type(target).__name__}. "
+                        "Explicit spring_type_change='csharp_reset' discards the "
+                        "incompatible history to reproduce the C# database restart."
+                    )
+                # Original dbOutputManager.UpdateSpringStates logs and skips
+                # mismatched SpringType rows before reaching SetSpring(false).
+                resets.append(InterfaceSpringHistoryReset(
+                    old.key, label, index, type(source).__name__, type(target).__name__,
+                ))
+                continue
             transfer_committed_spring_state(source, target)
+    return resets
 
 
 def change_interface_materials(
@@ -156,6 +202,7 @@ def change_interface_materials(
     *,
     preserve_committed_state: bool = True,
     interface_registration: str = "csharp",
+    spring_type_change: str = "reject",
 ) -> InterfaceMaterialMutationReport:
     """Change selected interface materials atomically.
 
@@ -163,8 +210,8 @@ def change_interface_materials(
 
     1. rebuild each interface's spring definitions using ``material_key`` for
        both sides;
-    2. restore the predecessor's committed local history onto those new
-       definitions;
+    2. restore matching spring histories onto the new definitions; changed
+       classes are rejected unless selective native reset is explicit;
     3. preserve the committed Interface state and geometry/afference mapping;
     4. update compatible dense constitutive rows in place, otherwise fall
        back to the existing full compiled-runtime rebuild.
@@ -174,10 +221,17 @@ def change_interface_materials(
     links and emits an explicit compatibility warning. Select a strategy before
     starting the chain. The global displacement and unaffected springs are
     preserved; affected Quad normal-force caches are rebuilt.
+
+    A changed spring class is rejected by default. Explicit
+    ``spring_type_change="csharp_reset"`` retains newly constructed virgin
+    springs for mismatched classes, as the guarded C# DB restart does. Matching
+    classes and interface/global displacement history remain preserved. The
+    report identifies each skipped spring and a warning exposes preload loss.
     """
     if model.collections is None:
         raise InterfaceMaterialMutationError("Model.collections is not initialized.")
     strategy = normalize_interface_registration(interface_registration)
+    policy = normalize_spring_type_change(spring_type_change)
     material_key = int(material_key)
     if material_key != 0 and material_key not in model.collections.materials:
         raise InterfaceMaterialMutationError(
@@ -186,7 +240,10 @@ def change_interface_materials(
 
     keys = tuple(dict.fromkeys(int(key) for key in interface_keys))
     if not keys:
-        return InterfaceMaterialMutationReport(material_key, (), strategy)
+        return InterfaceMaterialMutationReport(
+            material_key, (), strategy, spring_type_change=policy,
+            preserve_committed_state=preserve_committed_state,
+        )
     missing = [key for key in keys if key not in model.collections.interfaces]
     if missing:
         raise InterfaceMaterialMutationError(
@@ -215,6 +272,7 @@ def change_interface_materials(
         for key in keys
     }
     records: list[InterfaceMaterialMutationRecord] = []
+    resets: list[InterfaceSpringHistoryReset] = []
     # Material-law construction depends only on the material and direction.
     # Share these caches across this mutation batch, exactly as full model
     # preparation does, instead of rebuilding identical law objects for every
@@ -240,7 +298,7 @@ def change_interface_materials(
                 sliding_law_cache=sliding_law_cache,
             )
             if preserve_committed_state:
-                _transfer_groups(old, interface)
+                resets.extend(_transfer_groups(old, interface, policy))
 
             # ReSetInterfaces initializes a fresh status, then C# SetStatus
             # restores the predecessor InterfaceState.  In-memory chaining can
@@ -273,6 +331,14 @@ def change_interface_materials(
                 InterfaceRegistrationWarning, stacklevel=2,
             )
         added_links = _register_material_resets(model, records, strategy)
+        if resets:
+            warnings.warn(
+                f"C# compatibility reset discarded {len(resets)} incompatible spring "
+                "histories. This may remove previously carried forces/preload; "
+                "matching C# output does not establish physical equilibrium. "
+                "The mutation report identifies every reset spring.",
+                SpringHistoryResetWarning, stacklevel=2,
+            )
     except Exception:
         _restore_quad_links(model, quad_links)
         for key, backup in backups.items():
@@ -293,5 +359,6 @@ def change_interface_materials(
             model, changed_interfaces
         )
     return InterfaceMaterialMutationReport(
-        material_key, tuple(records), strategy, added_links
+        material_key, tuple(records), strategy, added_links,
+        policy, tuple(resets), preserve_committed_state,
     )
