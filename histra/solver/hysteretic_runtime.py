@@ -1588,30 +1588,12 @@ class HystereticBatchRuntime:
         ]
 
     def _read_transverse_objects_bulk(
-        self, springs: list[SpringHysteretic], *, chunk_size: int = 4096
-    ) -> None:
-        """Import the initial transverse object state in NumPy-sized chunks.
-
-        The previous constructor called ``_read_transverse_object`` once for
-        every fibre.  With ~550k fibres that means ~550k Python→NumPy row
-        assignments for each dense array.  Material updates usually touch only
-        a few interfaces and should retain the scalar importer; the initial
-        runtime build is large enough to amortize bulk conversion.
-
-        Chunking bounds temporary Python tuples/NumPy arrays to a few MiB and
-        preserves spring order and float64 conversion semantics exactly.
-        """
-        count = len(springs)
-        if count == 0:
-            return
-        if chunk_size <= 0:
-            raise ValueError(f"chunk_size must be positive, got {chunk_size}")
-
-    def _read_transverse_objects_bulk(
         self, springs: list[Any], *, chunk_size: int = 16384
     ) -> None:
-        count = len(springs)
-        if count == 0:
+        """Import all records, including groups with no materialized springs."""
+        # ``springs`` contains only scalar objects. A fully numeric topology
+        # still owns dense rows that must be initialized before any solve.
+        if self.committed.shape[0] == 0:
             return
         if chunk_size <= 0:
             raise ValueError(f"chunk_size must be positive, got {chunk_size}")
