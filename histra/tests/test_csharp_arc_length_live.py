@@ -20,7 +20,10 @@ FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "csharp_arc_length
 
 @pytest.fixture
 def csharp_runner() -> CSharpRunnerClient:
-    return get_csharp_runner()
+    client = get_csharp_runner()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+    return client
 
 
 class MockLinearSystem:

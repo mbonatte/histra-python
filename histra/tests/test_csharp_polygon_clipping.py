@@ -17,7 +17,10 @@ FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "csharp_quad_conta
 
 @pytest.fixture
 def csharp_runner() -> CSharpRunnerClient:
-    return get_csharp_runner()
+    client = get_csharp_runner()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+    return client
 
 
 def test_csharp_polygon_clipping_live_fixtures(csharp_runner: CSharpRunnerClient):

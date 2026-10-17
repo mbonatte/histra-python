@@ -11,7 +11,10 @@ from histra.tests.csharp_runner_client import CSharpRunnerClient, get_csharp_run
 
 @pytest.fixture
 def csharp_runner() -> CSharpRunnerClient:
-    return get_csharp_runner()
+    client = get_csharp_runner()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+    return client
 
 
 def evaluate_piecewise_linear_backbone(u_curve: list[float], f_curve: list[float], u: float) -> tuple[float, float]:

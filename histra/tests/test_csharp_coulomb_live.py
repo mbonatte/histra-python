@@ -13,7 +13,10 @@ from histra.types.phase_enum import PhaseEnum
 
 @pytest.fixture
 def csharp_runner() -> CSharpRunnerClient:
-    return get_csharp_runner()
+    client = get_csharp_runner()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+    return client
 
 
 @pytest.mark.parametrize(

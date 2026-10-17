@@ -1,6 +1,7 @@
 """Single polygon projection used by the original restraint spring factory."""
-from pathlib import Path
 import json
+from pathlib import Path
+import pytest
 
 import numpy as np
 
@@ -40,6 +41,8 @@ def test_polygon_area_live_bitwise_runner():
     """Verify polygon area against live C# micro-runner with exact 32-bit single bit parity."""
     from histra.tests.csharp_runner_client import CSharpRunnerClient
     client = CSharpRunnerClient()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
     fixture = Path(__file__).parent / "fixtures/csharp-polygon-area-2026.1.1.json"
     cases = json.loads(fixture.read_text(encoding="utf-8-sig"))["cases"][:20]
 

@@ -324,4 +324,7 @@ def get_csharp_runner() -> CSharpRunnerClient:
 @pytest.fixture(scope="session")
 def csharp_runner() -> CSharpRunnerClient:
     """Session-scoped fixture providing the C# micro-runner client."""
-    return get_csharp_runner()
+    client = get_csharp_runner()
+    if not client.is_available():
+        pytest.skip("C# HiStrA .NET MicroRunner binary is not available in this environment")
+    return client
