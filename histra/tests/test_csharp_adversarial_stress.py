@@ -1,12 +1,16 @@
-"""Empirical adversarial stress test suite asserting against authoritative C# outputs.
+"""Boundary regressions using saved constants and analytical expectations.
+
+These do not all have independent native captures. Exact integer-bit assertions
+freeze an expected response; they do not establish its C# provenance. See the
+current source audit for native evidence and the remaining capture work.
 
 Covers:
-1. Gauss quadrature with edge-case orders (N=2..10, 25) and boundary values.
+1. Gauss quadrature table comparisons (N=2..10).
 2. Arc-Length Crisfield solver with complex roots (discriminant < 0), zero bar, and extreme trial states.
 3. Sutherland-Hodgman polygon clipping with non-overlapping, touching, orthogonal, and identical quadrilaterals.
 4. Polygon area with collinear points, degenerate quadrilaterals, and high-magnitude coordinates.
-5. Coulomb friction with extreme normal compressive/tensile forces, zero cohesion, high friction angles, and cyclic slip reversal.
-6. Hysteretic and multilinear springs with large cyclic plastic strains and pinching.
+5. Coulomb friction with positive normal forces, high friction and cyclic slip reversal.
+6. Hysteretic masonry springs with cyclic plastic strains and pinching.
 """
 from __future__ import annotations
 
@@ -109,7 +113,7 @@ def test_adversarial_arc_length_complex_roots_fallback():
 
 
 def test_adversarial_arc_length_zero_bar_and_extreme_states():
-    """Stress test zero bar displacement (c = 0) and extreme trial coordinates against C# outputs."""
+    """Check stored zero-bar and extreme-state regression expectations."""
     # 1. Zero bar displacement: c = 0
     case_zero_bar = {
         "alpha2": 0.0,

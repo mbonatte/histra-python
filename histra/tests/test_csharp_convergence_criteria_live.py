@@ -1,7 +1,8 @@
-"""Bitwise parity tests for convergence criteria (CTestNormUnbalance, CTestNormDispIncr, CTestEnergyIncr).
+"""Analytical exact-output regressions for production convergence criteria.
 
-Validates unbalance (ForceMoment), displacement increment (DispRotation), and energy increment (Work)
-between authoritative C# HiStrA convergence tests and Python ConvergenceTest with exact IEEE-754 bit representations.
+These simple Euclidean-norm/dot-product expectations are not independent live
+C# captures. Original routine/control fixtures provide separate native checks;
+storing an analytical result as integer bits does not broaden that coverage.
 """
 from types import SimpleNamespace
 import numpy as np
@@ -36,7 +37,7 @@ def test_csharp_convergence_unbalance_live(
     expected_converged: bool,
     expected_error_bits: int,
 ):
-    """Verify CTestNormUnbalance (ForceMoment) against authoritative C# outputs."""
+    """Check simple ForceMoment cases against analytical Euclidean norms."""
     mock_program, mock_model = mock_solver_environment
 
     ls = LinearSystem(len(residual))
@@ -67,7 +68,7 @@ def test_csharp_convergence_displacement_live(
     expected_converged: bool,
     expected_error_bits: int,
 ):
-    """Verify CTestNormDispIncr (DispRotation) against authoritative C# outputs."""
+    """Check simple DispRotation cases against analytical Euclidean norms."""
     mock_program, mock_model = mock_solver_environment
 
     ls = LinearSystem(len(displacement))
@@ -99,7 +100,7 @@ def test_csharp_convergence_energy_live(
     expected_converged: bool,
     expected_error_bits: int,
 ):
-    """Verify CTestEnergyIncr (Work) against authoritative C# outputs."""
+    """Check simple Work cases against analytical half-dot-product values."""
     mock_program, mock_model = mock_solver_environment
 
     ls = LinearSystem(len(residual))

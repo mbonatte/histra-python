@@ -88,6 +88,10 @@ def test_csharp_arc_length_dynamic_cases(
 ):
     """Verify synthesized parameter states against authoritative C# bit values."""
     case = {"alpha2": alpha2, "hat": hat, "bar": bar, "step": step}
+    references = json.loads(FIXTURE_PATH.read_text(encoding="utf-8-sig"))["cases"]
+    native = next(row for row in references if all(row[key] == value for key, value in case.items()))
+    assert (expected_code, expected_lambda_bits, expected_du_bits) == (
+        native["code"], int(native["lambda_bits"]), int(native["du_bits"]))
     py_code, arc = _run_python_arc_length(case)
 
     assert py_code == expected_code

@@ -1,7 +1,9 @@
-"""Bitwise parity tests for hysteretic spring (SpringHysteretic).
+"""Offline exact-output regressions for the production hysteretic spring.
 
-Validates force/displacement response, linear hardening, unloading/reloading branches, and pinching
-between authoritative C# HiStrA SpringHysteretic outputs and Python SpringHysteretic with exact bitwise assertions.
+Hardening and pinching cases were independently checked against the installed
+original C# assembly on 2026-10-17. Elastic values are analytical regression
+expectations. The separate masonry-backbone fixture provides a reproducible
+native driver and compiled-history checks; this module does not run C#.
 """
 import numpy as np
 import pytest
@@ -10,7 +12,7 @@ from histra.springs.hysteretic import SpringHysteretic
 
 
 def test_csharp_hysteretic_elastic_regime_bitwise():
-    """Verify bitwise IEEE-754 force parity in the reversible elastic regime."""
+    """Check exact analytical force values in the reversible elastic regime."""
     k = 2500.0
     strains = [0.0002, 0.0006, 0.001, -0.0004, -0.0008]
     expected_force_bits = [4602678819172646912, 4609434218613702655, 4612811918334230528, -4616189618054758400, -4611686018427387904]
@@ -18,7 +20,7 @@ def test_csharp_hysteretic_elastic_regime_bitwise():
     py_spring = SpringHysteretic(
         k=k,
         e1p=k,
-        e1n=-k,
+        e1n=k,
         tensile_curve_type="Elastic",
         compressive_curve_type="Elastic",
     )

@@ -1,7 +1,9 @@
-"""Bitwise parity tests for Coulomb friction spring (SpringCoulomb03).
+"""Offline exact-output regressions for the production Coulomb spring.
 
-Validates shear yield, Mohr-Coulomb envelope, normal force coupling, and hysteretic state transitions
-between authoritative C# HiStrA SpringCoulomb03 and Python SpringCoulomb03 with exact bitwise assertions.
+The five normal-coupling cases were independently checked against the original
+installed C# assembly on 2026-10-17. Other embedded expectations are regression
+contracts pending a committed independent capture driver; see the source audit.
+No original assembly is executed by this test module.
 """
 import numpy as np
 import pytest
@@ -89,7 +91,7 @@ def test_csharp_coulomb_normal_coupling_and_yield_envelope(
 
 
 def test_csharp_coulomb_elastic_shear_bitwise():
-    """Verify exact IEEE-754 bitwise parity in elastic shear loading."""
+    """Check the analytical elastic shear response at exact stored bits."""
     k = 2500.0
     strains = [0.0001, 0.0004, 0.0008, 0.0012]
     expected_force_bits = [4598175219545276416, 4607182418800017408, 4611686018427387904, 4613937818241073151]

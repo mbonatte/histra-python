@@ -20,7 +20,9 @@ if(!$ls.SymbolicFactorization() -or $ls.K.NumericFactorization() -ne 0) {throw '
 [SolverRuntime.ModelManager].GetField('_Fext',$static).SetValue($null,[MatrixManager.Vector]::new(1))
 $an=[Objects.Analyses.Analysis]::new()
 $rows=@()
-foreach($case in @(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,0.4),@(0.0,1.3,-0.7,-0.02),@(1.0,1.0,1.0,0.1),@(0.0,1e-16,0.3,0.1),@(0.0,0.0,0.3,0.1,-10),@(1.0,1.0,1.0,0.0,-10))) {
+$cases=@(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,0.4),@(0.0,1.3,-0.7,-0.02),@(1.0,1.0,1.0,0.1),@(0.0,1e-16,0.3,0.1),@(0.0,0.0,0.3,0.1,-10),@(1.0,1.0,1.0,0.0,-10))
+$cases+=@(@(0.0,2.0,0.5,0.02),@(1.0,1.5,-0.2,0.05),@(0.5,3.0,1.2,-0.01))
+foreach($case in $cases) {
  $arc=[Activator]::CreateInstance($type,$true)
  foreach($name in @('deltaUhat','deltaUbar','deltaU','deltaUstep','phat')) {$v=[MatrixManager.Vector]::new(1);$type.GetField($name,$flags).SetValue($arc,$v)}
  $type.GetField('alpha2',$flags).SetValue($arc,[double]$case[0])
@@ -37,4 +39,9 @@ foreach($case in @(@(0.0,1.1,0.3,0.01),@(0.0,0.0037,1.8e-8,0.01),@(0.2,1.1,-0.3,
  $du=[double]$type.GetField('deltaU',$flags).GetValue($arc).Get(0)
  $rows+=@{alpha2=$case[0];hat=$case[1];bar=$case[2];step=$case[3];code=$code;lambda_bits=[BitConverter]::DoubleToInt64Bits($dl).ToString();du_bits=[BitConverter]::DoubleToInt64Bits($du).ToString()}
 }
-@{source='Original SolverRuntime.Integrator.ArcLength.Update; identity native UMFPACK system';cases=$rows}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $OutputPath -Encoding UTF8
+@{schema_version=1;generated_at=[DateTime]::UtcNow.ToString('o');
+ source_commit=(& git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD);
+ generator='tools/csharp-diagnostics/Invoke-ArcLengthUpdateOracle.ps1';
+ benchmark_id='native-arclength-identity-update-2026.1.1';
+ assembly_sha256=(Get-FileHash (Join-Path $InstalledRoot 'SolverRuntime.dll') -Algorithm SHA256).Hash.ToLowerInvariant();
+ source='Original SolverRuntime.Integrator.ArcLength.Update; identity native UMFPACK system';cases=$rows}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $OutputPath -Encoding UTF8

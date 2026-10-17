@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-17T08:29:22.972841+00:00",
+  "source_commit": "f5a49f45b731c06b080a46073264322b6640751e",
+  "generator": "tools/benchmarks/probe_native_test_sensitivity.py",
+  "benchmark_id": "native-test-sensitivity-backbone",
+  "scenario": "backbone",
+  "outcome": "known_fault_detected",
+  "failed_as_expected": 3,
+  "test": "histra/tests/test_csharp_multilinear_live.py",
+  "test_lf_sha256": "4864b861beca7a2ac8b2c996b13e0343ec0a4bfae04295b091de3daf23773b96",
+  "limitation": "Detects the specified injected fault; not a proof of exhaustive fault coverage."
+}

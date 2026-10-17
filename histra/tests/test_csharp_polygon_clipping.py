@@ -1,7 +1,8 @@
-"""Parity tests for Sutherland-Hodgman polygon clipping and quad contact intersection.
+"""Selected saved-native contact cases and an analytical square intersection.
 
-Validates quad intersection clipping (Operations.FindIntersectionBetweenQuadrilaters)
-and 3D shoelace polygon area between authoritative C# HiStrA outputs and Python preprocessing.
+The two identified native fixture cases check rounded vertices and exact area
+bits. The additional square-overlap case is analytical. These do not certify
+every branch of the original FindIntersectionBetweenQuadrilaters algorithm.
 """
 import json
 from pathlib import Path
@@ -12,7 +13,8 @@ from histra.preprocessing.contact_geometry import _coplanar_quad_intersection_pr
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "csharp_quad_contact_intersection_2026_1_1.json"
 
-# Authoritative outputs directly from C# HiStrA Operations.FindIntersectionBetweenQuadrilaters
+# First two entries correspond to the identified native fixture cases.
+# orthogonal_overlap is an analytical unit-square result, not a native capture.
 CSHARP_CLIPPING_EXACT = {
     "partial_rectangle": {
         "code": 4,
@@ -69,7 +71,7 @@ def test_csharp_polygon_clipping_authoritative_fixtures():
 
 
 def test_csharp_polygon_clipping_orthogonal_overlap():
-    """Test overlapping unit squares against authoritative C# outputs."""
+    """Check the analytical area of overlapping squares in production code."""
     poly1 = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0], [0.0, 2.0, 0.0]]
     poly2 = [[1.0, 1.0, 0.0], [3.0, 1.0, 0.0], [3.0, 3.0, 0.0], [1.0, 3.0, 0.0]]
     expected = CSHARP_CLIPPING_EXACT["orthogonal_overlap"]

@@ -55,6 +55,10 @@ def assert_native_state(spring, native, *, include_energy=True):
     }
     if include_energy:
         values.update(CenergyD=spring.cenergy_d, TenergyD=spring._tenergy_d)
+    expected_fields = set(native["bits"])
+    if not include_energy:
+        expected_fields -= {"CenergyD", "TenergyD"}
+    assert set(values) == expected_fields  # New native fields cannot pass unchecked.
     for field, value in values.items():
         actual = int(np.asarray([value], dtype=np.float64).view(np.int64)[0])
         assert actual == int(native["bits"][field]), (field, value, native["values"][field])

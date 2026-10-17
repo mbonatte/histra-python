@@ -1,7 +1,8 @@
-"""Bitwise parity tests for Gauss-Legendre quadrature (QuadraturaGaussiana).
+"""Saved QuadraturaGaussiana table versus NumPy, not production mass assembly.
 
-Validates exact IEEE-754 bit representations of Gauss points and weights for orders N=2..10
-between authoritative C# HiStrA QuadraturaGaussiana and Python NumPy Legendre-Gauss quadrature.
+Order 2 is compared exactly; orders 3..10 use the explicit tolerance below.
+All embedded table bits were independently checked against the original
+installed C# assembly during the 2026-10-17 review. No C# runs in this test.
 """
 import numpy as np
 import pytest
@@ -76,7 +77,7 @@ CSHARP_GAUSS_EXACT = {
 
 @pytest.mark.parametrize("order", list(range(2, 11)))
 def test_csharp_gauss_quadrature_live(order: int):
-    """Verify Gauss quadrature points and weights against authoritative C# outputs."""
+    """Compare NumPy with the saved native table at the stated tolerances."""
     data = CSHARP_GAUSS_EXACT[order]
     assert data["order"] == order
 

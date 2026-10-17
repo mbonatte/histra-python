@@ -63,9 +63,7 @@ class TestSpringCoulomb(unittest.TestCase):
 
 
 class TestSpringMultiLinear(unittest.TestCase):
-    """SpringMultiLinear stores deformation/force curve strings.
-    It inherits base Spring set_trial_strain (f = k * u) and does not
-    interpolate the curve — so f stays 0 unless k is set."""
+    """The legacy container preserves fields and rejects unimplemented solving."""
 
     def setUp(self):
         self.s = SpringMultiLinear(deformations="0.0,0.1,0.2,0.3",
@@ -81,9 +79,11 @@ class TestSpringMultiLinear(unittest.TestCase):
     def test_stores_forces(self):
         self.assertEqual(self.s.forces, "0.0,100.0,100.0,150.0")
 
-    def test_set_trial_strain_stores_u(self):
-        self.s.set_trial_strain(0.05)
-        self.assertAlmostEqual(self.s.u, 0.05)
+    def test_unsupported_update_preserves_stored_state(self):
+        with self.assertRaisesRegex(NotImplementedError, "multilinear plastic"):
+            self.s.set_trial_strain(0.05)
+        self.assertEqual(self.s.u, 0.0)
+        self.assertEqual(self.s.f, 0.0)
 
 
 if __name__ == "__main__":
