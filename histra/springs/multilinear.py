@@ -10,10 +10,25 @@ from histra.springs.registry import _register_spring
 @_register_spring("HiStrA.Objects.SpringMultiLinear")
 @dataclass
 class SpringMultiLinear(Spring):
-    """Multi-linear spring."""
+    """Legacy HRX field container, without a numerical constitutive law.
+
+    The original class is SpringMultiLinearPlastic, which has plastic history
+    and reversal rules. Inheriting the base spring's linear response must not
+    silently masquerade as that implementation. Supported masonry piecewise
+    backbones are evaluated by SpringHysteretic instead.
+    """
     # Deformation points (could be encoded as semicolon-separated values)
     deformations: str = ""
     forces: str = ""
+
+    def set_trial_strain(self, strain: float) -> None:
+        raise NotImplementedError("Generic multilinear plastic spring evaluation is not implemented")
+
+    def get_force(self) -> float:
+        raise NotImplementedError("Generic multilinear plastic spring evaluation is not implemented")
+
+    def commit(self) -> None:
+        raise NotImplementedError("Generic multilinear plastic spring evaluation is not implemented")
 
     @classmethod
     def _from_xml(cls, elem: ET.Element, type_of: str = "") -> SpringMultiLinear:
