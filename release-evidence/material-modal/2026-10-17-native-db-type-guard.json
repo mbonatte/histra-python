@@ -1,0 +1,85 @@
+﻿{
+    "source":  "Original dbOutputManager.UpdateSpringStates(IEnumerable\u003cSpringStateDBclass\u003e, bool), including type guard",
+    "schema_version":  1,
+    "oracle_lf_sha256":  "dd7a187b5399a7ed1f949240ef4d41d63191aa5031be2cbc49390abecd70332d",
+    "input_sha256":  "070cc6218395a465f4ab42125c8b4749c0df203456658c57c9973dee9c0bf1ee",
+    "source_commit":  "03aaaf5a31722af5fb2b8700867537402b704526",
+    "assembly_sha256":  "a981364ef5b6e3fde2c65d7994eb4a0f60132ded61cf8edac9a98a061b1a5a9b",
+    "generated_at":  "2026-10-17T09:33:15.0682802Z",
+    "generator":  "tools/csharp-diagnostics/Invoke-InterfaceRestartTypeGuardOracle.ps1",
+    "benchmark_id":  "original-db-restart-type-guard-2026.1.1",
+    "cases":  [
+                  {
+                      "target_before":  {
+                                            "Force":  0,
+                                            "K_tang":  98.765424025854543,
+                                            "F":  0,
+                                            "type":  1,
+                                            "U":  0
+                                        },
+                      "target_after":  {
+                                           "Force":  0,
+                                           "K_tang":  98.765424025854543,
+                                           "F":  0,
+                                           "type":  1,
+                                           "U":  0
+                                       },
+                      "name":  "HystereticToElastic",
+                      "source":  {
+                                     "Force":  -0.49382712012927271,
+                                     "K_tang":  98.765424025854543,
+                                     "F":  -0.49382712012927271,
+                                     "type":  8,
+                                     "U":  -0.005
+                                 }
+                  },
+                  {
+                      "target_before":  {
+                                            "Force":  0,
+                                            "K_tang":  98.765424025854543,
+                                            "F":  0,
+                                            "type":  8,
+                                            "U":  0
+                                        },
+                      "target_after":  {
+                                           "Force":  0,
+                                           "K_tang":  98.765424025854543,
+                                           "F":  0,
+                                           "type":  8,
+                                           "U":  0
+                                       },
+                      "name":  "ElasticToHysteretic",
+                      "source":  {
+                                     "Force":  -0.49382712012927271,
+                                     "K_tang":  98.765424025854543,
+                                     "F":  -0.49382712012927271,
+                                     "type":  1,
+                                     "U":  -0.005
+                                 }
+                  },
+                  {
+                      "target_before":  {
+                                            "Force":  0,
+                                            "K_tang":  49.382702781366305,
+                                            "F":  0,
+                                            "type":  8,
+                                            "U":  0
+                                        },
+                      "target_after":  {
+                                           "Force":  -0.49382712012927271,
+                                           "K_tang":  98.765424025854543,
+                                           "F":  -0.49382712012927271,
+                                           "type":  8,
+                                           "U":  -0.005
+                                       },
+                      "name":  "HystereticToHystereticControl",
+                      "source":  {
+                                     "Force":  -0.49382712012927271,
+                                     "K_tang":  98.765424025854543,
+                                     "F":  -0.49382712012927271,
+                                     "type":  8,
+                                     "U":  -0.005
+                                 }
+                  }
+              ]
+}

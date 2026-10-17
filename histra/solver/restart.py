@@ -192,8 +192,9 @@ def capture_committed_spring_state(spring: Any) -> dict[str, Any]:
 def transfer_committed_spring_state(source: Any, target: Any) -> None:
     """Apply a source committed history to a newly defined target spring.
 
-    This is the in-memory equivalent of C# rebuilding an interface and then
-    restoring the predecessor analysis through ``SpringStateDBclass.SetSpring``.
+    For compatible laws this mirrors native ``SpringStateDBclass.SetSpring``.
+    The guarded DB restart skips incompatible types before that call; the
+    Elastic/Coulomb history-preserving Python policy below is distinct.
     """
     values = capture_committed_spring_state(source)
     if isinstance(target, SpringHysteretic) and isinstance(source, SpringHysteretic):
@@ -202,11 +203,10 @@ def transfer_committed_spring_state(source: Any, target: Any) -> None:
     if isinstance(target, SpringCoulomb03) and isinstance(source, SpringCoulomb03):
         _restore_coulomb(target, values)
         return
-    # C# SpringStateDBclass stores a generic row and dispatches restoration on
-    # the *new* spring type.  A material stage may consequently transition a
-    # sliding spring between LinearElastic and Coulomb03.  Fields absent from
-    # the source law are persisted as zero and the common U/F/K/Phase state is
-    # still transferred.
+    # The low-level native SetSpring dispatches on the new type, but the full
+    # dbOutputManager restart logs/skips mismatched types. These existing
+    # Elastic/Coulomb transfers deliberately preserve history in Python;
+    # they do not establish parity with that guarded native restart.
     if isinstance(target, SpringCoulomb03) and isinstance(source, SpringElastic):
         _restore_coulomb(target, values)
         return

@@ -36,6 +36,15 @@ session.run("LiveLoad_1")
 This is an analysis-boundary operation. It is not a substitute for arbitrary
 stage mutation inside a load-control step.
 
+Changing parameters within the same spring law is distinct from changing the
+spring class. Loaded Hysteretic/Elastic transverse changes are explicitly
+rejected and rolled back. The original C# database restart instead logs a type
+mismatch and skips those histories; calling its lower-level `SetSpring` alone
+does not reproduce that path. Existing Elastic/Coulomb transfers in Python
+preserve history, which is a Python policy rather than evidence of guarded
+C# cross-law restart parity. See the
+[loaded foundation reference](../benchmarks/material-modal-gui-2026-10-17.md).
+
 ## Material-reset registration strategy
 
 C# 2026.1.1 `ReSetInterfaces` rebuilds a changed interface and appends its key

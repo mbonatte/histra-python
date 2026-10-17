@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-17T09:37:43.916125+00:00",
-  "source_commit": "03aaaf5a31722af5fb2b8700867537402b704526",
+  "generated_at": "2026-10-17T09:43:22.152280+00:00",
+  "source_commit": "f34bcebdbba8cf6b721f242c83eb993b26553f04",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
@@ -4299,7 +4299,7 @@
     {
       "path": "histra/solver/restart.py",
       "status": "inventory_only",
-      "lf_sha256": "9c770afe4f5ba6907e8acbc3b132c0c5dcfe68690d62233acfcf62d9172f698c",
+      "lf_sha256": "46e5e1286d901f0e0f9d7ca96297d56a073151a151324687593695cc976ce28f",
       "classes": [
         {
           "name": "RestartSummary",
