@@ -18,8 +18,9 @@ class TestSpringElastic(unittest.TestCase):
 
     def test_set_trial_strain_elastic(self):
         self.s.set_trial_strain(0.01)
-        self.assertAlmostEqual(self.s.f, 20.0)
-        self.assertAlmostEqual(self.s.u, 0.01)
+        self.assertAlmostEqual(self.s.get_force(), 20.0)
+        self.assertAlmostEqual(self.s.get_displacement(), 0.01)
+        self.assertEqual((self.s.f, self.s.u), (0.0, 0.0))
 
     def test_commit(self):
         self.s.set_trial_strain(0.02)
@@ -42,6 +43,8 @@ class TestSpringElastic(unittest.TestCase):
 
     def test_revert_to_start(self):
         self.s.set_trial_strain(0.5)
+        self.assertAlmostEqual(self.s.get_force(), 1000.0)
+        self.s.commit()
         self.assertAlmostEqual(self.s.f, 1000.0)
         self.s.revert_to_start()
         self.assertEqual(self.s.u, 0.0)

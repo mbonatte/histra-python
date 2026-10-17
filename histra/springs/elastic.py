@@ -41,10 +41,8 @@ class SpringElastic(Spring):
         self._tstress = self._cstress + self.k_tang * (
             self._tstrain - self._cstrain
         )
-        # Keep the common Python fields useful to callers while the dedicated
-        # fields preserve the C# trial/commit distinction.
-        self.u = self._tstrain
-        self.f = self._tstress
+        # C# keeps base U/F committed; trial response is exposed through
+        # GetDisplacement/GetForce until Commit copies the dedicated fields.
 
     def revert_to_start(self) -> None:
         self._cstress = self._tstress = 0.0

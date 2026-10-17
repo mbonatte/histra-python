@@ -2105,21 +2105,22 @@ class HystereticBatchRuntime:
 
     def _read_elastic_quad_object(self, index: int, spring: SpringElastic) -> None:
         row = self.quad_state[index]
-        strain = float(spring.u)
-        force = float(spring.k) * strain
-        row[QCSTRESS] = force
-        row[QCSTRAIN] = strain
+        row[QCSTRESS] = float(spring._cstress)
+        row[QCSTRAIN] = float(spring._cstrain)
         row[QPHASE] = int(spring.phase)
-        row[QTSTRESS] = force
-        row[QTSTRAIN] = strain
+        row[QTSTRESS] = float(spring._tstress)
+        row[QTSTRAIN] = float(spring._tstrain)
         row[QTPHASE] = int(spring.t_phase)
-        row[QKTANG] = float(spring.k)
-        row[QKTANG_COMMITTED] = float(spring.k)
+        row[QKTANG] = float(spring.k_tang)
+        row[QKTANG_COMMITTED] = float(spring.k_tang)
 
     def _write_elastic_quad_object(self, index: int, spring: SpringElastic) -> None:
         row = self.quad_state[index]
+        spring._cstrain = float(row[QCSTRAIN])
         spring.u = float(row[QTSTRAIN])
-        spring.f = float(row[QTSTRESS])
+        spring._cstress = spring.f = float(row[QCSTRESS])
+        spring._tstrain = float(row[QTSTRAIN])
+        spring._tstress = float(row[QTSTRESS])
         spring.k_tang = float(row[QKTANG])
         spring.phase = _PHASE_BY_CODE[int(row[QPHASE])]
         spring.t_phase = _PHASE_BY_CODE[int(row[QTPHASE])]
@@ -2345,7 +2346,7 @@ class HystereticBatchRuntime:
             spring._tstrain = float(row[CTSTRAIN])
             spring.k_tang = float(row[CKTANG])
             spring.u = float(row[CU])
-            spring.f = float(row[CF])
+            spring.f = spring._cstress
             return
         spring.fy[0] = float(row[CFY0])
         spring.fy[1] = float(row[CFY1])
@@ -2749,7 +2750,6 @@ class HystereticBatchRuntime:
                     strain = float(row[7])
                     spring._tstress = stress
                     spring._tstrain = strain
-                    spring.f = stress
                     spring.u = strain
                     spring.k_tang = float(row[9])
 
@@ -3096,7 +3096,7 @@ class HystereticBatchRuntime:
                         else:
                             spring._cstress, spring._cstrain = float(committed[6]), float(committed[7])
                             spring._tstress, spring._tstrain = float(trial[6]), float(trial[7])
-                            spring.f = float(trial[6])
+                            spring.f = spring._cstress
                             spring.u = float(trial[7])
                             spring.k_tang = float(trial[9])
                             spring.k_tang_committed = float(trial[9])
@@ -3130,7 +3130,7 @@ class HystereticBatchRuntime:
                 else:
                     spring._cstress, spring._cstrain = float(committed[6]), float(committed[7])
                     spring._tstress, spring._tstrain = float(trial[6]), float(trial[7])
-                    spring.f = float(trial[6])
+                    spring.f = spring._cstress
                     spring.u = float(trial[7])
                     spring.k_tang = float(trial[9])
                     spring.k_tang_committed = float(trial[9])
