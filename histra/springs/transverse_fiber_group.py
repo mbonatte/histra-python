@@ -48,6 +48,8 @@ class TransverseFiberGroup(MutableSequence):
         "_batch_slice",
         "_cache",
         "_fy",
+        "_uy_corr",
+        "_f0",
         "_kt",
         "_ur",
         "alfar_p",
@@ -86,6 +88,8 @@ class TransverseFiberGroup(MutableSequence):
         self.betap = float(betap)
         self.betan = float(betan)
         self._fy = np.ascontiguousarray(fy, dtype=np.float64) if fy is not None else None
+        self._uy_corr: np.ndarray | None = None
+        self._f0: np.ndarray | None = None
         self._kt = np.ascontiguousarray(kt, dtype=np.float64) if kt is not None else None
         self._ur = np.ascontiguousarray(ur, dtype=np.float64) if ur is not None else None
         self.alfar_p = float(alfar[0])
@@ -206,8 +210,11 @@ class TransverseFiberGroup(MutableSequence):
         sp.alfau = [self.betap, self.betan]
         sp.alfar = [self.alfar_p, self.alfar_n]
         sp.umax = [float(self._committed[index, 0]), float(self._committed[index, 1])]
-        sp.uy_corr = [value / sp.k if sp.k else 0.0 for value in sp.fy]
-        sp.f0 = 0.0
+        sp.uy_corr = (
+            self._uy_corr[index].tolist() if self._uy_corr is not None
+            else [value / sp.k if sp.k else 0.0 for value in sp.fy]
+        )
+        sp.f0 = float(self._f0[index]) if self._f0 is not None else 0.0
         sp.f0_target = 0.0
         sp.kstrain = 0.0
         sp.cenergy_d = float(self._committed[index, 4])
@@ -405,10 +412,31 @@ class TransverseFiberGroup(MutableSequence):
                 sp.u = float(t[7])
 
     def copy_committed_state_from(self, source: TransverseFiberGroup) -> None:
-        """Transfer committed history from another fiber group across material mutation."""
+        """Match SetSpring(false) at a committed material-change boundary.
+
+        New envelope parameters remain on the target. Native DB restoration
+        retains the predecessor tangent, yield forces/coordinates and F0.
+        Python additionally preserves cumulative energy, as in scalar transfer.
+        """
         self._committed[:] = source._committed
         self._trial[:, :9] = source._committed[:, :9]
-        self._trial[:, 9] = self._k  # fresh tangent stiffness for new material
+        self._trial[:, 9] = source._trial[:, 9]
+        self._copy_committed_metadata(source)
         self.is_on[:] = source.is_on
         if self._cache:
             self._cache.clear()
+
+    def _copy_committed_metadata(self, source: TransverseFiberGroup) -> None:
+        self._fy = (source._fy if source._fy is not None else source._params[:, [1, 6]]).copy()
+        self._uy_corr = (
+            source._uy_corr.copy() if source._uy_corr is not None
+            else np.divide(self._fy, source._k[:, None], out=np.zeros_like(self._fy),
+                           where=source._k[:, None] != 0.0)
+        )
+        self._f0 = source._f0.copy() if source._f0 is not None else np.zeros(len(source))
+        # Inspection/restart code can have populated a proxy's metadata.
+        for index, spring in source._cache.items():
+            self._fy[index] = spring.fy
+            self._uy_corr[index] = spring.uy_corr
+            self._f0[index] = spring.f0
+            self._trial[index, 9] = spring.k_tang_committed
