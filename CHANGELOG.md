@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.6.3 - 2026-10-23
+
+- Complete C# `Interface.CalcolaRisultanti` resultant bending-moment calculation (`Mx, My, Mz` in `float32`) in `histra.postprocessing` and compiled `HystereticBatchRuntime` / `ModelManager.refresh_saved_interface_forces`, verified against C# `InterfaceStates`.
+- Synchronize 12-DOF local interface resisting forces (`Interface.f`) from `HystereticBatchRuntime._local_full_forces` when publishing dense runtime state to Python compatibility objects.
+- Skip auxiliary 2-node interface edge vertices created during `ModelManager.prepare_model` when exporting Quad node translations in `compute_node_displacements`.
+
 ## 1.6.2 - 2026-10-17
 
 - Reject interface spring-class changes by default. Add explicit `spring_type_change="csharp_reset"` compatibility through the session, free mutation function and backend job API, warning about discarded histories and reporting every reset spring. Matching classes retain their committed histories; failed mutations restore the prior model.

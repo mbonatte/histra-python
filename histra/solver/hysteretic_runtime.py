@@ -258,6 +258,7 @@ from histra.solver.hysteretic_kernels.kinematics import (
 )
 from histra.solver.hysteretic_kernels.scatter import (
     _batch_interface_resultants,
+    _batch_interface_resultants_and_moments,
     _eval_pdelta_interfaces_kernel,
     _eval_pdelta_line_loads_kernel,
     _refresh_global_resisting_force,
@@ -1304,9 +1305,15 @@ class HystereticBatchRuntime:
         # C# convergence limits exclude interface spring displacements.
         self._max_u_cache = np.zeros(5, dtype=np.float64)
         self._interface_resultants = np.zeros((len(self.records), 3), dtype=np.float32)
+        self._interface_moments = np.zeros((len(self.records), 3), dtype=np.float32)
+        self._resultant_vec_x: np.ndarray | None = None
+        self._resultant_vec_y: np.ndarray | None = None
         self._interface_resultants_valid = False
         self._pdelta_saved_resultants = np.asarray(
             [record.interface.status.forces for record in self.records], dtype=np.float32,
+        ).reshape((-1, 3))
+        self._saved_bending_moments = np.asarray(
+            [record.interface.status.bending_moments for record in self.records], dtype=np.float32,
         ).reshape((-1, 3))
         self._e1 = (
             np.asarray([record.interface.reference_e1 for record in self.records], dtype=np.float32)
@@ -2395,6 +2402,7 @@ class HystereticBatchRuntime:
     def _sync_interface_status_to_objects(self) -> None:
         for index, record in enumerate(self.records):
             record.interface.status.u[:12] = self._local_u[index].tolist()
+            record.interface.f[:12] = self._local_full_forces[index].tolist()
             record.interface.status.normal_increment = float(self._normal_increments[index])
             record.interface.status.committed_normal_force = float(self._committed_forces[index])
             record.interface.status.max_spring_displacement = float(self._max_displacements[index])
@@ -2764,6 +2772,7 @@ class HystereticBatchRuntime:
                     spring_index, self.coulomb_springs[spring_index]
                 )
         interface.status.u[:12] = self._local_u[record_index].tolist()
+        interface.f[:12] = self._local_full_forces[record_index].tolist()
 
     def local_force_for(self, interface: Any) -> np.ndarray:
         return self._local_full_forces[self._record_by_id[id(interface)]]
@@ -2771,21 +2780,49 @@ class HystereticBatchRuntime:
     def transverse_force_for(self, interface: Any) -> np.ndarray:
         return self._local_forces[self._record_by_id[id(interface)]]
 
+    def _ensure_resultant_moment_arms(self) -> None:
+        if self._resultant_vec_x is not None and self._resultant_vec_y is not None:
+            return
+        from histra.postprocessing import _spring_area_centroid_local_xy
+
+        total = int(self.trial.shape[0])
+        vx = np.empty(total, dtype=np.float32)
+        vy = np.empty(total, dtype=np.float32)
+        for record in self.records:
+            intf = record.interface
+            for local_i, dense_i in enumerate(range(record.start, record.stop)):
+                cx, cy = _spring_area_centroid_local_xy(intf, local_i)
+                vx[dense_i] = cx
+                vy[dense_i] = cy
+        self._resultant_vec_x = vx
+        self._resultant_vec_y = vy
+
     def all_resultant_forces(self) -> np.ndarray:
         """Return (N_interfaces, 3) float32 physical local resultant forces."""
         if not self._interface_resultants_valid:
-            _batch_interface_resultants(
+            self._ensure_resultant_moment_arms()
+            _batch_interface_resultants_and_moments(
                 self._starts,
                 self._stops,
                 self.trial,
+                self._resultant_vec_x,
+                self._resultant_vec_y,
+                self._lengths,
                 self._slid_index,
                 self._oop0_index,
                 self._oop1_index,
                 self.coulomb_state,
                 self._interface_resultants,
+                self._interface_moments,
             )
             self._interface_resultants_valid = True
         return self._interface_resultants
+
+    def all_bending_moments(self) -> np.ndarray:
+        """Return (N_interfaces, 3) float32 physical local bending moments."""
+        if not self._interface_resultants_valid:
+            self.all_resultant_forces()
+        return self._interface_moments
 
     def compute_total_reaction_vector(self) -> np.ndarray:
         """Compute the global sum of reaction forces on all constrained interfaces."""
@@ -3142,6 +3179,11 @@ class HystereticBatchRuntime:
             quad.status.f = float(self._quad_forces[i, 0])
             quad.sigma_initial = float(self._quad_sigma_initial[i])
         self._sync_interface_status_to_objects()
+        forces = self.all_resultant_forces()
+        moments = self.all_bending_moments()
+        for f_row, m_row, record in zip(forces, moments, self.records):
+            record.interface.status.forces = tuple(float(value) for value in f_row)
+            record.interface.status.bending_moments = tuple(float(value) for value in m_row)
         self._objects_trial_synced = True
 
     def compute_energy(self, initial_elastic=0.0, initial_plastic=0.0) -> tuple[float, float]:
@@ -3229,8 +3271,13 @@ class HystereticBatchRuntime:
         self._quad_sigma_initial[...] = quad_sigma_initial
         self.quad_state[...] = quad_state
         self._pdelta_saved_resultants[...] = saved_resultants
-        for row, record in zip(self._pdelta_saved_resultants, self.records):
-            record.interface.status.forces = tuple(float(value) for value in row)
+        if np.all(saved_resultants == 0.0):
+            self._saved_bending_moments.fill(0.0)
+        for f_row, m_row, record in zip(
+            self._pdelta_saved_resultants, self._saved_bending_moments, self.records
+        ):
+            record.interface.status.forces = tuple(float(value) for value in f_row)
+            record.interface.status.bending_moments = tuple(float(value) for value in m_row)
         self._pending_values.fill(0.0)
         self._refresh_transverse_cache()
         self._objects_trial_synced = False

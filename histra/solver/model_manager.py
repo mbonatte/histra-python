@@ -309,18 +309,26 @@ class ModelManager:
 
     @classmethod
     def refresh_saved_interface_forces(cls, model: Model) -> None:
-        """Mirror the force cache written by C# AddStateElements."""
+        """Mirror the force and bending-moment cache written by C# AddStateElements."""
         runtime = cls.hysteretic_batch_for(model)
         if runtime is not None:
-            np.copyto(runtime._pdelta_saved_resultants, runtime.all_resultant_forces())
-            for row, record in zip(runtime._pdelta_saved_resultants, runtime.records):
-                record.interface.status.forces = tuple(float(value) for value in row)
+            forces = runtime.all_resultant_forces()
+            moments = runtime.all_bending_moments()
+            np.copyto(runtime._pdelta_saved_resultants, forces)
+            np.copyto(runtime._saved_bending_moments, moments)
+            for f_row, m_row, record in zip(
+                runtime._pdelta_saved_resultants, runtime._saved_bending_moments, runtime.records
+            ):
+                record.interface.status.forces = tuple(float(value) for value in f_row)
+                record.interface.status.bending_moments = tuple(float(value) for value in m_row)
             interfaces = runtime.unmanaged_interfaces
         else:
             interfaces = model.collections.interfaces.values()
-        from histra.postprocessing import _interface_local_resultant
+        from histra.postprocessing import _interface_local_resultants
         for interface in interfaces:
-            interface.status.forces = tuple(float(value) for value in _interface_local_resultant(interface))
+            forces_row, moments_row = _interface_local_resultants(interface)
+            interface.status.forces = tuple(float(value) for value in forces_row)
+            interface.status.bending_moments = tuple(float(value) for value in moments_row)
 
     @classmethod
     def compute_and_assemble_pdelta_load(

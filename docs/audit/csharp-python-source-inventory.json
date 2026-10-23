@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-17T09:52:47.113994+00:00",
-  "source_commit": "d0ad2574ce00208e794f0d4b8bc644ebfb4f6b9f",
+  "generated_at": "2026-10-23T10:08:23.687404+00:00",
+  "source_commit": "e3451c95938f1ea6761fce51fe65128b91887a8b",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 99,
     "classes": 115,
-    "function_definitions": 858
+    "function_definitions": 862
   },
   "files": [
     {
@@ -2595,14 +2595,14 @@
     {
       "path": "histra/solver/hysteretic_batch.py",
       "status": "inventory_only",
-      "lf_sha256": "38d3db604e9688695bc8c4165eb0ffdf994442660210760c600c30613df5eb7a",
+      "lf_sha256": "6b9e878c994f325bd0e5237f5fd847404514e5585ced3af55e184b216c9fe4c0",
       "classes": [],
       "functions": []
     },
     {
       "path": "histra/solver/hysteretic_kernels/__init__.py",
       "status": "inventory_only",
-      "lf_sha256": "f5b6e2cab0fdc09b5f31d072ebc59a290f155decd63f7dca477f7a1cd4c6ee3a",
+      "lf_sha256": "45f8a8f3641ba3b69d7a58474efcee984bd13578c0f0d1ca1bac188ac4ee08ea",
       "classes": [],
       "functions": []
     },
@@ -2741,7 +2741,7 @@
     {
       "path": "histra/solver/hysteretic_kernels/scatter.py",
       "status": "inventory_only",
-      "lf_sha256": "5cbbe42513ffcfafb50052f957951087775e0c9dd84b67dccf742ab60f519180",
+      "lf_sha256": "e34f499a3715cf586071dd45bc47c65e8d6bd0b748df59eb3077fe42d1a91286",
       "classes": [],
       "functions": [
         {
@@ -2769,24 +2769,32 @@
           "line": 123
         },
         {
-          "name": "_eval_pdelta_interfaces_kernel",
+          "name": "_batch_interface_resultants_and_moments",
           "line": 151
         },
         {
+          "name": "_eval_pdelta_interfaces_kernel",
+          "line": 197
+        },
+        {
           "name": "_eval_pdelta_line_loads_kernel",
-          "line": 212
+          "line": 258
         },
         {
           "name": "_batch_interface_resultants",
-          "line": 278
+          "line": 324
+        },
+        {
+          "name": "_batch_interface_resultants_and_moments",
+          "line": 351
         },
         {
           "name": "_eval_pdelta_interfaces_kernel",
-          "line": 305
+          "line": 396
         },
         {
           "name": "_eval_pdelta_line_loads_kernel",
-          "line": 365
+          "line": 456
         }
       ]
     },
@@ -2873,433 +2881,441 @@
     {
       "path": "histra/solver/hysteretic_runtime.py",
       "status": "inventory_only",
-      "lf_sha256": "28e4395ce773767d4eedb5170a44dd17cb1188dc606beec13dbcdaab1e544c62",
+      "lf_sha256": "dc5d56c5a768d0bcfa69a4cb197701112c330ec84d233f3558d7f5280cc1877b",
       "classes": [
         {
           "name": "PDeltaPlan",
-          "line": 271
+          "line": 272
         },
         {
           "name": "PDeltaLineLoadPlan",
-          "line": 286
+          "line": 287
         },
         {
           "name": "_VirtualSpringSequence",
-          "line": 525
+          "line": 526
         },
         {
           "name": "_VirtualManagedSequence",
-          "line": 566
+          "line": 567
         },
         {
           "name": "_TransverseParameterView",
-          "line": 630
+          "line": 631
         },
         {
           "name": "HystereticBatchRuntime",
-          "line": 786
+          "line": 787
         }
       ],
       "functions": [
         {
           "name": "_phase_from_code",
-          "line": 302
+          "line": 303
         },
         {
           "name": "_managed_elastic_energy",
-          "line": 314
+          "line": 315
         },
         {
           "name": "_update_domain_batch",
-          "line": 345
+          "line": 346
         },
         {
           "name": "recommended_numba_threads",
-          "line": 441
+          "line": 442
         },
         {
           "name": "current_numba_threads",
-          "line": 488
+          "line": 489
         },
         {
           "name": "restore_numba_threads",
-          "line": 495
+          "line": 496
         },
         {
           "name": "_force_general_hysteretic_batch",
-          "line": 501
+          "line": 502
         },
         {
           "name": "_uses_simple_hysteretic_parameters",
-          "line": 507
+          "line": 508
         },
         {
           "name": "_VirtualSpringSequence.__init__",
-          "line": 530
+          "line": 531
         },
         {
           "name": "_VirtualSpringSequence.__len__",
-          "line": 535
+          "line": 536
         },
         {
           "name": "_VirtualSpringSequence.__bool__",
-          "line": 538
+          "line": 539
         },
         {
           "name": "_VirtualSpringSequence.__getitem__",
-          "line": 541
+          "line": 542
         },
         {
           "name": "_VirtualSpringSequence.__setitem__",
-          "line": 553
+          "line": 554
         },
         {
           "name": "_VirtualSpringSequence.__iter__",
-          "line": 561
+          "line": 562
         },
         {
           "name": "_VirtualManagedSequence.__init__",
-          "line": 571
+          "line": 572
         },
         {
           "name": "_VirtualManagedSequence.__len__",
-          "line": 581
+          "line": 582
         },
         {
           "name": "_VirtualManagedSequence.__bool__",
-          "line": 584
+          "line": 585
         },
         {
           "name": "_VirtualManagedSequence.__getitem__",
-          "line": 587
+          "line": 588
         },
         {
           "name": "_VirtualManagedSequence.__setitem__",
-          "line": 605
+          "line": 606
         },
         {
           "name": "_VirtualManagedSequence.extend",
-          "line": 619
+          "line": 620
         },
         {
           "name": "_VirtualManagedSequence.__iter__",
-          "line": 622
+          "line": 623
         },
         {
           "name": "_TransverseParameterView.__init__",
-          "line": 647
+          "line": 648
         },
         {
           "name": "_TransverseParameterView.shape",
-          "line": 651
+          "line": 652
         },
         {
           "name": "_TransverseParameterView.ndim",
-          "line": 655
+          "line": 656
         },
         {
           "name": "_TransverseParameterView.dtype",
-          "line": 659
+          "line": 660
         },
         {
           "name": "_TransverseParameterView.size",
-          "line": 663
+          "line": 664
         },
         {
           "name": "_TransverseParameterView.__len__",
-          "line": 667
+          "line": 668
         },
         {
           "name": "_TransverseParameterView._normalise_column",
-          "line": 671
+          "line": 672
         },
         {
           "name": "_TransverseParameterView._selected_energy_a",
-          "line": 681
+          "line": 682
         },
         {
           "name": "_TransverseParameterView._materialize_rows",
-          "line": 693
+          "line": 694
         },
         {
           "name": "_TransverseParameterView.__getitem__",
-          "line": 716
+          "line": 717
         },
         {
           "name": "_TransverseParameterView.__setitem__",
-          "line": 760
+          "line": 761
         },
         {
           "name": "_TransverseParameterView.copy",
-          "line": 771
+          "line": 772
         },
         {
           "name": "_TransverseParameterView.__array__",
-          "line": 774
+          "line": 775
         },
         {
           "name": "_TransverseParameterView.__repr__",
-          "line": 782
+          "line": 783
         },
         {
           "name": "HystereticBatchRuntime.__init__",
-          "line": 789
+          "line": 790
         },
         {
           "name": "HystereticBatchRuntime._transverse_rejection_reason",
-          "line": 1334
+          "line": 1341
         },
         {
           "name": "HystereticBatchRuntime._coulomb_rejection_reason",
-          "line": 1351
+          "line": 1358
         },
         {
           "name": "HystereticBatchRuntime._refresh_elastic_sliding_indices",
-          "line": 1366
+          "line": 1373
         },
         {
           "name": "HystereticBatchRuntime._refresh_unmanaged_sliding_record_indices",
-          "line": 1376
+          "line": 1383
         },
         {
           "name": "HystereticBatchRuntime._import_interface_sliding_object",
-          "line": 1395
+          "line": 1402
         },
         {
           "name": "HystereticBatchRuntime._rebuild_interface_coulomb_storage",
-          "line": 1415
+          "line": 1422
         },
         {
           "name": "HystereticBatchRuntime._rebuild_interface_coulomb_storage.copy_run",
-          "line": 1547
+          "line": 1554
         },
         {
           "name": "HystereticBatchRuntime._read_transverse_objects_bulk",
-          "line": 1590
+          "line": 1597
         },
         {
           "name": "HystereticBatchRuntime._read_transverse_object",
-          "line": 1749
+          "line": 1756
         },
         {
           "name": "HystereticBatchRuntime._promote_transverse_parameter_storage",
-          "line": 1771
+          "line": 1778
         },
         {
           "name": "HystereticBatchRuntime._refresh_simple_hysteretic_flag",
-          "line": 1780
+          "line": 1787
         },
         {
           "name": "HystereticBatchRuntime.active",
-          "line": 1823
+          "line": 1830
         },
         {
           "name": "HystereticBatchRuntime.try_update_material_interfaces",
-          "line": 1826
+          "line": 1833
         },
         {
           "name": "HystereticBatchRuntime.performance_counts",
-          "line": 2060
+          "line": 2067
         },
         {
           "name": "HystereticBatchRuntime._read_elastic_quad_object",
-          "line": 2106
+          "line": 2113
         },
         {
           "name": "HystereticBatchRuntime._write_elastic_quad_object",
-          "line": 2117
+          "line": 2124
         },
         {
           "name": "HystereticBatchRuntime._read_quad_object",
-          "line": 2128
+          "line": 2135
         },
         {
           "name": "HystereticBatchRuntime._write_hysteretic_quad_object",
-          "line": 2194
+          "line": 2201
         },
         {
           "name": "HystereticBatchRuntime._write_quad_object",
-          "line": 2210
+          "line": 2217
         },
         {
           "name": "HystereticBatchRuntime._read_coulomb_object",
-          "line": 2284
+          "line": 2291
         },
         {
           "name": "HystereticBatchRuntime._write_coulomb_object",
-          "line": 2340
+          "line": 2347
         },
         {
           "name": "HystereticBatchRuntime._sync_interface_status_to_objects",
-          "line": 2395
-        },
-        {
-          "name": "HystereticBatchRuntime.prepare",
           "line": 2402
         },
         {
+          "name": "HystereticBatchRuntime.prepare",
+          "line": 2410
+        },
+        {
           "name": "HystereticBatchRuntime.evaluate",
-          "line": 2418
+          "line": 2426
         },
         {
           "name": "HystereticBatchRuntime.configure_numba_threads",
-          "line": 2429
+          "line": 2437
         },
         {
           "name": "HystereticBatchRuntime._refresh_transverse_cache",
-          "line": 2443
-        },
-        {
-          "name": "HystereticBatchRuntime.finish",
           "line": 2451
         },
         {
+          "name": "HystereticBatchRuntime.finish",
+          "line": 2459
+        },
+        {
           "name": "HystereticBatchRuntime.update_domain",
-          "line": 2479
+          "line": 2487
         },
         {
           "name": "HystereticBatchRuntime.update_quads",
-          "line": 2573
+          "line": 2581
         },
         {
           "name": "HystereticBatchRuntime.manages_quad",
-          "line": 2601
+          "line": 2609
         },
         {
           "name": "HystereticBatchRuntime._refresh_full_force_cache",
-          "line": 2604
+          "line": 2612
         },
         {
           "name": "HystereticBatchRuntime._advance_unmanaged_sliding_springs",
-          "line": 2614
+          "line": 2622
         },
         {
           "name": "HystereticBatchRuntime._add_unmanaged_sliding_forces",
-          "line": 2638
+          "line": 2646
         },
         {
           "name": "HystereticBatchRuntime._refresh_global_resisting_force_cache",
-          "line": 2674
-        },
-        {
-          "name": "HystereticBatchRuntime._refresh_max_u_cache",
           "line": 2682
         },
         {
-          "name": "HystereticBatchRuntime.copy_resisting_force_to",
-          "line": 2687
-        },
-        {
-          "name": "HystereticBatchRuntime.scatter_quad_resisting_force",
+          "name": "HystereticBatchRuntime._refresh_max_u_cache",
           "line": 2690
         },
         {
+          "name": "HystereticBatchRuntime.copy_resisting_force_to",
+          "line": 2695
+        },
+        {
+          "name": "HystereticBatchRuntime.scatter_quad_resisting_force",
+          "line": 2698
+        },
+        {
           "name": "HystereticBatchRuntime.scatter_resisting_force",
-          "line": 2701
+          "line": 2709
         },
         {
           "name": "HystereticBatchRuntime.cached_max_u",
-          "line": 2707
+          "line": 2715
         },
         {
           "name": "HystereticBatchRuntime.cached_quad_max_u",
-          "line": 2717
+          "line": 2725
         },
         {
           "name": "HystereticBatchRuntime.manages",
-          "line": 2724
+          "line": 2732
         },
         {
           "name": "HystereticBatchRuntime.sync_interface_trial_to_objects",
-          "line": 2727
+          "line": 2735
         },
         {
           "name": "HystereticBatchRuntime.local_force_for",
-          "line": 2768
+          "line": 2777
         },
         {
           "name": "HystereticBatchRuntime.transverse_force_for",
-          "line": 2771
+          "line": 2780
+        },
+        {
+          "name": "HystereticBatchRuntime._ensure_resultant_moment_arms",
+          "line": 2783
         },
         {
           "name": "HystereticBatchRuntime.all_resultant_forces",
-          "line": 2774
+          "line": 2800
+        },
+        {
+          "name": "HystereticBatchRuntime.all_bending_moments",
+          "line": 2821
         },
         {
           "name": "HystereticBatchRuntime.compute_total_reaction_vector",
-          "line": 2790
+          "line": 2827
         },
         {
           "name": "HystereticBatchRuntime.get_pdelta_plan",
-          "line": 2803
+          "line": 2840
         },
         {
           "name": "HystereticBatchRuntime._build_pdelta_plan",
-          "line": 2809
+          "line": 2846
         },
         {
           "name": "HystereticBatchRuntime.compute_pdelta_interface_moments",
-          "line": 2890
+          "line": 2927
         },
         {
           "name": "HystereticBatchRuntime._build_pdelta_line_load_plan",
-          "line": 2912
+          "line": 2949
         },
         {
           "name": "HystereticBatchRuntime.compute_pdelta_line_load_moments",
-          "line": 2979
+          "line": 3016
         },
         {
           "name": "HystereticBatchRuntime.resultant_force_for",
-          "line": 3004
+          "line": 3041
         },
         {
           "name": "HystereticBatchRuntime.trial_stresses_for",
-          "line": 3026
+          "line": 3063
         },
         {
           "name": "HystereticBatchRuntime.sync_trial_to_objects",
-          "line": 3030
+          "line": 3067
         },
         {
           "name": "HystereticBatchRuntime.sync_tangents_to_objects",
-          "line": 3037
+          "line": 3074
         },
         {
           "name": "HystereticBatchRuntime.sync_all_to_objects",
-          "line": 3061
+          "line": 3098
         },
         {
           "name": "HystereticBatchRuntime.compute_energy",
-          "line": 3147
+          "line": 3189
         },
         {
           "name": "HystereticBatchRuntime.commit",
-          "line": 3157
+          "line": 3199
         },
         {
           "name": "HystereticBatchRuntime.snapshot",
-          "line": 3182
+          "line": 3224
         },
         {
           "name": "HystereticBatchRuntime.restore",
-          "line": 3215
+          "line": 3257
         },
         {
           "name": "HystereticBatchRuntime.reset_to_initial_state",
-          "line": 3246
+          "line": 3293
         },
         {
           "name": "HystereticBatchRuntime.revert_quad",
-          "line": 3250
+          "line": 3297
         },
         {
           "name": "HystereticBatchRuntime.revert_interface",
-          "line": 3264
+          "line": 3311
         },
         {
           "name": "build_hysteretic_batch",
-          "line": 3295
+          "line": 3342
         }
       ]
     },
@@ -3929,7 +3945,7 @@
     {
       "path": "histra/solver/model_manager.py",
       "status": "inventory_only",
-      "lf_sha256": "a8cf28657662f19e500a2e9525a91da5b45749eddb0f818cfa77ba955427a40f",
+      "lf_sha256": "5dffd75381061d4c45b84cf900f727c68ed2293d7589386fa349fee0a1c6035c",
       "classes": [
         {
           "name": "ModelManager",
@@ -3991,31 +4007,31 @@
         },
         {
           "name": "ModelManager.compute_and_assemble_pdelta_load",
-          "line": 326
+          "line": 334
         },
         {
           "name": "ModelManager.form_unbalance",
-          "line": 446
-        },
-        {
-          "name": "ModelManager.get_resisting_force",
           "line": 454
         },
         {
+          "name": "ModelManager.get_resisting_force",
+          "line": 462
+        },
+        {
           "name": "ModelManager.update_domain",
-          "line": 487
+          "line": 495
         },
         {
           "name": "ModelManager.compute_energy",
-          "line": 506
+          "line": 514
         },
         {
           "name": "ModelManager.find_max_u",
-          "line": 524
+          "line": 532
         },
         {
           "name": "ModelManager.get_dof_for_max_displacement",
-          "line": 550
+          "line": 558
         }
       ]
     },

@@ -1,8 +1,11 @@
 # Current feature status
 
-The package metadata is now 1.6.2. This patch includes the reviewed native
-material-transfer and initialization corrections, elastic state-field fixes,
-and explicit C# spring-type history-reset compatibility with rejection by default.
+The package metadata is now 1.6.3. This patch completes C# `Interface.CalcolaRisultanti`
+bending-moment post-processing, synchronizes 12-DOF local interface forces from
+the compiled runtime, and filters auxiliary prepared-interface edge vertices in
+`compute_node_displacements`, building on the 1.6.2 native material-transfer,
+initialization, elastic state-field, and `spring_type_change="csharp_reset"`
+compatibility fixes.
 The [loaded foundation reference](benchmarks/material-modal-gui-2026-10-17.md)
 qualifies 84 committed static steps and six available modal comparisons;
 successful return-stage results remain absent from the native references.
