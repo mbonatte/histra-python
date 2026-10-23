@@ -1,6 +1,8 @@
 """HiStrA-Python: structural analysis solver port."""
 from importlib.metadata import PackageNotFoundError, version
 from histra.io.hr_loader import load_model
+from histra.io.results_reader import SimulationResults
+from histra.io.results_writer import ResultsWriter
 from histra.solver.backend_api import (
     ConcreteInterfaceMutation,
     PythonAnalysisRequest,
@@ -74,6 +76,8 @@ except PackageNotFoundError:  # Source tree used without installation.
 __all__ = [
     "__version__",
     "load_model",
+    "ResultsWriter",
+    "SimulationResults",
     "AnalysisSession",
     "AnalysisSessionError",
     "solve_modal_analysis",

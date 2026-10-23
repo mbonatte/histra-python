@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 import time
 from typing import Any, Callable, Iterable
 
@@ -296,7 +297,15 @@ class AnalysisSession:
                     f"Analysis {definition.key}:{definition.name} is virgin but session "
                     f"already contains committed analysis {self.current_analysis_key}."
                 )
-            initial_step = AnalysisStep.initial(np.zeros(int(self.model.gdl), dtype=float))
+            interfaces = getattr(self.model.collections, "interfaces", None)
+            num_intf = len(interfaces) if interfaces is not None else 0
+            init_f = np.zeros((num_intf, 3), dtype=np.float32) if num_intf > 0 else None
+            init_m = np.zeros((num_intf, 3), dtype=np.float32) if num_intf > 0 else None
+            initial_step = AnalysisStep.initial(
+                np.zeros(int(self.model.gdl), dtype=float),
+                interface_resultants=init_f,
+                interface_moments=init_m,
+            )
         else:
             if self.current_analysis_key != initial_key or self.current_displacement is None:
                 raise AnalysisSessionError(
@@ -305,11 +314,26 @@ class AnalysisSession:
                     f"{self.current_analysis_key}."
                 )
             predecessor_reaction = compute_total_reaction(self.model)
+            from histra.solver.model_manager import ModelManager
+
+            pred_rt = ModelManager.hysteretic_batch_for(self.model)
+            pred_f = (
+                pred_rt.all_resultant_forces().copy()
+                if pred_rt is not None and getattr(pred_rt, "active", False)
+                else None
+            )
+            pred_m = (
+                pred_rt.all_bending_moments().copy()
+                if pred_rt is not None and getattr(pred_rt, "active", False)
+                else None
+            )
             initial_step = AnalysisStep.initial(
                 self.current_displacement,
                 reaction_x=predecessor_reaction.x,
                 reaction_y=predecessor_reaction.y,
                 reaction_z=predecessor_reaction.z,
+                interface_resultants=pred_f,
+                interface_moments=pred_m,
             )
             kwargs.update(
                 initial_displacement=self.current_displacement,
@@ -456,6 +480,128 @@ class AnalysisSession:
         return tuple(
             self.run(analysis, should_cancel=should_cancel) for analysis in analyses
         )
+
+    # Alias matching session documentation and user intuition
+    run_analysis = run
+
+    def export_analysis(
+        self,
+        analysis_key_or_name: int | str,
+        output_dir: str | Path,
+        base_name: str | None = None,
+        format: str = "npz",
+        tier: str = "all",
+        include_node_displacements: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Path]:
+        """Export simulation results of a single executed analysis.
+
+        Parameters
+        ----------
+        analysis_key_or_name : int or str
+            Key or name of an already executed analysis in this session.
+        output_dir : str or Path
+            Target directory for export.
+        base_name : str, optional
+            Base filename prefix (defaults to '{model_name}_{analysis_name}').
+        format : {"npz", "h5", "json"}, default="npz"
+            Array format for dense fields.
+        tier : {"all", "summary", "fields"}, default="all"
+            Which tiers to export.
+        include_node_displacements : bool, default=True
+            Whether to project and store full 3D node translations across steps.
+        metadata : dict, optional
+            Additional metadata merged into the summary manifest.
+
+        Returns
+        -------
+        dict[str, Path]
+            Dictionary of created files: {'summary': path, 'fields': path}.
+        """
+        target_analysis = self.resolve_analysis(analysis_key_or_name)
+        target_key = int(target_analysis.key)
+        execution = next(
+            (e for e in reversed(self.executions) if int(e.analysis_key) == target_key),
+            None,
+        )
+        if execution is None:
+            raise AnalysisSessionError(
+                f"No execution found in session for analysis {target_key}:{target_analysis.name}. "
+                "Execute the analysis first using session.run(...) before exporting."
+            )
+
+        if base_name is None:
+            model_stem = getattr(self.model, "name", None) or (
+                Path(self.model.source_path).stem if getattr(self.model, "source_path", None) else "model"
+            )
+            base_name = f"{model_stem}_{execution.analysis_name}"
+
+        filepath = Path(output_dir) / base_name
+        from histra.io.results_writer import ResultsWriter
+
+        return ResultsWriter.export(
+            model=self.model,
+            execution=execution,
+            filepath=filepath,
+            format=format,
+            tier=tier,
+            include_node_displacements=include_node_displacements,
+            metadata=metadata,
+        )
+
+    def export_session(
+        self,
+        output_dir: str | Path,
+        bundle_name: str,
+        format: str = "npz",
+        tier: str = "all",
+        include_node_displacements: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, dict[str, Path]]:
+        """Export all executed analyses in this session.
+
+        Parameters
+        ----------
+        output_dir : str or Path
+            Target directory.
+        bundle_name : str
+            Prefix for all exported analyses.
+        format : {"npz", "h5", "json"}, default="npz"
+            Array format for dense fields.
+        tier : {"all", "summary", "fields"}, default="all"
+            Which tiers to export.
+        include_node_displacements : bool, default=True
+            Whether to project and store full 3D node translations across steps.
+        metadata : dict, optional
+            Additional metadata merged into the summary manifests.
+
+        Returns
+        -------
+        dict[str, dict[str, Path]]
+            Mapping of analysis_name -> dict of created file paths.
+        """
+        if not self.executions:
+            raise AnalysisSessionError("Session contains no completed or executed analyses to export.")
+
+        results: dict[str, dict[str, Path]] = {}
+        from histra.io.results_writer import ResultsWriter
+
+        for execution in self.executions:
+            base_name = f"{bundle_name}_{execution.analysis_name}"
+            filepath = Path(output_dir) / base_name
+            meta = dict(metadata or {})
+            meta["bundle_name"] = bundle_name
+            exported = ResultsWriter.export(
+                model=self.model,
+                execution=execution,
+                filepath=filepath,
+                format=format,
+                tier=tier,
+                include_node_displacements=include_node_displacements,
+                metadata=meta,
+            )
+            results[execution.analysis_name] = exported
+        return results
 
 
 def _outcome_message(outcome: AnalysisOutcome) -> str:

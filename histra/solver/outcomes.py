@@ -73,21 +73,26 @@ class AnalysisStep(dict[str, Any]):
         reaction_x: float = 0.0,
         reaction_y: float = 0.0,
         reaction_z: float = 0.0,
+        interface_resultants: np.ndarray | None = None,
+        interface_moments: np.ndarray | None = None,
     ) -> "AnalysisStep":
-        return cls.from_mapping(
-            {
-                "step": 0,
-                "status": "INITIAL",
-                "exit_code": 0,
-                "u": np.asarray(displacement, dtype=float),
-                "load_factor": 0.0,
-                "displacement": 0.0,
-                "iterations": 0,
-                "reaction_x": float(reaction_x),
-                "reaction_y": float(reaction_y),
-                "reaction_z": float(reaction_z),
-            }
-        )
+        mapping: dict[str, Any] = {
+            "step": 0,
+            "status": "INITIAL",
+            "exit_code": 0,
+            "u": np.asarray(displacement, dtype=float),
+            "load_factor": 0.0,
+            "displacement": 0.0,
+            "iterations": 0,
+            "reaction_x": float(reaction_x),
+            "reaction_y": float(reaction_y),
+            "reaction_z": float(reaction_z),
+        }
+        if interface_resultants is not None:
+            mapping["interface_resultants"] = np.asarray(interface_resultants, dtype=np.float32)
+        if interface_moments is not None:
+            mapping["interface_moments"] = np.asarray(interface_moments, dtype=np.float32)
+        return cls.from_mapping(mapping)
 
     @property
     def step(self) -> int:
@@ -128,6 +133,16 @@ class AnalysisStep(dict[str, Any]):
     @property
     def reaction_z(self) -> float | None:
         return _optional_float(self.get("reaction_z"))
+
+    @property
+    def interface_resultants(self) -> np.ndarray | None:
+        val = self.get("interface_resultants")
+        return None if val is None else np.asarray(val, dtype=np.float32)
+
+    @property
+    def interface_moments(self) -> np.ndarray | None:
+        val = self.get("interface_moments")
+        return None if val is None else np.asarray(val, dtype=np.float32)
 
     @property
     def equilibrium_ok(self) -> bool | None:

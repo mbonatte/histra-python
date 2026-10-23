@@ -385,6 +385,10 @@ def _execute_steps(
                 **equilibrium_fields,
             }
         )
+        rt = ModelManager.hysteretic_batch_for(model)
+        if rt is not None and getattr(rt, "active", False):
+            step_data[-1]["interface_resultants"] = rt.all_resultant_forces().copy()
+            step_data[-1]["interface_moments"] = rt.all_bending_moments().copy()
         p.log(
             f"Step {step}: committed, load_factor={p.current_load_factor:.6f}, "
             f"displacement={displacement:.6e}, "

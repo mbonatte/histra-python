@@ -1,12 +1,12 @@
 # Current feature status
 
-The package metadata is now 1.6.4. This release eliminates lazy proxy materialization
-across `TransverseFiberGroup` batches and introduces zero-copy/fast `__deepcopy__`
-optimizations across elements and assembly plans, cutting 3D model dirty RAM by ~1.90 GB
-and deepcopy footprint from +3,429 MB down to +254 MB to safely enable 4-worker parallel
-scour executions. This builds upon the 1.6.3 C# `Interface.CalcolaRisultanti`
-bending-moment post-processing, 12-DOF local interface forces, and 1.6.2 native
-material-transfer and history-reset compatibility fixes.
+The package metadata is now 1.7.0. This release introduces the native Two-Tier
+Simulation Output Architecture (`ResultsWriter` and `SimulationResults`), delivering
+instant lightweight summary manifests (< 100 KB JSON) and compressed NumPy/HDF5
+dense array datasets (12–25 MB) separating static mesh topology from dynamic step fields
+and stage-end constitutive state snapshots, alongside zero-dependency ParaView VTK export.
+This builds upon the 1.6.4 `TransverseFiberGroup` zero-proxy materialization and deepcopy
+optimizations that slashed 3D dirty memory by ~1.90 GB and cloning overhead by 13.5x.
 The [loaded foundation reference](benchmarks/material-modal-gui-2026-10-17.md)
 qualifies 84 committed static steps and six available modal comparisons;
 successful return-stage results remain absent from the native references.

@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-23T10:08:23.687404+00:00",
-  "source_commit": "e3451c95938f1ea6761fce51fe65128b91887a8b",
+  "generated_at": "2026-10-23T16:16:29.257849+00:00",
+  "source_commit": "04b5498de4c89680a530057d560aadf4fd938b19",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 99,
     "classes": 115,
-    "function_definitions": 874
+    "function_definitions": 878
   },
   "files": [
     {
@@ -4180,7 +4180,7 @@
     {
       "path": "histra/solver/nonlinear_step.py",
       "status": "inventory_only",
-      "lf_sha256": "492d2b8465a00ab47740ff928104d2b8c4c36bb3e3e447b20f0b881510bff92e",
+      "lf_sha256": "5a95fa5afba3b2805eefec0fe21c91ff3485e59943aa083f7a6b2eb6ea144b0c",
       "classes": [],
       "functions": [
         {
@@ -4200,7 +4200,7 @@
     {
       "path": "histra/solver/outcomes.py",
       "status": "inventory_only",
-      "lf_sha256": "189ceafab97014d70cf376a26966417bba722d879b56590597129136730173dc",
+      "lf_sha256": "1ab67d5bf4b13a2be507f8ad610ecaa757540f5e869afa8320a1d403bb02dd4f",
       "classes": [
         {
           "name": "AnalysisOutcome",
@@ -4212,7 +4212,7 @@
         },
         {
           "name": "AnalysisExecution",
-          "line": 142
+          "line": 157
         }
       ],
       "functions": [
@@ -4226,71 +4226,79 @@
         },
         {
           "name": "AnalysisStep.step",
-          "line": 93
+          "line": 98
         },
         {
           "name": "AnalysisStep.status",
-          "line": 97
+          "line": 102
         },
         {
           "name": "AnalysisStep.exit_code",
-          "line": 101
+          "line": 106
         },
         {
           "name": "AnalysisStep.u",
-          "line": 105
+          "line": 110
         },
         {
           "name": "AnalysisStep.committed",
-          "line": 109
+          "line": 114
         },
         {
           "name": "AnalysisStep.cancelled",
-          "line": 113
+          "line": 118
         },
         {
           "name": "AnalysisStep.max_element_displacement",
-          "line": 117
+          "line": 122
         },
         {
           "name": "AnalysisStep.reaction_x",
-          "line": 121
+          "line": 126
         },
         {
           "name": "AnalysisStep.reaction_y",
-          "line": 125
+          "line": 130
         },
         {
           "name": "AnalysisStep.reaction_z",
-          "line": 129
+          "line": 134
+        },
+        {
+          "name": "AnalysisStep.interface_resultants",
+          "line": 138
+        },
+        {
+          "name": "AnalysisStep.interface_moments",
+          "line": 143
         },
         {
           "name": "AnalysisStep.equilibrium_ok",
-          "line": 133
+          "line": 148
         },
         {
           "name": "AnalysisStep.to_dict",
-          "line": 137
+          "line": 152
         },
         {
           "name": "AnalysisExecution.committed_steps",
-          "line": 154
+          "line": 169
         },
         {
           "name": "AnalysisExecution.completed",
-          "line": 158
+          "line": 173
         },
         {
           "name": "AnalysisExecution.output_steps",
-          "line": 167
+          "line": 182
         },
         {
           "name": "classify_analysis_outcome",
-          "line": 172
+          "line": 187
         },
         {
           "name": "_optional_float",
-          "line": 193
+          "line": 208
         }
       ]
     },
@@ -4461,57 +4469,65 @@
     {
       "path": "histra/solver/session.py",
       "status": "inventory_only",
-      "lf_sha256": "334d8ca99c22c426253c5168c3a4ad6ba3b7c84d26a12ac122aef72e9a777fbf",
+      "lf_sha256": "73293fd8f4cb2a0d3f5d909a3365c9c24b93406620ec4079bd30a7663c143d31",
       "classes": [
         {
           "name": "AnalysisSessionError",
-          "line": 36
+          "line": 37
         },
         {
           "name": "AnalysisSession",
-          "line": 40
+          "line": 41
         }
       ],
       "functions": [
         {
           "name": "AnalysisSession.__init__",
-          "line": 74
+          "line": 75
         },
         {
           "name": "AnalysisSession.usable",
-          "line": 142
+          "line": 143
         },
         {
           "name": "AnalysisSession._require_usable",
-          "line": 146
+          "line": 147
         },
         {
           "name": "AnalysisSession.resolve_analysis",
-          "line": 153
+          "line": 154
         },
         {
           "name": "AnalysisSession.change_interface_materials",
-          "line": 173
+          "line": 174
         },
         {
           "name": "AnalysisSession.run",
-          "line": 256
+          "line": 257
         },
         {
           "name": "AnalysisSession.dependency_chain",
-          "line": 409
+          "line": 433
         },
         {
           "name": "AnalysisSession.run_to",
-          "line": 435
+          "line": 459
         },
         {
           "name": "AnalysisSession.run_sequence",
-          "line": 450
+          "line": 474
+        },
+        {
+          "name": "AnalysisSession.export_analysis",
+          "line": 487
+        },
+        {
+          "name": "AnalysisSession.export_session",
+          "line": 552
         },
         {
           "name": "_outcome_message",
-          "line": 461
+          "line": 607
         }
       ]
     },

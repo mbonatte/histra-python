@@ -549,3 +549,303 @@ def find_results_path(hrx_path: str | Path) -> Optional[Path]:
         if cand.exists():
             return cand
     return None
+
+
+class SimulationResults:
+    """Memory-efficient query reader for .npz and .h5 result datasets."""
+
+    def __init__(
+        self,
+        filepath: Path,
+        fields_path: Path | None,
+        summary_path: Path | None,
+        data: Any,
+        summary: dict[str, Any],
+    ) -> None:
+        self.filepath = filepath
+        self.fields_path = fields_path
+        self.summary_path = summary_path
+        self._data = data
+        self.summary = summary
+
+    @classmethod
+    def load(cls, filepath: str | Path) -> "SimulationResults":
+        """Open a simulation result dataset from .summary.json, .fields.npz, or .fields.h5."""
+        p = Path(filepath).resolve()
+        name = p.name
+
+        # Strip suffixes to find root stem
+        for suffix in (
+            ".summary.json",
+            ".fields.npz",
+            ".fields.h5",
+            ".npz",
+            ".h5",
+            ".json",
+        ):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                break
+
+        summary_path = p.parent / f"{name}.summary.json"
+        summary: dict[str, Any] = {}
+        if summary_path.is_file():
+            try:
+                import json
+                with open(summary_path, "r", encoding="utf-8") as fp:
+                    summary = json.load(fp)
+            except Exception:
+                pass
+        else:
+            summary_path = None
+
+        fields_path: Path | None = None
+        for cand in (
+            p if p.suffix in (".npz", ".h5") and p.is_file() else None,
+            p.parent / f"{name}.fields.npz",
+            p.parent / f"{name}.fields.h5",
+            p.parent / f"{name}.npz",
+            p.parent / f"{name}.h5",
+        ):
+            if cand is not None and cand.is_file():
+                fields_path = cand
+                break
+
+        data: Any = None
+        if fields_path is not None:
+            if fields_path.suffix == ".h5":
+                import h5py
+                data = h5py.File(fields_path, "r")
+            else:
+                data = np.load(fields_path)
+        elif not summary:
+            raise FileNotFoundError(f"Could not locate result dataset for {filepath}.")
+
+        return cls(
+            filepath=p,
+            fields_path=fields_path,
+            summary_path=summary_path,
+            data=data,
+            summary=summary,
+        )
+
+    def close(self) -> None:
+        if self._data is not None:
+            if hasattr(self._data, "close"):
+                self._data.close()
+            self._data = None
+
+    def __enter__(self) -> "SimulationResults":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.close()
+
+    def keys(self) -> list[str]:
+        if self._data is None:
+            return []
+        return list(self._data.keys())
+
+    def __contains__(self, key: str) -> bool:
+        if self._data is None:
+            return False
+        return key in self._data
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        if self._data is None:
+            raise KeyError(f"No array dataset loaded for key {key!r}.")
+        val = self._data[key]
+        if hasattr(val, "__array__"):
+            return np.asarray(val)
+        return val
+
+    # Static Topology Properties
+    @property
+    def mesh_nodes_xyz(self) -> np.ndarray:
+        return self["mesh/nodes_xyz"]
+
+    @property
+    def mesh_node_keys(self) -> np.ndarray:
+        return self["mesh/node_keys"]
+
+    @property
+    def mesh_quad_conn(self) -> np.ndarray:
+        return self["mesh/quad_conn"]
+
+    @property
+    def mesh_quad_keys(self) -> np.ndarray:
+        return self["mesh/quad_keys"]
+
+    @property
+    def mesh_quad_g(self) -> np.ndarray:
+        return self["mesh/quad_g"]
+
+    @property
+    def mesh_interface_keys(self) -> np.ndarray:
+        return self["mesh/interface_keys"]
+
+    @property
+    def mesh_interface_parents(self) -> np.ndarray:
+        return self["mesh/interface_parents"]
+
+    @property
+    def mesh_interface_vint(self) -> np.ndarray:
+        return self["mesh/interface_vint"]
+
+    # Step Field Properties
+    @property
+    def steps(self) -> np.ndarray:
+        return self["steps/step_index"]
+
+    @property
+    def load_factors(self) -> np.ndarray:
+        return self["steps/load_factor"]
+
+    @property
+    def displacements(self) -> np.ndarray:
+        return self["steps/displacement"]
+
+    @property
+    def reactions(self) -> np.ndarray:
+        return self["steps/reactions"]
+
+    @property
+    def u_global(self) -> np.ndarray:
+        return self["fields/U"]
+
+    @property
+    def node_displacements(self) -> np.ndarray:
+        return self["fields/node_displacements"]
+
+    @property
+    def interface_resultants(self) -> np.ndarray:
+        return self["fields/interface_resultants"]
+
+    @property
+    def interface_moments(self) -> np.ndarray:
+        return self["fields/interface_moments"]
+
+    def get_pushover_curve(self, mp_key: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Returns (displacement_mm, force_kN)."""
+        if self.summary and "curve" in self.summary:
+            curve = self.summary["curve"]
+            disp = np.asarray(curve.get("displacement_mm", []), dtype=float)
+            force = np.asarray(curve.get("force_kN", []), dtype=float)
+            if disp.size > 0:
+                return disp, force
+
+        # Fallback to dense array dataset
+        disp = np.asarray(self["steps/displacement"], dtype=float)
+        rx = self["steps/reactions"][:, 0]
+        ry = self["steps/reactions"][:, 1]
+        rz = self["steps/reactions"][:, 2]
+        f_lat = np.hypot(rx, ry)
+        if np.max(f_lat, initial=0.0) > 1e-4:
+            force = f_lat
+        else:
+            force = np.sqrt(rx * rx + ry * ry + rz * rz)
+        return disp, force
+
+    def get_displacement_field(self, step: int = -1) -> np.ndarray:
+        """Returns (N_nodes, 3) translations [ux, uy, uz] at specified step."""
+        disps = self["fields/node_displacements"]
+        n_steps = disps.shape[0]
+        if step < 0:
+            step = n_steps + step
+        if step < 0 or step >= n_steps:
+            raise IndexError(f"Step index {step} out of bounds for {n_steps} steps.")
+        return np.asarray(disps[step], dtype=np.float32)
+
+    def get_interface_resultants(
+        self,
+        step: int = -1,
+        interface_keys: list[int] | None = None,
+    ) -> np.ndarray:
+        """Returns (N_interfaces, 3) [Fx, Fy, Fz] forces at specified step."""
+        res = self["fields/interface_resultants"]
+        n_steps = res.shape[0]
+        if step < 0:
+            step = n_steps + step
+        if step < 0 or step >= n_steps:
+            raise IndexError(f"Step index {step} out of bounds for {n_steps} steps.")
+
+        step_res = np.asarray(res[step], dtype=np.float32)
+        if interface_keys is None:
+            return step_res
+
+        keys = self.mesh_interface_keys
+        key_to_idx = {int(k): i for i, k in enumerate(keys)}
+        indices = [key_to_idx[int(k)] for k in interface_keys if int(k) in key_to_idx]
+        return step_res[indices]
+
+    def to_vtk(self, output_vtu_path: str | Path, step: int = -1) -> None:
+        """Exports deformed 3D mesh with interface stress contours for ParaView."""
+        vtu_path = Path(output_vtu_path)
+        vtu_path.parent.mkdir(parents=True, exist_ok=True)
+
+        nodes_xyz = self.mesh_nodes_xyz
+        node_disps = self.get_displacement_field(step)
+        deformed_xyz = nodes_xyz + node_disps
+
+        quad_keys = self.mesh_quad_keys
+        quad_conn = self.mesh_quad_conn
+        node_keys = self.mesh_node_keys
+        key_to_idx = {int(k): i for i, k in enumerate(node_keys)}
+
+        num_points = len(nodes_xyz)
+        num_cells = len(quad_conn)
+
+        connectivity = []
+        for q in quad_conn:
+            for nk in q:
+                connectivity.append(key_to_idx.get(int(nk), 0))
+
+        offsets = [(i + 1) * 4 for i in range(num_cells)]
+        # VTK_QUAD = 9
+        cell_types = [9] * num_cells
+
+        with open(vtu_path, "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0"?>\n')
+            f.write('<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">\n')
+            f.write('  <UnstructuredGrid>\n')
+            f.write(f'    <Piece NumberOfPoints="{num_points}" NumberOfCells="{num_cells}">\n')
+
+            # Points (deformed coordinates)
+            f.write('      <Points>\n')
+            f.write('        <DataArray type="Float32" Name="Points" NumberOfComponents="3" format="ascii">\n')
+            for pt in deformed_xyz:
+                f.write(f'          {pt[0]:.6e} {pt[1]:.6e} {pt[2]:.6e}\n')
+            f.write('        </DataArray>\n')
+            f.write('      </Points>\n')
+
+            # Cells
+            f.write('      <Cells>\n')
+            f.write('        <DataArray type="Int32" Name="connectivity" format="ascii">\n')
+            f.write('          ' + ' '.join(str(c) for c in connectivity) + '\n')
+            f.write('        </DataArray>\n')
+            f.write('        <DataArray type="Int32" Name="offsets" format="ascii">\n')
+            f.write('          ' + ' '.join(str(o) for o in offsets) + '\n')
+            f.write('        </DataArray>\n')
+            f.write('        <DataArray type="UInt8" Name="types" format="ascii">\n')
+            f.write('          ' + ' '.join(str(t) for t in cell_types) + '\n')
+            f.write('        </DataArray>\n')
+            f.write('      </Cells>\n')
+
+            # Point Data (displacements)
+            f.write('      <PointData Vectors="Displacement">\n')
+            f.write('        <DataArray type="Float32" Name="Displacement" NumberOfComponents="3" format="ascii">\n')
+            for d in node_disps:
+                f.write(f'          {d[0]:.6e} {d[1]:.6e} {d[2]:.6e}\n')
+            f.write('        </DataArray>\n')
+            f.write('      </PointData>\n')
+
+            # Cell Data (Quad keys)
+            f.write('      <CellData Scalars="QuadKey">\n')
+            f.write('        <DataArray type="Int32" Name="QuadKey" format="ascii">\n')
+            f.write('          ' + ' '.join(str(k) for k in quad_keys) + '\n')
+            f.write('        </DataArray>\n')
+            f.write('      </CellData>\n')
+
+            f.write('    </Piece>\n')
+            f.write('  </UnstructuredGrid>\n')
+            f.write('</VTKFile>\n')

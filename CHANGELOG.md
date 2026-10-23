@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.7.0 - 2026-10-23
+
+- Native Two-Tier Simulation Output Architecture (`ResultsWriter` and `SimulationResults`):
+  - Tier 1 Summary Manifest (`<case_id>.summary.json`, < 100 KB): fast schema-versioned metrics, capacity summaries (F_max, d_max, ductility, failure classification), and 1D scalar response curves.
+  - Tier 2 Dense Array Dataset (`<case_id>.fields.npz` or `.h5`): contiguous NumPy array storage separating static mesh topology (`mesh/nodes_xyz`, `mesh/quad_conn`, `mesh/interface_vint`, etc.) from dynamic step fields (`fields/U`, `fields/node_displacements`, `fields/interface_resultants`, `fields/interface_moments`) and stage-end spring constitutive states.
+  - Session Export API: `session.export_analysis(...)` and `session.export_session(...)` for single analysis or multi-stage chained session exports.
+  - Zero-dependency ParaView VTK Export: `SimulationResults.to_vtk(output_vtu_path, step=-1)` for immediate 3D deformed mesh visualization.
+  - Zero-proxy per-step resultant hooks in solver loop capturing contiguous float32 interface force and moment arrays directly from `HystereticBatchRuntime`.
+
 ## 1.6.4 - 2026-10-23
 
 - Eliminate proxy materialization in `TransverseFiberGroup` across nonlinear setup, stiffness assembly, state reverting, quad/interface caches, snapshotting, and postprocessing, preventing 550k proxy objects and saving ~1.90 GB dirty RAM on 3D bridge models.
