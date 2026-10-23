@@ -218,43 +218,47 @@ def _solve_static_nonlinear_impl(
     equilibrium_force_relative_tolerance = setup.equilibrium_force_relative_tolerance
     equilibrium_residual_tolerance = setup.equilibrium_residual_tolerance
 
-    final_code, step_data, unsafe_equilibrium_steps, step = _execute_steps(
-        model, analysis, combination,
-        p=p, ls=ls, n=n, integrator=integrator, algorithm=algorithm,
-        alfa=alfa, dof=dof, diagnostic_writer=diagnostic_writer,
-        initial_reaction=initial_reaction,
-        equilibrium_reference_load_factor=equilibrium_reference_load_factor,
-        equilibrium_target_force=equilibrium_target_force,
-        reference=reference,
-        reference_displacement=reference_displacement,
-        equilibrium_policy=equilibrium_policy,
-        equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
-        equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
-        equilibrium_residual_tolerance=equilibrium_residual_tolerance,
-        on_step_committed=on_step_committed,
-        should_stop_after_commit=should_stop_after_commit,
-        max_committed_steps=max_committed_steps,
-    )
-    if final_code == 0:
-        p.log("Analysis executed and completed" if step else "Analysis not executed")
-    else:
-        p.log("Analysis executed but not completed")
-    if unsafe_equilibrium_steps:
-        p.log(
-            f"EQUILIBRIUM SAFETY SUMMARY: {unsafe_equilibrium_steps} candidate "
-            f"step(s) failed the independent audit (policy={equilibrium_policy})."
-        )
-    if diagnostic_writer is not None:
-        diagnostic_writer.emit(
-            "analysis_end",
-            exit_code=final_code,
-            committed_steps=sum(1 for row in step_data if row.get("status") == "OK"),
-            attempted_steps=len(step_data),
-            unsafe_equilibrium_steps=unsafe_equilibrium_steps,
+    try:
+        final_code, step_data, unsafe_equilibrium_steps, step = _execute_steps(
+            model, analysis, combination,
+            p=p, ls=ls, n=n, integrator=integrator, algorithm=algorithm,
+            alfa=alfa, dof=dof, diagnostic_writer=diagnostic_writer,
+            initial_reaction=initial_reaction,
+            equilibrium_reference_load_factor=equilibrium_reference_load_factor,
+            equilibrium_target_force=equilibrium_target_force,
+            reference=reference,
+            reference_displacement=reference_displacement,
             equilibrium_policy=equilibrium_policy,
+            equilibrium_force_absolute_tolerance=equilibrium_force_absolute_tolerance,
+            equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
+            equilibrium_residual_tolerance=equilibrium_residual_tolerance,
+            on_step_committed=on_step_committed,
+            should_stop_after_commit=should_stop_after_commit,
+            max_committed_steps=max_committed_steps,
         )
-        diagnostic_writer.close()
-    return final_code, step_data
+        if final_code == 0:
+            p.log("Analysis executed and completed" if step else "Analysis not executed")
+        else:
+            p.log("Analysis executed but not completed")
+        if unsafe_equilibrium_steps:
+            p.log(
+                f"EQUILIBRIUM SAFETY SUMMARY: {unsafe_equilibrium_steps} candidate "
+                f"step(s) failed the independent audit (policy={equilibrium_policy})."
+            )
+        if diagnostic_writer is not None:
+            diagnostic_writer.emit(
+                "analysis_end",
+                exit_code=final_code,
+                committed_steps=sum(1 for row in step_data if row.get("status") == "OK"),
+                attempted_steps=len(step_data),
+                unsafe_equilibrium_steps=unsafe_equilibrium_steps,
+                equilibrium_policy=equilibrium_policy,
+            )
+            diagnostic_writer.close()
+        return final_code, step_data
+    finally:
+        ls.close()
+        p.ls = None
 
 
 # Compatibility re-exports: histra.solver.__init__ and tests import these

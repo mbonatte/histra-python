@@ -457,6 +457,10 @@ def _set_initial_state(
         for spring_group in (
             intf.trasv_1, intf.trasv_2, intf.slid, intf.slid_out_plan
         ):
+            if getattr(spring_group, "is_batch_backed", False):
+                spring_group.revert_to_start()
+                spring_group.revert_to_last_commit()
+                continue
             for spring in spring_group:
                 if spring is None:
                     continue

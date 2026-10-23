@@ -260,7 +260,12 @@ def _iter_springs(
             yield spring
     for intf in interface_values:
         for name in ("trasv_1", "trasv_2", "slid", "slid_out_plan"):
-            for spring in getattr(intf, name, ()):
+            group = getattr(intf, name, ())
+            if getattr(group, "is_batch_backed", False) and getattr(
+                group, "_histra_batch_managed", False
+            ):
+                continue
+            for spring in group:
                 if (
                     spring is not None
                     and not getattr(spring, "_histra_batch_managed", False)

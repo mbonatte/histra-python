@@ -160,7 +160,7 @@ def _parse_load_template_item(elem: ET.Element) -> LoadTemplateItem:
 
 
 def _parse_line_load_element(elem: ET.Element) -> LineLoadElement:
-    type_of = _attr(elem, "TypeOf", default="")
+    type_of = _attr(elem, "TypeOf", "typeof", default="")
     if type_of.endswith("LineLoadElement"):
         return LineLoadElement(
             key=_safe_int(_attr(elem, "Key", default="0")),

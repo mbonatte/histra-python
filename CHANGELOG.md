@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.6.4 - 2026-10-23
+
+- Eliminate proxy materialization in `TransverseFiberGroup` across nonlinear setup, stiffness assembly, state reverting, quad/interface caches, snapshotting, and postprocessing, preventing 550k proxy objects and saving ~1.90 GB dirty RAM on 3D bridge models.
+- Implement custom fast `__deepcopy__` on `TransverseFiberGroup`, `_StiffnessAssemblyPlan`, `Point`, `AfferenceEntry`, `Interface`, `Quad`, and spring classes, reducing deepcopy memory overhead from +3,429 MB down to +254 MB (13.5x reduction) and dropping clone duration from minutes to 1.50 seconds.
+- Break cyclic reference in `_TransverseParameterView` via `weakref` and release solver factorizations immediately on exit (`ls.close()`), allowing clean deallocation during loop execution with disabled GC.
+- Add regression coverage in `test_transverse_group_memory_and_cache.py` ensuring zero proxy creation and Copy-On-Write array integrity.
+
 ## 1.6.3 - 2026-10-23
 
 - Complete C# `Interface.CalcolaRisultanti` resultant bending-moment calculation (`Mx, My, Mz` in `float32`) in `histra.postprocessing` and compiled `HystereticBatchRuntime` / `ModelManager.refresh_saved_interface_forces`, verified against C# `InterfaceStates`.

@@ -89,7 +89,23 @@ class ModelManager:
                 for name in ("_perf_hysteretic_batch", "_perf_hysteretic_slice"):
                     if hasattr(interface, name):
                         delattr(interface, name)
-            for spring in getattr(runtime, "managed_springs", runtime.springs):
+                group = getattr(interface, "trasv_1", None)
+                if getattr(group, "is_batch_backed", False):
+                    group._histra_batch_managed = False
+                    group._batch_slice = None
+                    for sp in group._cache.values():
+                        sp._histra_batch_managed = False
+                elif group is not None:
+                    for sp in group:
+                        if hasattr(sp, "_histra_batch_managed"):
+                            sp._histra_batch_managed = False
+            for spring in getattr(runtime, "coulomb_springs", ()):
+                if hasattr(spring, "_histra_batch_managed"):
+                    spring._histra_batch_managed = False
+            for quad in getattr(runtime, "quad_records", ()):
+                spring = getattr(quad, "spring", None)
+                if spring is None:
+                    continue
                 if hasattr(spring, "_histra_batch_managed"):
                     spring._histra_batch_managed = False
                 for name in (
@@ -98,6 +114,10 @@ class ModelManager:
                 ):
                     if hasattr(spring, name):
                         delattr(spring, name)
+            if not getattr(runtime, "is_batch_backed", False):
+                for spring in getattr(runtime, "springs", ()):
+                    if hasattr(spring, "_histra_batch_managed"):
+                        spring._histra_batch_managed = False
         cls._hysteretic_batch = None
         cls._hysteretic_batch_model_id = None
         cls._hysteretic_batch_error = None

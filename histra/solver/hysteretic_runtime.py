@@ -22,6 +22,7 @@ from collections import Counter
 from dataclasses import dataclass
 import os
 from typing import Any, Iterator, Sequence
+import weakref
 
 import numpy as np
 
@@ -646,7 +647,14 @@ class _TransverseParameterView:
     """
 
     def __init__(self, runtime: "HystereticBatchRuntime") -> None:
-        self._runtime = runtime
+        self._runtime_ref = weakref.ref(runtime)
+
+    @property
+    def _runtime(self) -> "HystereticBatchRuntime":
+        rt = self._runtime_ref()
+        if rt is None:
+            raise ReferenceError("HystereticBatchRuntime has already been collected")
+        return rt
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -1335,7 +1343,9 @@ class HystereticBatchRuntime:
         self._pdelta_plan: PDeltaPlan | None = None
         self._pdelta_line_load_plans: dict[tuple[int, int], PDeltaLineLoadPlan] = {}
         self.interface_ids = frozenset(id(record.interface) for record in self.records)
-        self._initial_state_snapshot = self.snapshot()
+        self._initial_trial_ktang = self.trial[:, 9].copy()
+        self._initial_coulomb_state = self.coulomb_state.copy()
+        self._initial_quad_state = self.quad_state.copy()
 
     @staticmethod
     def _transverse_rejection_reason(spring: Any) -> str:
@@ -1588,11 +1598,22 @@ class HystereticBatchRuntime:
 
         # Preserve the constructor's managed-spring ordering exactly:
         # transverse -> interface Coulomb -> Quad diagonal.
-        self.managed_springs = [
-            *self.springs,
-            *self.coulomb_springs,
-            *(quad.spring for quad in self.quad_records),
-        ]
+        if self.is_batch_backed:
+            self.managed_springs = _VirtualManagedSequence(
+                self.springs, self.coulomb_springs, self.quad_records
+            )
+        else:
+            self.managed_springs = [
+                *self.springs,
+                *self.coulomb_springs,
+                *(quad.spring for quad in self.quad_records),
+            ]
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> None:
+        # HystereticBatchRuntime is a process-wide transient execution engine
+        # bound to id(model). Deep-copying a Model or AnalysisSession must not
+        # duplicate dense runtime buffers into the cloned model.
+        return None
 
     def _read_transverse_objects_bulk(
         self, springs: list[Any], *, chunk_size: int = 16384
@@ -1620,6 +1641,8 @@ class HystereticBatchRuntime:
             group_count = stop - start
             group = intf.trasv_1
             if getattr(group, "is_batch_backed", False):
+                if getattr(group, "_cache", None):
+                    group.flush_cache_to_arrays()
                 if self._compact_simple_params:
                     param_cols = min(fixed_parameter_count, group._params.shape[1])
                     self._params[start:stop, :param_cols] = group._params[:, :param_cols]
@@ -1963,6 +1986,8 @@ class HystereticBatchRuntime:
             start = record.start
             stop = record.stop
             if getattr(group, "is_batch_backed", False):
+                if getattr(group, "_cache", None):
+                    group.flush_cache_to_arrays()
                 group._histra_batch_managed = True
                 self._transverse_k[start:stop] = group._k
                 if self._compact_simple_params:
@@ -3292,7 +3317,21 @@ class HystereticBatchRuntime:
 
     def reset_to_initial_state(self) -> None:
         """Reset runtime state arrays to the initial virgin state."""
-        self.restore(self._initial_state_snapshot)
+        self.committed.fill(0.0)
+        self.trial.fill(0.0)
+        self.trial[:, 9] = self._initial_trial_ktang
+        self.targets.fill(0.0)
+        self.enabled.fill(True)
+        self.coulomb_state[:] = self._initial_coulomb_state
+        self.quad_state[:] = self._initial_quad_state
+        self._local_u.fill(0.0)
+        self._quad_local_u.fill(0.0)
+        self._quad_local_du.fill(0.0)
+        self._pending_values.fill(0.0)
+        self._refresh_full_force_cache()
+        self._refresh_global_resisting_force_cache()
+        self._refresh_max_u_cache()
+        self._objects_trial_synced = True
 
     def revert_quad(self, quad: Any) -> None:
         index = int(quad.spring._histra_quad_batch_index)

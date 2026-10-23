@@ -282,6 +282,12 @@ class _StiffnessAssemblyPlan:
                 return False
         return True
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> None:
+        # Cached assembly plans are rebuilt lazily per model on demand; omit
+        # them from deep copies so branching a session does not duplicate
+        # sparse scatter topology and batch stiffness tables.
+        return None
+
     def ensure_batch_data(self, model: Model, runtime: Any) -> None:
         if self.batch_data is not None:
             return
@@ -1143,12 +1149,20 @@ def _build_stiffness_batch_data(
         dj_c = intf._perf_dj[:sc]
         ecc_c = intf._perf_ecc[:sc]
         L = float(intf.length)
-        for s_idx in range(sc):
-            all_di.append(float(di_c[s_idx]))
-            all_dj.append(float(dj_c[s_idx]))
-            all_ecc.append(float(ecc_c[s_idx]))
-            all_dm.append(0.5 * L - float(di_c[s_idx]))
-            all_k0.append(float(intf.trasv_1[s_idx].k))
+        group = intf.trasv_1
+        if getattr(group, "is_batch_backed", False) and not group._cache:
+            all_di.extend(float(d) for d in di_c)
+            all_dj.extend(float(d) for d in dj_c)
+            all_ecc.extend(float(e) for e in ecc_c)
+            all_dm.extend(0.5 * L - float(d) for d in di_c)
+            all_k0.extend(float(k_val) for k_val in group._k[:sc])
+        else:
+            for s_idx in range(sc):
+                all_di.append(float(di_c[s_idx]))
+                all_dj.append(float(dj_c[s_idx]))
+                all_ecc.append(float(ecc_c[s_idx]))
+                all_dm.append(0.5 * L - float(di_c[s_idx]))
+                all_k0.append(float(intf.trasv_1[s_idx].k))
 
         sp_offset += sc
         term_idx += 21 + (3 if layout.has_slid else 0) + (10 if layout.has_out_of_plane else 0)

@@ -273,12 +273,20 @@ def _interface_local_resultants(interface) -> tuple[np.ndarray, np.ndarray]:
     moment_y = f32(0.0)
     moment_z = f32(0.0)
 
-    for i, spring in enumerate(interface.trasv_1):
-        vec_x, vec_y = _spring_area_centroid_local_xy(interface, i)
-        num2 = f32(spring.get_force())
-        force_y = f32(force_y + num2)
-        moment_z = f32(moment_z + f32(num2 * vec_x))
-        moment_x = f32(moment_x + f32(num2 * vec_y))
+    if getattr(interface.trasv_1, "is_batch_backed", False) and not interface.trasv_1._cache:
+        for i, raw_force in enumerate(interface.trasv_1._trial[:, 6]):
+            vec_x, vec_y = _spring_area_centroid_local_xy(interface, i)
+            num2 = f32(raw_force)
+            force_y = f32(force_y + num2)
+            moment_z = f32(moment_z + f32(num2 * vec_x))
+            moment_x = f32(moment_x + f32(num2 * vec_y))
+    else:
+        for i, spring in enumerate(interface.trasv_1):
+            vec_x, vec_y = _spring_area_centroid_local_xy(interface, i)
+            num2 = f32(spring.get_force())
+            force_y = f32(force_y + num2)
+            moment_z = f32(moment_z + f32(num2 * vec_x))
+            moment_x = f32(moment_x + f32(num2 * vec_y))
 
     for i, spring in enumerate(interface.trasv_2):
         vec_x, vec_y = _spring_area_centroid_local_xy(interface, i)
@@ -314,8 +322,12 @@ def _interface_local_resultant(interface) -> np.ndarray:
     force_x = f32(0.0)
     force_y = f32(0.0)
     force_z = f32(0.0)
-    for spring in interface.trasv_1:
-        force_y = f32(force_y + f32(spring.get_force()))
+    if getattr(interface.trasv_1, "is_batch_backed", False) and not interface.trasv_1._cache:
+        for raw_force in interface.trasv_1._trial[:, 6]:
+            force_y = f32(force_y + f32(raw_force))
+    else:
+        for spring in interface.trasv_1:
+            force_y = f32(force_y + f32(spring.get_force()))
     for spring in interface.trasv_2:
         force_y = f32(force_y + f32(spring.get_force()))
     for spring in interface.slid:

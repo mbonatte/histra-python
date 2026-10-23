@@ -1,11 +1,12 @@
 # Current feature status
 
-The package metadata is now 1.6.3. This patch completes C# `Interface.CalcolaRisultanti`
-bending-moment post-processing, synchronizes 12-DOF local interface forces from
-the compiled runtime, and filters auxiliary prepared-interface edge vertices in
-`compute_node_displacements`, building on the 1.6.2 native material-transfer,
-initialization, elastic state-field, and `spring_type_change="csharp_reset"`
-compatibility fixes.
+The package metadata is now 1.6.4. This release eliminates lazy proxy materialization
+across `TransverseFiberGroup` batches and introduces zero-copy/fast `__deepcopy__`
+optimizations across elements and assembly plans, cutting 3D model dirty RAM by ~1.90 GB
+and deepcopy footprint from +3,429 MB down to +254 MB to safely enable 4-worker parallel
+scour executions. This builds upon the 1.6.3 C# `Interface.CalcolaRisultanti`
+bending-moment post-processing, 12-DOF local interface forces, and 1.6.2 native
+material-transfer and history-reset compatibility fixes.
 The [loaded foundation reference](benchmarks/material-modal-gui-2026-10-17.md)
 qualifies 84 committed static steps and six available modal comparisons;
 successful return-stage results remain absent from the native references.
