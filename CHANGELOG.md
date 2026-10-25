@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove tracked Jupyter notebooks and saved outputs; preserve benchmark plotting-source provenance in compact JSON and ignore local notebooks.
+
 ## 1.7.1 - 2026-10-25
 
 - Correct native output units to cm/kN/kN·cm/rad, add explicit cm/mm displacement metrics, and select pushover forces by dominant baseline-subtracted reactions.

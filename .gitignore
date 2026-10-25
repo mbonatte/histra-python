@@ -31,3 +31,7 @@ benchmark_outputs/
 docs/PhD-Thesis/
 .agents/
 csharp_runner/
+
+# Local notebooks and saved outputs are not repository source.
+*.ipynb
+.ipynb_checkpoints/
