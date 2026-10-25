@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reorganize current documentation around usage, architecture, tooling and release workflows; archive superseded V1/refactoring plans and correct stale paths/preparation descriptions.
+- Remove a verified duplicate model ZIP, consolidate dependency entry points, and relocate source-only analytical/profiling utilities out of the repository root.
+
 - Remove tracked Jupyter notebooks and saved outputs; preserve benchmark plotting-source provenance in compact JSON and ignore local notebooks.
 
 ## 1.7.1 - 2026-10-25

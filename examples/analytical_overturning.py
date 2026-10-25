@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -110,7 +109,7 @@ class ScourScenarioAnalytical:
 
 def critical_force(weight_kn: float | np.ndarray, d1_m: float | np.ndarray, d2_m: float | np.ndarray) -> float | np.ndarray:
     """Compute theoretical critical live load capacity F_cr at zero rotation.
-    
+
     F_cr = W * (d1 / d2)
     """
     w = np.asarray(weight_kn, dtype=float)
@@ -123,7 +122,7 @@ def critical_force(weight_kn: float | np.ndarray, d1_m: float | np.ndarray, d2_m
 
 def limit_rotation_angle(d1_m: float | np.ndarray, h1_m: float | np.ndarray) -> float | np.ndarray:
     """Compute zero-load limit rotation angle theta_0 where F(theta) = 0.
-    
+
     theta_0 = arctan(d1 / H1)
     """
     d1 = np.asarray(d1_m, dtype=float)
@@ -141,16 +140,16 @@ def post_peak_force(
     h2_m: float,
 ) -> float | np.ndarray:
     """Compute vertical live load equilibrium path as a function of rotation theta.
-    
+
     F(theta) = W * (d1 * cos(theta) - H1 * sin(theta)) / (d2 * cos(theta) + H2 * sin(theta))
     """
     theta = np.asarray(theta_rad, dtype=float)
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
-    
+
     restoring_arm = d1_m * cos_t - h1_m * sin_t
     load_arm = d2_m * cos_t + h2_m * sin_t
-    
+
     with np.errstate(divide="ignore", invalid="ignore"):
         force = np.where(
             (restoring_arm >= 0.0) & (load_arm > 0.0),
@@ -168,7 +167,7 @@ def initial_softening_slope(
     h2_m: float | np.ndarray,
 ) -> float | np.ndarray:
     """Compute derivative dF/dtheta at theta = 0 [kN/rad].
-    
+
     dF/dtheta|_{theta=0} = -W * (H1 * d2 + H2 * d1) / (d2^2) = -F_cr * (H1/d1 + H2/d2)
     """
     w = np.asarray(weight_kn, dtype=float)
@@ -186,17 +185,17 @@ def kinematic_displacements(
     h2_m: float,
 ) -> Tuple[float | np.ndarray, float | np.ndarray]:
     """Compute outward (horizontal) and downward (vertical) displacements of load point relative to pivot.
-    
+
     u_y(theta) = H2 * sin(theta) - d2_track * (1 - cos(theta))
     u_z(theta) = d2_track * sin(theta) + H2 * (1 - cos(theta))
     """
     theta = np.asarray(theta_rad, dtype=float)
     sin_t = np.sin(theta)
     cos_t = np.cos(theta)
-    
+
     u_y = h2_m * sin_t - d2_track_m * (1.0 - cos_t)
     u_z = d2_track_m * sin_t + h2_m * (1.0 - cos_t)
-    
+
     if np.ndim(u_y) == 0:
         return float(u_y), float(u_z)
     return u_y, u_z
@@ -208,7 +207,7 @@ def overturning_work_capacity(
     h1_m: float | np.ndarray,
 ) -> float | np.ndarray:
     """Compute total restoring strain energy / overturning work up to limit rotation theta_0 [kN*m].
-    
+
     U_max = W * (sqrt(d1^2 + H1^2) - H1) = W * H1 * (sec(theta_0) - 1)
     """
     w = np.asarray(weight_kn, dtype=float)
@@ -224,7 +223,7 @@ def overturning_work_capacity(
 
 def normalized_critical_force(support_ratio: float | np.ndarray) -> float | np.ndarray:
     """Compute normalized critical capacity F_cr / W as function of remaining support ratio r = b/B.
-    
+
     F_cr / W = (r - 0.5) / (1 - r)  for r in (0.5, 1.0)
     """
     r = np.asarray(support_ratio, dtype=float)
@@ -239,13 +238,13 @@ def normalized_limit_rotation(
     relative_centroid_hg: float | np.ndarray,
 ) -> float | np.ndarray:
     """Compute zero-load limit rotation theta_0 [rad] using dimensionless parameters.
-    
+
     theta_0 = arctan((r - 0.5) / (h_G * lambda))
     """
     r = np.asarray(support_ratio, dtype=float)
     lam = np.asarray(aspect_ratio_lambda, dtype=float)
     hg = np.asarray(relative_centroid_hg, dtype=float)
-    
+
     num = r - 0.5
     den = hg * lam
     res = np.where(num > 0.0, np.arctan2(num, den), 0.0)
@@ -259,21 +258,21 @@ def normalized_post_peak_curve(
     relative_centroid_hg: float,
 ) -> float | np.ndarray:
     """Compute weight-normalized post-peak force F(theta) / W from dimensionless parameters.
-    
+
     F(theta) / W = ((r - 0.5)*cos(theta) - h_G*lambda*sin(theta)) / ((1 - r)*cos(theta) + lambda*sin(theta))
     """
     theta = np.asarray(theta_rad, dtype=float)
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
-    
+
     d1_tilde = support_ratio - 0.5
     d2_tilde = 1.0 - support_ratio
     h1_tilde = relative_centroid_hg * aspect_ratio_lambda
     h2_tilde = aspect_ratio_lambda
-    
+
     restoring = d1_tilde * cos_t - h1_tilde * sin_t
     overturning = d2_tilde * cos_t + h2_tilde * sin_t
-    
+
     with np.errstate(divide="ignore", invalid="ignore"):
         res = np.where((restoring >= 0.0) & (overturning > 0.0), restoring / overturning, 0.0)
     return float(res) if np.ndim(res) == 0 else res
@@ -285,16 +284,16 @@ def relative_capacity_degradation(
     eta2: float,
 ) -> float | np.ndarray:
     """Compute capacity-normalized degradation function Phi(theta) = F(theta) / F_cr.
-    
+
     Phi(theta) = (1 - eta1 * tan(theta)) / (1 + eta2 * tan(theta))
     where eta1 = H1 / d1 = 1 / tan(theta_0), eta2 = H2 / d2.
     """
     theta = np.asarray(theta_rad, dtype=float)
     tan_t = np.tan(theta)
-    
+
     num = 1.0 - eta1 * tan_t
     den = 1.0 + eta2 * tan_t
-    
+
     with np.errstate(divide="ignore", invalid="ignore"):
         res = np.where((num >= 0.0) & (den > 0.0), num / den, 0.0)
     return float(res) if np.ndim(res) == 0 else res
@@ -306,13 +305,13 @@ def normalized_overturning_energy(
     relative_centroid_hg: float | np.ndarray,
 ) -> float | np.ndarray:
     """Compute normalized energy capacity U_max / (W * B).
-    
+
     U_max / (W * B) = h_G * lambda * (sqrt(1 + ((r - 0.5) / (h_G * lambda))^2) - 1)
     """
     r = np.asarray(support_ratio, dtype=float)
     lam = np.asarray(aspect_ratio_lambda, dtype=float)
     hg = np.asarray(relative_centroid_hg, dtype=float)
-    
+
     xi = (r - 0.5) / (hg * lam)
     res = np.where(r > 0.5, hg * lam * (np.sqrt(1.0 + xi**2) - 1.0), 0.0)
     return float(res) if np.ndim(res) == 0 else res
@@ -350,13 +349,13 @@ def sensitivity_limit_rotation(
     """Partial derivatives and elasticities of limit rotation theta_0 with respect to (d1, H1)."""
     denom = d1_m**2 + h1_m**2
     theta_0 = np.arctan2(d1_m, h1_m)
-    
+
     dtheta_dd1 = h1_m / denom
     dtheta_dH1 = -d1_m / denom
-    
+
     elasticity_d1 = (d1_m / theta_0) * dtheta_dd1 if theta_0 > 0 else 0.0
     elasticity_h1 = (h1_m / theta_0) * dtheta_dH1 if theta_0 > 0 else 0.0
-    
+
     return {
         "theta_0_rad": theta_0,
         "theta_0_deg": float(np.degrees(theta_0)),
@@ -384,18 +383,18 @@ def sensitivity_support_ratio(
     w = weight_kn
     lam = aspect_ratio_lambda
     hg = relative_centroid_hg
-    
+
     # F_cr = W * (r - 0.5) / (1 - r)
     f_cr = w * (r - 0.5) / (1.0 - r)
     dFcr_dr = 0.5 * w / ((1.0 - r)**2)
     elasticity_fcr_r = (r / f_cr) * dFcr_dr
-    
+
     # theta_0 = arctan((r - 0.5) / (hg * lambda))
     xi = (r - 0.5) / (hg * lam)
     theta_0 = np.arctan(xi)
     dtheta_dr = (1.0 / (1.0 + xi**2)) * (1.0 / (hg * lam))
     elasticity_theta0_r = (r / theta_0) * dtheta_dr if theta_0 > 0 else 0.0
-    
+
     return {
         "F_cr": f_cr,
         "dFcr_dr": dFcr_dr,
@@ -418,10 +417,10 @@ def sensitivity_post_peak_path(
     """Analytical sensitivities of post-peak force F(theta) at a given rotation theta."""
     cos_t = np.cos(theta_rad)
     sin_t = np.sin(theta_rad)
-    
+
     r_arm = d1_m * cos_t - h1_m * sin_t
     l_arm = d2_m * cos_t + h2_m * sin_t
-    
+
     if l_arm <= 0.0 or r_arm <= 0.0:
         return {
             "F": 0.0,
@@ -432,15 +431,15 @@ def sensitivity_post_peak_path(
             "elasticity_H1": 0.0, "elasticity_H2": 0.0,
             "elasticity_W": 0.0,
         }
-    
+
     f_val = weight_kn * r_arm / l_arm
-    
+
     dF_dd1 = weight_kn * cos_t / l_arm
     dF_dd2 = -weight_kn * r_arm * cos_t / (l_arm**2)
     dF_dH1 = -weight_kn * sin_t / l_arm
     dF_dH2 = -weight_kn * r_arm * sin_t / (l_arm**2)
     dF_dW = r_arm / l_arm
-    
+
     return {
         "F": f_val,
         "dF_dd1": dF_dd1,
@@ -500,23 +499,23 @@ def evaluate_scour_scenario(
     b_total = system.foundation_breadth
     supported_width = b_total * support_ratio
     scoured_width = b_total - supported_width
-    
+
     pivot_y = system.load_y + scoured_width
     d1 = system.centroid_y_g - pivot_y
     d2 = pivot_y - system.load_y
-    
+
     w = system.total_weight
     h1 = system.centroid_h1
     h2 = system.load_elevation_h2
-    
+
     f_cr = critical_force(w, d1, d2)
     theta_0 = limit_rotation_angle(d1, h1)
     theta_0_deg = float(np.degrees(theta_0))
     slope_0 = initial_softening_slope(w, d1, d2, h1, h2)
-    
+
     u_y0, u_z0 = kinematic_displacements(theta_0, d2, h2)
     energy = overturning_work_capacity(w, d1, h1)
-    
+
     return ScourScenarioAnalytical(
         support_ratio=support_ratio,
         foundation_breadth=b_total,
@@ -546,11 +545,11 @@ def one_at_a_time_sweep(
 ) -> Dict[str, Dict[str, np.ndarray]]:
     """Perform One-At-A-Time (OAT) parameter variations and return metric responses."""
     results: Dict[str, Dict[str, List[float]]] = {}
-    
+
     # Identify output keys from baseline
     base_output = evaluate_fn(baseline_params)
     out_keys = list(base_output.keys())
-    
+
     for p_name in baseline_params:
         results[p_name] = {k: [] for k in out_keys}
         for pct in variation_pcts:
@@ -559,7 +558,7 @@ def one_at_a_time_sweep(
             out = evaluate_fn(perturbed)
             for k in out_keys:
                 results[p_name][k].append(out[k])
-                
+
     # Convert lists to numpy arrays
     final_results: Dict[str, Dict[str, np.ndarray]] = {}
     for p_name in baseline_params:
@@ -596,11 +595,11 @@ def compute_sobol_indices_mc(
     rng = np.random.default_rng(seed)
     p_names = list(param_bounds.keys())
     d = len(p_names)
-    
+
     # Generate matrices A and B in [0, 1]^d
     mat_a = rng.random((n_samples, d))
     mat_b = rng.random((n_samples, d))
-    
+
     # Transform to physical domains
     def to_physical(unit_mat: np.ndarray) -> np.ndarray:
         res = np.zeros_like(unit_mat)
@@ -608,17 +607,17 @@ def compute_sobol_indices_mc(
             low, high = param_bounds[name]
             res[:, idx] = low + unit_mat[:, idx] * (high - low)
         return res
-    
+
     phys_a = to_physical(mat_a)
     phys_b = to_physical(mat_b)
-    
+
     y_a = model_fn(phys_a)
     y_b = model_fn(phys_b)
-    
+
     var_total = np.var(y_a, ddof=1)
     if var_total < 1e-14:
         return {name: {"S1": 0.0, "ST": 0.0} for name in p_names}
-    
+
     sobol_results = {}
     for idx, name in enumerate(p_names):
         # Matrix AB_i: B with column i from A
@@ -626,20 +625,20 @@ def compute_sobol_indices_mc(
         mat_ab_i[:, idx] = mat_a[:, idx]
         phys_ab_i = to_physical(mat_ab_i)
         y_ab_i = model_fn(phys_ab_i)
-        
+
         # Saltelli estimator for first order
         # V_i = (1/N) * sum(Y_B * (Y_AB_i - Y_A))
         v_i = np.mean(y_b * (y_ab_i - y_a))
         s1 = v_i / var_total
-        
+
         # Saltelli estimator for total order
         # V_Ti = (1/(2N)) * sum((Y_A - Y_AB_i)^2)
         v_ti = 0.5 * np.mean((y_a - y_ab_i)**2)
         st = v_ti / var_total
-        
+
         sobol_results[name] = {
             "S1": float(np.clip(s1, 0.0, 1.0)),
             "ST": float(np.clip(st, 0.0, 1.0)),
         }
-        
+
     return sobol_results

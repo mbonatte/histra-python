@@ -1,3 +1,8 @@
+"""Source-checkout profiler for the recorded random_005 Vert/scour workflow.
+
+Run with python -m tools.profiling.profile_scour_workflow --model <model.hrx>.
+The geometry constants below belong to that benchmark, not arbitrary HRX models.
+"""
 from __future__ import annotations
 
 import argparse
@@ -1065,9 +1070,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=Path,
-        default=Path(
-            "temp-six-jobs/random_005/random_005.hrx"
-        ),
+        required=True,
+        help="HRX for the recorded random_005 pier/scour geometry.",
     )
 
     parser.add_argument(

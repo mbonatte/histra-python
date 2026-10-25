@@ -35,3 +35,6 @@ csharp_runner/
 # Local notebooks and saved outputs are not repository source.
 *.ipynb
 .ipynb_checkpoints/
+
+# Keep reference models as individual audited files, not duplicate archives.
+histra/model-output/*.zip

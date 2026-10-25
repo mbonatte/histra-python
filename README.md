@@ -1,252 +1,147 @@
 # histra-python
 
-An installable, in-process Python implementation of the supported HiStrA
-static nonlinear and modal-analysis workflows.
+An in-process Python implementation of HiStrA's Discrete Macro-Element Method
+(DMEM) for supported masonry static nonlinear and modal analyses. It loads HRX
+models, regenerates computational topology, runs staged analyses, and exports
+native results for postprocessing.
 
-## Backend service API
-
-```python
-from histra import PythonAnalysisRequest, run_python_solver_job
-
-result = run_python_solver_job(
-    "model.hrx",
-    [
-        PythonAnalysisRequest(
-            name="Vert",
-            output_request=outputs,
-            timeout_seconds=600,
-        )
-    ],
-    timeout_seconds=600,
-)
-```
-
-The service:
-
-- loads the HRX once;
-- resolves and executes `InitialAnalysisKey` dependencies;
-- keeps committed global and constitutive state in memory;
-- applies concrete interface/material mutations between analyses;
-- enforces job and analysis deadlines cooperatively;
-- projects C#-compatible reaction and model-point displacement rows.
-- executes `AnalysisType=5` modal analyses and projects C#-compatible modal
-  summaries and complete global-DOF mode shapes.
+Numerical parity is qualified for identified C# reference models and checked
+fields. See [current capabilities and limitations](docs/STATUS.md) and the
+[documentation index](docs/README.md).
 
 ## Install
+
+From a checkout, using Python 3.12–3.14:
 
 ```console
 python -m pip install -e .
 ```
 
-Runtime dependencies are NumPy, SciPy, and Numba, with Python 3.12 through 3.14
-accepted by the package. Current local verification covers Windows x64 and
-Ubuntu on Python 3.12; the CI workflow also targets Linux Python 3.13 and 3.14.
-See [current status](docs/STATUS.md) for benchmark scope and
-[the v1.6.0 preparation record](docs/release/v1.6.0-preparation.md) for artifacts
-and platform evidence.
+Runtime dependencies and version bounds are declared in `pyproject.toml`.
+`requirements.txt` is a compatibility entry point to the same package install.
+Optional HDF5 export requires `h5py`; otherwise an HDF5 request falls back to NPZ
+with a warning.
 
-## Architecture & System Workflow
+## Run and export an analysis
 
-The following diagram illustrates the flow from source inputs through preprocessing, mechanics assembly, numerical solution, and output projection:
+Use an analysis name present in your HRX:
 
-```mermaid
-graph TD
-    subgraph Inputs["Inputs"]
-        HRX["Model File (.hrx)"]
-        Results["C# Reference (.Results SQLite)"]
-    end
+```python
+from histra import AnalysisSession, SimulationResults, load_model
 
-    subgraph IO["IO & Parsing (histra.io)"]
-        Loader["load_model() / HRX Parser"]
-        ResultsReader["ResultsReader / C# Verification"]
-    end
+model = load_model("bridge.hrx")
+session = AnalysisSession(model, equilibrium_policy="error")
+execution = session.run("Vert")
+files = session.export_analysis("Vert", "python-results")
 
-    subgraph Preprocessing["Preprocessing (histra.preprocessing)"]
-        Prepare["prepare_model(force=True)"]
-        Geometry["Contact Geometry & Faces"]
-        SpringFactory["Spring Factory & Restraints"]
-    end
-
-    subgraph Mechanics["Core Mechanics & Assembly (histra.elements / solver)"]
-        ModelManager["ModelManager (State & Orchestration)"]
-        Assembler["assembler (Global K & Load Vectors)"]
-        HystereticRuntime["hysteretic_runtime (Compiled Numba Kernels)"]
-        LinearSystem["LinearSystem (SuperLU / UMFPACK)"]
-    end
-
-    subgraph Solvers["Solvers & Strategy (histra.solver)"]
-        Session["AnalysisSession (Multi-Stage Execution)"]
-        Nonlinear["Nonlinear Solvers (Newton-Raphson, Arc-Length, Line Search, ALS)"]
-        Modal["solve_modal_analysis() (SubSpaceIteration2 & MAC)"]
-        Audit["Equilibrium Audit (Independent Residual Balance)"]
-    end
-
-    subgraph Outputs["Projection & API (histra)"]
-        BackendAPI["run_python_solver_job()"]
-        Projection["project_displacements() / project_reactions()"]
-    end
-
-    HRX --> Loader
-    Loader --> Prepare
-    Prepare --> Geometry
-    Geometry --> SpringFactory
-    SpringFactory --> ModelManager
-    ModelManager --> Assembler
-    ModelManager --> HystereticRuntime
-    Assembler --> LinearSystem
-    HystereticRuntime --> LinearSystem
-    LinearSystem --> Session
-    Session --> Nonlinear
-    Session --> Modal
-    Nonlinear --> Audit
-    Audit --> Projection
-    Modal --> Projection
-    Results --> ResultsReader
-    ResultsReader -.-> Audit
-    Session --> BackendAPI
+with SimulationResults.load(files["summary"]) as results:
+    displacement_mm, total_force_kN = results.get_pushover_curve()
 ```
 
-### Multi-Stage Stateful Analysis Chains
+A session freshly prepares serialized HRX models before solving. For a staged
+model, `session.run_to("LiveLoad_1")` resolves its HRX predecessor chain and
+retains committed state in memory. Apply interface-material changes only at
+committed analysis boundaries. See [analysis chains](docs/guides/analysis-chains.md)
+and [preprocessing](docs/guides/preprocessing.md).
 
-`AnalysisSession` coordinates chained multi-analysis runs, retaining committed element and constitutive state in memory across analysis boundaries:
+Native output uses a summary JSON plus NPZ/HDF5 dense fields. Schema 2.0.0
+explicitly declares cm, kN, kN·cm, MPa and rad, and includes independent Quad
+corner translations, interface topology and stage-end spring spans.
+`session.export_session("python-results", "bridge")` also writes a portable
+session index. See the [results format](docs/reference/native-results-format.md)
+for units, force conventions and migration from older exports.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Caller
-    participant Session as AnalysisSession
-    participant Model as Model & HystereticRuntime
-    participant Solver as Nonlinear / Modal Solver
-    participant Audit as Equilibrium Audit
-
-    Caller->>Session: init(model)
-    Caller->>Session: run_analysis("Vert") [Gravity]
-    Session->>Model: assemble initial tangent & loads
-    Session->>Solver: Newton-Raphson solve to completion
-    Solver->>Audit: audit force balance & residuals
-    Audit-->>Session: equilibrium verified
-    Session->>Model: commit global & constitutive state in memory
-
-    Caller->>Session: change_interface_materials(...) [e.g. Scour]
-    Session->>Model: mutate affected interface springs (preserves unaffected history)
-
-    Caller->>Session: run_analysis("Live") [Lateral Pushover]
-    Session->>Solver: continuation solve from in-memory pre-state
-    Solver->>Audit: audit force balance & residuals
-    Audit-->>Session: equilibrium verified
-    Session-->>Caller: AnalysisExecution (converged steps & projected outputs)
-```
-
-## Public API
-
-The stable root package exports:
-
-- `load_model`
-- `AnalysisSession`
-- `run_python_solver_job`
-- `PythonAnalysisRequest`
-- `ConcreteInterfaceMutation`
-- `AnalysisExecution`, `AnalysisStep`, `AnalysisOutcome`
-- `solve_modal_analysis`, `ModalAnalysisResult`, `ModalMode`
-- capability and cancellation exceptions
-- `inspect_solver_strategy`, `SolverStrategyReport`, and
-  `SuboptimalSolverStrategyWarning`
-- `project_analysis_outputs`, `project_displacements`, `project_reactions`
-
-## Output compatibility
-
-`project_displacements` reproduces the fields selected by HiStrA Job Runner from
-C# `DisplModelPoints`:
-
-```text
-IdElement, ParentKey, Step, Ux, Uy, Uz
-```
-
-For supported Node model points it averages connected Quad predictions like the
-C# response operation. Quad model points use centroid or vertex displacement
-according to `IdVertex`. The mapping and numerical values are regression-tested
-against the included authoritative `model.hrx` + `model.Results` pair.
-
-Reaction projection uses the C# `ReactionSumStates` sign convention:
-
-```text
-Step, R1, R2, R3
-```
-
-Static nonlinear solves independently audit global force balance and the full
-active-DOF residual before every commit. Warning mode preserves the C# path;
-strict mode rejects unsafe states. `run_python_solver_job` uses strict mode by
-default. See
-[nonlinear convergence and equilibrium safety](docs/nonlinear_convergence_safety.md).
-
-## Solver strategy advice
-
-The default strategy policy is `warn`. The advisor reports supported but
-potentially unsafe or inefficient configurations through Python warnings and
-`on_log`; it never changes an analysis definition. Recommendations are
-scenario-qualified and must still pass the independent equilibrium and response
-checks. See [nonlinear convergence and equilibrium safety](docs/nonlinear_convergence_safety.md).
-
-## Batch modal C#/Python parity
-
-A directory or wildcard can be used to validate many models against C# in one
-command:
+For the standalone command:
 
 ```console
-python -m histra.tools.run_modal my_model\modal-tests\* --analysis 30
+python -m histra.tools.run_vert_live bridge.hrx --output-dir python-results
 ```
 
-For each HRX, the runner automatically looks for a same-stem `.Results` file,
-regenerates the computational springs with Python (even if C# already prepared
-the HRX), runs the modal analysis, and compares every `ModalValues` quantity and
-the corresponding `ModalShapeValues` using MAC. Consolidated JSON/CSV reports
-are written under `<models-root>/modal-comparison`. Use
-`--preprocessing stored` for a narrower eigensolver-only check.
+Analysis selectors and output/status details are in the
+[standalone guide](docs/guides/standalone-analysis.md). `python -m histra` inspects
+and assembles a model; it is not the standalone nonlinear analysis runner.
 
-## Current capability boundary
+## Backend service API
 
-Supported backend scope is the static nonlinear and modal Quad/Interface masonry
-subset. Capability preflight accepts validated P-Delta `EachStep` and
-`EachIteration`, and rejects unknown solver/material enums, unsupported
-model-point element types, broken analysis chains, dynamic analysis, and
-response-spectrum contributions before solving. Modal eigenanalysis itself is
-supported.
+Output requests are attribute containers, compatible with a caller's existing
+request classes. This example requests all available reaction rows:
 
-The modal solver ports the active C# consistent Quad mass integration,
-`SubSpaceIteration2`, inverse iteration, mass normalization, participation
-coefficients and effective modal masses. `histra.tools.run_modal` supports
-single-model execution and batch C#/Python parity validation of folders or
-wildcards, including all `ModalValues` and sign-invariant mode-shape MAC checks.
-See [Modal analysis](docs/guides/modal-analysis.md).
+```python
+from types import SimpleNamespace
+from histra import PythonAnalysisRequest, run_python_solver_job
 
-The solver uses shared class-level runtime arrays internally, so one solve is
-active per Python process. A cancellable process-wide lock prevents concurrent
-state corruption. Cooperative cancellation checks are present at load-step,
-Newton, line-search, ArcLength retry, and ALS boundaries. A single native
-linear solve cannot be interrupted in the middle.
+outputs = SimpleNamespace(
+    reactions=SimpleNamespace(enabled=True, all_steps=True),
+)
+result = run_python_solver_job(
+    "bridge.hrx",
+    [PythonAnalysisRequest(name="Vert", output_request=outputs, timeout_seconds=600)],
+    timeout_seconds=600,
+)
+```
 
-## C# numerical parity mode
+The service loads the HRX once, resolves dependencies, preserves committed
+state, supports concrete interface-material mutations between analyses, and
+enforces cooperative deadlines. It projects C#-compatible model-point
+translations and reactions, and supports modal summaries and mode shapes.
+See the [architecture](docs/reference/architecture.md) and
+[output format](docs/reference/native-results-format.md).
 
-The authoritative C# solver uses SuiteSparse UMFPACK. For branch-sensitive
-parity regressions, select the same native backend explicitly with
-`HISTRA_LINEAR_SOLVER=umfpack` and point `HISTRA_UMFPACK_LIBRARY` to the native
-shared library. The default remains SciPy SuperLU to preserve existing production behavior.
-Use `auto` only when environment-dependent backend selection is intentional; it
-uses UMFPACK when available and otherwise falls back to SuperLU.
-
-An optional deterministic JSONL/NPZ diagnostic stream records step and Newton
-iteration metrics with stable C# spring identifiers. It is disabled by default.
-See [C# parity diagnostics](docs/guides/csharp-parity-diagnostics.md) and the
-[branch-divergence investigation](docs/investigations/csharp-python-branch-divergence.md).
-
-## Tests
+## Modal analysis and C# comparison
 
 ```console
-pytest histra/tests
+python -m histra.tools.run_modal bridge.hrx --analysis 30 --output modal.json
+python -m histra.tools.run_modal my_model/modal-tests --analysis 30
 ```
 
-The normal suite includes a solve of the `Vert` benchmark and compares projected
-rows with its authoritative C# `.Results` database. Longer chain and live-load
-acceptance tests remain opt-in through their documented environment variables.
-The Ersino modal regression is opt-in through `HISTRA_MODAL_HRX` and
-`HISTRA_MODAL_RESULTS`.
+The batch runner discovers same-stem `.Results` databases for C# comparisons.
+Mode-shape checks use sign-invariant MAC. See the
+[modal guide](docs/guides/modal-analysis.md) and
+[command catalog](tools/README.md).
+
+## Numerical safety and supported scope
+
+The supported structural domain is masonry Quad/Interface models. Capability
+preflight rejects unsupported element types, solver/material enums, loading
+paths and response-spectrum contributions. Modal eigenanalysis is supported;
+nonlinear dynamics and response-spectrum solving are not.
+
+Production numerical execution requires compiled Numba coverage. One solve
+runs per Python process because runtime arrays are shared. Cancellation is
+cooperative at solver checkpoints; a native linear solve cannot be interrupted
+mid-call.
+
+The backend job API uses strict equilibrium auditing by default. Direct session
+calls default to warnings; the example above requests strict auditing explicitly.
+Work and DispRotation convergence alone do not establish force equilibrium.
+Recommendations from the strategy advisor do not change the authored analysis
+and require model-specific qualification. See
+[convergence safety](docs/nonlinear_convergence_safety.md).
+
+SciPy SuperLU is the default linear backend. For branch-sensitive C# parity
+checks, use `HISTRA_LINEAR_SOLVER=umfpack` and set `HISTRA_UMFPACK_LIBRARY` to
+the native library. See [parity diagnostics](docs/guides/csharp-parity-diagnostics.md).
+
+## Development and repository layout
+
+```console
+make setup
+make check
+.venv/bin/python -m pytest -q
+```
+
+`make check` runs lint, configured type checks and compact release tests. The
+complete suite additionally exercises native fixtures; some larger benchmarks
+require external models or opt-in environment variables.
+
+| Directory | Purpose |
+|---|---|
+| `histra/` | Installable package, tests and retained numerical reference models |
+| `docs/` | Current guides, references, dated benchmark reports and historical archive |
+| `tools/` | Source-checkout reference generators, native C# diagnostics and profiling |
+| `examples/` | Supplementary analytical examples, outside the production solver |
+| `release-evidence/` | Compact, traceable benchmark evidence and original source data |
+
+[Release verification](docs/release/README.md) documents packaging and publication.
+[Repository maintenance](docs/reference/repository-maintenance.md) explains file
+retention and cleanup decisions. The [changelog](CHANGELOG.md) records changes.

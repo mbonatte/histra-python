@@ -1,3 +1,2 @@
-numpy
-scipy
-numba>=0.60
+# Compatibility entry point; dependency versions live in pyproject.toml.
+-e .

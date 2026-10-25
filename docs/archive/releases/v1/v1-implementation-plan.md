@@ -1,5 +1,9 @@
 # HiStrA Python V1.0.0 implementation and validation plan
 
+Historical record: preserved from its original development milestone. Version,
+worktree, test-count and release-approval statements below describe that milestone.
+Use the maintained status, guides and release workflow for current instructions.
+
 Status: **active and blocked for release**
 Last consolidated: 2026-09-06
 Working branch: `codex/v1-release`
@@ -129,7 +133,7 @@ the exact notebook-cell/series mapping are preserved in compact evidence.
 
 ### 3.3 Article model status
 
-The current [RC aggregate](../../release-evidence/article-models-v1-rc/article_models_csharp_verification.md)
+The current [RC aggregate](../../../../release-evidence/article-models-v1-rc/article_models_csharp_verification.md)
 contains 14 authored entries and only three strict entries. Earlier attempts
 are not a substitute for complete, current evidence.
 
