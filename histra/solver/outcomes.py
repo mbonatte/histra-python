@@ -1,7 +1,7 @@
 """Stable result records and outcome classification for solver integrations."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 import math
 from typing import Any, Mapping
@@ -164,6 +164,7 @@ class AnalysisExecution:
     message: str | None = None
     initial_step: AnalysisStep | None = None
     modal_result: Any | None = None
+    export_snapshot: dict[str, np.ndarray] | None = field(default=None, repr=False, compare=False)
 
     @property
     def committed_steps(self) -> tuple[AnalysisStep, ...]:

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-23T16:16:29.257849+00:00",
-  "source_commit": "04b5498de4c89680a530057d560aadf4fd938b19",
+  "generated_at": "2026-10-25T12:49:11.005030+00:00",
+  "source_commit": "1ecf20e6f0c32464df2f26adb5ee0cf8f6a7fdf0",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
@@ -4200,7 +4200,7 @@
     {
       "path": "histra/solver/outcomes.py",
       "status": "inventory_only",
-      "lf_sha256": "1ab67d5bf4b13a2be507f8ad610ecaa757540f5e869afa8320a1d403bb02dd4f",
+      "lf_sha256": "4b7db2bce0440f4e7462b8533004a06688a24d11898cfeb5148f34a320bb69bc",
       "classes": [
         {
           "name": "AnalysisOutcome",
@@ -4282,23 +4282,23 @@
         },
         {
           "name": "AnalysisExecution.committed_steps",
-          "line": 169
+          "line": 170
         },
         {
           "name": "AnalysisExecution.completed",
-          "line": 173
+          "line": 174
         },
         {
           "name": "AnalysisExecution.output_steps",
-          "line": 182
+          "line": 183
         },
         {
           "name": "classify_analysis_outcome",
-          "line": 187
+          "line": 188
         },
         {
           "name": "_optional_float",
-          "line": 208
+          "line": 209
         }
       ]
     },
@@ -4469,7 +4469,7 @@
     {
       "path": "histra/solver/session.py",
       "status": "inventory_only",
-      "lf_sha256": "73293fd8f4cb2a0d3f5d909a3365c9c24b93406620ec4079bd30a7663c143d31",
+      "lf_sha256": "fd9f8199cd0ad7eb91a4c479c577f954af31c1827d3601457ffe4e09e5143e20",
       "classes": [
         {
           "name": "AnalysisSessionError",
@@ -4507,27 +4507,27 @@
         },
         {
           "name": "AnalysisSession.dependency_chain",
-          "line": 433
+          "line": 436
         },
         {
           "name": "AnalysisSession.run_to",
-          "line": 459
+          "line": 462
         },
         {
           "name": "AnalysisSession.run_sequence",
-          "line": 474
+          "line": 477
         },
         {
           "name": "AnalysisSession.export_analysis",
-          "line": 487
+          "line": 490
         },
         {
           "name": "AnalysisSession.export_session",
-          "line": 552
+          "line": 555
         },
         {
           "name": "_outcome_message",
-          "line": 607
+          "line": 615
         }
       ]
     },

@@ -400,6 +400,8 @@ class AnalysisSession:
         runtime = time.perf_counter() - started
         steps = tuple(AnalysisStep.from_mapping(step) for step in raw_steps)
         outcome = classify_analysis_outcome(int(code), steps, definition)
+        from histra.io.results_snapshot import capture_export_snapshot
+
         execution = AnalysisExecution(
             analysis_key=int(definition.key),
             analysis_name=str(definition.name),
@@ -415,6 +417,7 @@ class AnalysisSession:
             ),
             initial_step=initial_step,
             modal_result=modal_result,
+            export_snapshot=capture_export_snapshot(self.model) if modal_result is None else None,
         )
         committed = execution.committed_steps
         if execution.completed and execution.modal_result is not None:
@@ -586,7 +589,9 @@ class AnalysisSession:
         results: dict[str, dict[str, Path]] = {}
         from histra.io.results_writer import ResultsWriter
 
-        for execution in self.executions:
+        # Match export_analysis: the most recent execution wins on reruns.
+        latest = {execution.analysis_name: execution for execution in self.executions}
+        for execution in latest.values():
             base_name = f"{bundle_name}_{execution.analysis_name}"
             filepath = Path(output_dir) / base_name
             meta = dict(metadata or {})
@@ -601,6 +606,9 @@ class AnalysisSession:
                 metadata=meta,
             )
             results[execution.analysis_name] = exported
+        from histra.io.results_writer import write_session_manifest
+
+        write_session_manifest(self.model, results, Path(output_dir) / f"{bundle_name}.session.json")
         return results
 
 

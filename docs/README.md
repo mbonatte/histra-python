@@ -33,6 +33,7 @@ The source review compares the Python DMEM implementation with C# HiStrA:
 - [C# to Python Feature Matrix](reference/v1-csharp-feature-matrix.md)
 - [Supported Features](reference/v1-supported-features.md)
 - [Data Model](reference/data-model.md)
+- [Native simulation results format](reference/native-results-format.md)
 - [Glossary](reference/glossary.md)
 - [Porting Notes](reference/porting-notes.md)
 
@@ -56,4 +57,3 @@ The source review compares the Python DMEM implementation with C# HiStrA:
 `archive/` preserves audit deliverables, generated source inventories, patches,
 old metrics, and superseded handoff reports. Archived files are historical evidence,
 not current release guidance.
-

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.7.1 - 2026-10-25
+
+- Correct native output units to cm/kN/kN·cm/rad, add explicit cm/mm displacement metrics, and select pushover forces by dominant baseline-subtracted reactions.
+- Introduce native results schema 2.0.0 with complete topology, lossless per-face interface lists, per-Quad corner displacements, and explicit fibre offsets. Export actual MPa spring stress and correctly indexed Coulomb phase/force state.
+- Preserve stage-end export snapshots across chained analyses and material mutations; write portable session manifests indexing every exported stage and copying the source HRX.
+- Extend `SimulationResults` with topology, Quad displacement, spring-slicing and session-loading helpers while retaining legacy dataset access. See [native results format](docs/reference/native-results-format.md) for migration and scope.
+
 ## 1.7.0 - 2026-10-23
 
 - Native Two-Tier Simulation Output Architecture (`ResultsWriter` and `SimulationResults`):

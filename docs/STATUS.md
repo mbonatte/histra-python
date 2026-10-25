@@ -1,7 +1,10 @@
 # Current feature status
 
-The package metadata is now 1.7.0. This release introduces the native Two-Tier
-Simulation Output Architecture (`ResultsWriter` and `SimulationResults`), delivering
+The package metadata is now 1.7.1. This release corrects and extends the native Two-Tier
+Simulation Output Architecture (`ResultsWriter` and `SimulationResults`).
+[Native results schema 2.0.0](reference/native-results-format.md) specifies corrected
+units and reaction curves, complete topology, independent Quad kinematics, and
+portable session manifests. The two-tier architecture provides
 instant lightweight summary manifests (< 100 KB JSON) and compressed NumPy/HDF5
 dense array datasets (12–25 MB) separating static mesh topology from dynamic step fields
 and stage-end constitutive state snapshots, alongside zero-dependency ParaView VTK export.

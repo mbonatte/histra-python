@@ -590,34 +590,40 @@ class SimulationResults:
         summary_path = p.parent / f"{name}.summary.json"
         summary: dict[str, Any] = {}
         if summary_path.is_file():
-            try:
-                import json
-                with open(summary_path, "r", encoding="utf-8") as fp:
-                    summary = json.load(fp)
-            except Exception:
-                pass
+            import json
+            with open(summary_path, "r", encoding="utf-8") as fp:
+                summary = json.load(fp)
+
         else:
             summary_path = None
 
+        version = str(summary.get("metadata", {}).get("schema_version", "1.0.0"))
+        if version.split(".")[0] not in {"1", "2"}:
+            raise ValueError(f"Unsupported simulation result schema: {version}")
+        files = summary.get("files", {})
+        declared_fields = files.get("fields")
         fields_path: Path | None = None
         for cand in (
             p if p.suffix in (".npz", ".h5") and p.is_file() else None,
-            p.parent / f"{name}.fields.npz",
-            p.parent / f"{name}.fields.h5",
-            p.parent / f"{name}.npz",
-            p.parent / f"{name}.h5",
+            p.parent / declared_fields if declared_fields else None,
+            p.parent / f"{name}.fields.npz" if "fields" not in files else None,
+            p.parent / f"{name}.fields.h5" if "fields" not in files else None,
+            p.parent / f"{name}.npz" if "fields" not in files else None,
+            p.parent / f"{name}.h5" if "fields" not in files else None,
         ):
             if cand is not None and cand.is_file():
                 fields_path = cand
                 break
 
+        if declared_fields and fields_path is None:
+            raise FileNotFoundError(f"Manifest references missing fields: {declared_fields}")
         data: Any = None
         if fields_path is not None:
             if fields_path.suffix == ".h5":
                 import h5py
                 data = h5py.File(fields_path, "r")
             else:
-                data = np.load(fields_path)
+                data = np.load(fields_path, allow_pickle=False)
         elif not summary:
             raise FileNotFoundError(f"Could not locate result dataset for {filepath}.")
 
@@ -628,6 +634,28 @@ class SimulationResults:
             data=data,
             summary=summary,
         )
+
+    @classmethod
+    def load_session(cls, filepath: str | Path) -> dict[str, "SimulationResults"]:
+        """Open every case indexed by a native session manifest; close each reader after use."""
+        import json
+
+        path = Path(filepath).resolve()
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        if str(manifest.get("schema_version", "")).split(".")[0] != "2":
+            raise ValueError("Unsupported session result schema")
+        results = {}
+        try:
+            for case in manifest["cases"]:
+                filename = case.get("summary") or case.get("fields")
+                if not filename:
+                    raise ValueError(f"Case {case['id']} has no output files")
+                results[case["id"]] = cls.load(path.parent / filename)
+        except Exception:
+            for result in results.values():
+                result.close()
+            raise
+        return results
 
     def close(self) -> None:
         if self._data is not None:
@@ -644,6 +672,10 @@ class SimulationResults:
     def keys(self) -> list[str]:
         if self._data is None:
             return []
+        if self.fields_path is not None and self.fields_path.suffix == ".h5":
+            keys = []
+            self._data.visititems(lambda name, obj: keys.append(name) if hasattr(obj, "shape") else None)
+            return keys
         return list(self._data.keys())
 
     def __contains__(self, key: str) -> bool:
@@ -692,6 +724,70 @@ class SimulationResults:
     def mesh_interface_vint(self) -> np.ndarray:
         return self["mesh/interface_vint"]
 
+    @property
+    def mesh_quad_material_keys(self) -> np.ndarray:
+        return self["mesh/quad_material_keys"]
+
+    @property
+    def mesh_quad_thickness(self) -> np.ndarray:
+        return self["mesh/quad_thickness"]
+
+    @property
+    def mesh_quad_interface_keys(self) -> np.ndarray:
+        return self["mesh/quad_interface_keys"]
+
+    @property
+    def mesh_quad_face_interface_keys(self) -> np.ndarray:
+        return self["mesh/quad_face_interface_keys"]
+
+    @property
+    def mesh_quad_face_interface_offsets(self) -> np.ndarray:
+        return self["mesh/quad_face_interface_offsets"]
+
+    @property
+    def mesh_interface_node_keys(self) -> np.ndarray:
+        return self["mesh/interface_node_keys"]
+
+    @property
+    def mesh_interface_length(self) -> np.ndarray:
+        return self["mesh/interface_length"]
+
+    @property
+    def mesh_interface_material_keys(self) -> np.ndarray:
+        return self["mesh/interface_material_keys"]
+
+    @property
+    def mesh_interface_e1(self) -> np.ndarray:
+        return self["mesh/interface_e1"]
+
+    @property
+    def mesh_interface_e3(self) -> np.ndarray:
+        return self["mesh/interface_e3"]
+
+    @property
+    def mesh_interface_origin(self) -> np.ndarray:
+        return self["mesh/interface_origin"]
+
+    @property
+    def mesh_interface_nrow(self) -> np.ndarray:
+        return self["mesh/interface_nrow"]
+
+    @property
+    def mesh_interface_ncol(self) -> np.ndarray:
+        return self["mesh/interface_ncol"]
+
+    @property
+    def mesh_interface_nspring(self) -> np.ndarray:
+        return self["mesh/interface_nspring"]
+
+    @property
+    def mesh_interface_restrained(self) -> np.ndarray:
+        return self["mesh/interface_restrained"]
+
+    @property
+    def mesh_interface_node_xyz(self) -> np.ndarray:
+        return self["mesh/interface_node_xyz"]
+
     # Step Field Properties
     @property
     def steps(self) -> np.ndarray:
@@ -730,21 +826,39 @@ class SimulationResults:
         if self.summary and "curve" in self.summary:
             curve = self.summary["curve"]
             disp = np.asarray(curve.get("displacement_mm", []), dtype=float)
-            force = np.asarray(curve.get("force_kN", []), dtype=float)
+            force = np.asarray(curve.get("total_force_kN", curve.get("force_kN", [])), dtype=float)
             if disp.size > 0:
                 return disp, force
 
-        # Fallback to dense array dataset
-        disp = np.asarray(self["steps/displacement"], dtype=float)
-        rx = self["steps/reactions"][:, 0]
-        ry = self["steps/reactions"][:, 1]
-        rz = self["steps/reactions"][:, 2]
-        f_lat = np.hypot(rx, ry)
-        if np.max(f_lat, initial=0.0) > 1e-4:
-            force = f_lat
-        else:
-            force = np.sqrt(rx * rx + ry * ry + rz * rz)
-        return disp, force
+        # Native dense displacements are cm; this public method returns mm.
+        from histra.io.results_writer import select_pushover_force
+
+        disp = np.asarray(self["steps/displacement"], dtype=float) * 10.0
+        reactions = self["steps/reactions"]
+        _, force = select_pushover_force(*(reactions[:, axis] for axis in range(3)))
+        return disp, np.asarray(force, dtype=float)
+
+    @property
+    def quad_displacements(self) -> np.ndarray:
+        return self["fields/quad_displacements"]
+
+    def get_quad_displacement_field(self, step: int = -1) -> np.ndarray:
+        """Return independent Quad corner translations in cm, (N_quads, 4, 3)."""
+        return self.quad_displacements[step]
+
+    def get_interface_springs(self, interface_key: int, kind: str = "transverse") -> dict[str, np.ndarray]:
+        """Return committed stage-end force (kN), stress (MPa) and phase for one interface."""
+        if kind not in {"transverse", "sliding"}:
+            raise ValueError(f"Unknown spring kind: {kind}")
+        indices = np.flatnonzero(self.mesh_interface_keys == interface_key)
+        if not len(indices):
+            raise KeyError(interface_key)
+        index = int(indices[0])
+        offsets = self[f"springs/{kind}_offsets"]
+        span = slice(int(offsets[index]), int(offsets[index + 1]))
+        return {name: self[f"springs/{kind}_{name}"][span]
+                for name in ("force", "stress", "phase", "area", "stress_valid")
+                if f"springs/{kind}_{name}" in self}
 
     def get_displacement_field(self, step: int = -1) -> np.ndarray:
         """Returns (N_nodes, 3) translations [ux, uy, uz] at specified step."""
