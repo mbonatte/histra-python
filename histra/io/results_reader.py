@@ -569,9 +569,20 @@ class SimulationResults:
         self.summary = summary
 
     @classmethod
-    def load(cls, filepath: str | Path) -> "SimulationResults":
-        """Open a simulation result dataset from .summary.json, .fields.npz, or .fields.h5."""
+    def load(cls, filepath: str | Path, *, case_id: str | None = None) -> "SimulationResults":
+        """Open a .histra case or a legacy JSON/NPZ/HDF5 dataset."""
         p = Path(filepath).resolve()
+        if p.suffix.lower() == ".histra":
+            from histra.io.bundle import BundleStore
+
+            store = BundleStore(p)
+            try:
+                return cls._from_bundle(p, store.case_data(case_id))
+            except Exception:
+                store.close()
+                raise
+        if case_id is not None:
+            raise ValueError("case_id is supported for .histra bundles only")
         name = p.name
 
         # Strip suffixes to find root stem
@@ -641,6 +652,22 @@ class SimulationResults:
         import json
 
         path = Path(filepath).resolve()
+        if path.suffix.lower() == ".histra":
+            from histra.io.bundle import BundleStore
+
+            store = BundleStore(path)
+            readers = {}
+            try:
+                for case_id in store.manifest["cases"]:
+                    readers[case_id] = cls._from_bundle(path, store.case_data(case_id))
+            except Exception:
+                for reader in readers.values():
+                    reader.close()
+                store.close()
+                raise
+            if not readers:
+                store.close()
+            return readers
         manifest = json.loads(path.read_text(encoding="utf-8"))
         if str(manifest.get("schema_version", "")).split(".")[0] != "2":
             raise ValueError("Unsupported session result schema")
@@ -656,6 +683,44 @@ class SimulationResults:
                 result.close()
             raise
         return results
+
+    @classmethod
+    def _from_bundle(cls, path, data):
+        return cls(path, path, None, data, data.case["summary"] or {})
+
+    @classmethod
+    def list_cases(cls, filepath: str | Path) -> list[str]:
+        """Inspect a .histra manifest without loading numerical arrays."""
+        from histra.io.bundle import BundleStore
+
+        store = BundleStore(filepath)
+        try:
+            return list(store.manifest["cases"])
+        finally:
+            store.close()
+
+    @property
+    def bundle_metadata(self):
+        return dict(self._bundle_data().store.manifest["metadata"])
+
+    def _bundle_data(self):
+        from histra.io.bundle import BundleCaseData
+
+        if not isinstance(self._data, BundleCaseData):
+            raise ValueError("This operation requires an open .histra bundle")
+        return self._data
+
+    def get_model_source(self) -> bytes:
+        """Return the selected case's embedded HRX bytes; never extract automatically."""
+        data = self._bundle_data()
+        return data.store.blob("models", data.case["model_sha256"])
+
+    @property
+    def attachment_names(self) -> list[str]:
+        return list(self._bundle_data().store.manifest["attachments"])
+
+    def get_attachment(self, name: str) -> bytes:
+        return self._bundle_data().store.blob("attachments", name)
 
     def close(self) -> None:
         if self._data is not None:
@@ -846,8 +911,27 @@ class SimulationResults:
         """Return independent Quad corner translations in cm, (N_quads, 4, 3)."""
         return self.quad_displacements[step]
 
+    @property
+    def model_points(self) -> list[dict[str, Any]]:
+        """Named monitoring points from summary JSON; empty for older exports."""
+        return self.summary.get("model_points", {}).get("points", [])
+
+    def get_model_point_curve(self, point_key: int, component: str = "uz", unit: str = "mm"):
+        """Return (steps, signed displacement) for one ModelPoint key, not element key."""
+        if component not in {"ux", "uy", "uz"} or unit not in {"cm", "mm"}:
+            raise ValueError("Use component ux/uy/uz and unit cm/mm")
+        for point in self.model_points:
+            if int(point["key"]) != int(point_key):
+                continue
+            if not point["available"]:
+                raise ValueError(point.get("error") or "Model point output is unavailable")
+            return (np.asarray(self.summary["model_points"]["step"], dtype=np.int64),
+                    np.asarray(point[f"displacement_{unit}"][component], dtype=np.float64))
+        raise KeyError(point_key)
+
     def get_interface_springs(self, interface_key: int, kind: str = "transverse") -> dict[str, np.ndarray]:
-        """Return committed stage-end force (kN), stress (MPa) and phase for one interface."""
+        """Return committed stage-end stress, strain, plastic and phase fields for one interface."""
+        from histra.io.spring_response import SPRING_RESPONSE_FIELDS
         if kind not in {"transverse", "sliding"}:
             raise ValueError(f"Unknown spring kind: {kind}")
         indices = np.flatnonzero(self.mesh_interface_keys == interface_key)
@@ -857,8 +941,25 @@ class SimulationResults:
         offsets = self[f"springs/{kind}_offsets"]
         span = slice(int(offsets[index]), int(offsets[index + 1]))
         return {name: self[f"springs/{kind}_{name}"][span]
-                for name in ("force", "stress", "phase", "area", "stress_valid")
+                for name in SPRING_RESPONSE_FIELDS
                 if f"springs/{kind}_{name}" in self}
+
+    def get_quad_springs(self, quad_key: int | None = None) -> dict[str, np.ndarray]:
+        """Return stage-end diagonal spring responses in mesh Quad order (or one Quad)."""
+        from histra.io.spring_response import SPRING_RESPONSE_FIELDS
+
+        span = slice(None)
+        if quad_key is not None:
+            indices = np.flatnonzero(self.mesh_quad_keys == quad_key)
+            if not len(indices):
+                raise KeyError(quad_key)
+            index = int(indices[0])
+            span = slice(index, index + 1)
+        fields = {name: self[f"springs/quad_{name}"][span]
+                  for name in SPRING_RESPONSE_FIELDS if f"springs/quad_{name}" in self}
+        if not fields:
+            raise KeyError("Quad spring responses are absent in this export")
+        return fields
 
     def get_displacement_field(self, step: int = -1) -> np.ndarray:
         """Returns (N_nodes, 3) translations [ux, uy, uz] at specified step."""

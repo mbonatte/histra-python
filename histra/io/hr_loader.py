@@ -182,6 +182,8 @@ def _parse_model_point(elem: ET.Element) -> ModelPoint:
         element_key=_safe_int(_attr(elem, "ElementKey", "IdElement", default="0")),
         element_type=_attr(elem, "ElementType", default=""),
         id_vertex=_safe_int(_attr(elem, "IdVertex", default="0")),
+        name=_attr(elem, "Name", default=""),
+        description=_attr(elem, "Description", default=""),
     )
 
 

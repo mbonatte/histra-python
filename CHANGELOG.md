@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.7.2 - 2026-10-26
+
+- Add named ModelPoint XYZ displacement histories to summary JSON and bundled summaries, with cm/mm units, locations, analysis flags and reader plotting accessors. Retain point labels and predecessor histories at the analysis boundary.
+
+- Extend native viewer schema to 2.1.0 with C# spring strain, plastic displacement/strain/demand and explicit phase/rupture/history indicators for fibres, sliding and Quad diagonals. Preserve undefined native divisions through validity masks.
+
+- Add opt-in capture and native C# `.Results` SQLite output for supported static masonry states, with exact stored-record comparison against reference databases. File-byte identity and automatic solver bit parity are not claimed.
+
+- Add lossless single-file `.histra` study bundles using ZIP/LZMA, reversible byte shuffling and content-based deduplication across cases, with embedded HRX sources and attachments.
+- Add session bundle export, lazy `SimulationResults` bundle loading, full integrity verification and a converter for existing JSON/NPZ/HDF5 outputs with optional verified cleanup. See the [bundle guide](docs/reference/histra-bundle-format.md).
+
 - Reorganize current documentation around usage, architecture, tooling and release workflows; archive superseded V1/refactoring plans and correct stale paths/preparation descriptions.
 - Remove a verified duplicate model ZIP, consolidate dependency entry points, and relocate source-only analytical/profiling utilities out of the repository root.
 

@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-25T12:49:11.005030+00:00",
-  "source_commit": "1ecf20e6f0c32464df2f26adb5ee0cf8f6a7fdf0",
+  "generated_at": "2026-10-26T12:23:48.241792+00:00",
+  "source_commit": "712c93a47fc5e1ea9fbf0af4ee588deaddb8d370",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 99,
     "classes": 115,
-    "function_definitions": 878
+    "function_definitions": 880
   },
   "files": [
     {
@@ -35,7 +35,7 @@
     {
       "path": "histra/model/load.py",
       "status": "inventory_only",
-      "lf_sha256": "7fa5624b3c2e30bdb1c3d70f85ce2fec43193a0102f0ef2800b90f8d86efb7e2",
+      "lf_sha256": "9e6a7e01f69a13451f9fda849831e211b54f3bf1d88dd138c9bce4b2bc049f0b",
       "classes": [
         {
           "name": "LoadCombinationItem",
@@ -75,7 +75,7 @@
         },
         {
           "name": "Analysis",
-          "line": 174
+          "line": 176
         }
       ],
       "functions": [
@@ -4180,7 +4180,7 @@
     {
       "path": "histra/solver/nonlinear_step.py",
       "status": "inventory_only",
-      "lf_sha256": "5a95fa5afba3b2805eefec0fe21c91ff3485e59943aa083f7a6b2eb6ea144b0c",
+      "lf_sha256": "dc94677bbdc09dc3a7b0bb28f192c5495865ac0dff634aec69dd84289e218571",
       "classes": [],
       "functions": [
         {
@@ -4200,7 +4200,7 @@
     {
       "path": "histra/solver/outcomes.py",
       "status": "inventory_only",
-      "lf_sha256": "4b7db2bce0440f4e7462b8533004a06688a24d11898cfeb5148f34a320bb69bc",
+      "lf_sha256": "dd7dce199a1ec24a53ddd95cffc50f4c64c7805538a5de2cc8e6f2b5b084b4bc",
       "classes": [
         {
           "name": "AnalysisOutcome",
@@ -4282,23 +4282,23 @@
         },
         {
           "name": "AnalysisExecution.committed_steps",
-          "line": 170
+          "line": 173
         },
         {
           "name": "AnalysisExecution.completed",
-          "line": 174
+          "line": 177
         },
         {
           "name": "AnalysisExecution.output_steps",
-          "line": 183
+          "line": 186
         },
         {
           "name": "classify_analysis_outcome",
-          "line": 188
+          "line": 191
         },
         {
           "name": "_optional_float",
-          "line": 209
+          "line": 212
         }
       ]
     },
@@ -4469,7 +4469,7 @@
     {
       "path": "histra/solver/session.py",
       "status": "inventory_only",
-      "lf_sha256": "fd9f8199cd0ad7eb91a4c479c577f954af31c1827d3601457ffe4e09e5143e20",
+      "lf_sha256": "3ad5d796d8934ae35a6da2ac39dc9c5c49324505accb9fcf28480dfd330791dd",
       "classes": [
         {
           "name": "AnalysisSessionError",
@@ -4487,47 +4487,55 @@
         },
         {
           "name": "AnalysisSession.usable",
-          "line": 143
+          "line": 145
         },
         {
           "name": "AnalysisSession._require_usable",
-          "line": 147
+          "line": 149
         },
         {
           "name": "AnalysisSession.resolve_analysis",
-          "line": 154
+          "line": 156
         },
         {
           "name": "AnalysisSession.change_interface_materials",
-          "line": 174
+          "line": 176
         },
         {
           "name": "AnalysisSession.run",
-          "line": 257
+          "line": 259
         },
         {
           "name": "AnalysisSession.dependency_chain",
-          "line": 436
+          "line": 451
         },
         {
           "name": "AnalysisSession.run_to",
-          "line": 462
-        },
-        {
-          "name": "AnalysisSession.run_sequence",
           "line": 477
         },
         {
+          "name": "AnalysisSession.run_sequence",
+          "line": 492
+        },
+        {
           "name": "AnalysisSession.export_analysis",
-          "line": 490
+          "line": 505
         },
         {
           "name": "AnalysisSession.export_session",
-          "line": 555
+          "line": 570
+        },
+        {
+          "name": "AnalysisSession.export_csharp_results",
+          "line": 641
+        },
+        {
+          "name": "AnalysisSession.export_bundle",
+          "line": 647
         },
         {
           "name": "_outcome_message",
-          "line": 615
+          "line": 660
         }
       ]
     },
@@ -4567,7 +4575,7 @@
     {
       "path": "histra/solver/solve.py",
       "status": "inventory_only",
-      "lf_sha256": "055824c9e3f27f458d1a8b17dcf7384210b142f1d5e1d6c6d1e52911168728b9",
+      "lf_sha256": "4ef173d2739a5532d56a437cfb77a4a3d8cb8519f225687bf8f0217c991579fb",
       "classes": [],
       "functions": [
         {
@@ -4576,7 +4584,7 @@
         },
         {
           "name": "_solve_static_nonlinear_impl",
-          "line": 139
+          "line": 144
         }
       ]
     },

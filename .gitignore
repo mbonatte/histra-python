@@ -38,3 +38,6 @@ csharp_runner/
 
 # Keep reference models as individual audited files, not duplicate archives.
 histra/model-output/*.zip
+
+# Generated single-file simulation studies.
+*.histra

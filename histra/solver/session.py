@@ -93,10 +93,12 @@ class AnalysisSession:
         tangent_refresh_cadence: int | None = None,
         allow_experimental_methods: bool = False,
         interface_registration: str = "csharp",
+        capture_csharp_results: bool = False,
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
         self.model = model
+        self.capture_csharp_results = bool(capture_csharp_results)
         self.interface_registration = normalize_interface_registration(interface_registration)
         self.combination_row = int(combination_row)
         self.on_log = on_log
@@ -340,6 +342,13 @@ class AnalysisSession:
                 restart_from_current_state=True,
             )
 
+        capture = None
+        if self.capture_csharp_results:
+            from histra.io.csharp_results_capture import CSharpResultsCapture
+
+            if int(definition.analysis_type) == 5:
+                raise AnalysisSessionError("Native .Results capture currently supports static Quad/Interface analyses only")
+            capture = CSharpResultsCapture(self.model, self.combination_row)
         started = time.perf_counter()
         try:
             if int(getattr(definition, "analysis_type", 0)) == 5:
@@ -365,6 +374,7 @@ class AnalysisSession:
                     max_committed_steps=max_committed_steps,
                     should_stop_after_commit=should_stop_after_commit,
                     on_step_committed=on_step_committed,
+                    on_state_saved=capture.capture if capture is not None else None,
                     should_cancel=should_cancel,
                     linear_solver_backend=getattr(
                         definition, "linear_solver_backend", self.linear_solver_backend
@@ -401,6 +411,7 @@ class AnalysisSession:
         steps = tuple(AnalysisStep.from_mapping(step) for step in raw_steps)
         outcome = classify_analysis_outcome(int(code), steps, definition)
         from histra.io.results_snapshot import capture_export_snapshot
+        from histra.io.model_point_summary import build_model_point_summary
 
         execution = AnalysisExecution(
             analysis_key=int(definition.key),
@@ -418,6 +429,10 @@ class AnalysisSession:
             initial_step=initial_step,
             modal_result=modal_result,
             export_snapshot=capture_export_snapshot(self.model) if modal_result is None else None,
+            csharp_records=capture.finish(definition.key) if capture is not None and capture.last_row is not None else None,
+            model_point_output=build_model_point_summary(
+                self.model, ((initial_step,) if initial_step is not None else ()) + tuple(s for s in steps if s.committed), definition,
+            ) if modal_result is None else None,
         )
         committed = execution.committed_steps
         if execution.completed and execution.modal_result is not None:
@@ -507,7 +522,7 @@ class AnalysisSession:
             Target directory for export.
         base_name : str, optional
             Base filename prefix (defaults to '{model_name}_{analysis_name}').
-        format : {"npz", "h5", "json"}, default="npz"
+        format : {"npz", "h5", "json", "histra", "results"}, default="npz"
             Array format for dense fields.
         tier : {"all", "summary", "fields"}, default="all"
             Which tiers to export.
@@ -569,7 +584,7 @@ class AnalysisSession:
             Target directory.
         bundle_name : str
             Prefix for all exported analyses.
-        format : {"npz", "h5", "json"}, default="npz"
+        format : {"npz", "h5", "json", "histra", "results"}, default="npz"
             Array format for dense fields.
         tier : {"all", "summary", "fields"}, default="all"
             Which tiers to export.
@@ -585,6 +600,18 @@ class AnalysisSession:
         """
         if not self.executions:
             raise AnalysisSessionError("Session contains no completed or executed analyses to export.")
+
+        if str(format).lower().strip() in {"results", "result", "csharp"}:
+            if str(tier).lower().strip() != "all":
+                raise ValueError("Native .Results export requires tier='all'")
+            path = self.export_csharp_results(Path(output_dir) / bundle_name)
+            return {execution.analysis_name: {"results": path} for execution in self.executions}
+        if str(format).lower().strip() == "histra":
+            path = self.export_bundle(
+                Path(output_dir) / bundle_name, tier=tier,
+                include_node_displacements=include_node_displacements, metadata=metadata,
+            )
+            return {execution.analysis_name: {"bundle": path} for execution in self.executions}
 
         results: dict[str, dict[str, Path]] = {}
         from histra.io.results_writer import ResultsWriter
@@ -610,6 +637,24 @@ class AnalysisSession:
 
         write_session_manifest(self.model, results, Path(output_dir) / f"{bundle_name}.session.json")
         return results
+
+    def export_csharp_results(self, filepath, *, reference_path=None) -> Path:
+        """Export captured native static records; optionally demand exact reference values."""
+        from histra.io.csharp_results_writer import export_csharp_executions
+
+        return export_csharp_executions(self.executions, filepath, reference_path=reference_path)
+
+    def export_bundle(self, filepath, *, tier="all", include_node_displacements=True, metadata=None) -> Path:
+        """Export the latest execution of every analysis in one .histra file."""
+        from histra.io.results_writer import ResultsWriter
+
+        if not self.executions:
+            raise AnalysisSessionError("Session contains no executed analyses to export.")
+        latest = {execution.analysis_name: execution for execution in self.executions}
+        return ResultsWriter.export_bundle(
+            self.model, latest, filepath, tier=tier,
+            include_node_displacements=include_node_displacements, metadata=metadata,
+        )
 
 
 def _outcome_message(outcome: AnalysisOutcome) -> str:

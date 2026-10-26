@@ -51,6 +51,7 @@ def solve_static_nonlinear(
     max_committed_steps: int | None = None,
     should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
     on_step_committed: Callable[[dict[str, Any], Any], None] | None = None,
+    on_state_saved: Callable[[dict[str, Any], Any], None] | None = None,
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
@@ -73,6 +74,9 @@ def solve_static_nonlinear(
     It is intended for path-dependent terminal conditions such as a descending
     ArcLength branch returning to zero load; it is never evaluated on trial or
     failed states.
+
+    ``on_state_saved`` observes step 0 and committed state before integrator
+    domain changes. It is used for native database capture; it must not mutate state.
 
     ``on_step_committed`` receives the same committed row plus the private
     analysis definition used by the solve. It may adjust continuation controls
@@ -103,6 +107,7 @@ def solve_static_nonlinear(
                     max_committed_steps=max_committed_steps,
                     should_stop_after_commit=should_stop_after_commit,
                     on_step_committed=on_step_committed,
+                    on_state_saved=on_state_saved,
                     should_cancel=should_cancel,
                     diagnostics=diagnostics,
                     linear_solver_backend=linear_solver_backend,
@@ -150,6 +155,7 @@ def _solve_static_nonlinear_impl(
     max_committed_steps: int | None = None,
     should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
     on_step_committed: Callable[[dict[str, Any], Any], None] | None = None,
+    on_state_saved: Callable[[dict[str, Any], Any], None] | None = None,
     should_cancel: CancelCheck | None = None,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
@@ -219,6 +225,11 @@ def _solve_static_nonlinear_impl(
     equilibrium_residual_tolerance = setup.equilibrium_residual_tolerance
 
     try:
+        if on_state_saved is not None:
+            on_state_saved({
+                "step": 0, "u": p.u.copy(), "elastic_energy": 0.0, "dissipated_energy": 0.0,
+                "reaction_x": initial_reaction.x, "reaction_y": initial_reaction.y, "reaction_z": initial_reaction.z,
+            }, analysis)
         final_code, step_data, unsafe_equilibrium_steps, step = _execute_steps(
             model, analysis, combination,
             p=p, ls=ls, n=n, integrator=integrator, algorithm=algorithm,
@@ -233,6 +244,7 @@ def _solve_static_nonlinear_impl(
             equilibrium_force_relative_tolerance=equilibrium_force_relative_tolerance,
             equilibrium_residual_tolerance=equilibrium_residual_tolerance,
             on_step_committed=on_step_committed,
+            on_state_saved=on_state_saved,
             should_stop_after_commit=should_stop_after_commit,
             max_committed_steps=max_committed_steps,
         )

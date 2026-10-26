@@ -3,6 +3,9 @@ from importlib.metadata import PackageNotFoundError, version
 from histra.io.hr_loader import load_model
 from histra.io.results_reader import SimulationResults
 from histra.io.results_writer import ResultsWriter
+from histra.io.bundle_conversion import pack_results_directory
+from histra.io.bundle import verify_bundle
+from histra.io.csharp_results_writer import compare_csharp_results
 from histra.solver.backend_api import (
     ConcreteInterfaceMutation,
     PythonAnalysisRequest,
@@ -77,6 +80,9 @@ __all__ = [
     "__version__",
     "load_model",
     "ResultsWriter",
+    "pack_results_directory",
+    "verify_bundle",
+    "compare_csharp_results",
     "SimulationResults",
     "AnalysisSession",
     "AnalysisSessionError",

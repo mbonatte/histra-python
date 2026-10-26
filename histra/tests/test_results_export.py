@@ -307,7 +307,7 @@ def test_bundle_manifest_relative_references_and_curve_only(vert_execution, tmp_
     shutil.move(tmp_path / "original", tmp_path / "moved")
     base = tmp_path / "moved"
     manifest = json.loads((base / "bundle.session.json").read_text())
-    assert manifest["schema_version"] == "2.0.0"
+    assert manifest["schema_version"] == "2.1.0"
     assert len(manifest["cases"]) == len(session.executions)
     for case in manifest["cases"]:
         assert not case["curve_only"]

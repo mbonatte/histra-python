@@ -21,6 +21,8 @@ qualify their recorded inputs and source revisions, rather than the entire packa
 - [Supported features](reference/v1-supported-features.md)
 - [C# feature matrix](reference/v1-csharp-feature-matrix.md)
 - [Data model](reference/data-model.md)
+- [C# SQLite results export](reference/csharp-results-export.md)
+- [Single-file study bundles](reference/histra-bundle-format.md)
 - [Native simulation results format](reference/native-results-format.md)
 - [Glossary](reference/glossary.md)
 - [Porting notes](reference/porting-notes.md)

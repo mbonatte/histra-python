@@ -1,9 +1,13 @@
 # Current feature status
 
-The latest package release is **1.7.1**. Its native results schema is **2.0.0**;
+The latest package release is **1.7.2**. Its native results schema is **2.1.0**;
 package and file-format versions are independent. The
 [results reference](reference/native-results-format.md) defines corrected units,
-force curves, topology, stage snapshots and portable session manifests.
+force curves, topology, named model-point histories and stage-end spring strain/plastic-state snapshots.
+[Single-file bundles](reference/histra-bundle-format.md) provide lossless compressed
+study storage. Optional [C# SQLite output](reference/csharp-results-export.md)
+preserves the native schema for supported captured static states; new Python solves
+are not guaranteed to reproduce C# values bit for bit.
 
 This page describes capabilities and remaining limits. Exact numerical and
 performance claims belong to their dated benchmark reports.

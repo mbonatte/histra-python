@@ -32,9 +32,9 @@ from histra import AnalysisSession, SimulationResults, load_model
 model = load_model("bridge.hrx")
 session = AnalysisSession(model, equilibrium_policy="error")
 execution = session.run("Vert")
-files = session.export_analysis("Vert", "python-results")
+bundle = session.export_bundle("python-results/bridge.histra")
 
-with SimulationResults.load(files["summary"]) as results:
+with SimulationResults.load(bundle, case_id="Vert") as results:
     displacement_mm, total_force_kN = results.get_pushover_curve()
 ```
 
@@ -44,12 +44,27 @@ retains committed state in memory. Apply interface-material changes only at
 committed analysis boundaries. See [analysis chains](docs/guides/analysis-chains.md)
 and [preprocessing](docs/guides/preprocessing.md).
 
-Native output uses a summary JSON plus NPZ/HDF5 dense fields. Schema 2.0.0
-explicitly declares cm, kN, kN·cm, MPa and rad, and includes independent Quad
-corner translations, interface topology and stage-end spring spans.
-`session.export_session("python-results", "bridge")` also writes a portable
-session index. See the [results format](docs/reference/native-results-format.md)
-for units, force conventions and migration from older exports.
+Use `.histra` for one portable, losslessly compressed study file containing all
+exported analyses, summary curves, dense fields and the source HRX when available.
+Identical arrays are stored once across cases. Native schema 2.1.0 also exposes
+committed spring strain, plastic demand and C# phase/rupture indicators with
+explicit validity masks. Summary JSON also includes named model-point XYZ
+displacement histories for plotting without loading dense fields. Existing
+JSON/NPZ/HDF5 exports remain supported; their API defaults are preserved for compatibility.
+
+C# SQLite `.Results` export is also available with capture enabled before solving;
+see the [native export guide](docs/reference/csharp-results-export.md) for the
+exactness contract and supported scope.
+
+Convert existing exports without rerunning the solver:
+
+```console
+python -m histra.tools.pack_results python-results --output bridge.histra --model bridge.hrx
+```
+
+See the [bundle guide and specification](docs/reference/histra-bundle-format.md)
+and [numerical results schema](docs/reference/native-results-format.md) for
+loading cases, cleanup options, units and force conventions.
 
 For the standalone command:
 

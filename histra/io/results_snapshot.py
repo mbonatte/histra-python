@@ -141,6 +141,9 @@ def _add_spring_arrays(model, interfaces, arrays):
         np.divide(10.0 * arrays[f"springs/{kind}_force"], area, out=stress, where=valid)
         arrays[f"springs/{kind}_stress"] = stress.astype(np.float32)
 
+    from histra.io.spring_snapshot import add_spring_responses
+
+    add_spring_responses(runtime, interfaces, transverse, sliding, arrays)
     order = arrays["_export/interface_record_order"]
     arrays["springs/runtime_arrays/all_resultant_forces"] = runtime.all_resultant_forces()[order]
     arrays["springs/runtime_arrays/all_bending_moments"] = runtime.all_bending_moments()[order]

@@ -8,6 +8,7 @@ Provides two-tier output for HiStrA simulations:
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -22,8 +23,12 @@ import histra
 from histra.model.model import Model
 from histra.postprocessing import compute_node_displacements, quad_node_displacement
 from histra.io.results_snapshot import capture_export_snapshot
+from histra.io.spring_response import SPRING_RESPONSE_METADATA
+from histra.io.model_point_summary import build_model_point_summary
 from histra.solver.outcomes import AnalysisExecution, AnalysisOutcome
 
+
+NATIVE_RESULTS_SCHEMA = "2.1.0"
 
 NATIVE_UNITS = {
     "length": "cm", "displacement": "cm", "force": "kN",
@@ -50,7 +55,7 @@ class ResultsWriter:
         model: Model,
         execution: AnalysisExecution,
         filepath: str | Path,
-        format: str = "npz",  # "npz" | "h5" | "json"
+        format: str = "npz",  # "npz" | "h5" | "json" | "histra"
         tier: str = "all",     # "summary" | "fields" | "all"
         include_node_displacements: bool = True,
         metadata: dict[str, Any] | None = None,
@@ -66,9 +71,11 @@ class ResultsWriter:
         filepath : str or Path
             Target base filepath. Suffixes (.npz, .h5, .summary.json, etc.)
             are stripped to form the stem.
-        format : {"npz", "h5", "json"}, default="npz"
+        format : {"npz", "h5", "json", "histra", "results"}, default="npz"
             Array storage format. "npz" uses compressed NumPy; "h5" uses HDF5
             (falls back to .npz if h5py is not installed). "json" writes Tier 1 only.
+            "histra" writes both tiers into a single compressed bundle.
+            "results" writes captured native C# SQLite records (tier="all" only).
         tier : {"all", "summary", "fields"}, default="all"
             Which tiers to export.
         include_node_displacements : bool, default=True
@@ -79,10 +86,23 @@ class ResultsWriter:
         Returns
         -------
         dict[str, Path]
-            Dictionary containing created file paths: {'summary': path, 'fields': path}.
+            Created paths: {'summary': path, 'fields': path}, or {'bundle': path}.
         """
         format = str(format).lower().strip()
         tier = str(tier).lower().strip()
+        if format in {"results", "result", "csharp"}:
+            from histra.io.csharp_results_writer import export_csharp_executions
+
+            if tier != "all":
+                raise ValueError("Native .Results export requires tier='all'")
+            return {"results": export_csharp_executions([execution], filepath)}
+        if format == "histra":
+            name = _output_stem(Path(filepath).name)
+            path = ResultsWriter.export_bundle(
+                model, {name: execution}, Path(filepath).parent / f"{name}.histra",
+                tier=tier, include_node_displacements=include_node_displacements, metadata=metadata,
+            )
+            return {"bundle": path}
         if format not in {"npz", "h5", "json"}:
             raise ValueError(f"Unsupported result format: {format}")
         if tier not in {"all", "summary", "fields"}:
@@ -159,6 +179,36 @@ class ResultsWriter:
         return created
 
 
+    @staticmethod
+    def export_bundle(model, executions, filepath, *, tier="all", include_node_displacements=True, metadata=None):
+        """Write every selected execution into one verified .histra file."""
+        from histra.io.bundle import HistraBundleWriter
+
+        tier = str(tier).lower().strip()
+        if tier not in {"all", "summary", "fields"}:
+            raise ValueError(f"Unsupported result tier: {tier}")
+        if not executions:
+            raise ValueError("No executions selected for the bundle")
+        path = Path(filepath)
+        if path.suffix.lower() != ".histra":
+            path = path.with_name(path.name + ".histra")
+        with HistraBundleWriter(path, metadata=metadata) as writer:
+            source = getattr(model, "source_path", None)
+            model_sha = writer.add_model(source) if source and Path(source).is_file() else None
+            for case_id, execution in executions.items():
+                summary = _build_summary_manifest(model, execution, case_id, metadata) if tier != "fields" else None
+                arrays = _build_dense_field_arrays(model, execution, include_node_displacements) if tier != "summary" else {}
+                writer.add_case(case_id, summary, arrays, model_sha256=model_sha)
+        return path
+
+
+def _output_stem(name):
+    for suffix in (".summary.json", ".fields.npz", ".fields.h5", ".histra", ".npz", ".h5", ".json"):
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+    return name
+
+
 def _compute_sha256(filepath: str | Path) -> str | None:
     p = Path(filepath)
     if not p.is_file():
@@ -229,7 +279,7 @@ def _build_summary_manifest(
 
     meta: dict[str, Any] = {
         "case_id": case_id,
-        "schema_version": "2.0.0",
+        "schema_version": NATIVE_RESULTS_SCHEMA,
         "title": str(getattr(model, "title", model_name)),
         "model_name": model_name,
         "model_file": Path(model_src).name if model_src else "",
@@ -239,11 +289,13 @@ def _build_summary_manifest(
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "generator": f"histra-python {getattr(histra, '__version__', '1.6.4')}",
         "units": NATIVE_UNITS.copy(),
+        "spring_response": copy.deepcopy(SPRING_RESPONSE_METADATA),
     }
     if extra_metadata:
         meta.update(extra_metadata)
-        meta["schema_version"] = "2.0.0"
+        meta["schema_version"] = NATIVE_RESULTS_SCHEMA
         meta["units"] = NATIVE_UNITS.copy()
+        meta["spring_response"] = copy.deepcopy(SPRING_RESPONSE_METADATA)
         if meta.get("model_file"):
             meta["model_file"] = Path(meta["model_file"]).name
 
@@ -276,6 +328,7 @@ def _build_summary_manifest(
             "elastic_energy": [s.get("elastic_energy") for s in steps],
             "dissipated_energy": [s.get("dissipated_energy") for s in steps],
         },
+        "model_points": _model_point_output(model, execution),
         "reactions": {
             "reaction_x": rx,
             "reaction_y": ry,
@@ -285,6 +338,15 @@ def _build_summary_manifest(
     }
 
 
+
+def _model_point_output(model, execution):
+    captured = getattr(execution, "model_point_output", None)
+    if captured is not None:
+        return copy.deepcopy(captured)
+    definitions = getattr(model.collections, "analyses", {}) or {}
+    return build_model_point_summary(model, execution.output_steps, definitions.get(execution.analysis_key))
+
+
 def _build_dense_field_arrays(
     model: Model,
     execution: AnalysisExecution,
@@ -292,8 +354,9 @@ def _build_dense_field_arrays(
 ) -> dict[str, np.ndarray]:
     """Extract and build all dense NumPy arrays for Tier 2 storage."""
     arrays: dict[str, np.ndarray] = {
-        "metadata/schema_version": np.asarray("2.0.0"),
+        "metadata/schema_version": np.asarray(NATIVE_RESULTS_SCHEMA),
         "metadata/units": np.asarray(json.dumps(NATIVE_UNITS)),
+        "metadata/spring_response": np.asarray(json.dumps(SPRING_RESPONSE_METADATA)),
     }
 
     snapshot = execution.export_snapshot
@@ -421,7 +484,7 @@ def write_session_manifest(model, results, filepath: Path):
                 raise FileExistsError(f"Bundle model path contains a different model: {target}")
             shutil.copyfile(source, target)
     manifest = {
-        "schema_version": "2.0.0",
+        "schema_version": NATIVE_RESULTS_SCHEMA,
         "units": NATIVE_UNITS.copy(),
         "model": {"file": Path(source).name if source else None,
                   "sha256": _compute_sha256(source) if source else None},
