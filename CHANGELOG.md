@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.7.3 - 2026-10-26
+
+- Accelerate CPU resultant geometry and fibre preparation while preserving C# arithmetic ordering. Skip saved computational HRX state in solver entry points and avoid duplicate compiled-runtime construction on virgin static solves.
+- Add bounded, isolated CPU batch jobs and a single-model resource runner with independent Numba/BLAS thread budgets, optional project-local LP64 OpenBLAS installation, actual native-library reporting, and `.histra` output. Retain committed output after cooperative cancellation/failure where export completes before the hard deadline.
+- Add an opt-in experimental NVIDIA cuDSS FP64 sparse backend, deterministic mode, reusable factors, and CPU/GPU precision and performance tools. CPU element kernels, compiled coverage checks and strict job equilibrium auditing remain enabled.
+- Record model-specific CPU and GPU evidence. Repeated numeric factorization of the captured 47,768-DOF system improved 3.35× with optimized CPU BLAS and 18.18× with cuDSS. These are matrix-phase measurements, not whole-analysis speedups. Full Dhir CPU/GPU attempts timed out after two committed load steps; full-history GPU parity is not qualified, and the larger Article Bridge 1 GPU comparison exceeds the requested tolerance.
+- Add regression coverage for loader equivalence, initialization count, resource isolation, native ABI checks, process timeouts, partial-result exports, and solver factorization lifecycle.
+
 ## 1.7.2 - 2026-10-26
 
 - Add named ModelPoint XYZ displacement histories to summary JSON and bundled summaries, with cm/mm units, locations, analysis flags and reader plotting accessors. Retain point labels and predecessor histories at the analysis boundary.

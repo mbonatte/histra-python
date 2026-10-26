@@ -22,6 +22,9 @@ Run a module with `--help` for its actual arguments.
 | `strategy_benchmark` | Model-specific nonlinear solver-strategy qualification |
 | `linear_solver_benchmark` | Sparse linear-backend experiments |
 | `cpu_workflow_benchmark` | Compare CPU loading, preparation and solve phases with exact history/state arrays |
+| `run_large_model` | One model with separate kernel/BLAS thread teams and a results bundle |
+| `setup_openblas` | Install optional project-local LP64 OpenBLAS without changing system packages |
+| `native_capacity_benchmark` | Measure FP64 factorization, RHS reuse and numeric refactorization |
 | `parallel_solver_jobs` | Run independent CPU model jobs with bounded workers and strict equilibrium checks |
 | `pack_results` | Convert native NPZ/HDF5/JSON exports to one verified `.histra` study bundle |
 | `release_manifest` | Generate archive SHA-256 checksums |

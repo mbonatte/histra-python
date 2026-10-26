@@ -308,6 +308,11 @@ def _resolve_linear_solver_backend(
             "CHOLMOD was requested but no native library was found; set "
             "HISTRA_CHOLMOD_LIBRARY or select another backend.",
         )
+    if system.backend == "cudss":
+        from histra.types.cudss import probe_cudss
+
+        available, error = probe_cudss()
+        return system.requested_backend, system.backend, available, error
     return system.requested_backend, system.backend, True, None
 
 

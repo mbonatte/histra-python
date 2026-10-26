@@ -1,0 +1,974 @@
+{
+  "schema_version": 1,
+  "source_commit": "40596c23c3d6d777a3a53d2fae9d5ea16858d9f9",
+  "working_tree_dirty": true,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.12.3",
+  "packages": {
+    "histra-python": "1.7.2",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "numba": "0.67.0",
+    "nvmath-python": "1.0.0",
+    "nvidia-cudss-cu12": "0.8.0.10"
+  },
+  "gpu_inventory": "NVIDIA GeForce RTX 4060 Laptop GPU, 595.99.02, 8188 MiB",
+  "generated_at": "2026-10-26T18:50:13.283003+00:00",
+  "generator": "histra GPU benchmark aggregation",
+  "benchmark_id": "rtx4060-bridge-screen-2026-10-26",
+  "cpu": "Intel Core i7-13650HX, 20 logical CPUs",
+  "absolute_tolerance": 1e-09,
+  "relative_tolerance": 0,
+  "comparisons": [
+    {
+      "scope": "identical_sparse_matrix",
+      "dofs": 336,
+      "nnz": 6144,
+      "passed": true,
+      "runs": {
+        "superlu": {
+          "status": "ok",
+          "cold": {
+            "backend": "superlu",
+            "first_solve_seconds": 0.0035400230003688193,
+            "reused_rhs_seconds": 9.161500020127278e-05,
+            "numeric_refactor_solve_seconds": 0.002800850999847171
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.0025896510001075512,
+              "reused_rhs_seconds": 8.053900000959402e-05,
+              "numeric_refactor_solve_seconds": 0.002649655999903189
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.0025946290002138994,
+              "reused_rhs_seconds": 7.805400036886567e-05,
+              "numeric_refactor_solve_seconds": 0.002616114999909769
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.0025553269997544703,
+              "reused_rhs_seconds": 7.750099985059933e-05,
+              "numeric_refactor_solve_seconds": 0.00263786200002869
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.002554682000209141,
+              "reused_rhs_seconds": 7.940700015751645e-05,
+              "numeric_refactor_solve_seconds": 0.0026432009999552974
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.002551620999838633,
+              "reused_rhs_seconds": 7.965800023157499e-05,
+              "numeric_refactor_solve_seconds": 0.002625326999805111
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.0025553269997544703,
+            "reused_rhs_seconds": 7.940700015751645e-05,
+            "numeric_refactor_solve_seconds": 0.00263786200002869
+          }
+        },
+        "cudss": {
+          "status": "ok",
+          "cold": {
+            "backend": "cudss",
+            "first_solve_seconds": 0.49422101400023166,
+            "reused_rhs_seconds": 0.0007136590002119192,
+            "numeric_refactor_solve_seconds": 0.002687078999770165
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.016183272000034776,
+              "reused_rhs_seconds": 0.00030494299971906,
+              "numeric_refactor_solve_seconds": 0.0014447839998865675
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.015751282000110223,
+              "reused_rhs_seconds": 0.0004993909997210721,
+              "numeric_refactor_solve_seconds": 0.0019739490003303217
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.01727519599990046,
+              "reused_rhs_seconds": 0.0005623279998872022,
+              "numeric_refactor_solve_seconds": 0.002112018999923748
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.016716879000341578,
+              "reused_rhs_seconds": 0.0005364959997677943,
+              "numeric_refactor_solve_seconds": 0.001997792000111076
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.016354032999970514,
+              "reused_rhs_seconds": 0.00027999500025543966,
+              "numeric_refactor_solve_seconds": 0.001326038000115659
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.016354032999970514,
+            "reused_rhs_seconds": 0.0004993909997210721,
+            "numeric_refactor_solve_seconds": 0.0019739490003303217
+          }
+        }
+      },
+      "speedup_first_solve": 0.15625057132751766,
+      "matrix_source": {
+        "model": "my_model/benchmark_1/benchmark_virgin.hrx",
+        "dofs": 336,
+        "nnz": 6144,
+        "rhs": "seed_42_random",
+        "preparation": "force=True"
+      },
+      "cudss_options": {
+        "blocking": true,
+        "multithreading_lib": "/home/mauricio/coding/histra-python/.venv/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so.0"
+      },
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/benchmark1-matrix-superlu.json",
+      "raw_report_sha256": "5466325082cb1e858fcd9deed6dc27f36cb0865c60ab1b04883fe8911a6f60e4",
+      "precision_maxima": {
+        "superlu": {
+          "solution": 2.8823514755527135e-16,
+          "residual": 4.056310842770472e-12
+        },
+        "cudss": {
+          "solution": 1.2836953722228372e-16,
+          "residual": 3.1030733538273125e-12
+        }
+      }
+    },
+    {
+      "scope": "identical_sparse_matrix",
+      "dofs": 336,
+      "nnz": 6144,
+      "passed": true,
+      "runs": {
+        "umfpack": {
+          "status": "ok",
+          "cold": {
+            "backend": "umfpack",
+            "first_solve_seconds": 0.011645733000023029,
+            "reused_rhs_seconds": 9.803400007513119e-05,
+            "numeric_refactor_solve_seconds": 0.002581868000106624
+          },
+          "samples": [
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.007808173000285024,
+              "reused_rhs_seconds": 9.490299999015406e-05,
+              "numeric_refactor_solve_seconds": 0.002684896000118897
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.007696736000070814,
+              "reused_rhs_seconds": 9.146599995801807e-05,
+              "numeric_refactor_solve_seconds": 0.002591367999684735
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.005401376000008895,
+              "reused_rhs_seconds": 4.770300029122154e-05,
+              "numeric_refactor_solve_seconds": 0.001599210999756906
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.005715489000067464,
+              "reused_rhs_seconds": 4.860600029132911e-05,
+              "numeric_refactor_solve_seconds": 0.0015794000000823871
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.0073710899996513035,
+              "reused_rhs_seconds": 4.899099985777866e-05,
+              "numeric_refactor_solve_seconds": 0.001601237000159017
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.0073710899996513035,
+            "reused_rhs_seconds": 4.899099985777866e-05,
+            "numeric_refactor_solve_seconds": 0.001601237000159017
+          }
+        },
+        "cudss": {
+          "status": "ok",
+          "cold": {
+            "backend": "cudss",
+            "first_solve_seconds": 0.015097432000402478,
+            "reused_rhs_seconds": 0.00026778900019053253,
+            "numeric_refactor_solve_seconds": 0.0013222940001469397
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.021970001999761735,
+              "reused_rhs_seconds": 0.00028837499985456816,
+              "numeric_refactor_solve_seconds": 0.0012846859999626759
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.014803651999955036,
+              "reused_rhs_seconds": 0.0002651009999681264,
+              "numeric_refactor_solve_seconds": 0.0012487080002756556
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.014673231999950076,
+              "reused_rhs_seconds": 0.00028065099968443974,
+              "numeric_refactor_solve_seconds": 0.0012868130002061662
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.015520317000209616,
+              "reused_rhs_seconds": 0.0004363329999250709,
+              "numeric_refactor_solve_seconds": 0.002041620999989391
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.015764076999857934,
+              "reused_rhs_seconds": 0.00028664999990724027,
+              "numeric_refactor_solve_seconds": 0.0013275979999889387
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.015520317000209616,
+            "reused_rhs_seconds": 0.00028664999990724027,
+            "numeric_refactor_solve_seconds": 0.0012868130002061662
+          }
+        }
+      },
+      "speedup_first_solve": 0.4749316653488296,
+      "matrix_source": {
+        "model": "my_model/benchmark_1/benchmark_virgin.hrx",
+        "dofs": 336,
+        "nnz": 6144,
+        "rhs": "seed_42_random",
+        "preparation": "force=True"
+      },
+      "cudss_options": {
+        "blocking": true,
+        "multithreading_lib": "/home/mauricio/coding/histra-python/.venv/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so.0"
+      },
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/benchmark1-matrix-umfpack.json",
+      "raw_report_sha256": "4bd0f914b31ef8fabc5c0a50e5c46015aba5cff2b6eb188123da322d20bc21ea",
+      "precision_maxima": {
+        "umfpack": {
+          "solution": 4.92227786308419e-17,
+          "residual": 3.2935876248529894e-12
+        },
+        "cudss": {
+          "solution": 3.5149834431980054e-16,
+          "residual": 3.063993503360507e-12
+        }
+      }
+    },
+    {
+      "scope": "identical_sparse_matrix",
+      "dofs": 6398,
+      "nnz": 157220,
+      "passed": true,
+      "runs": {
+        "superlu": {
+          "status": "ok",
+          "cold": {
+            "backend": "superlu",
+            "first_solve_seconds": 0.15158770500011087,
+            "reused_rhs_seconds": 0.002829618000305345,
+            "numeric_refactor_solve_seconds": 0.15216400100007377
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.14889427999969485,
+              "reused_rhs_seconds": 0.0026915380003629252,
+              "numeric_refactor_solve_seconds": 0.1505415520000497
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.1477592830001413,
+              "reused_rhs_seconds": 0.00267840000014985,
+              "numeric_refactor_solve_seconds": 0.147924303000309
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.14585243500005163,
+              "reused_rhs_seconds": 0.0026984690002791467,
+              "numeric_refactor_solve_seconds": 0.14890171000024566
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.14712386099972719,
+              "reused_rhs_seconds": 0.0030542530003003776,
+              "numeric_refactor_solve_seconds": 0.15175716500016279
+            },
+            {
+              "backend": "superlu",
+              "first_solve_seconds": 0.17487252799992348,
+              "reused_rhs_seconds": 0.00541581400011637,
+              "numeric_refactor_solve_seconds": 0.17791067000007388
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.1477592830001413,
+            "reused_rhs_seconds": 0.0026984690002791467,
+            "numeric_refactor_solve_seconds": 0.1505415520000497
+          }
+        },
+        "cudss": {
+          "status": "ok",
+          "cold": {
+            "backend": "cudss",
+            "first_solve_seconds": 0.060960256999806006,
+            "reused_rhs_seconds": 0.0011370039997018466,
+            "numeric_refactor_solve_seconds": 0.008943981999891548
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05571808800004874,
+              "reused_rhs_seconds": 0.000537441999767907,
+              "numeric_refactor_solve_seconds": 0.008187964000171633
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05657480799982295,
+              "reused_rhs_seconds": 0.000618194999788102,
+              "numeric_refactor_solve_seconds": 0.00794290900012129
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.055608619000395265,
+              "reused_rhs_seconds": 0.0005688429996553168,
+              "numeric_refactor_solve_seconds": 0.007707015999585565
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05533678499978123,
+              "reused_rhs_seconds": 0.0005348130002857943,
+              "numeric_refactor_solve_seconds": 0.007400100000268139
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.0600403510002252,
+              "reused_rhs_seconds": 0.0005974830000923248,
+              "numeric_refactor_solve_seconds": 0.007926548999876104
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.05571808800004874,
+            "reused_rhs_seconds": 0.0005688429996553168,
+            "numeric_refactor_solve_seconds": 0.007926548999876104
+          }
+        }
+      },
+      "speedup_first_solve": 2.6519087123020455,
+      "matrix_source": {
+        "model": "my_model/Article_Models_Benchmark/Bridge_1.hrx",
+        "dofs": 6398,
+        "nnz": 157220,
+        "rhs": "seed_42_random",
+        "preparation": "force=True"
+      },
+      "cudss_options": {
+        "blocking": true,
+        "multithreading_lib": "/home/mauricio/coding/histra-python/.venv/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so.0"
+      },
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/bridge1-matrix-superlu.json",
+      "raw_report_sha256": "2820ce12103d2ae865a618b0957f57df0ad8ce284ce4a45febc882e1ebeefb6c",
+      "precision_maxima": {
+        "superlu": {
+          "solution": 1.0466364306813657e-14,
+          "residual": 9.902278996776204e-11
+        },
+        "cudss": {
+          "solution": 7.488286249759946e-15,
+          "residual": 9.542833190323563e-11
+        }
+      }
+    },
+    {
+      "scope": "identical_sparse_matrix",
+      "dofs": 6398,
+      "nnz": 157220,
+      "passed": true,
+      "runs": {
+        "umfpack": {
+          "status": "ok",
+          "cold": {
+            "backend": "umfpack",
+            "first_solve_seconds": 0.1539873759998045,
+            "reused_rhs_seconds": 0.0016959810000116704,
+            "numeric_refactor_solve_seconds": 0.07332282800007306
+          },
+          "samples": [
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.1369651029999659,
+              "reused_rhs_seconds": 0.001474751999921864,
+              "numeric_refactor_solve_seconds": 0.06962686100041537
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.1387283720000596,
+              "reused_rhs_seconds": 0.0018006239997703233,
+              "numeric_refactor_solve_seconds": 0.07150787699993089
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.13629099399986444,
+              "reused_rhs_seconds": 0.001926932000060333,
+              "numeric_refactor_solve_seconds": 0.07070570600035353
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.13568765199988775,
+              "reused_rhs_seconds": 0.0017695589999675576,
+              "numeric_refactor_solve_seconds": 0.06999182400022619
+            },
+            {
+              "backend": "umfpack",
+              "first_solve_seconds": 0.13496698900007686,
+              "reused_rhs_seconds": 0.0014814630003456841,
+              "numeric_refactor_solve_seconds": 0.07692919300006906
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.13629099399986444,
+            "reused_rhs_seconds": 0.0017695589999675576,
+            "numeric_refactor_solve_seconds": 0.07070570600035353
+          }
+        },
+        "cudss": {
+          "status": "ok",
+          "cold": {
+            "backend": "cudss",
+            "first_solve_seconds": 0.05640896100021564,
+            "reused_rhs_seconds": 0.0005345109998415865,
+            "numeric_refactor_solve_seconds": 0.0071512930003336805
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05565951500011579,
+              "reused_rhs_seconds": 0.000576773999910074,
+              "numeric_refactor_solve_seconds": 0.0068894290002390335
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05404121900028258,
+              "reused_rhs_seconds": 0.0005540560000554251,
+              "numeric_refactor_solve_seconds": 0.006797696000376163
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05655938599966248,
+              "reused_rhs_seconds": 0.0005341969999790308,
+              "numeric_refactor_solve_seconds": 0.0068556740002350125
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05263092299992422,
+              "reused_rhs_seconds": 0.0005733030002375017,
+              "numeric_refactor_solve_seconds": 0.0067564209998636215
+            },
+            {
+              "backend": "cudss",
+              "first_solve_seconds": 0.05374906599990936,
+              "reused_rhs_seconds": 0.0005241409999143798,
+              "numeric_refactor_solve_seconds": 0.006816561000050569
+            }
+          ],
+          "median_seconds": {
+            "first_solve_seconds": 0.05404121900028258,
+            "reused_rhs_seconds": 0.0005540560000554251,
+            "numeric_refactor_solve_seconds": 0.006816561000050569
+          }
+        }
+      },
+      "speedup_first_solve": 2.5219822298818197,
+      "matrix_source": {
+        "model": "my_model/Article_Models_Benchmark/Bridge_1.hrx",
+        "dofs": 6398,
+        "nnz": 157220,
+        "rhs": "seed_42_random",
+        "preparation": "force=True"
+      },
+      "cudss_options": {
+        "blocking": true,
+        "multithreading_lib": "/home/mauricio/coding/histra-python/.venv/lib/python3.12/site-packages/nvidia/cu12/lib/libcudss_mtlayer_gomp.so.0"
+      },
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/bridge1-matrix-umfpack.json",
+      "raw_report_sha256": "d9a20c1b90b56637bad4beeb5cee12b85e38c46370fa449af6ab7808a49171df",
+      "precision_maxima": {
+        "umfpack": {
+          "solution": 4.3368086899420177e-16,
+          "residual": 9.527259536845634e-11
+        },
+        "cudss": {
+          "solution": 1.7420960507497085e-15,
+          "residual": 9.235645581640028e-11
+        }
+      }
+    },
+    {
+      "scope": "static_chain",
+      "passed": true,
+      "runs": {
+        "superlu": {
+          "warmup": {
+            "backend": "superlu",
+            "prepare_seconds": 0.49988634600003934,
+            "observed_solve_seconds": 0.7837037059998693,
+            "capture_seconds": 0.004301438999391394,
+            "solve_excluding_capture_seconds": 0.7794022670004779,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 20
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.5031494339996243,
+              "observed_solve_seconds": 0.7772929379998459,
+              "capture_seconds": 0.0049135059985019325,
+              "solve_excluding_capture_seconds": 0.772379432001344,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.5055604760000278,
+              "observed_solve_seconds": 0.7879173669998636,
+              "capture_seconds": 0.004643558999759989,
+              "solve_excluding_capture_seconds": 0.7832738080001036,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.49847941699999865,
+              "observed_solve_seconds": 0.772227077000025,
+              "capture_seconds": 0.004061834999902203,
+              "solve_excluding_capture_seconds": 0.7681652420001228,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            }
+          ]
+        },
+        "cudss": {
+          "warmup": {
+            "backend": "cudss",
+            "prepare_seconds": 0.5037164099999245,
+            "observed_solve_seconds": 0.9306708499998422,
+            "capture_seconds": 0.004280411998479394,
+            "solve_excluding_capture_seconds": 0.9263904380013628,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 20
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.5034127500002796,
+              "observed_solve_seconds": 0.8668215420002525,
+              "capture_seconds": 0.004380787000172859,
+              "solve_excluding_capture_seconds": 0.8624407550000797,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.5421541139999135,
+              "observed_solve_seconds": 0.8324501820002297,
+              "capture_seconds": 0.004613039000105346,
+              "solve_excluding_capture_seconds": 0.8278371430001243,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.5369545210000979,
+              "observed_solve_seconds": 0.841784324999935,
+              "capture_seconds": 0.004044705000069371,
+              "solve_excluding_capture_seconds": 0.8377396199998657,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "median_solve_seconds": {
+        "superlu": 0.772379432001344,
+        "cudss": 0.8377396199998657
+      },
+      "speedup": 0.9219803069615685,
+      "model": "/home/mauricio/coding/histra-python/my_model/benchmark_1/benchmark_virgin.hrx",
+      "model_sha256": "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/benchmark1-vert-superlu-isolated.json",
+      "raw_report_sha256": "3a74de005cbd046e71b7d755a94830393dbf803433179286205f7382e1f85c61",
+      "repeats": [
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.6263032587282567e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 9.9253938401489e-14,
+            "reaction_z": 0,
+            "elastic_energy": 2.5587171270657905e-17,
+            "dissipated_energy": 1.457167719820518e-16,
+            "residual_norm": 3.2732684420924415e-13,
+            "convergence_error": 3.2983815726025306e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 3.2732684420924405e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        },
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.5287250632045613e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 1.0058620603103918e-13,
+            "reaction_z": 0,
+            "elastic_energy": 2.47198095326695e-17,
+            "dissipated_energy": 1.3357370765021415e-16,
+            "residual_norm": 4.226174990915664e-13,
+            "convergence_error": 3.1331106006765767e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 4.226174990915665e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        },
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.7333682232612002e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 1.0014211682118912e-13,
+            "reaction_z": 0,
+            "elastic_energy": 3.209238430557093e-17,
+            "dissipated_energy": 1.5959455978986625e-16,
+            "residual_norm": 2.8463948326008563e-13,
+            "convergence_error": 3.665655046695274e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 2.8463948326008573e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        }
+      ]
+    },
+    {
+      "scope": "static_chain",
+      "passed": false,
+      "runs": {
+        "superlu": {
+          "warmup": {
+            "backend": "superlu",
+            "prepare_seconds": 7.177814375000253,
+            "observed_solve_seconds": 3.4979665959999693,
+            "capture_seconds": 0.005326291000073979,
+            "solve_excluding_capture_seconds": 3.4926403049998953,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.2278233490001185,
+              "observed_solve_seconds": 3.83042640199983,
+              "capture_seconds": 0.005322415000136971,
+              "solve_excluding_capture_seconds": 3.825103986999693,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.160453900999983,
+              "observed_solve_seconds": 3.494238616000075,
+              "capture_seconds": 0.005025423999995837,
+              "solve_excluding_capture_seconds": 3.4892131920000793,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.164185817000089,
+              "observed_solve_seconds": 3.5097252569999,
+              "capture_seconds": 0.005424936000054004,
+              "solve_excluding_capture_seconds": 3.504300320999846,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        },
+        "cudss": {
+          "warmup": {
+            "backend": "cudss",
+            "prepare_seconds": 7.178142478999689,
+            "observed_solve_seconds": 3.243381043000227,
+            "capture_seconds": 0.0067160919993511925,
+            "solve_excluding_capture_seconds": 3.2366649510008756,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.123545842000112,
+              "observed_solve_seconds": 3.2535057939999206,
+              "capture_seconds": 0.006257875000301283,
+              "solve_excluding_capture_seconds": 3.2472479189996193,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.171685766000337,
+              "observed_solve_seconds": 3.2662344370000937,
+              "capture_seconds": 0.006427956000152335,
+              "solve_excluding_capture_seconds": 3.2598064809999414,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.173259129000144,
+              "observed_solve_seconds": 3.2463190480002595,
+              "capture_seconds": 0.006981131000429741,
+              "solve_excluding_capture_seconds": 3.2393379169998298,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "median_solve_seconds": {
+        "superlu": 3.504300320999846,
+        "cudss": 3.2472479189996193
+      },
+      "speedup": 1.079160079061477,
+      "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+      "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/bridge1-vert-superlu-isolated.json",
+      "raw_report_sha256": "01b97decfad54efc0cdbdb23f2c90802403c5bdbee80b54952fc0584bad7dc83",
+      "repeats": [
+        {
+          "passed": false,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 6.195770892863939e-14,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 4.837907852106582e-11,
+            "reaction_z": 0,
+            "elastic_energy": 4.324596236671141e-13,
+            "dissipated_energy": 9.314771176605063e-13,
+            "residual_norm": 1.2618954770005075e-09,
+            "convergence_error": 4.1150947666795945e-14,
+            "equilibrium_force_error_norm": 1.2880980800760757e-14,
+            "equilibrium_residual_norm": 1.2619381095646531e-09
+          },
+          "runtime_max_absolute": 3.6759593058377504e-07
+        },
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314981,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.8596075790355826e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195057,
+            "dissipated_energy": 0.13208813856844515,
+            "residual_norm": 15.507068879437504,
+            "convergence_error": 3.9987123495255284e-05,
+            "equilibrium_force_error_norm": 3.773898173543433e-05,
+            "equilibrium_residual_norm": 15.507068879437412
+          },
+          "runtime_max_absolute": 71775.30179287122
+        },
+        {
+          "passed": false,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 6.158918861021156e-14,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 4.831335331800801e-11,
+            "reaction_z": 0,
+            "elastic_energy": 4.3057224452525134e-13,
+            "dissipated_energy": 9.291456493087935e-13,
+            "residual_norm": 1.2675798188865883e-09,
+            "convergence_error": 4.08434543781519e-14,
+            "equilibrium_force_error_norm": 1.286336759765555e-14,
+            "equilibrium_residual_norm": 1.267622451450734e-09
+          },
+          "runtime_max_absolute": 3.6679557524621487e-07
+        }
+      ]
+    }
+  ],
+  "source_files_sha256": {
+    "histra/types/cudss.py": "9ce308c1b608325a689912e9c042519d2f645a4513e01da6ec0d6d5c4feb2413",
+    "histra/types/linear_system.py": "d0d8667041ed31803dad1e8669da7f8ec38f2dfcc38e39d1eed74daf6de20599",
+    "histra/solver/backend_coverage.py": "40fddbdf76beaad274d0fce5f84f10418376b1f305c8c3d4ccd2d7c5b3080cfa",
+    "histra/solver/session.py": "0b44906ca8402ae06ae9744250aa73b5d666905f82b9e97f2518d313ce50a65d",
+    "histra/tools/gpu_solver_benchmark.py": "1f2880ecbe6fe9e6fdbed37903339f3c87d84cef9233c220b0a15777852c319b",
+    "histra/tools/gpu_analysis_benchmark.py": "fb6b2c08f2327e76a7aea6c5a07d8749af6bf9a0ddb0f4fcfb1787adb29c3aec"
+  },
+  "limitations": [
+    "GPU-native tests do not establish C# differential parity for all models.",
+    "Strict absolute differences use each field's native units.",
+    "Full-analysis samples use fresh processes, compiled-helper warmup and backend preflight; some first-call cache loading remains timed.",
+    "The larger full analysis fails the configured accuracy and equilibrium gates; speedup does not qualify it.",
+    "The cause of the larger full-analysis repeat variability is unresolved; fresh-process isolation did not eliminate it."
+  ],
+  "regression": {
+    "passed": 69,
+    "skipped": 2,
+    "native_cuda_tests_passed": 4,
+    "log_path": "benchmark_outputs/gpu-2026-10-26/regression-tests.log",
+    "log_sha256": "8e32af1b8dccb80b4c217bf1e5fecd9086cf6c69fe7188a688ebb3de489bcd66"
+  }
+}

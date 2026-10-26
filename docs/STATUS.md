@@ -1,6 +1,6 @@
 # Current feature status
 
-The latest package release is **1.7.2**. Its native results schema is **2.1.0**;
+The latest package release is **1.7.3**. Its native results schema is **2.1.0**;
 package and file-format versions are independent. The
 [results reference](reference/native-results-format.md) defines corrected units,
 force curves, topology, named model-point histories and stage-end spring strain/plastic-state snapshots.
@@ -12,9 +12,18 @@ are not guaranteed to reproduce C# values bit for bit.
 This page describes capabilities and remaining limits. Exact numerical and
 performance claims belong to their dated benchmark reports.
 
-The working tree also includes [CPU workflow improvements](guides/cpu-performance.md):
+Version 1.7.3 includes an opt-in, experimental
+[cuDSS GPU sparse backend](guides/gpu-solving.md) and CPU/GPU comparison tools.
+[CPU/GPU optimization measurements](benchmarks/cpu-gpu-fast-mode-2026-10-26.md)
+cover automatic compiled CPU geometry, deterministic CUDA tests, and selected
+bridge comparisons; GPU qualification remains limited to the recorded cases.
+Element updates remain on the compiled CPU backend. GPU remains opt-in.
+
+Version 1.7.3 also includes [CPU workflow improvements](guides/cpu-performance.md):
 solver-only HRX loading, one compiled initialization per virgin static solve,
 reused fibre face geometry, and bounded independent CPU processes.
+The single-model resource runner also supports project-local threaded BLAS,
+independent kernel/BLAS budgets, and saved `.histra` results.
 
 ## Supported boundary
 

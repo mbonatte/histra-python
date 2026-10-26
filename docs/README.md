@@ -12,6 +12,7 @@ qualify their recorded inputs and source revisions, rather than the entire packa
 - [Fresh HRX preprocessing](guides/preprocessing.md)
 - [Modal analysis](guides/modal-analysis.md)
 - [C# parity diagnostics](guides/csharp-parity-diagnostics.md)
+- [Experimental GPU sparse solving and CPU/GPU comparisons](guides/gpu-solving.md)
 - [Nonlinear convergence and equilibrium safety](nonlinear_convergence_safety.md)
 - [Development commands and reference tools](../tools/README.md)
 - [Release verification and publication](release/README.md)

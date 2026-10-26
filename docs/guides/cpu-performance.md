@@ -78,3 +78,65 @@ single-job API. The private worker transport is not an input-file format.
 
 See the [CPU workflow measurements](../benchmarks/cpu-workflow-2026-10-26.md) for
 identified models, timing methodology and numerical comparisons.
+
+## Giving one large model a faster native runtime
+
+`run_large_model` allocates separate thread teams to compiled element updates
+and sparse-factor BLAS. It starts a fresh process so native library selection
+and thread limits take effect before SuiteSparse loads. Its default sparse
+backend remains CPU `auto`; authored methods and tolerances remain unchanged.
+
+On an apt-based x86_64 Linux machine, install the optional OpenBLAS runtime once
+into the active virtual environment, without changing system libraries:
+
+```bash
+python -m histra.tools.setup_openblas
+python -m histra.tools.run_large_model my_model/profiling/dhir_bridge_model.hrx --output large_results
+```
+
+The default budgets are eight kernel threads and four BLAS threads, capped by
+the CPUs available to the process. These are measured starting points, rather
+than a promise of optimal settings on every processor. Override them with
+`--kernel-threads` and `--blas-threads`. In the recorded 47,768-DOF screen,
+four BLAS threads outperformed twenty. Higher CPU utilization can cost more
+synchronization time than it saves.
+
+The installer uses the distribution's `libopenblas0-pthread` package and keeps
+its libraries and license files inside the virtual environment. Existing system
+packages are untouched. The worker rejects an incompatible ILP64 native BLAS;
+SuiteSparse requires the LP64 ABI, independently of NumPy's own BLAS ABI.
+For another compatible installation, supply `--blas-directory`.
+
+A completed run writes a `.histra` results bundle and `run_summary.json`, including
+the actual loaded library paths and resource budgets. Generalized displacements
+and stage snapshots are saved; full node-displacement projection is omitted.
+The default one-hour deadline includes preparation, solving and export.
+Cooperative cancellation/failure exports committed work as a partial bundle.
+Workers reserve up to 30 seconds for that export; the hard process deadline
+still applies. `run_summary.json` distinguishes partial output from completion.
+
+The equivalent Python API is:
+
+```python
+from histra import PythonAnalysisRequest, PythonSolverJob, SolverResources, run_large_solver_job
+
+job = PythonSolverJob(
+    "bridge.hrx",
+    (PythonAnalysisRequest("Vert", None, 3600),),
+    timeout_seconds=3600,
+    output_directory="large_results",
+)
+outcome = run_large_solver_job(job, resources=SolverResources(kernel_threads=8, blas_threads=4))
+```
+
+The runner also accepts explicit `--backend cholmod` or experimental
+`--backend cudss`. CHOLMOD requires suitable stiffness matrices and can fall back
+to LU. GPU use requires the optional cuDSS dependencies and a process with GPU
+device access. Backend changes require complete response/stop validation on the
+chosen model: a tiny linear-system error alone does not establish nonlinear
+branch equivalence. Standard in-process and ordinary batch APIs keep their
+previous native-library selection.
+
+See the [large-model capacity measurements](../benchmarks/large-model-capacity-2026-10-26.md)
+for timings, precision scope and the distinction between refactorization and
+complete analysis time.

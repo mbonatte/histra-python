@@ -1,0 +1,839 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T19:12:51.711058+00:00",
+  "source_commit": "40596c23c3d6d777a3a53d2fae9d5ea16858d9f9",
+  "working_tree_dirty": true,
+  "generator": "histra CPU/GPU optimization aggregation",
+  "benchmark_id": "fast-cpu-deterministic-gpu-2026-10-26",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "processor": "",
+  "gpu_inventory": "NVIDIA GeForce RTX 4060 Laptop GPU, 595.99.02, 8188 MiB",
+  "python": "3.12.3",
+  "packages": {
+    "histra-python": "1.7.2",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "numba": "0.67.0",
+    "nvmath-python": "1.0.0",
+    "nvidia-cudss-cu12": "0.8.0.10"
+  },
+  "cudss_mode": "deterministic",
+  "observations": [
+    {
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/compiled-geometry-screen.json",
+      "raw_report_sha256": "7e298cb8b0eeadafe9016891a08edeeaf5daf8cb952ce90534dca91f7559f531",
+      "bit_exact": true,
+      "fibres": 27372,
+      "medians": {
+        "scalar": 1.7861919990000388,
+        "compiled": 0.005767712999841024
+      },
+      "samples": {
+        "scalar": [
+          1.7814917030000288,
+          1.7861919990000388,
+          1.7874623550005708
+        ],
+        "compiled": [
+          0.005767712999841024,
+          0.00567995300025359,
+          0.005951329999334121
+        ]
+      },
+      "speedup": 309.6880859101817,
+      "model": "my_model/Article_Models_Benchmark/Bridge_1.hrx",
+      "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec"
+    },
+    {
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/benchmark1-vert-deterministic-compiled-geometry.json",
+      "raw_report_sha256": "b7d0ce75d74831a56380c4a6a22ede92ac5be5ce572ac757a97fe092bdb84e75",
+      "cudss_mode": "deterministic",
+      "model": "/home/mauricio/coding/histra-python/my_model/benchmark_1/benchmark_virgin.hrx",
+      "model_sha256": "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+      "atol": 1e-09,
+      "rtol": 0.0,
+      "passed": true,
+      "median_solve_seconds": {
+        "superlu": 0.20961088500098413,
+        "cudss": 0.2670731930011243
+      },
+      "median_total_seconds": {
+        "superlu": 0.7151915500026007,
+        "cudss": 0.8140724870008853
+      },
+      "speedup": 0.784844344149889,
+      "total_speedup": 0.8785354638840939,
+      "repeatability": {
+        "cudss": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          },
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          }
+        ],
+        "superlu": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          },
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          }
+        ]
+      },
+      "runs": {
+        "superlu": {
+          "warmup": {
+            "backend": "superlu",
+            "prepare_seconds": 0.5061167389994807,
+            "observed_solve_seconds": 0.2082637439998507,
+            "capture_seconds": 0.004451796000466857,
+            "solve_excluding_capture_seconds": 0.20381194799938385,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 20
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.5111346199992113,
+              "observed_solve_seconds": 0.21544441400055803,
+              "capture_seconds": 0.0044576199989023735,
+              "solve_excluding_capture_seconds": 0.21098679400165565,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.5082096199994339,
+              "observed_solve_seconds": 0.211298080999768,
+              "capture_seconds": 0.004316150996601209,
+              "solve_excluding_capture_seconds": 0.20698193000316678,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 0.5033180330001414,
+              "observed_solve_seconds": 0.21421774800001003,
+              "capture_seconds": 0.004606862999025907,
+              "solve_excluding_capture_seconds": 0.20961088500098413,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            }
+          ]
+        },
+        "cudss": {
+          "warmup": {
+            "backend": "cudss",
+            "prepare_seconds": 0.5421515039997757,
+            "observed_solve_seconds": 0.27182847099993523,
+            "capture_seconds": 0.00446805499632319,
+            "solve_excluding_capture_seconds": 0.26736041600361204,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 20
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.565638332999697,
+              "observed_solve_seconds": 0.27269797999997536,
+              "capture_seconds": 0.0044877650016132975,
+              "solve_excluding_capture_seconds": 0.26821021499836206,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.5422122299996772,
+              "observed_solve_seconds": 0.26811865999934525,
+              "capture_seconds": 0.004333663001489185,
+              "solve_excluding_capture_seconds": 0.26378499699785607,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 0.546999293999761,
+              "observed_solve_seconds": 0.2715062620000026,
+              "capture_seconds": 0.004433068998878298,
+              "solve_excluding_capture_seconds": 0.2670731930011243,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 20
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "comparisons": [
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.0191500421363742e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 1.0036416142611415e-13,
+            "reaction_z": 0,
+            "elastic_energy": 2.0383000842727483e-17,
+            "dissipated_energy": 8.153200337090993e-17,
+            "residual_norm": 3.970769197796678e-13,
+            "convergence_error": 1.9440588413662337e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 3.970769197796678e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        },
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.0191500421363742e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 1.0036416142611415e-13,
+            "reaction_z": 0,
+            "elastic_energy": 2.0383000842727483e-17,
+            "dissipated_energy": 8.153200337090993e-17,
+            "residual_norm": 3.970769197796678e-13,
+            "convergence_error": 1.9440588413662337e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 3.970769197796678e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        },
+        {
+          "passed": true,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": true,
+          "response_max_absolute": {
+            "u": 1.0191500421363742e-17,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 1.0036416142611415e-13,
+            "reaction_z": 0,
+            "elastic_energy": 2.0383000842727483e-17,
+            "dissipated_energy": 8.153200337090993e-17,
+            "residual_norm": 3.970769197796678e-13,
+            "convergence_error": 1.9440588413662337e-18,
+            "equilibrium_force_error_norm": 5.929230630780102e-21,
+            "equilibrium_residual_norm": 3.970769197796678e-13
+          },
+          "runtime_max_absolute": 1.3096723705530167e-10
+        }
+      ]
+    },
+    {
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/bridge1-vert-deterministic-compiled-geometry.json",
+      "raw_report_sha256": "88240b6b0d66599463765d859f2b511b2fd04d18d80f884056e2342040b242f7",
+      "cudss_mode": "deterministic",
+      "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+      "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+      "atol": 1e-09,
+      "rtol": 0.0,
+      "passed": false,
+      "median_solve_seconds": {
+        "superlu": 1.7071388399981515,
+        "cudss": 2.047044120999999
+      },
+      "median_total_seconds": {
+        "superlu": 8.88780596199922,
+        "cudss": 9.163863707000019
+      },
+      "speedup": 0.8339531241584569,
+      "total_speedup": 0.9698753982133185,
+      "repeatability": {
+        "cudss": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          },
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          }
+        ],
+        "superlu": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          },
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          }
+        ]
+      },
+      "runs": {
+        "superlu": {
+          "warmup": {
+            "backend": "superlu",
+            "prepare_seconds": 7.147641585999736,
+            "observed_solve_seconds": 1.6901503720005167,
+            "capture_seconds": 0.0053539919999820995,
+            "solve_excluding_capture_seconds": 1.6847963800005346,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.15385657600018,
+              "observed_solve_seconds": 1.713584188999448,
+              "capture_seconds": 0.006445349001296563,
+              "solve_excluding_capture_seconds": 1.7071388399981515,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.155500097000186,
+              "observed_solve_seconds": 1.7386535109999386,
+              "capture_seconds": 0.006347143999846594,
+              "solve_excluding_capture_seconds": 1.732306367000092,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.196850809999887,
+              "observed_solve_seconds": 1.6964599009997983,
+              "capture_seconds": 0.005504749000465381,
+              "solve_excluding_capture_seconds": 1.6909551519993329,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        },
+        "cudss": {
+          "warmup": {
+            "backend": "cudss",
+            "prepare_seconds": 7.217892835000384,
+            "observed_solve_seconds": 1.4812708560002648,
+            "capture_seconds": 0.0060774699986723135,
+            "solve_excluding_capture_seconds": 1.4751933860015924,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.11681958600002,
+              "observed_solve_seconds": 2.054118113000186,
+              "capture_seconds": 0.0070739920001869905,
+              "solve_excluding_capture_seconds": 2.047044120999999,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.092249424000329,
+              "observed_solve_seconds": 2.0903049220005414,
+              "capture_seconds": 0.00656944399997883,
+              "solve_excluding_capture_seconds": 2.0837354780005626,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.251482319999923,
+              "observed_solve_seconds": 1.5130350400004318,
+              "capture_seconds": 0.006090841000514047,
+              "solve_excluding_capture_seconds": 1.5069441989999177,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "comparisons": [
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314461,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.859606868492847e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195146,
+            "dissipated_energy": 0.13208813856844692,
+            "residual_norm": 15.507068879437668,
+            "convergence_error": 3.9987123495130885e-05,
+            "equilibrium_force_error_norm": 3.7738981735432325e-05,
+            "equilibrium_residual_norm": 15.507068879437568
+          },
+          "runtime_max_absolute": 71775.30179287122
+        },
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314461,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.859606868492847e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195146,
+            "dissipated_energy": 0.13208813856844692,
+            "residual_norm": 15.507068879437668,
+            "convergence_error": 3.9987123495130885e-05,
+            "equilibrium_force_error_norm": 3.7738981735432325e-05,
+            "equilibrium_residual_norm": 15.507068879437568
+          },
+          "runtime_max_absolute": 71775.30179287122
+        },
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314461,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.859606868492847e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195146,
+            "dissipated_energy": 0.13208813856844692,
+            "residual_norm": 15.507068879437668,
+            "convergence_error": 3.9987123495130885e-05,
+            "equilibrium_force_error_norm": 3.7738981735432325e-05,
+            "equilibrium_residual_norm": 15.507068879437568
+          },
+          "runtime_max_absolute": 71775.30179287122
+        }
+      ]
+    },
+    {
+      "raw_report_path": "benchmark_outputs/gpu-2026-10-26/bridge1-vert-refined-compiled-geometry.json",
+      "raw_report_sha256": "f7aa5d154b5d06dafe4c10572066de912e53dcf2e1dbc29dfeb674878597b86d",
+      "cudss_mode": "refined",
+      "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+      "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+      "atol": 1e-09,
+      "rtol": 1e-09,
+      "passed": false,
+      "median_solve_seconds": {
+        "superlu": 1.6812489979993188,
+        "cudss": 1.5721010529987325
+      },
+      "median_total_seconds": {
+        "superlu": 8.889722033998623,
+        "cudss": 8.837203333998332
+      },
+      "speedup": 1.0694280719374814,
+      "total_speedup": 1.0059429095399721,
+      "repeatability": {
+        "cudss": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": false
+          },
+          {
+            "same_behavior": false,
+            "phase_mismatches": 2000,
+            "within_tolerance": false
+          }
+        ],
+        "superlu": [
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          },
+          {
+            "same_behavior": true,
+            "phase_mismatches": 0,
+            "within_tolerance": true
+          }
+        ]
+      },
+      "runs": {
+        "superlu": {
+          "warmup": {
+            "backend": "superlu",
+            "prepare_seconds": 7.194758087000082,
+            "observed_solve_seconds": 1.6923910890000116,
+            "capture_seconds": 0.005233715001850214,
+            "solve_excluding_capture_seconds": 1.6871573739981613,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.182318593999298,
+              "observed_solve_seconds": 1.712624112999947,
+              "capture_seconds": 0.0052206730006219,
+              "solve_excluding_capture_seconds": 1.7074034399993252,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.260765965999781,
+              "observed_solve_seconds": 1.6869057829999292,
+              "capture_seconds": 0.005656785000610398,
+              "solve_excluding_capture_seconds": 1.6812489979993188,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "superlu",
+              "prepare_seconds": 7.166257900999881,
+              "observed_solve_seconds": 1.6760821570005646,
+              "capture_seconds": 0.005935578001299291,
+              "solve_excluding_capture_seconds": 1.6701465789992653,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        },
+        "cudss": {
+          "warmup": {
+            "backend": "cudss",
+            "prepare_seconds": 7.187128211000527,
+            "observed_solve_seconds": 1.5376741649997712,
+            "capture_seconds": 0.006689911999274045,
+            "solve_excluding_capture_seconds": 1.5309842530004971,
+            "analyses": [
+              {
+                "key": 1,
+                "name": "Vert",
+                "code": 0,
+                "outcome": "completed",
+                "committed_steps": 5
+              }
+            ]
+          },
+          "samples": [
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.215048070999728,
+              "observed_solve_seconds": 1.5786764210006368,
+              "capture_seconds": 0.006558917999427649,
+              "solve_excluding_capture_seconds": 1.5721175030012091,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.337418918000367,
+              "observed_solve_seconds": 1.5776317999998355,
+              "capture_seconds": 0.0061551199987661676,
+              "solve_excluding_capture_seconds": 1.5714766800010693,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            },
+            {
+              "backend": "cudss",
+              "prepare_seconds": 7.265102280999599,
+              "observed_solve_seconds": 1.5793468410001879,
+              "capture_seconds": 0.007245788001455367,
+              "solve_excluding_capture_seconds": 1.5721010529987325,
+              "analyses": [
+                {
+                  "key": 1,
+                  "name": "Vert",
+                  "code": 0,
+                  "outcome": "completed",
+                  "committed_steps": 5
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "comparisons": [
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314357,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.859606157950111e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195235,
+            "dissipated_energy": 0.13208813856845225,
+            "residual_norm": 15.507068879438009,
+            "convergence_error": 3.9987123495171556e-05,
+            "equilibrium_force_error_norm": 3.7738981735448344e-05,
+            "equilibrium_residual_norm": 15.507068879437924
+          },
+          "runtime_max_absolute": 71775.30179287122
+        },
+        {
+          "passed": false,
+          "same_behavior": false,
+          "phase_mismatches": 2000,
+          "within_tolerance": false,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 0.0007019121462314738,
+            "load_factor": 0,
+            "reaction_x": 5.289912223815918e-06,
+            "reaction_y": 1.859606868492847e-08,
+            "reaction_z": 4.863739013671875e-05,
+            "elastic_energy": 0.03251257471195412,
+            "dissipated_energy": 0.13208813856846113,
+            "residual_norm": 15.507068879436389,
+            "convergence_error": 3.998712349512049e-05,
+            "equilibrium_force_error_norm": 3.7738981735432325e-05,
+            "equilibrium_residual_norm": 15.507068879436268
+          },
+          "runtime_max_absolute": 71775.30179287122
+        },
+        {
+          "passed": false,
+          "same_behavior": true,
+          "phase_mismatches": 0,
+          "within_tolerance": true,
+          "equilibrium_ok": false,
+          "response_max_absolute": {
+            "u": 6.12196925098285e-14,
+            "load_factor": 0,
+            "reaction_x": 0,
+            "reaction_y": 4.8629544835421257e-11,
+            "reaction_z": 0,
+            "elastic_energy": 4.2493786267527867e-13,
+            "dissipated_energy": 9.164891068280667e-13,
+            "residual_norm": 1.2855281283918885e-09,
+            "convergence_error": 4.130100124746794e-14,
+            "equilibrium_force_error_norm": 1.2948111549962449e-14,
+            "equilibrium_residual_norm": 1.285570760956034e-09
+          },
+          "runtime_max_absolute": 3.6385608837008476e-07
+        }
+      ]
+    }
+  ],
+  "cpu_before_after": [
+    {
+      "model": "benchmark1",
+      "before_solve_seconds": 0.772379432001344,
+      "after_solve_seconds": 0.20961088500098413,
+      "before_total_seconds": 1.2755288660009683,
+      "after_total_seconds": 0.7151915500026007,
+      "baseline_raw_report_sha256": "3a74de005cbd046e71b7d755a94830393dbf803433179286205f7382e1f85c61"
+    },
+    {
+      "model": "bridge1",
+      "before_solve_seconds": 3.504300320999846,
+      "after_solve_seconds": 1.7071388399981515,
+      "before_total_seconds": 10.668486137999935,
+      "after_total_seconds": 8.88780596199922,
+      "baseline_raw_report_sha256": "01b97decfad54efc0cdbdb23f2c90802403c5bdbee80b54952fc0584bad7dc83"
+    }
+  ],
+  "source_files_sha256_at_aggregation": {
+    "histra/solver/hysteretic_kernels/resultant_geometry.py": "68dd03218311e442f10e85ae116dd1105c0fa8e5483cb00ddf0af77e07efc528",
+    "histra/solver/hysteretic_runtime.py": "75e1f6a6d98074907997edab1aa661bd06446d01cfc4e7df84dee99042eaa80c",
+    "histra/solver/warmup.py": "e2add3a0cabceabfe5cc128b968bc9b8346891b2261e5f6339d83b39f89af215",
+    "histra/types/cudss.py": "fbdc22555f00f1cab34438ae5b6780400d8e4a4b1ae2b859b6780ba3d88b7880",
+    "histra/types/linear_system.py": "5b2f00bcd8abef378f69a40dd223c814d9666943924a252923ed12c302426510",
+    "histra/tools/gpu_analysis_benchmark.py": "bd08147727dd3dda66910c361bdfe07151252c416d4b3a71381879c7d00ea6c0",
+    "histra/tools/gpu_solver_benchmark.py": "622c2eb7fe98a8e6dd4634f3d0f720155d9d5ca0ca3c94bd47ce0660000c0abd"
+  },
+  "regression": {
+    "passed": 103,
+    "skipped": 2,
+    "native_cuda_tests_passed": 8,
+    "csharp_subtests_passed": 12,
+    "log_path": "benchmark_outputs/gpu-2026-10-26/fast-mode-regression-tests.log",
+    "log_sha256": "5b60eb1a6d97c14c7c7b607f7e802632064ac3007955a11701690a0e6c6a8f1d"
+  },
+  "limitations": [
+    "Before/after measurements are sequential screens on the same host, not simultaneous paired runs.",
+    "Original solver formulas, convergence thresholds, and exact regression tolerances remain unchanged.",
+    "Deterministic GPU is repeatable but does not reproduce the larger CPU nonlinear path.",
+    "Refinement is a separate nondeterministic experiment and does not qualify the larger model.",
+    "Both backends fail the larger model equilibrium audit under its original Work criterion.",
+    "Source hashes record aggregation state; uncommitted launch source snapshots were not individually archived.",
+    "Total times include model load/preparation and solve but exclude worker startup, explicit warmup, and diagnostic snapshot capture."
+  ]
+}

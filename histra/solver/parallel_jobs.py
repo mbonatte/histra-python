@@ -13,6 +13,8 @@ from tempfile import TemporaryDirectory
 import time
 from typing import Iterable, Mapping
 
+from histra.solver.resources import SolverResources
+
 from histra.solver.backend_api import (
     ConcreteInterfaceMutation,
     PythonAnalysisRequest,
@@ -34,6 +36,7 @@ class PythonSolverJob:
     combination_row: int = 1
     equilibrium_policy: str = "error"
     strategy_policy: str = "warn"
+    output_directory: str | Path | None = None
 
 
 @dataclass(frozen=True)
@@ -96,23 +99,28 @@ def run_parallel_solver_jobs(
         return tuple(executor.map(lambda job: _launch_job(job, threads), pending))
 
 
-def _launch_job(job: PythonSolverJob, threads: int) -> PythonSolverJobOutcome:
+def _launch_job(
+    job: PythonSolverJob, threads: int, *, environment: dict[str, str] | None = None,
+    stream_output: bool = False,
+) -> PythonSolverJobOutcome:
     started = time.perf_counter()
-    environment = dict(os.environ)
-    for name in ("NUMBA_NUM_THREADS", "HISTRA_NUMBA_THREADS", "OMP_NUM_THREADS",
-                 "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
-        environment[name] = str(threads)
-    environment["HISTRA_LINEAR_SOLVER"] = "auto"
+    if environment is None:
+        environment = SolverResources(threads, threads, blas_directory=None).environment()
+        # Ordinary batch jobs retain their previous native-library selection.
+        if "LD_LIBRARY_PATH" not in os.environ:
+            environment.pop("LD_LIBRARY_PATH", None)
+        else:
+            environment["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
     with TemporaryDirectory(prefix="histra-job-") as directory:
         request, response = Path(directory) / "request.pkl", Path(directory) / "response.pkl"
         request.write_bytes(pickle.dumps(job))
         try:
             completed = subprocess.run(
                 [sys.executable, "-m", "histra.solver._job_worker", str(request), str(response)],
-                env=environment, capture_output=True, text=True, timeout=job.timeout_seconds,
+                env=environment, capture_output=not stream_output, text=True, timeout=job.timeout_seconds,
             )
             if completed.returncode != 0:
-                raise RuntimeError(f"Worker exited {completed.returncode}: {completed.stderr[-4000:]}")
+                raise RuntimeError(f"Worker exited {completed.returncode}: {(completed.stderr or "See worker output")[-4000:]}")
             outcome = pickle.loads(response.read_bytes())
             return replace(outcome, runtime_seconds=time.perf_counter() - started)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
@@ -122,12 +130,43 @@ def _launch_job(job: PythonSolverJob, threads: int) -> PythonSolverJobOutcome:
 def _execute_job(job: PythonSolverJob) -> PythonSolverJobOutcome:
     started = time.perf_counter()
     try:
+        from histra.solver.resources import validate_native_blas
+
+        validate_native_blas()
+        stream = os.environ.get("HISTRA_WORKER_STREAM_OUTPUT") == "1"
+        # Leave a small part of the hard deadline for exporting committed work
+        # after cooperative timeout. The launcher still enforces the full limit.
+        export_reserve = min(30.0, job.timeout_seconds * 0.05) if job.output_directory is not None else 0.0
         result = run_python_solver_job(
-            job.model_path, job.analyses, timeout_seconds=job.timeout_seconds,
+            job.model_path, job.analyses, timeout_seconds=job.timeout_seconds - export_reserve,
             interface_mutations=job.interface_mutations, combination_row=job.combination_row,
             equilibrium_policy=job.equilibrium_policy, strategy_policy=job.strategy_policy,
+            output_directory=job.output_directory,
+            on_log=(lambda message: print(message, flush=True)) if stream else None,
         )
+        from histra.solver.resources import inspect_process_resources
+
+        metadata = dict(result.metadata, resources=inspect_process_resources())
+        result = replace(result, metadata=metadata)
         return PythonSolverJobOutcome(result, None, time.perf_counter() - started, os.getpid())
     except Exception as exc:
         return PythonSolverJobOutcome(None, f"{type(exc).__name__}: {exc}",
                                       time.perf_counter() - started, os.getpid())
+
+
+def run_large_solver_job(
+    job: PythonSolverJob, *, resources: SolverResources | None = None, stream_output: bool = False,
+) -> PythonSolverJobOutcome:
+    """Give one model separate kernel/BLAS teams and optional native OpenBLAS.
+
+    The subprocess retains compiled-only enforcement, authored analysis settings
+    and equilibrium checks. A backend change still needs full-history validation.
+    """
+    if not math.isfinite(job.timeout_seconds) or job.timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be finite and positive")
+    pickle.dumps(job)
+    selected = resources if resources is not None else SolverResources()
+    environment = selected.environment()
+    environment["HISTRA_WORKER_STREAM_OUTPUT"] = "1" if stream_output else "0"
+    return _launch_job(job, int(environment["HISTRA_NUMBA_THREADS"]),
+                       environment=environment, stream_output=stream_output)

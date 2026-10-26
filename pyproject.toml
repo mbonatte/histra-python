@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "histra-python"
-version = "1.7.2"
+version = "1.7.3"
 description = "In-process Python solver for HiStrA HRX models"
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu-cu12 = ["nvmath-python[cu12]>=0.9,<2"]
 test = ["pytest>=8,<10"]
 release = ["build>=1.2,<2", "twine>=6,<7"]
 lint = ["ruff>=0.9.0", "mypy>=1.14.0"]
@@ -52,6 +53,7 @@ namespaces = false
 [tool.pytest.ini_options]
 testpaths = ["histra/tests"]
 markers = [
+  "gpu: native CUDA differential tests (skip when cuDSS is unavailable)",
   "integration: regression tests requiring external representative HRX/Results files",
 ]
 

@@ -167,3 +167,8 @@ from histra.solver.parallel_jobs import (
 )
 
 __all__ += ["PythonSolverJob", "PythonSolverJobOutcome", "run_parallel_solver_jobs"]
+
+from histra.solver.resources import SolverResources
+from histra.solver.parallel_jobs import run_large_solver_job
+
+__all__ += ["SolverResources", "run_large_solver_job"]

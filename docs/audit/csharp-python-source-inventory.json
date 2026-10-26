@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-26T12:23:48.241792+00:00",
-  "source_commit": "712c93a47fc5e1ea9fbf0af4ee588deaddb8d370",
+  "generated_at": "2026-10-26T20:46:15.652177+00:00",
+  "source_commit": "1e191793394ef2ac7a16f85272318f8e6a45a0eb",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
-    "files": 99,
-    "classes": 115,
-    "function_definitions": 880
+    "files": 103,
+    "classes": 118,
+    "function_definitions": 901
   },
   "files": [
     {
@@ -414,7 +414,7 @@
     {
       "path": "histra/elements/quad.py",
       "status": "inventory_only",
-      "lf_sha256": "d010b7d802578a859169e0c5591bd8fe79299ca72d5ad64caa9f6202cda50afe",
+      "lf_sha256": "df9e59d6d99699a421fcef6642994e1cce1f6dabaff856b138f3c31aa0fa4f16",
       "classes": [
         {
           "name": "Quad",
@@ -1526,7 +1526,7 @@
     {
       "path": "histra/preprocessing/csharp_fibre_geometry.py",
       "status": "inventory_only",
-      "lf_sha256": "5951b2d0c8a1b8a7bcc6935249b93ac0aac651125da32b43e175bda5a4a7abc9",
+      "lf_sha256": "2bcb28f590adc9b8a02416f9f2613bbdf505036cdf8d6aaddaf9f35b4f141f99",
       "classes": [],
       "functions": [
         {
@@ -1575,31 +1575,31 @@
         },
         {
           "name": "_csharp_mapped",
-          "line": 124
+          "line": 127
         },
         {
           "name": "_csharp_properties",
-          "line": 136
+          "line": 142
         },
         {
           "name": "_csharp_stiffness",
-          "line": 169
+          "line": 175
         },
         {
           "name": "_csharp_cell_vertices",
-          "line": 188
+          "line": 194
         },
         {
           "name": "_csharp_interface_cells_nb",
-          "line": 212
+          "line": 218
         },
         {
           "name": "_csharp_interface_cells",
-          "line": 237
+          "line": 243
         },
         {
           "name": "_csharp_fibre_stiffness_batch_nb",
-          "line": 257
+          "line": 263
         }
       ]
     },
@@ -2047,9 +2047,21 @@
     {
       "path": "histra/solver/__init__.py",
       "status": "inventory_only",
-      "lf_sha256": "5bf836ba20d0564ed288ca452237129131fce8cf837e8280788249baa0d99835",
+      "lf_sha256": "7561eb5ca3c361aaf7d3d5b140a9458a0edbbf20d051dd37217ecd4ee0f31ab8",
       "classes": [],
       "functions": []
+    },
+    {
+      "path": "histra/solver/_job_worker.py",
+      "status": "inventory_only",
+      "lf_sha256": "c91d3c5a3c03aaaf87a5d27c972b3acec1566b75532bcef7317f8d06e03249e8",
+      "classes": [],
+      "functions": [
+        {
+          "name": "main",
+          "line": 9
+        }
+      ]
     },
     {
       "path": "histra/solver/arc_length.py",
@@ -2256,7 +2268,7 @@
     {
       "path": "histra/solver/backend_api.py",
       "status": "inventory_only",
-      "lf_sha256": "b2d424dcf9c6c0be9d74ee457410650e753f18cec8f51e59178fb25fbfc6542b",
+      "lf_sha256": "0ff6056c0f31769f4b4c452f503b2d9d589268b5a9324cf58f8e199a9f831d78",
       "classes": [
         {
           "name": "ConcreteInterfaceMutation",
@@ -2298,26 +2310,30 @@
         },
         {
           "name": "run_python_solver_job.log",
-          "line": 166
+          "line": 167
         },
         {
           "name": "run_python_solver_job.analysis_cancelled",
-          "line": 213
+          "line": 214
+        },
+        {
+          "name": "_export_job_session",
+          "line": 266
         },
         {
           "name": "_dependency_order",
-          "line": 258
+          "line": 274
         },
         {
           "name": "_normalize_mutations",
-          "line": 273
+          "line": 289
         }
       ]
     },
     {
       "path": "histra/solver/backend_coverage.py",
       "status": "inventory_only",
-      "lf_sha256": "dccde96103d7cf64daa0815bc20e895ba9b80cfe6a31f0c0c877ce8ef41cd91d",
+      "lf_sha256": "d40f2bd8100172cbfc8cf7262cd75549bc0ee0cd3ac85318408afe9c395f42e3",
       "classes": [
         {
           "name": "CompiledBackendError",
@@ -2346,16 +2362,20 @@
           "line": 67
         },
         {
-          "name": "inspect_solver_backend",
+          "name": "require_compiled_dependencies",
           "line": 111
         },
         {
+          "name": "inspect_solver_backend",
+          "line": 135
+        },
+        {
           "name": "_resolve_linear_solver_backend",
-          "line": 257
+          "line": 281
         },
         {
           "name": "_resolve_requested_analyses",
-          "line": 290
+          "line": 319
         }
       ]
     },
@@ -2779,6 +2799,22 @@
       ]
     },
     {
+      "path": "histra/solver/hysteretic_kernels/resultant_geometry.py",
+      "status": "inventory_only",
+      "lf_sha256": "68dd03218311e442f10e85ae116dd1105c0fa8e5483cb00ddf0af77e07efc528",
+      "classes": [],
+      "functions": [
+        {
+          "name": "_spring_centroid",
+          "line": 13
+        },
+        {
+          "name": "resultant_moment_arms",
+          "line": 62
+        }
+      ]
+    },
+    {
       "path": "histra/solver/hysteretic_kernels/scatter.py",
       "status": "inventory_only",
       "lf_sha256": "e34f499a3715cf586071dd45bc47c65e8d6bd0b748df59eb3077fe42d1a91286",
@@ -2921,7 +2957,7 @@
     {
       "path": "histra/solver/hysteretic_runtime.py",
       "status": "inventory_only",
-      "lf_sha256": "813dec98e53ca534e7e118cc76213c45146a0f8dcccce780e2536207b41d0947",
+      "lf_sha256": "75e1f6a6d98074907997edab1aa661bd06446d01cfc4e7df84dee99042eaa80c",
       "classes": [
         {
           "name": "PDeltaPlan",
@@ -3283,87 +3319,87 @@
         },
         {
           "name": "HystereticBatchRuntime.all_resultant_forces",
-          "line": 2825
+          "line": 2826
         },
         {
           "name": "HystereticBatchRuntime.all_bending_moments",
-          "line": 2846
+          "line": 2847
         },
         {
           "name": "HystereticBatchRuntime.compute_total_reaction_vector",
-          "line": 2852
+          "line": 2853
         },
         {
           "name": "HystereticBatchRuntime.get_pdelta_plan",
-          "line": 2865
+          "line": 2866
         },
         {
           "name": "HystereticBatchRuntime._build_pdelta_plan",
-          "line": 2871
+          "line": 2872
         },
         {
           "name": "HystereticBatchRuntime.compute_pdelta_interface_moments",
-          "line": 2952
+          "line": 2953
         },
         {
           "name": "HystereticBatchRuntime._build_pdelta_line_load_plan",
-          "line": 2974
+          "line": 2975
         },
         {
           "name": "HystereticBatchRuntime.compute_pdelta_line_load_moments",
-          "line": 3041
+          "line": 3042
         },
         {
           "name": "HystereticBatchRuntime.resultant_force_for",
-          "line": 3066
+          "line": 3067
         },
         {
           "name": "HystereticBatchRuntime.trial_stresses_for",
-          "line": 3088
+          "line": 3089
         },
         {
           "name": "HystereticBatchRuntime.sync_trial_to_objects",
-          "line": 3092
+          "line": 3093
         },
         {
           "name": "HystereticBatchRuntime.sync_tangents_to_objects",
-          "line": 3099
+          "line": 3100
         },
         {
           "name": "HystereticBatchRuntime.sync_all_to_objects",
-          "line": 3123
+          "line": 3124
         },
         {
           "name": "HystereticBatchRuntime.compute_energy",
-          "line": 3214
+          "line": 3215
         },
         {
           "name": "HystereticBatchRuntime.commit",
-          "line": 3224
+          "line": 3225
         },
         {
           "name": "HystereticBatchRuntime.snapshot",
-          "line": 3249
+          "line": 3250
         },
         {
           "name": "HystereticBatchRuntime.restore",
-          "line": 3282
+          "line": 3283
         },
         {
           "name": "HystereticBatchRuntime.reset_to_initial_state",
-          "line": 3318
+          "line": 3319
         },
         {
           "name": "HystereticBatchRuntime.revert_quad",
-          "line": 3336
+          "line": 3337
         },
         {
           "name": "HystereticBatchRuntime.revert_interface",
-          "line": 3350
+          "line": 3351
         },
         {
           "name": "build_hysteretic_batch",
-          "line": 3381
+          "line": 3382
         }
       ]
     },
@@ -4152,7 +4188,7 @@
     {
       "path": "histra/solver/nonlinear_setup.py",
       "status": "inventory_only",
-      "lf_sha256": "cbec26476b8fa6074dc85f8252ec672621e8664e3c6a1eb818c6b2e7f2067508",
+      "lf_sha256": "a27c2a033874d2d97812198b00aec3beb6f8283f72683232cf48edfcf088e5dd",
       "classes": [
         {
           "name": "_NonlinearSetup",
@@ -4166,7 +4202,7 @@
         },
         {
           "name": "_set_initial_state",
-          "line": 426
+          "line": 425
         }
       ]
     },
@@ -4352,6 +4388,51 @@
       ]
     },
     {
+      "path": "histra/solver/parallel_jobs.py",
+      "status": "inventory_only",
+      "lf_sha256": "ce6e24fcdb3beb7c55d55156798609ba432e98f788b70cab7419f87408fb7d54",
+      "classes": [
+        {
+          "name": "PythonSolverJob",
+          "line": 27
+        },
+        {
+          "name": "PythonSolverJobOutcome",
+          "line": 43
+        }
+      ],
+      "functions": [
+        {
+          "name": "PythonSolverJobOutcome.completed",
+          "line": 52
+        },
+        {
+          "name": "_positive_integer",
+          "line": 56
+        },
+        {
+          "name": "_worker_limit",
+          "line": 62
+        },
+        {
+          "name": "run_parallel_solver_jobs",
+          "line": 78
+        },
+        {
+          "name": "_launch_job",
+          "line": 102
+        },
+        {
+          "name": "_execute_job",
+          "line": 130
+        },
+        {
+          "name": "run_large_solver_job",
+          "line": 157
+        }
+      ]
+    },
+    {
       "path": "histra/solver/program.py",
       "status": "inventory_only",
       "lf_sha256": "1705885b0b8eccf04de8ec2c40fe745eb388ad206db543762812562f4ee18091",
@@ -4381,6 +4462,55 @@
         {
           "name": "Program.add_value_graph_static_analysis",
           "line": 114
+        }
+      ]
+    },
+    {
+      "path": "histra/solver/resources.py",
+      "status": "inventory_only",
+      "lf_sha256": "f6e74ad7cdcab02fe29425dacffa210df4ae5b869af57f710c25f8c1ca5206fa",
+      "classes": [
+        {
+          "name": "SolverResources",
+          "line": 15
+        }
+      ],
+      "functions": [
+        {
+          "name": "SolverResources.environment",
+          "line": 23
+        },
+        {
+          "name": "available_cpu_count",
+          "line": 42
+        },
+        {
+          "name": "_thread_count",
+          "line": 46
+        },
+        {
+          "name": "discover_openblas_directory",
+          "line": 52
+        },
+        {
+          "name": "_is_blas_directory",
+          "line": 58
+        },
+        {
+          "name": "_set_blas_directory",
+          "line": 62
+        },
+        {
+          "name": "inspect_process_resources",
+          "line": 72
+        },
+        {
+          "name": "validate_native_blas",
+          "line": 86
+        },
+        {
+          "name": "_native_blas_details",
+          "line": 101
         }
       ]
     },
@@ -4469,7 +4599,7 @@
     {
       "path": "histra/solver/session.py",
       "status": "inventory_only",
-      "lf_sha256": "3ad5d796d8934ae35a6da2ac39dc9c5c49324505accb9fcf28480dfd330791dd",
+      "lf_sha256": "ecf3a7ed0f9ee3ad70d72cc3431b24f1af2bf2f502717c3fad4c836353057dd0",
       "classes": [
         {
           "name": "AnalysisSessionError",
@@ -4507,35 +4637,35 @@
         },
         {
           "name": "AnalysisSession.dependency_chain",
-          "line": 451
+          "line": 479
         },
         {
           "name": "AnalysisSession.run_to",
-          "line": 477
-        },
-        {
-          "name": "AnalysisSession.run_sequence",
-          "line": 492
-        },
-        {
-          "name": "AnalysisSession.export_analysis",
           "line": 505
         },
         {
+          "name": "AnalysisSession.run_sequence",
+          "line": 520
+        },
+        {
+          "name": "AnalysisSession.export_analysis",
+          "line": 533
+        },
+        {
           "name": "AnalysisSession.export_session",
-          "line": 570
+          "line": 598
         },
         {
           "name": "AnalysisSession.export_csharp_results",
-          "line": 641
+          "line": 669
         },
         {
           "name": "AnalysisSession.export_bundle",
-          "line": 647
+          "line": 675
         },
         {
           "name": "_outcome_message",
-          "line": 660
+          "line": 688
         }
       ]
     },
@@ -4814,7 +4944,7 @@
     {
       "path": "histra/solver/warmup.py",
       "status": "inventory_only",
-      "lf_sha256": "95e093841640a27cd948d9ae3e947402940e01060e75e5c734883cb9362f2413",
+      "lf_sha256": "e2add3a0cabceabfe5cc128b968bc9b8346891b2261e5f6339d83b39f89af215",
       "classes": [],
       "functions": [
         {
