@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Iterable, Mapping
 
-from histra.io.hr_loader import load_model
+from histra.io.hr_loader import load_solver_model as load_model
 from histra.solver.cancellation import CancelCheck, SolverCancelled
 from histra.solver.capabilities import inspect_solver_capabilities
 from histra.solver.interface_material import InterfaceMaterialMutationReport
@@ -153,13 +153,10 @@ def run_python_solver_job(
     )
     capability_report.require_supported()
 
-    from histra.solver.backend_coverage import inspect_solver_backend
+    from histra.solver.backend_coverage import require_compiled_dependencies
 
-    backend_report = inspect_solver_backend(
-        model, [request.name for request in requested]
-    )
     if performance_policy == "compiled":
-        backend_report.require_compiled()
+        require_compiled_dependencies(model, [request.name for request in requested])
 
     captured_logs: list[str] = []
 
@@ -250,7 +247,7 @@ def run_python_solver_job(
             "equilibrium_policy": str(equilibrium_policy),
             "strategy_policy": str(strategy_policy),
             "performance_policy": str(performance_policy),
-            "backend_coverage": backend_report,
+            "backend_coverage": session.backend_coverage,
         },
     )
 

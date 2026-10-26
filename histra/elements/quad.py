@@ -428,7 +428,7 @@ class Quad(
         return e, 0.0, e
 
     @classmethod
-    def from_xml(cls, elem) -> Quad:
+    def from_xml(cls, elem, *, include_reference: bool = True) -> Quad:
         q = cls()
         q.key = int(elem.get("Key", "0"))
         q.name = elem.get("Name", "")
@@ -457,6 +457,22 @@ class Quad(
         gstr = elem.get("G", None)
         if gstr:
             q.g = Point.from_str(gstr)
+
+        # ReferenceSystem
+        rs = elem.find("ReferenceSystem")
+        if rs is not None:
+            e1 = rs.get("E1", "1;0;0")
+            e2 = rs.get("E2", "0;1;0")
+            e3 = rs.get("E3", "0;0;1")
+            q.reference_e1 = tuple(float(x) for x in e1.split(";"))
+            q.reference_e2 = tuple(float(x) for x in e2.split(";"))
+            q.reference_e3 = tuple(float(x) for x in e3.split(";"))
+            orig = rs.get("Origin", None)
+            if orig:
+                q.reference_origin = Point.from_str(orig)
+
+        if not include_reference:
+            return q
 
         # U1..U7 (post-solve state)
         for i in range(7):
@@ -489,18 +505,5 @@ class Quad(
             grp = elem.find(f"Interfaces{f+1}")
             if grp is not None:
                 q.interface_keys[f] = [int(iface.get("Value", "0")) for iface in grp.findall("Interface")]
-
-        # ReferenceSystem
-        rs = elem.find("ReferenceSystem")
-        if rs is not None:
-            e1 = rs.get("E1", "1;0;0")
-            e2 = rs.get("E2", "0;1;0")
-            e3 = rs.get("E3", "0;0;1")
-            q.reference_e1 = tuple(float(x) for x in e1.split(";"))
-            q.reference_e2 = tuple(float(x) for x in e2.split(";"))
-            q.reference_e3 = tuple(float(x) for x in e3.split(";"))
-            orig = rs.get("Origin", None)
-            if orig:
-                q.reference_origin = Point.from_str(orig)
 
         return q

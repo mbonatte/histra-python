@@ -159,12 +159,11 @@ def _setup_nonlinear_analysis(
 
     policy = str(performance_policy).strip().lower()
     if policy == "compiled":
-        from histra.solver.backend_coverage import inspect_solver_backend
+        from histra.solver.backend_coverage import require_compiled_dependencies
 
-        backend = inspect_solver_backend(
+        require_compiled_dependencies(
             model, [analysis], linear_solver_backend=linear_solver_backend
         )
-        backend.require_compiled()
     elif policy == "diagnostic-scalar" and on_log is not None:
         on_log(
             "PERFORMANCE POLICY NOTICE: Running in 'diagnostic-scalar' mode. "

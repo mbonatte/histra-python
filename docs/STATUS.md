@@ -12,6 +12,10 @@ are not guaranteed to reproduce C# values bit for bit.
 This page describes capabilities and remaining limits. Exact numerical and
 performance claims belong to their dated benchmark reports.
 
+The working tree also includes [CPU workflow improvements](guides/cpu-performance.md):
+solver-only HRX loading, one compiled initialization per virgin static solve,
+reused fibre face geometry, and bounded independent CPU processes.
+
 ## Supported boundary
 
 | Area | Current boundary |

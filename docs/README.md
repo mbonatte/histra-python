@@ -8,6 +8,7 @@ qualify their recorded inputs and source revisions, rather than the entire packa
 
 - [Standalone Vert → Live Load](guides/standalone-analysis.md)
 - [Analysis chains and interface mutation](guides/analysis-chains.md)
+- [Faster CPU analyses and independent process jobs](guides/cpu-performance.md)
 - [Fresh HRX preprocessing](guides/preprocessing.md)
 - [Modal analysis](guides/modal-analysis.md)
 - [C# parity diagnostics](guides/csharp-parity-diagnostics.md)

@@ -17,6 +17,8 @@ claims of parity for untested inputs.
 
 [Compiled CPU resultant geometry](compiled-resultant-geometry-2026-10-26.md)
 records the automatic, bit-exact geometry acceleration.
+[CPU workflow improvements](cpu-workflow-2026-10-26.md) cover loading,
+initialization, fibre preparation and independent process throughput.
 
 Other dated reports in this directory preserve earlier measurements. Retain their
 original timing and numerical context. See [current status](../STATUS.md) for the

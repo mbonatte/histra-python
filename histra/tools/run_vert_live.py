@@ -24,7 +24,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from histra.io.hr_loader import load_model
+from histra.io.hr_loader import load_solver_model as load_model
 from histra.postprocessing import compute_node_displacements
 from histra.solver.solve import solve_static_nonlinear
 from histra.solver.model_manager import ModelManager

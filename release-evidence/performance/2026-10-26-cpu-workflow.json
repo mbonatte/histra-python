@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T19:44:27.293130+00:00",
+  "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+  "working_tree_dirty": true,
+  "generator": "histra.tools.cpu_workflow_benchmark",
+  "benchmark_id": "cpu-workflow-2026-10-26",
+  "methodology": {
+    "baseline": "CPU commit 8745cc8 exported with git archive into a separate source tree",
+    "candidate": "current working tree; solver-only loader and CPU improvements",
+    "timing": "three warmed samples, median per phase; no diagnostic state capture during timing",
+    "precision": "all recorded step response fields and final compiled runtime snapshot compared by dtype, shape and bytes",
+    "equilibrium_policy": "off for both performance paths; no physical equilibrium qualification",
+    "linear_solver": "UMFPACK, fast precision in both sources",
+    "numba_threads": "automatic for single solves; one per process for batch",
+    "batch": "two fresh interpreter jobs, each running complete Bridge_1 Vert; one measurement per worker count"
+  },
+  "environment": {
+    "python": "3.12.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+    "available_cores": 20,
+    "packages": {
+      "numpy": "2.5.2",
+      "scipy": "1.18.1",
+      "numba": "0.67.0"
+    }
+  },
+  "models": {
+    "small": {
+      "model": "/home/mauricio/coding/histra-python/my_model/benchmark_1/benchmark_virgin.hrx",
+      "model_sha256": "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+      "quads": 48,
+      "dofs": 336,
+      "steps": 20,
+      "baseline": {
+        "schema_version": 1,
+        "generated_at": "2026-10-26T19:41:40.663217+00:00",
+        "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+        "generator": "histra.tools.cpu_workflow_benchmark",
+        "benchmark_id": "cpu-workflow",
+        "source_root": "/tmp/histra-cpu-baseline-8745cc8",
+        "fast_loader": false,
+        "model": "/home/mauricio/coding/histra-python/my_model/benchmark_1/benchmark_virgin.hrx",
+        "model_sha256": "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+        "cold": {
+          "load_seconds": 0.022123822000139626,
+          "prepare_seconds": 0.6590185000004567,
+          "solve_seconds": 0.21566138900016085,
+          "total_seconds": 0.8968037110007572,
+          "steps": 20,
+          "code": 0,
+          "quads": 48,
+          "dofs": 336
+        },
+        "samples": [
+          {
+            "load_seconds": 0.02071182300005603,
+            "prepare_seconds": 0.40110719399945083,
+            "solve_seconds": 0.12948187300025893,
+            "total_seconds": 0.5513008899997658,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          },
+          {
+            "load_seconds": 0.02078427600008581,
+            "prepare_seconds": 0.42838408700026775,
+            "solve_seconds": 0.12032188500052143,
+            "total_seconds": 0.569490248000875,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          },
+          {
+            "load_seconds": 0.020209076999890385,
+            "prepare_seconds": 0.4039221440007168,
+            "solve_seconds": 0.11648383599913359,
+            "total_seconds": 0.5406150569997408,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          }
+        ],
+        "median_seconds": {
+          "load_seconds": 0.02071182300005603,
+          "prepare_seconds": 0.4039221440007168,
+          "solve_seconds": 0.12032188500052143,
+          "total_seconds": 0.5513008899997658
+        }
+      },
+      "candidate": {
+        "schema_version": 1,
+        "generated_at": "2026-10-26T19:41:43.592378+00:00",
+        "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+        "generator": "histra.tools.cpu_workflow_benchmark",
+        "benchmark_id": "cpu-workflow",
+        "source_root": "/home/mauricio/coding/histra-python",
+        "fast_loader": true,
+        "model": "/home/mauricio/coding/histra-python/my_model/benchmark_1/benchmark_virgin.hrx",
+        "model_sha256": "92ee80b5501c35609905cf79570ba3b6a05c2fe07c65d78f9ef4a3a24a809333",
+        "cold": {
+          "load_seconds": 0.019690682000145898,
+          "prepare_seconds": 0.5466878179995547,
+          "solve_seconds": 0.20472361799966166,
+          "total_seconds": 0.7711021179993622,
+          "steps": 20,
+          "code": 0,
+          "quads": 48,
+          "dofs": 336
+        },
+        "samples": [
+          {
+            "load_seconds": 0.019466784000542248,
+            "prepare_seconds": 0.2908133330001874,
+            "solve_seconds": 0.1136683599997923,
+            "total_seconds": 0.42394847700052196,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          },
+          {
+            "load_seconds": 0.018788303000292217,
+            "prepare_seconds": 0.3230802859998221,
+            "solve_seconds": 0.10794396600067557,
+            "total_seconds": 0.44981255500078987,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          },
+          {
+            "load_seconds": 0.0182044359999054,
+            "prepare_seconds": 0.28986097399956634,
+            "solve_seconds": 0.11697595400073624,
+            "total_seconds": 0.425041364000208,
+            "steps": 20,
+            "code": 0,
+            "quads": 48,
+            "dofs": 336
+          }
+        ],
+        "median_seconds": {
+          "load_seconds": 0.018788303000292217,
+          "prepare_seconds": 0.2908133330001874,
+          "solve_seconds": 0.1136683599997923,
+          "total_seconds": 0.425041364000208
+        }
+      },
+      "precision": {
+        "bit_exact": true,
+        "fields": 211,
+        "values": 200904,
+        "mismatched_fields": [],
+        "max_absolute_difference": 0.0
+      },
+      "wall_time_reduction_fraction": 0.2290210813909832
+    },
+    "large": {
+      "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+      "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+      "quads": 914,
+      "dofs": 6398,
+      "steps": 5,
+      "baseline": {
+        "schema_version": 1,
+        "generated_at": "2026-10-26T19:38:29.079499+00:00",
+        "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+        "generator": "histra.tools.cpu_workflow_benchmark",
+        "benchmark_id": "cpu-workflow",
+        "source_root": "/tmp/histra-cpu-baseline-8745cc8",
+        "fast_loader": false,
+        "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+        "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+        "cold": {
+          "load_seconds": 2.4492358859997694,
+          "prepare_seconds": 5.058953486000064,
+          "solve_seconds": 13.318236684000112,
+          "total_seconds": 20.826426055999946,
+          "steps": 5,
+          "code": 0,
+          "quads": 914,
+          "dofs": 6398
+        },
+        "samples": [
+          {
+            "load_seconds": 2.565786649999609,
+            "prepare_seconds": 4.875533447000635,
+            "solve_seconds": 1.591420420999384,
+            "total_seconds": 9.032740517999628,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          },
+          {
+            "load_seconds": 2.808252182000615,
+            "prepare_seconds": 4.712897204000001,
+            "solve_seconds": 1.67275678399983,
+            "total_seconds": 9.193906170000446,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          },
+          {
+            "load_seconds": 2.6471451650004383,
+            "prepare_seconds": 4.880996062000122,
+            "solve_seconds": 1.584522198999366,
+            "total_seconds": 9.112663425999926,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          }
+        ],
+        "median_seconds": {
+          "load_seconds": 2.6471451650004383,
+          "prepare_seconds": 4.875533447000635,
+          "solve_seconds": 1.591420420999384,
+          "total_seconds": 9.112663425999926
+        }
+      },
+      "candidate": {
+        "schema_version": 1,
+        "generated_at": "2026-10-26T19:39:42.655962+00:00",
+        "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+        "generator": "histra.tools.cpu_workflow_benchmark",
+        "benchmark_id": "cpu-workflow",
+        "source_root": "/home/mauricio/coding/histra-python",
+        "fast_loader": true,
+        "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+        "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+        "cold": {
+          "load_seconds": 1.16906640399975,
+          "prepare_seconds": 4.367297773000246,
+          "solve_seconds": 1.4101621410000007,
+          "total_seconds": 6.9465263179999965,
+          "steps": 5,
+          "code": 0,
+          "quads": 914,
+          "dofs": 6398
+        },
+        "samples": [
+          {
+            "load_seconds": 1.2520727800001623,
+            "prepare_seconds": 4.158638403000623,
+            "solve_seconds": 1.294398142999853,
+            "total_seconds": 6.705109326000638,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          },
+          {
+            "load_seconds": 1.270464744000492,
+            "prepare_seconds": 4.067418611999528,
+            "solve_seconds": 1.384518890000436,
+            "total_seconds": 6.722402246000456,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          },
+          {
+            "load_seconds": 1.1524055780000708,
+            "prepare_seconds": 4.126043389999722,
+            "solve_seconds": 1.295600170000398,
+            "total_seconds": 6.574049138000191,
+            "steps": 5,
+            "code": 0,
+            "quads": 914,
+            "dofs": 6398
+          }
+        ],
+        "median_seconds": {
+          "load_seconds": 1.2520727800001623,
+          "prepare_seconds": 4.126043389999722,
+          "solve_seconds": 1.295600170000398,
+          "total_seconds": 6.705109326000638
+        }
+      },
+      "precision": {
+        "bit_exact": true,
+        "fields": 61,
+        "values": 963232,
+        "mismatched_fields": [],
+        "max_absolute_difference": 0.0
+      },
+      "wall_time_reduction_fraction": 0.2641987295536605
+    }
+  },
+  "batch": {
+    "schema_version": 1,
+    "generated_at": "2026-10-26T19:40:49.544278+00:00",
+    "source_commit": "8745cc836ee60cda9fe53bdda40947e65a311b99",
+    "working_tree_dirty": true,
+    "generator": "histra.solver.parallel_jobs",
+    "benchmark_id": "cpu-independent-process-throughput",
+    "model": "/home/mauricio/coding/histra-python/my_model/Article_Models_Benchmark/Bridge_1.hrx",
+    "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec",
+    "threads_per_worker": 1,
+    "jobs": 2,
+    "runs": {
+      "1": {
+        "wall_seconds": 16.057377834000363,
+        "completed_jobs": 2,
+        "bit_exact_responses": true,
+        "process_ids": [
+          43,
+          70
+        ],
+        "job_wall_seconds": [
+          8.020962532999874,
+          8.03456383899993
+        ]
+      },
+      "2": {
+        "wall_seconds": 8.155259140999988,
+        "completed_jobs": 2,
+        "bit_exact_responses": true,
+        "process_ids": [
+          100,
+          99
+        ],
+        "job_wall_seconds": [
+          8.152714824999748,
+          8.14263877799931
+        ]
+      }
+    },
+    "speedup": 1.9689598523329606
+  },
+  "candidate_file_sha256": {
+    "histra/io/hr_loader.py": "12a6b0b93701a79d84b48fa7393865818eaf49a86eb88cbee8bfac54be46f7bf",
+    "histra/elements/quad.py": "df9e59d6d99699a421fcef6642994e1cce1f6dabaff856b138f3c31aa0fa4f16",
+    "histra/preprocessing/csharp_fibre_geometry.py": "2bcb28f590adc9b8a02416f9f2613bbdf505036cdf8d6aaddaf9f35b4f141f99",
+    "histra/solver/backend_coverage.py": "d40f2bd8100172cbfc8cf7262cd75549bc0ee0cd3ac85318408afe9c395f42e3",
+    "histra/solver/nonlinear_setup.py": "a27c2a033874d2d97812198b00aec3beb6f8283f72683232cf48edfcf088e5dd",
+    "histra/solver/session.py": "ecf3a7ed0f9ee3ad70d72cc3431b24f1af2bf2f502717c3fad4c836353057dd0",
+    "histra/solver/backend_api.py": "caf66750b51e36068a326a8a20c3915e7b34ab7df4beb5970920400579118023",
+    "histra/solver/parallel_jobs.py": "3633f0e287659be5e9f278334940fbc97b8b42090583efe965a274bde17eb991",
+    "histra/solver/_job_worker.py": "c91d3c5a3c03aaaf87a5d27c972b3acec1566b75532bcef7317f8d06e03249e8",
+    "histra/tools/cpu_workflow_benchmark.py": "c7136873d1dc26792c7cc5a559bd11d918e44f8b5a6ba0761f6a55c6c1bf9a63",
+    "histra/tools/parallel_solver_jobs.py": "344aaa5f2845d6a1bad3f4b78248190f57a0221431abfd3665707c8f5113115e"
+  }
+}

@@ -278,11 +278,29 @@ class AnalysisSession:
             definition.allow_experimental_methods = True
         inspect_solver_capabilities(self.model, [definition]).require_supported()
         if self.performance_policy == "compiled":
+            from histra.solver.backend_coverage import require_compiled_dependencies
+
+            require_compiled_dependencies(
+                self.model, [definition],
+                linear_solver_backend=getattr(
+                    definition, "linear_solver_backend", self.linear_solver_backend
+                ),
+            )
+        # Restart resultants are numerical work too: audit their live runtime
+        # before capturing predecessor reactions. Virgin state is built in setup.
+        if self.performance_policy == "compiled" and (
+            int(getattr(definition, "initial_analysis_key", -100)) >= 0
+            or int(getattr(definition, "analysis_type", 0)) == 5
+        ):
             from histra.solver.backend_coverage import inspect_solver_backend
 
-            coverage = inspect_solver_backend(self.model, [definition])
-            self.backend_coverage = coverage
-            coverage.require_compiled()
+            self.backend_coverage = inspect_solver_backend(
+                self.model, [definition],
+                linear_solver_backend=getattr(
+                    definition, "linear_solver_backend", self.linear_solver_backend
+                ),
+            )
+            self.backend_coverage.require_compiled()
         emit_strategy_advisories(
             definition,
             policy=self.strategy_policy,
@@ -404,6 +422,16 @@ class AnalysisSession:
                     performance_policy=self.performance_policy,
                     **kwargs,
                 )
+            if self.performance_policy == "compiled":
+                from histra.solver.backend_coverage import inspect_solver_backend
+
+                self.backend_coverage = inspect_solver_backend(
+                    self.model, [definition],
+                    linear_solver_backend=getattr(
+                        definition, "linear_solver_backend", self.linear_solver_backend
+                    ),
+                )
+                self.backend_coverage.require_compiled()
         except Exception as exc:
             self._tainted_reason = f"{type(exc).__name__}: {exc}"
             raise

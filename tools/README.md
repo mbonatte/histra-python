@@ -21,6 +21,8 @@ Run a module with `--help` for its actual arguments.
 | `interface_chain_benchmark` | Interface-mutation chain qualification |
 | `strategy_benchmark` | Model-specific nonlinear solver-strategy qualification |
 | `linear_solver_benchmark` | Sparse linear-backend experiments |
+| `cpu_workflow_benchmark` | Compare CPU loading, preparation and solve phases with exact history/state arrays |
+| `parallel_solver_jobs` | Run independent CPU model jobs with bounded workers and strict equilibrium checks |
 | `pack_results` | Convert native NPZ/HDF5/JSON exports to one verified `.histra` study bundle |
 | `release_manifest` | Generate archive SHA-256 checksums |
 | `run_benchmark_full_comparison` | Fixture-specific Vert/Soil/scour/Live Load comparison |
