@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T19:12:51.711058+00:00",
+  "source_commit": "40596c23c3d6d777a3a53d2fae9d5ea16858d9f9",
+  "working_tree_dirty": true,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.12.3",
+  "packages": {
+    "histra-python": "1.7.2",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "numba": "0.67.0"
+  },
+  "generator": "CPU resultant-geometry evidence extraction",
+  "benchmark_id": "compiled-resultant-geometry-2026-10-26",
+  "geometry": {
+    "raw_report_path": "benchmark_outputs/gpu-2026-10-26/compiled-geometry-screen.json",
+    "raw_report_sha256": "7e298cb8b0eeadafe9016891a08edeeaf5daf8cb952ce90534dca91f7559f531",
+    "bit_exact": true,
+    "fibres": 27372,
+    "medians": {
+      "scalar": 1.7861919990000388,
+      "compiled": 0.005767712999841024
+    },
+    "samples": {
+      "scalar": [
+        1.7814917030000288,
+        1.7861919990000388,
+        1.7874623550005708
+      ],
+      "compiled": [
+        0.005767712999841024,
+        0.00567995300025359,
+        0.005951329999334121
+      ]
+    },
+    "speedup": 309.6880859101817,
+    "model": "my_model/Article_Models_Benchmark/Bridge_1.hrx",
+    "model_sha256": "96851f85177b57d08b49e4f16a741dab0aa32fa9c4f5ea3cdd67a05955b3cbec"
+  },
+  "cpu_before_after": [
+    {
+      "model": "benchmark1",
+      "before_solve_seconds": 0.772379432001344,
+      "after_solve_seconds": 0.20961088500098413,
+      "before_total_seconds": 1.2755288660009683,
+      "after_total_seconds": 0.7151915500026007,
+      "baseline_raw_report_sha256": "3a74de005cbd046e71b7d755a94830393dbf803433179286205f7382e1f85c61"
+    },
+    {
+      "model": "bridge1",
+      "before_solve_seconds": 3.504300320999846,
+      "after_solve_seconds": 1.7071388399981515,
+      "before_total_seconds": 10.668486137999935,
+      "after_total_seconds": 8.88780596199922,
+      "baseline_raw_report_sha256": "01b97decfad54efc0cdbdb23f2c90802403c5bdbee80b54952fc0584bad7dc83"
+    }
+  ],
+  "source_files_sha256_at_aggregation": {
+    "histra/solver/hysteretic_kernels/resultant_geometry.py": "68dd03218311e442f10e85ae116dd1105c0fa8e5483cb00ddf0af77e07efc528",
+    "histra/solver/hysteretic_runtime.py": "75e1f6a6d98074907997edab1aa661bd06446d01cfc4e7df84dee99042eaa80c",
+    "histra/solver/warmup.py": "e2add3a0cabceabfe5cc128b968bc9b8346891b2261e5f6339d83b39f89af215",
+    "histra/tests/test_resultant_geometry.py": "c8c2d2a214617eab40665f11c28c3cfc4d78938b9a7d34501223f63b8a8e07ec"
+  },
+  "limitations": [
+    "Before/after timings are sequential same-host screens, not paired simultaneous measurements.",
+    "Total timings include model loading, preparation and solve; exclude worker startup, explicit warmup and snapshot capture.",
+    "Raw reports came from the uncommitted working tree; per-launch source snapshots were not archived.",
+    "This change preserves output arithmetic and does not qualify models that fail existing independent equilibrium audits."
+  ]
+}

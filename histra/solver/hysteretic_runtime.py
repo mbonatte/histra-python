@@ -2808,19 +2808,20 @@ class HystereticBatchRuntime:
     def _ensure_resultant_moment_arms(self) -> None:
         if self._resultant_vec_x is not None and self._resultant_vec_y is not None:
             return
-        from histra.postprocessing import _spring_area_centroid_local_xy
+        from histra.solver.hysteretic_kernels.resultant_geometry import resultant_moment_arms
 
-        total = int(self.trial.shape[0])
-        vx = np.empty(total, dtype=np.float32)
-        vy = np.empty(total, dtype=np.float32)
-        for record in self.records:
-            intf = record.interface
-            for local_i, dense_i in enumerate(range(record.start, record.stop)):
-                cx, cy = _spring_area_centroid_local_xy(intf, local_i)
-                vx[dense_i] = cx
-                vy[dense_i] = cy
-        self._resultant_vec_x = vx
-        self._resultant_vec_y = vy
+        interfaces = [record.interface for record in self.records]
+        vertices = np.asarray(
+            [[[v.x, v.y] for v in interface.vint2d] for interface in interfaces],
+            dtype=np.float32,
+        ).reshape(-1, 4, 2)
+        lengths = np.asarray([i.length for i in interfaces], dtype=np.float32)
+        nrows = np.asarray([i.nrow for i in interfaces], dtype=np.int64)
+        ncols = np.asarray([i.ncol for i in interfaces], dtype=np.int64)
+        self._resultant_vec_x, self._resultant_vec_y = resultant_moment_arms(
+            vertices, lengths, nrows, ncols, self._starts, self._stops,
+            int(self.trial.shape[0]),
+        )
 
     def all_resultant_forces(self) -> np.ndarray:
         """Return (N_interfaces, 3) float32 physical local resultant forces."""

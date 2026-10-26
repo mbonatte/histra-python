@@ -15,6 +15,9 @@ claims of parity for untested inputs.
 | Small-model output | [Live load](live-load-126-dof.md), [result database](results-database-126-dof.md) |
 | Performance experiments | [Snapshot reuse](newton-snapshot-reuse-performance.md), [linear library screen](faster-linear-library-screen-2026-10-15.md) |
 
+[Compiled CPU resultant geometry](compiled-resultant-geometry-2026-10-26.md)
+records the automatic, bit-exact geometry acceleration.
+
 Other dated reports in this directory preserve earlier measurements. Retain their
 original timing and numerical context. See [current status](../STATUS.md) for the
 present supported boundary and [tools](../../tools/README.md) for command ownership.
