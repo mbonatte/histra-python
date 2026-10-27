@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-27T15:41:40.973689+00:00",
+  "source_commit": "c8c20fbb7a1a3ef5c11b3beb99877a918e1c8019",
+  "generator": "benchmark_scozzese_export_final.py",
+  "benchmark_id": "scozzese-3span-export-optimization",
+  "measurements": {
+    "load": {
+      "wall_seconds": 0.6841790429971297,
+      "cpu_seconds": 0.6836261829999999
+    },
+    "prepare": {
+      "wall_seconds": 46.820146999001736,
+      "cpu_seconds": 47.170085074
+    },
+    "baseline_dense_fields": {
+      "wall_seconds": 45.49736841399863,
+      "cpu_seconds": 45.48747714499999
+    },
+    "baseline_full_export": {
+      "wall_seconds": 55.83671003400377,
+      "cpu_seconds": 55.806779175
+    },
+    "optimized_dense_fields": {
+      "wall_seconds": 0.42629250200116076,
+      "cpu_seconds": 0.4262901839999955
+    },
+    "optimized_full_export": {
+      "wall_seconds": 10.368657136001275,
+      "cpu_seconds": 10.366881144000004
+    }
+  },
+  "model_sha256": "5d62f4c6b591bd5ffbb381f1932c00997030f979ce4e97871d9ff129519cc7c7",
+  "bit_exact_fields": [
+    "metadata/schema_version",
+    "metadata/units",
+    "metadata/spring_response",
+    "mesh/node_keys",
+    "mesh/nodes_xyz",
+    "mesh/quad_keys",
+    "mesh/quad_conn",
+    "mesh/quad_g",
+    "mesh/quad_material_keys",
+    "mesh/quad_thickness",
+    "mesh/quad_interface_keys",
+    "mesh/quad_face_interface_offsets",
+    "mesh/quad_face_interface_keys",
+    "mesh/interface_keys",
+    "mesh/interface_parents",
+    "mesh/interface_vint",
+    "mesh/interface_node_keys",
+    "mesh/interface_node_xyz",
+    "mesh/interface_length",
+    "mesh/interface_material_keys",
+    "mesh/interface_nrow",
+    "mesh/interface_ncol",
+    "mesh/interface_restrained",
+    "mesh/interface_nspring",
+    "mesh/interface_e1",
+    "mesh/interface_e3",
+    "mesh/interface_origin",
+    "steps/step_index",
+    "steps/load_factor",
+    "steps/displacement",
+    "steps/reactions",
+    "fields/U",
+    "fields/interface_resultants",
+    "fields/interface_moments",
+    "fields/quad_displacements",
+    "fields/node_displacements"
+  ],
+  "step_count": 19,
+  "dofs": 60872,
+  "full_export_speedup": 5.385143833151906,
+  "dense_fields_speedup": 106.7280522186495,
+  "original_solver_projection_bit_exact": true,
+  "reference_bundle_sha256": "61750d2333be2e1b3c7badf0369c976fba1fd3bc2b4cda848a5f9b93717f19da",
+  "array_count": 36,
+  "candidate_source_sha256": {
+    "histra/io/results_writer.py": "5c6278b8e011b90c7737574086bae5fac01b0b949a132e420115c340e74c669b",
+    "histra/io/displacement_fields.py": "95d6012b89608279aed68d88da27f17f16c655d7dcefc6088fd5f084937a282c"
+  },
+  "baseline_source_commit": "c8c20fb",
+  "candidate_state": "Uncommitted displacement projection changes on top of source_commit; candidate module hashes recorded below.",
+  "scope": "Dense result export of reconstructed Scozzese history: initial state plus 18 accepted gravity states through load factor 0.90. No new nonlinear solve and no convergence qualification at 0.95.",
+  "environment": {
+    "cpu": "Intel Core i7-13650HX",
+    "physical_cores": 14,
+    "logical_cpus": 20,
+    "ram_gib_approx": 32,
+    "kernel_threads": 8,
+    "blas_threads": 4,
+    "profiling_enabled": false
+  },
+  "methodology": "Baseline export from release commit c8c20fb; final candidate export in a second fresh process using the same source HRX, FP64 displacement history and stored interface resultants. Fresh preparation excluded from export timings. Sequential runs, one timing per implementation, active desktop environment. Array bytes compared for all 36 reconstructed arrays. Original saved solver export independently checked for fields/U, fields/quad_displacements and fields/node_displacements.",
+  "validation": {
+    "csharp_projection_fixture": "histra/tests/fixtures/csharp_quad_displacement_2026_1_1.json",
+    "additional_tests": "histra/tests/test_displacement_fields.py",
+    "optional_hdf5_test": "skipped because h5py is not installed",
+    "tests": {
+      "make_check": "passed: Ruff, mypy, 74 tests; 1 environment skip",
+      "focused_export_suite": "56 passed, 1 optional HDF5 skip; C# fixture included",
+      "full_suite": {
+        "passed": 1083,
+        "skipped": 24,
+        "warnings": 51,
+        "subtests_passed": 1467,
+        "wall_seconds": 177.75
+      }
+    }
+  },
+  "displacement_history_sha256": "256c41b7c35909af9e9581142b0c3602d44166877aa63c8aad18daa12e84bb11",
+  "step_scalars_sha256": "8fce0ffe8d946c79854f20c4d70395b34094484ff81c96cfa568925e2802b930"
+}

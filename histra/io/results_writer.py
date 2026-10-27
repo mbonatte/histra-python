@@ -21,7 +21,7 @@ import numpy as np
 
 import histra
 from histra.model.model import Model
-from histra.postprocessing import compute_node_displacements, quad_node_displacement
+from histra.io.displacement_fields import build_displacement_fields
 from histra.io.results_snapshot import capture_export_snapshot
 from histra.io.spring_response import SPRING_RESPONSE_METADATA
 from histra.io.model_point_summary import build_model_point_summary
@@ -362,8 +362,6 @@ def _build_dense_field_arrays(
     snapshot = execution.export_snapshot
     arrays.update(snapshot if snapshot is not None else capture_export_snapshot(model))
     record_order = arrays.pop("_export/interface_record_order", None)
-    sorted_quads = sorted(model.collections.quads.items())
-    sorted_nodes = arrays["mesh/node_keys"]
     sorted_interfaces = arrays["mesh/interface_keys"]
 
     # 2. Step Fields
@@ -372,7 +370,6 @@ def _build_dense_field_arrays(
     n_steps = len(steps)
     gdl = int(model.gdl)
     n_intf = len(sorted_interfaces)
-    n_nodes = len(sorted_nodes)
 
     step_index = np.array([int(s.step) for s in steps], dtype=np.int32)
     load_factor = np.array([float(s.get("load_factor", 0.0)) for s in steps], dtype=np.float32)
@@ -422,30 +419,12 @@ def _build_dense_field_arrays(
     arrays["fields/interface_resultants"] = intf_res
     arrays["fields/interface_moments"] = intf_mom
 
-    quad_disps = np.zeros((n_steps, len(sorted_quads), 4, 3), dtype=np.float32)
-    for step_index, step in enumerate(steps):
-        if step.get("u") is None:
-            continue
-        for quad_index, (_, quad) in enumerate(sorted_quads):
-            for corner, node_key in enumerate(quad.node_keys):
-                point = model.collections.nodes[node_key].point
-                quad_disps[step_index, quad_index, corner] = quad_node_displacement(
-                    quad, point, corner, np.asarray(step["u"])
-                )
+    quad_disps, node_disps = build_displacement_fields(
+        model, steps, include_node_displacements=include_node_displacements,
+        node_count=len(arrays["mesh/node_keys"]),
+    )
     arrays["fields/quad_displacements"] = quad_disps
-
-    # Project node displacements if requested
-    if include_node_displacements and n_steps > 0:
-        node_disps = np.zeros((n_steps, n_nodes, 3), dtype=np.float32)
-        for i, s in enumerate(steps):
-            u_arr = s.get("u")
-            if u_arr is not None:
-                rows = compute_node_displacements(model, u_arr, only_quad_nodes=True)
-                for j, row in enumerate(rows):
-                    if j < n_nodes:
-                        node_disps[i, j, 0] = row.ux
-                        node_disps[i, j, 1] = row.uy
-                        node_disps[i, j, 2] = row.uz
+    if node_disps is not None and n_steps > 0:
         arrays["fields/node_displacements"] = node_disps
 
 

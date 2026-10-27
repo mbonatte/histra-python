@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Batch Quad-corner displacement projection during dense result export and reuse it for ordered node averaging. Preserve C# FP32 output bits, saved mesh dimensions and existing result formats.
+
 ## 1.7.3 - 2026-10-26
 
 - Accelerate CPU resultant geometry and fibre preparation while preserving C# arithmetic ordering. Skip saved computational HRX state in solver entry points and avoid duplicate compiled-runtime construction on virgin static solves.

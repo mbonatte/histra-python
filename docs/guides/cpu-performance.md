@@ -31,6 +31,22 @@ execution. Restarts and material mutations retain lifecycle coverage checks.
 Interface fibre stiffness preparation reuses face projections across fibres with
 the original C# float32 operation order.
 
+## Faster dense result export
+
+Dense output projects all Quad corners in NumPy batches and reuses those results
+for node averaging. Geometry and afference maps are prepared once per export,
+with the original C# float32 rounding and connected-Quad summation order.
+The plan is rebuilt for each export so later model changes cannot leave stale
+geometry or afferences in the output. Existing result schemas and array layouts
+are preserved.
+
+This accelerates `.histra`, NPZ and HDF5 field construction. Compression and
+storage still contribute to total export time. Summary-only output does not
+construct these dense fields. See the identified
+[Scozzese export measurements](../benchmarks/scozzese-export-2026-10-27.md)
+for timing and exact-array comparisons. This optimization does not change Newton
+iterations, sparse factorization or convergence behavior.
+
 ## Running independent models together
 
 `run_parallel_solver_jobs` launches independent CPU jobs in separate processes.
