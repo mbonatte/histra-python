@@ -299,7 +299,7 @@ def _build_summary_manifest(
         if meta.get("model_file"):
             meta["model_file"] = Path(meta["model_file"]).name
 
-    return {
+    manifest = {
         "metadata": meta,
         "pushover_axis": pushover_axis,
         "metrics": {
@@ -336,6 +336,11 @@ def _build_summary_manifest(
             "reaction_mag": forces_total,
         },
     }
+    if getattr(execution, "modal_result", None) is not None:
+        manifest["modal"] = {
+            "modal_values": execution.modal_result.modal_values_rows()
+        }
+    return manifest
 
 
 
@@ -427,6 +432,10 @@ def _build_dense_field_arrays(
     if node_disps is not None and n_steps > 0:
         arrays["fields/node_displacements"] = node_disps
 
+    if getattr(execution, "modal_result", None) is not None:
+        arrays["modal_mode_shapes"] = np.asarray(execution.modal_result.mode_shapes.T, dtype=np.float32)
+        arrays["modal_frequencies"] = np.asarray(execution.modal_result.frequencies, dtype=np.float32)
+        arrays["modal_periods"] = np.asarray(execution.modal_result.periods, dtype=np.float32)
 
     return arrays
 

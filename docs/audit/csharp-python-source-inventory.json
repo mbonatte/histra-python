@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-02T22:00:14.560073+00:00",
-  "source_commit": "b2a6e0b20e93e8e4284a160ec336c25b74abf62c",
+  "generated_at": "2026-11-02T23:22:05.719757+00:00",
+  "source_commit": "f6736c4ed150b327ba38f206c902d281ab5e300d",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 104,
     "classes": 118,
-    "function_definitions": 912
+    "function_definitions": 923
   },
   "files": [
     {
@@ -1402,7 +1402,7 @@
     {
       "path": "histra/preprocessing/contact_geometry.py",
       "status": "inventory_only",
-      "lf_sha256": "ae98138cdadb64a3e832aac9b580d194225b7e6467dff85e08c918e99c915736",
+      "lf_sha256": "7b2a667c58a9fd3683d963df7b2d59bf3d3817187a0998c5a93b6a18d3c5ef37",
       "classes": [],
       "functions": [
         {
@@ -1479,59 +1479,67 @@
         },
         {
           "name": "_convex_quad_overlap_prefilter_batch",
-          "line": 431
+          "line": 432
         },
         {
           "name": "_coplanar_quad_intersection_prechecked",
-          "line": 499
+          "line": 500
         },
         {
           "name": "_coplanar_quad_intersection",
-          "line": 594
+          "line": 604
         },
         {
           "name": "_polygon_edge_at_point",
-          "line": 607
+          "line": 617
         },
         {
           "name": "_quad_face_reference_edge",
-          "line": 624
+          "line": 634
         },
         {
           "name": "_prepare_interface_endpoints",
-          "line": 637
+          "line": 647
         },
         {
           "name": "_passes_csharp_lateral_area_filter",
-          "line": 685
+          "line": 695
         },
         {
           "name": "_find_broad_pairs_nb",
-          "line": 707
+          "line": 717
         },
         {
           "name": "_find_face_candidates_nb",
-          "line": 751
+          "line": 761
         },
         {
           "name": "_filter_coplanar_overlap_nb",
-          "line": 871
+          "line": 881
+        },
+        {
+          "name": "_coplanar_quad_intersection_nb",
+          "line": 919
+        },
+        {
+          "name": "_batch_coplanar_quad_intersection_nb",
+          "line": 1012
         },
         {
           "name": "_quad_contact_pairs",
-          "line": 912
+          "line": 1048
         },
         {
           "name": "_generate_interfaces",
-          "line": 1070
+          "line": 1236
         },
         {
           "name": "_quad_vint",
-          "line": 1149
+          "line": 1315
         },
         {
           "name": "_quad_vint_f32",
-          "line": 1165
+          "line": 1331
         }
       ]
     },
@@ -1773,39 +1781,43 @@
     {
       "path": "histra/preprocessing/polygon_clipping.py",
       "status": "inventory_only",
-      "lf_sha256": "421e7f74bf436d03a3842d1451f2bf747560b4f112d6f0f4ecb68f502cf78f65",
+      "lf_sha256": "55cb44653342c7ce35b0247ecf4cbcd097b304359f66c6045265db8f9df853af",
       "classes": [],
       "functions": [
         {
+          "name": "_clip_convex_quad_2d_kernel",
+          "line": 25
+        },
+        {
           "name": "_cross_2d",
-          "line": 18
+          "line": 168
         },
         {
           "name": "_polygon_area_2d",
-          "line": 22
+          "line": 172
         },
         {
           "name": "_polygon_area_3d",
-          "line": 29
+          "line": 179
         },
         {
           "name": "_line_intersection_2d",
-          "line": 51
+          "line": 201
         },
         {
           "name": "_clean_clipped_polygon",
-          "line": 72
+          "line": 222
         },
         {
           "name": "_clip_convex_quad_2d",
-          "line": 113
+          "line": 263
         }
       ]
     },
     {
       "path": "histra/preprocessing/prepare_model.py",
       "status": "inventory_only",
-      "lf_sha256": "830098afbe6ba87a069a89e9a6d1c83bc1ebb62424dc0a87ca911079e70150b0",
+      "lf_sha256": "5e9e2d0d9933fe3a2998cbbea4a5f6cdca819b43e3c54d029497c5b1599316ae",
       "classes": [
         {
           "name": "PreparationReport",
@@ -3875,45 +3887,77 @@
     {
       "path": "histra/solver/mass_matrix.py",
       "status": "inventory_only",
-      "lf_sha256": "067b98de012b93b695c5987777c9afc4028fadd5ceed454083b184f27575b321",
+      "lf_sha256": "493e0e52361d3e4f2848efe9426a44005fe2cb5c6e70fa97c54c8c9ccf5a5e33",
       "classes": [
         {
           "name": "MassMatrixError",
-          "line": 30
+          "line": 36
         },
         {
           "name": "MassMatrixAssembly",
-          "line": 35
+          "line": 41
         }
       ],
       "functions": [
         {
           "name": "_shape3",
-          "line": 42
+          "line": 48
         },
         {
           "name": "_map_hexahedron",
-          "line": 77
+          "line": 83
         },
         {
           "name": "_invert_hexahedron",
-          "line": 84
+          "line": 90
         },
         {
           "name": "_b_matrices",
-          "line": 106
+          "line": 112
+        },
+        {
+          "name": "_det3",
+          "line": 148
+        },
+        {
+          "name": "_solve3",
+          "line": 156
+        },
+        {
+          "name": "_shape3_point",
+          "line": 181
+        },
+        {
+          "name": "_invert_hexahedron_nb",
+          "line": 205
+        },
+        {
+          "name": "_b_matrix_single",
+          "line": 263
+        },
+        {
+          "name": "_compute_quad_mass_kernel",
+          "line": 290
+        },
+        {
+          "name": "_compute_all_quad_mass_nb",
+          "line": 377
+        },
+        {
+          "name": "_assemble_mass_coo_nb",
+          "line": 398
         },
         {
           "name": "compute_quad_local_mass",
-          "line": 140
+          "line": 426
         },
         {
           "name": "assemble_mass_matrix",
-          "line": 222
+          "line": 534
         },
         {
           "name": "build_translational_pseudovectors",
-          "line": 297
+          "line": 708
         }
       ]
     },

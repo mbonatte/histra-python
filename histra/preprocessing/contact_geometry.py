@@ -421,6 +421,7 @@ def _face_normals_batch(faces: np.ndarray) -> np.ndarray:
 from histra.preprocessing.polygon_clipping import (
     _clean_clipped_polygon,
     _clip_convex_quad_2d,
+    _clip_convex_quad_2d_kernel,
     _cross_2d,
     _line_intersection_2d,
     _polygon_area_2d,
@@ -501,6 +502,15 @@ def _coplanar_quad_intersection_prechecked(
     node_tolerance: float | None = None,
 ) -> list[np.ndarray] | None:
     """Clip two faces after the vectorized broad phase proved coplanarity."""
+    if _coplanar_quad_intersection_nb is not None:
+        poly, ok = _coplanar_quad_intersection_nb(
+            first, second, normal_first,
+            0.0 if node_tolerance is None else float(node_tolerance),
+        )
+        if not ok:
+            return None
+        return [poly[i] for i in range(4)]
+
     if node_tolerance is not None:
         code = classify_contained_contact(first, second, np.float32(node_tolerance))
         if code in (1, 3):
@@ -903,10 +913,136 @@ if njit is not None:
 
             mask[i] = True
         return mask
+
+    if _clip_convex_quad_2d_kernel is not None:
+        @njit(cache=True, nogil=True)
+        def _coplanar_quad_intersection_nb(first, second, normal_first, node_tolerance):
+            out = np.empty((4, 3), dtype=np.float32)
+            if node_tolerance > 0.0:
+                code = classify_contained_contact(first, second, np.float32(node_tolerance))
+                if code == 1 or code == 3:
+                    for i in range(4):
+                        for j in range(3):
+                            out[i, j] = np.float32(first[i, j])
+                    return out, True
+                if code == 2:
+                    for i in range(4):
+                        for j in range(3):
+                            out[i, j] = np.float32(second[i, j])
+                    return out, True
+
+            nx = abs(normal_first[0])
+            ny = abs(normal_first[1])
+            nz = abs(normal_first[2])
+            if nx >= ny and nx >= nz:
+                drop, k0, k1 = 0, 1, 2
+            elif ny >= nz:
+                drop, k0, k1 = 1, 0, 2
+            else:
+                drop, k0, k1 = 2, 0, 1
+
+            min_s0 = min(first[0, k0], first[1, k0], first[2, k0], first[3, k0])
+            max_s0 = max(first[0, k0], first[1, k0], first[2, k0], first[3, k0])
+            min_c0 = min(second[0, k0], second[1, k0], second[2, k0], second[3, k0])
+            max_c0 = max(second[0, k0], second[1, k0], second[2, k0], second[3, k0])
+            if max_s0 <= min_c0 or max_c0 <= min_s0:
+                return out, False
+
+            min_s1 = min(first[0, k1], first[1, k1], first[2, k1], first[3, k1])
+            max_s1 = max(first[0, k1], first[1, k1], first[2, k1], first[3, k1])
+            min_c1 = min(second[0, k1], second[1, k1], second[2, k1], second[3, k1])
+            max_c1 = max(second[0, k1], second[1, k1], second[2, k1], second[3, k1])
+            if max_s1 <= min_c1 or max_c1 <= min_s1:
+                return out, False
+
+            subject = np.empty((4, 2), dtype=np.float64)
+            clipper = np.empty((4, 2), dtype=np.float64)
+            for i in range(4):
+                subject[i, 0] = first[i, k0]
+                subject[i, 1] = first[i, k1]
+                clipper[i, 0] = second[i, k0]
+                clipper[i, 1] = second[i, k1]
+
+            clipped_buf = np.empty((16, 2), dtype=np.float64)
+            n_clipped = _clip_convex_quad_2d_kernel(subject, clipper, clipped_buf)
+            if n_clipped != 4:
+                return out, False
+
+            p0x, p0y = clipped_buf[0, 0], clipped_buf[0, 1]
+            p1x, p1y = clipped_buf[1, 0], clipped_buf[1, 1]
+            p2x, p2y = clipped_buf[2, 0], clipped_buf[2, 1]
+            p3x, p3y = clipped_buf[3, 0], clipped_buf[3, 1]
+
+            area = 0.5 * abs(
+                (p0x * p1y - p0y * p1x)
+                + (p1x * p2y - p1y * p2x)
+                + (p2x * p3y - p2y * p3x)
+                + (p3x * p0y - p3y * p0x)
+            )
+            if area <= 1.0e-6:
+                return out, False
+
+            e0 = math.hypot(p1x - p0x, p1y - p0y)
+            e1 = math.hypot(p2x - p1x, p2y - p1y)
+            e2 = math.hypot(p3x - p2x, p3y - p2y)
+            e3 = math.hypot(p0x - p3x, p0y - p3y)
+            longest_edge = max(e0, e1, e2, e3)
+            sliver_tol = 2.0e-4 if node_tolerance <= 0.0 else node_tolerance
+            if longest_edge <= 0.0 or area / longest_edge < sliver_tol:
+                return out, False
+
+            plane_origin = first[0]
+            pod = plane_origin[drop]
+            pok0 = plane_origin[k0]
+            pok1 = plane_origin[k1]
+            norm_drop = normal_first[drop]
+            norm_k0 = normal_first[k0]
+            norm_k1 = normal_first[k1]
+
+            for i in range(4):
+                px = clipped_buf[i, 0]
+                py = clipped_buf[i, 1]
+                out[i, k0] = np.float32(px)
+                out[i, k1] = np.float32(py)
+                out[i, drop] = np.float32(pod - (norm_k0 * (px - pok0) + norm_k1 * (py - pok1)) / norm_drop)
+
+            return out, True
+
+        @njit(fastmath=True, cache=True, parallel=True)
+        def _batch_coplanar_quad_intersection_nb(
+            cq1, cf1, cq2, cf2, faces, face_normal, node_tolerance
+        ):
+            n = len(cq1)
+            out_polys = np.empty((n, 4, 3), dtype=np.float32)
+            valid = np.zeros(n, dtype=np.bool_)
+
+            for p in prange(n):
+                q1 = cq1[p]
+                f1 = cf1[p]
+                q2 = cq2[p]
+                f2 = cf2[p]
+
+                first = faces[q1, f1]
+                second = faces[q2, f2]
+                norm = face_normal[q1, f1]
+
+                poly, ok = _coplanar_quad_intersection_nb(first, second, norm, node_tolerance)
+                if ok:
+                    valid[p] = True
+                    for i in range(4):
+                        for j in range(3):
+                            out_polys[p, i, j] = poly[i, j]
+
+            return out_polys, valid
+    else:
+        _coplanar_quad_intersection_nb = None
+        _batch_coplanar_quad_intersection_nb = None
 else:
     _find_broad_pairs_nb = None
     _find_face_candidates_nb = None
     _filter_coplanar_overlap_nb = None
+    _coplanar_quad_intersection_nb = None
+    _batch_coplanar_quad_intersection_nb = None
 
 
 def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]]:
@@ -935,6 +1071,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
         max(quad.length) + max(quad.thickness) for quad in quads
     ], dtype=float)
 
+    out_polys = None
     if _find_broad_pairs_nb is not None and _find_face_candidates_nb is not None:
         first_indices, second_indices = _find_broad_pairs_nb(centres, broad_radius)
         cq1, cf1, cq2, cf2 = _find_face_candidates_nb(
@@ -948,17 +1085,7 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
             _CONTACT_ANGLE_TOLERANCE,
         )
         if len(cq1):
-            first_faces = faces[cq1, cf1]
-            second_faces = faces[cq2, cf2]
-            normals1 = face_normal[cq1, cf1]
-            overlap = _convex_quad_overlap_prefilter_batch(
-                first_faces, second_faces, normals1
-            )
-            cq1 = cq1[overlap]
-            cf1 = cf1[overlap]
-            cq2 = cq2[overlap]
-            cf2 = cf2[overlap]
-            if _filter_coplanar_overlap_nb is not None and len(cq1):
+            if _filter_coplanar_overlap_nb is not None:
                 mask2d = _filter_coplanar_overlap_nb(
                     cq1, cf1, cq2, cf2, faces, face_normal
                 )
@@ -966,6 +1093,27 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
                 cf1 = cf1[mask2d]
                 cq2 = cq2[mask2d]
                 cf2 = cf2[mask2d]
+            if _batch_coplanar_quad_intersection_nb is not None and len(cq1):
+                node_tolerance = float(getattr(model, "geometry_tolerance_node", 1.0e-4))
+                out_polys, valid = _batch_coplanar_quad_intersection_nb(
+                    cq1, cf1, cq2, cf2, faces, face_normal, node_tolerance
+                )
+                cq1 = cq1[valid]
+                cf1 = cf1[valid]
+                cq2 = cq2[valid]
+                cf2 = cf2[valid]
+                out_polys = out_polys[valid]
+            else:
+                first_faces = faces[cq1, cf1]
+                second_faces = faces[cq2, cf2]
+                normals1 = face_normal[cq1, cf1]
+                overlap = _convex_quad_overlap_prefilter_batch(
+                    first_faces, second_faces, normals1
+                )
+                cq1 = cq1[overlap]
+                cf1 = cf1[overlap]
+                cq2 = cq2[overlap]
+                cf2 = cf2[overlap]
         surface_candidates = list(
             zip(cq1.tolist(), cf1.tolist(), cq2.tolist(), cf2.tolist())
         )
@@ -1044,8 +1192,26 @@ def _quad_contact_pairs(model: Model) -> list[tuple[Quad, int, Quad, int, list[n
                 )
             )
 
-    surface_candidates.sort(key=lambda item: (item[0], item[2], item[1], item[3]))
     contacts: list[tuple[Quad, int, Quad, int, list[np.ndarray], tuple[int, int], float]] = []
+    if out_polys is not None:
+        indices = list(range(len(surface_candidates)))
+        indices.sort(key=lambda idx: (surface_candidates[idx][0], surface_candidates[idx][2], surface_candidates[idx][1], surface_candidates[idx][3]))
+        for idx in indices:
+            first, face1, second, face2 = surface_candidates[idx]
+            q1, q2 = quads[first], quads[second]
+            intersection = [out_polys[idx, i] for i in range(4)]
+            if not _passes_csharp_lateral_area_filter(q1, face1, q2, face2, intersection, model):
+                continue
+            node_order, contact_length = _prepare_interface_endpoints(
+                model, q1, face1, q2, face2, intersection
+            )
+            contacts.append((
+                q1, face1, q2, face2, intersection, node_order, contact_length
+            ))
+        contacts.sort(key=lambda item: (item[0].key, item[2].key, item[1], item[3]))
+        return contacts
+
+    surface_candidates.sort(key=lambda item: (item[0], item[2], item[1], item[3]))
     for first, face1, second, face2 in surface_candidates:
         q1, q2 = quads[first], quads[second]
         intersection = _coplanar_quad_intersection_prechecked(
