@@ -18,7 +18,7 @@ from histra.solver.program import Program
 from histra.solver.solution_algorithm import EquiSolnAlgo
 from histra.solver.state_snapshot import SolverStateSnapshot
 from histra.solver.restart import restore_committed_analysis_state
-from histra.postprocessing import compute_total_reaction
+from histra.postprocessing import ReactionResult, compute_total_reaction
 from histra.preprocessing import inspect_solver_readiness, require_solver_ready
 from histra.types.linear_system import LinearSolveError, LinearSystem
 from histra.solver.diagnostics import DiagnosticOptions, create_diagnostics
@@ -47,6 +47,8 @@ def solve_static_nonlinear(
     results_path: str | Path | None = None,
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
+    initial_external_load: np.ndarray | None = None,
+    equilibrium_reference_reaction: ReactionResult | None = None,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
     should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
@@ -82,6 +84,10 @@ def solve_static_nonlinear(
     analysis definition used by the solve. It may adjust continuation controls
     such as ``dr2`` for the next step without modifying an accepted state.
 
+    ``initial_external_load`` and ``equilibrium_reference_reaction`` may be
+    supplied together for an in-memory restart to retain the preceding applied
+    load and audit against its committed reaction after a material change.
+
     Reversible Newton trials create thousands of short-lived state containers.
     CPython's cyclic collector can pause for minutes while scanning these fully
     reachable constitutive graphs even though reference counting already frees
@@ -103,6 +109,8 @@ def solve_static_nonlinear(
                     on_progress=on_progress, results_path=results_path,
                     initial_displacement=initial_displacement,
                     restart_from_current_state=restart_from_current_state,
+                    initial_external_load=initial_external_load,
+                    equilibrium_reference_reaction=equilibrium_reference_reaction,
                     auto_prepare=auto_prepare,
                     max_committed_steps=max_committed_steps,
                     should_stop_after_commit=should_stop_after_commit,
@@ -151,6 +159,8 @@ def _solve_static_nonlinear_impl(
     results_path: str | Path | None = None,
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
+    initial_external_load: np.ndarray | None = None,
+    equilibrium_reference_reaction: ReactionResult | None = None,
     auto_prepare: bool = True,
     max_committed_steps: int | None = None,
     should_stop_after_commit: Callable[[dict[str, Any]], bool] | None = None,
@@ -172,6 +182,8 @@ def _solve_static_nonlinear_impl(
 ) -> tuple[int, list[dict[str, Any]]]:
     """C#-ordered static nonlinear solver implementation."""
     raise_if_cancelled(should_cancel)
+    if (initial_external_load is None) != (equilibrium_reference_reaction is None):
+        raise ValueError("A preserved external load requires its predecessor reaction reference")
     if model.collections is None:
         raise ValueError("Model.collections is not initialized")
 
@@ -193,6 +205,7 @@ def _solve_static_nonlinear_impl(
         on_log=on_log, on_progress=on_progress, should_cancel=should_cancel,
         results_path=results_path, initial_displacement=initial_displacement,
         restart_from_current_state=restart_from_current_state,
+        initial_external_load=initial_external_load,
         auto_prepare=auto_prepare, diagnostics=diagnostics,
         linear_solver_backend=linear_solver_backend,
         linear_solver_precision=linear_solver_precision,
@@ -234,7 +247,8 @@ def _solve_static_nonlinear_impl(
             model, analysis, combination,
             p=p, ls=ls, n=n, integrator=integrator, algorithm=algorithm,
             alfa=alfa, dof=dof, diagnostic_writer=diagnostic_writer,
-            initial_reaction=initial_reaction,
+            initial_reaction=(initial_reaction if equilibrium_reference_reaction is None
+                              else equilibrium_reference_reaction),
             equilibrium_reference_load_factor=equilibrium_reference_load_factor,
             equilibrium_target_force=equilibrium_target_force,
             reference=reference,

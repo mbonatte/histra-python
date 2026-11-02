@@ -8,7 +8,7 @@ from typing import Any, Callable, Iterable
 
 import numpy as np
 
-from histra.postprocessing import compute_total_reaction
+from histra.postprocessing import ReactionResult, compute_total_reaction
 from histra.solver.cancellation import CancelCheck
 from histra.solver.interface_material import (
     InterfaceMaterialMutationReport,
@@ -24,7 +24,7 @@ from histra.solver.outcomes import (
     AnalysisStep,
     classify_analysis_outcome,
 )
-from histra.solver.modal import solve_modal_analysis
+from histra.solver.modal import modal_linear_solver_backend, solve_modal_analysis
 from histra.solver.solve import solve_static_nonlinear
 from histra.solver.equilibrium import UNSAFE_EQUILIBRIUM_EXIT_CODE
 from histra.solver.capabilities import inspect_solver_capabilities
@@ -59,8 +59,12 @@ class AnalysisSession:
         Callback receiving numerical step progress (0.0 to 100.0).
     equilibrium_policy : {"warn", "strict", "off"}, default="warn"
         Policy for independent equilibrium force residual balance auditing.
-    performance_policy : {"compiled", "warn", "off"}, default="compiled"
+    performance_policy : {"compiled", "diagnostic-scalar"}, default="compiled"
         Policy enforcing compiled Numba backend execution.
+    preserve_predecessor_load : bool, default=False
+        Carry the committed applied load into chained static analyses. This is
+        useful when a material change must re-equilibrate under the same load;
+        the default retains the C# restart's resisting-force baseline.
 
     Examples
     --------
@@ -94,11 +98,15 @@ class AnalysisSession:
         allow_experimental_methods: bool = False,
         interface_registration: str = "csharp",
         capture_csharp_results: bool = False,
+        preserve_predecessor_load: bool = False,
     ) -> None:
         if model.collections is None:
             raise AnalysisSessionError("Model.collections is not initialized.")
         self.model = model
         self.capture_csharp_results = bool(capture_csharp_results)
+        self.preserve_predecessor_load = bool(preserve_predecessor_load)
+        self._committed_external_load: np.ndarray | None = None
+        self._committed_reaction: ReactionResult | None = None
         self.interface_registration = normalize_interface_registration(interface_registration)
         self.combination_row = int(combination_row)
         self.on_log = on_log
@@ -277,28 +285,25 @@ class AnalysisSession:
         if self.allow_experimental_methods:
             definition.allow_experimental_methods = True
         inspect_solver_capabilities(self.model, [definition]).require_supported()
+        is_modal = int(getattr(definition, "analysis_type", 0)) == 5
+        execution_backend = modal_linear_solver_backend(definition) if is_modal else getattr(
+            definition, "linear_solver_backend", self.linear_solver_backend
+        )
         if self.performance_policy == "compiled":
             from histra.solver.backend_coverage import require_compiled_dependencies
 
             require_compiled_dependencies(
                 self.model, [definition],
-                linear_solver_backend=getattr(
-                    definition, "linear_solver_backend", self.linear_solver_backend
-                ),
+                linear_solver_backend=execution_backend,
             )
         # Restart resultants are numerical work too: audit their live runtime
         # before capturing predecessor reactions. Virgin state is built in setup.
-        if self.performance_policy == "compiled" and (
-            int(getattr(definition, "initial_analysis_key", -100)) >= 0
-            or int(getattr(definition, "analysis_type", 0)) == 5
-        ):
+        if self.performance_policy == "compiled" and int(definition.initial_analysis_key) >= 0:
             from histra.solver.backend_coverage import inspect_solver_backend
 
             self.backend_coverage = inspect_solver_backend(
                 self.model, [definition],
-                linear_solver_backend=getattr(
-                    definition, "linear_solver_backend", self.linear_solver_backend
-                ),
+                linear_solver_backend=execution_backend,
             )
             self.backend_coverage.require_compiled()
         emit_strategy_advisories(
@@ -359,6 +364,13 @@ class AnalysisSession:
                 initial_displacement=self.current_displacement,
                 restart_from_current_state=True,
             )
+            if self.preserve_predecessor_load and not is_modal:
+                if self._committed_external_load is None or self._committed_reaction is None:
+                    raise AnalysisSessionError("No committed predecessor load is available")
+                kwargs.update(
+                    initial_external_load=self._committed_external_load.copy(),
+                    equilibrium_reference_reaction=self._committed_reaction,
+                )
 
         capture = None
         if self.capture_csharp_results:
@@ -369,7 +381,7 @@ class AnalysisSession:
             capture = CSharpResultsCapture(self.model, self.combination_row)
         started = time.perf_counter()
         try:
-            if int(getattr(definition, "analysis_type", 0)) == 5:
+            if is_modal:
                 modal_result = solve_modal_analysis(
                     self.model,
                     definition,
@@ -377,6 +389,7 @@ class AnalysisSession:
                     on_log=self.on_log,
                     on_progress=self.on_progress,
                     should_cancel=should_cancel,
+                    performance_policy=self.performance_policy,
                     **kwargs,
                 )
                 code = 0
@@ -394,9 +407,7 @@ class AnalysisSession:
                     on_step_committed=on_step_committed,
                     on_state_saved=capture.capture if capture is not None else None,
                     should_cancel=should_cancel,
-                    linear_solver_backend=getattr(
-                        definition, "linear_solver_backend", self.linear_solver_backend
-                    ),
+                    linear_solver_backend=execution_backend,
                     linear_solver_precision=getattr(
                         definition, "linear_solver_precision", self.linear_solver_precision
                     ),
@@ -427,9 +438,7 @@ class AnalysisSession:
 
                 self.backend_coverage = inspect_solver_backend(
                     self.model, [definition],
-                    linear_solver_backend=getattr(
-                        definition, "linear_solver_backend", self.linear_solver_backend
-                    ),
+                    linear_solver_backend=execution_backend,
                 )
                 self.backend_coverage.require_compiled()
         except Exception as exc:
@@ -469,6 +478,19 @@ class AnalysisSession:
         elif execution.completed and committed:
             self.current_analysis_key = int(definition.key)
             self.current_displacement = committed[-1].u.copy()
+            if self.preserve_predecessor_load:
+                from histra.solver.model_manager import ModelManager
+
+                if ModelManager._fext is None:
+                    raise AnalysisSessionError("Completed analysis has no external load vector")
+                self._committed_external_load = ModelManager._fext.copy()
+                last = committed[-1]
+                reaction_x, reaction_y, reaction_z = last.reaction_x, last.reaction_y, last.reaction_z
+                if reaction_x is None or reaction_y is None or reaction_z is None:
+                    raise AnalysisSessionError("Completed analysis has no reaction reference")
+                self._committed_reaction = ReactionResult(
+                    reaction_x, reaction_y, reaction_z,
+                )
         elif not execution.completed:
             self._tainted_reason = (
                 f"analysis {definition.key}:{definition.name} ended as {outcome.value}"

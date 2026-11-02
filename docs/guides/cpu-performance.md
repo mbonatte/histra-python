@@ -156,3 +156,18 @@ previous native-library selection.
 See the [large-model capacity measurements](../benchmarks/large-model-capacity-2026-10-26.md)
 for timings, precision scope and the distinction between refactorization and
 complete analysis time.
+
+## Modal setup and CPU factorization screening
+
+Virgin modal sessions initialize state before building their compiled runtime.
+Modal stiffness scatter uses compiled loops while preserving its original COO
+contribution and reduction order. See the [modal guide](modal-analysis.md) and
+[Scozzese measurements](../benchmarks/scozzese-modal-cpu-2026-10-27.md).
+
+The existing `--backend cholmod` option is a separate CPU Cholesky alternative
+for symmetric positive-definite stiffness matrices. It can fall back to native
+LU when definiteness is lost; record the actual factor backend when evaluating
+it. The default `auto` choice remains unchanged. The Scozzese screen matched
+18 accepted steps through 90% load, including strict equilibrium checks, but
+does not qualify the unresolved 95% step or complete constitutive state history.
+Qualify the complete response before adopting that setting for a new model.

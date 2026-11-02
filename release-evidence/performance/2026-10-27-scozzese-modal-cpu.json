@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-27T16:14:23.307231+00:00",
+  "source_commit": "b2a6e0b20e93e8e4284a160ec336c25b74abf62c",
+  "generator": "Scozzese modal and CPU backend benchmark harnesses",
+  "benchmark_id": "scozzese-modal-cpu-optimization",
+  "model_sha256": "5d62f4c6b591bd5ffbb381f1932c00997030f979ce4e97871d9ff129519cc7c7",
+  "modal": {
+    "baseline": {
+      "load": {
+        "wall_seconds": 0.6036114159942372,
+        "cpu_seconds": 0.603594519,
+        "peak_rss_mb": 184.74609375
+      },
+      "prepare": {
+        "wall_seconds": 46.57085895999626,
+        "cpu_seconds": 46.927823618,
+        "peak_rss_mb": 780.59765625
+      },
+      "stiffness_assembly": {
+        "wall_seconds": 4.542519034999714,
+        "cpu_seconds": 4.542457806000002,
+        "peak_rss_mb": 2225.2421875
+      },
+      "modal": {
+        "wall_seconds": 38.9146444539947,
+        "cpu_seconds": 65.408644332,
+        "peak_rss_mb": 3010.98046875
+      }
+    },
+    "optimized": {
+      "load": {
+        "wall_seconds": 0.6303905890017631,
+        "cpu_seconds": 0.6303270079999999,
+        "peak_rss_mb": 187.28125
+      },
+      "prepare": {
+        "wall_seconds": 47.61454366699763,
+        "cpu_seconds": 47.992006264000004,
+        "peak_rss_mb": 786.84375
+      },
+      "stiffness_assembly": {
+        "wall_seconds": 2.6699556230014423,
+        "cpu_seconds": 2.667897047000004,
+        "peak_rss_mb": 1884.5625
+      },
+      "modal": {
+        "wall_seconds": 34.362099760001,
+        "cpu_seconds": 59.573573270999994,
+        "peak_rss_mb": 2476.3515625
+      }
+    },
+    "baseline_runtime_builds": 2,
+    "optimized_runtime_builds": 1,
+    "stiffness_csc_bit_exact": true,
+    "frequency_bit_exact": true,
+    "mode_shapes_bit_exact": true,
+    "modal_scalars_exact": true,
+    "mode_count": 12,
+    "coverage": {
+      "model_name": "Scozzese_Bridge_3span.hrx",
+      "numba_available": true,
+      "numba_threads": 8,
+      "linear_solver_backend": "superlu",
+      "total_interfaces": 23950,
+      "managed_interfaces": 23950,
+      "unmanaged_interfaces": 0,
+      "total_quads": 8696,
+      "managed_quads": 8696,
+      "unmanaged_quads": 0,
+      "managed_transverse_springs": 215550,
+      "managed_interface_coulomb_springs": 71850,
+      "managed_quad_coulomb_springs": 8696,
+      "managed_quad_cacovic_springs": 0,
+      "managed_quad_elastic_springs": 0,
+      "managed_quad_hysteretic_springs": 0,
+      "interface_rejection_reasons": {},
+      "interface_coulomb_rejection_reasons": {},
+      "quad_rejection_reasons": {},
+      "requested_linear_solver_backend": "superlu",
+      "linear_solver_available": true,
+      "linear_solver_error": null,
+      "analysis_names": [
+        "47:Modal_0"
+      ],
+      "analysis_resolution_errors": []
+    },
+    "speedup": 1.1324873836520624
+  },
+  "linear_screen": {
+    "matrix_scope": "Virgin modal tangent, not a nonlinear response-history qualification",
+    "shape": [
+      60872,
+      60872
+    ],
+    "nnz": 1611140,
+    "rhs_seed": 20261027,
+    "samples": 3,
+    "rows": [
+      {
+        "backend": "umfpack-metis",
+        "initial_factor_seconds": 2.2155508499999996,
+        "solve_median_seconds": 0.03846736900595715,
+        "numeric_refactor_median_seconds": 1.1902172390036867,
+        "max_abs_delta_from_metis": 0.0,
+        "relative_residual": 4.391761437796412e-12,
+        "peak_rss_mb": 562.65625
+      },
+      {
+        "backend": "umfpack-amd",
+        "initial_factor_seconds": 2.409069045999786,
+        "solve_median_seconds": 0.05828481500066118,
+        "numeric_refactor_median_seconds": 2.00347494000016,
+        "max_abs_delta_from_metis": 8.495808223596413e-16,
+        "relative_residual": 5.872210301805612e-12,
+        "peak_rss_mb": 880.58203125
+      },
+      {
+        "backend": "cholmod",
+        "initial_factor_seconds": 1.4757541119979578,
+        "solve_median_seconds": 0.02198336600122275,
+        "numeric_refactor_median_seconds": 0.39340580999851227,
+        "max_abs_delta_from_metis": 1.0243542125643046e-15,
+        "relative_residual": 3.774810653962626e-12,
+        "peak_rss_mb": 880.58203125
+      }
+    ]
+  },
+  "cholmod_screen": {
+    "baseline_solve_seconds": 103.27965217200108,
+    "candidate_solve_seconds": 81.25240463900263,
+    "speedup": 1.2710965617677852,
+    "committed_steps": 18,
+    "load_factor": 0.9000000000000002,
+    "all_equilibrium_audits_passed": true,
+    "same_iterations": true,
+    "max_absolute_displacement_error": 1.6028844918025698e-15,
+    "response_fields": {
+      "reaction_x": {
+        "max_absolute_error": 0.0,
+        "within_1e9_absolute": true
+      },
+      "reaction_y": {
+        "max_absolute_error": 0.0,
+        "within_1e9_absolute": true
+      },
+      "reaction_z": {
+        "max_absolute_error": 0.0,
+        "within_1e9_absolute": true
+      },
+      "elastic_energy": {
+        "max_absolute_error": 5.684341886080802e-14,
+        "within_1e9_absolute": true
+      },
+      "dissipated_energy": {
+        "max_absolute_error": 1.7053025658242404e-13,
+        "within_1e9_absolute": true
+      },
+      "residual_norm": {
+        "max_absolute_error": 4.942122181276362e-10,
+        "within_1e9_absolute": true
+      }
+    },
+    "final_phase_mismatches": {
+      "quad": 0,
+      "coulomb": 0
+    },
+    "actual_backend_solve_counts": {
+      "cholmod": 150
+    },
+    "scope": "18 accepted steps through 90% load only. Full constitutive state history and 95%/full-load behavior unqualified. No default backend change."
+  },
+  "environment": {
+    "cpu": "i7-13650HX",
+    "physical_cores": 14,
+    "logical_cpus": 20,
+    "ram_gib_approx": 32,
+    "kernel_threads": 8,
+    "blas_threads": 4,
+    "function_profiler": false,
+    "runs": "Sequential individual desktop runs; no confidence intervals."
+  },
+  "candidate_source_sha256": {
+    "histra/solver/modal.py": "6034787d5e087f1b3577616d507767286bb5a069e64f0304cd36a32fe279eced",
+    "histra/solver/session.py": "bc1ab8b1a1f5060761480498df5b1b05fe697abb3e27f7bdee823d78a58f9855",
+    "histra/solver/modal_assembly.py": "34991ccb103b781190f11b44dae8ceaf6046e0e85169de0651545f6e4b345d8c"
+  },
+  "validation": {
+    "focused_native_modal_tests": "37 passed, 2 skipped, 5 subtests; native unloaded/loaded/material-change cases included",
+    "new_boundary_and_scatter_tests": "Final combined focused run: 48 passed, 2 skipped, 5 subtests; includes 9 new execution/scatter tests plus native modal cases and source inventory checks.",
+    "full_suite": "1091 passed, 24 skipped, 51 warnings, 1467 subtests in 186.34s; main modal change. Final optional-dependency guard additionally covered by final focused run.",
+    "make_check": "Final Ruff, mypy and 74 tests passed; 1 environment skip."
+  },
+  "baseline_commit": "b2a6e0b",
+  "candidate_state": "Uncommitted modal execution changes on top of source_commit; final module hashes recorded.",
+  "harness_notes": "Sequential, profile-free fresh processes. Source kernel got an import-availability guard after timing, with unchanged numerical loop; validated by focused regression."
+}

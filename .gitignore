@@ -41,3 +41,5 @@ histra/model-output/*.zip
 
 # Generated single-file simulation studies.
 *.histra
+.histra_cache/
+*.prepared.cache

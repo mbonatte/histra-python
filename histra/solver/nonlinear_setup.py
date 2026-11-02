@@ -70,6 +70,7 @@ def _setup_nonlinear_analysis(
     results_path: str | Path | None = None,
     initial_displacement: np.ndarray | None = None,
     restart_from_current_state: bool = False,
+    initial_external_load: np.ndarray | None = None,
     auto_prepare: bool = True,
     diagnostics: DiagnosticOptions | str | Path | None = None,
     linear_solver_backend: str | None = None,
@@ -206,7 +207,10 @@ def _setup_nonlinear_analysis(
     # Without this reset, the first Python increment is added to the saved local
     # element displacements, producing a completely different residual path.
     initial_analysis_key = int(getattr(analysis, "initial_analysis_key", -100))
+    preserved_external_load = initial_external_load
     initial_external_load = np.zeros(n)
+    if preserved_external_load is not None and not restart_from_current_state:
+        raise ValueError("An explicit initial external load requires an in-memory restart")
     if initial_analysis_key < 0:
         if restart_from_current_state or initial_displacement is not None:
             raise ValueError(
@@ -284,6 +288,14 @@ def _setup_nonlinear_analysis(
             f"Restored chained baseline load from committed resisting forces: "
             f"norm={np.linalg.norm(initial_external_load):.6g}"
         )
+    if preserved_external_load is not None:
+        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
+            raise ValueError("Preserved-load restart is not yet validated with P-Delta")
+        preserved_external_load = np.asarray(preserved_external_load, dtype=np.float64)
+        if preserved_external_load.shape != (n,) or not np.all(np.isfinite(preserved_external_load)):
+            raise ValueError(f"Expected a finite initial external load vector with shape ({n},)")
+        initial_external_load = preserved_external_load.copy()
+        p.log("Preserved the predecessor's applied external load for re-equilibration")
     runtime = ModelManager.hysteretic_batch_for(model)
     if policy == "compiled":
         if runtime is None:

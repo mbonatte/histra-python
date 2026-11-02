@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an opt-in in-memory restart policy that preserves the committed applied load and reaction reference during material-change re-equilibration. The default retains the C# resisting-force baseline; the new policy is limited to analyses without P-Delta.
+
+- Build virgin modal runtimes after state initialization, enforce live compiled coverage before stiffness/mass work, and use a compiled full-block scatter preserving the existing COO reduction order. Report the native backend used by each modal procedure and retain explicit diagnostic reference assembly.
+
 - Batch Quad-corner displacement projection during dense result export and reuse it for ordered node averaging. Preserve C# FP32 output bits, saved mesh dimensions and existing result formats.
 
 ## 1.7.3 - 2026-10-26
