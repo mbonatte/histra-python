@@ -43,7 +43,70 @@ from histra.preprocessing.contact_geometry import (
     _v,
 )
 from histra.preprocessing.errors import ModelPreparationError
+from histra.preprocessing.intrinsic_coordinates import native_projected_intrinsic
 from histra.types.afference_entry import AfferenceEntry
+
+
+if njit is not None:
+    @njit(cache=True)
+    def _bilinear_f32_nb(warping_nodal: np.ndarray, u: float, v: float) -> np.ndarray:
+        one = np.float32(1.0)
+        four = np.float32(4.0)
+        u_f = np.float32(u)
+        v_f = np.float32(v)
+        w0 = np.float32(np.float32(np.float32(one - u_f) * np.float32(one - v_f)) / four)
+        w1 = np.float32(np.float32(np.float32(one + u_f) * np.float32(one - v_f)) / four)
+        w2 = np.float32(np.float32(np.float32(one + u_f) * np.float32(one + v_f)) / four)
+        w3 = np.float32(np.float32(np.float32(one - u_f) * np.float32(one + v_f)) / four)
+        out = np.zeros(3, dtype=np.float32)
+        for i in range(3):
+            out[i] = np.float32(out[i] + np.float32(warping_nodal[0, i] * w0))
+            out[i] = np.float32(out[i] + np.float32(warping_nodal[1, i] * w1))
+            out[i] = np.float32(out[i] + np.float32(warping_nodal[2, i] * w2))
+            out[i] = np.float32(out[i] + np.float32(warping_nodal[3, i] * w3))
+        return out
+
+    @njit(cache=True)
+    def _warping_vector_nb(vertices: np.ndarray, warping_nodal: np.ndarray, point: np.ndarray, node_tolerance: float) -> np.ndarray:
+        uv = native_projected_intrinsic(vertices, point, node_tolerance)
+        return _bilinear_f32_nb(warping_nodal, uv[0], uv[1])
+
+    @njit(cache=True, inline="always")
+    def _point_afference_nb(
+        rx, ry, rz, dx, dy, dz, wx, wy, wz, is_lateral,
+        aff_gdls, aff_alfas, out_gdl, out_alfa
+    ):
+        f = np.float32
+        shear = f(f(f(wx * f(dx)) + f(wy * f(dy))) + f(wz * f(dz))) if is_lateral else f(0.0)
+        c0 = dx
+        c1 = dy
+        c2 = dz
+        c3 = f(f(ry * dz) - f(rz * dy))
+        c4 = f(f(rz * dx) - f(rx * dz))
+        c5 = f(f(rx * dy) - f(ry * dx))
+        c6 = shear
+
+        cnt = 0
+        if abs(c0) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[0]; out_alfa[cnt] = float(c0 * aff_alfas[0]); cnt += 1
+        if abs(c1) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[1]; out_alfa[cnt] = float(c1 * aff_alfas[1]); cnt += 1
+        if abs(c2) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[2]; out_alfa[cnt] = float(c2 * aff_alfas[2]); cnt += 1
+        if abs(c3) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[3]; out_alfa[cnt] = float(c3 * aff_alfas[3]); cnt += 1
+        if abs(c4) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[4]; out_alfa[cnt] = float(c4 * aff_alfas[4]); cnt += 1
+        if abs(c5) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[5]; out_alfa[cnt] = float(c5 * aff_alfas[5]); cnt += 1
+        if abs(c6) > 1.0e-4:
+            out_gdl[cnt] = aff_gdls[6]; out_alfa[cnt] = float(c6 * aff_alfas[6]); cnt += 1
+
+        return cnt
+else:
+    _bilinear_f32_nb = None
+    _warping_vector_nb = None
+    _point_afference_nb = None
 
 
 @dataclass(frozen=True)
@@ -241,6 +304,194 @@ def _rotation_afference(quad: Quad, direction: np.ndarray) -> list[AfferenceEntr
 def _assign_interface_afference(model: Model) -> None:
     assert model.collections is not None
     c = model.collections
+
+    if _point_afference_nb is not None:
+        point_cache: dict[tuple[int, int], tuple[float, float, float, np.ndarray | None]] = {}
+        f = np.float32
+
+        # Pre-compute cached geometry and dof arrays for all quads
+        for quad in c.quads.values():
+            aff_local = getattr(quad, "_aff_by_local", None)
+            if aff_local is not None:
+                quad._prep_gdls = np.asarray([entry[0] for entry in aff_local], dtype=np.int64)
+                quad._prep_alfas = np.asarray([entry[1] for entry in aff_local], dtype=np.float64)
+            else:
+                quad._prep_gdls = np.asarray([quad.aff[i][0].gdl if quad.aff[i] else 0 for i in range(7)], dtype=np.int64)
+                quad._prep_alfas = np.asarray([quad.aff[i][0].alfa if quad.aff[i] else 0.0 for i in range(7)], dtype=np.float64)
+
+            geom = _quad_afference_geometry(model, quad)
+            w_nodal = np.vstack(geom.warping_nodal)
+            quad._prep_geom = (geom, geom.centre, geom.vertices, geom.normal, w_nodal, geom.node_tolerance)
+
+        gdl_buf = np.empty(7, dtype=np.int64)
+        alfa_buf = np.empty(7, dtype=np.float64)
+
+        for intf in c.interfaces.values():
+            intf_aff = [[] for _ in range(12)]
+            e1 = np.asarray(intf.reference_e1, dtype=np.float32)
+            e2 = np.asarray(intf.reference_e2, dtype=np.float32)
+            e3 = np.asarray(intf.reference_e3, dtype=np.float32)
+
+            n0_key = intf.node_keys[0]
+            n1_key = intf.node_keys[1]
+            n0 = c.nodes[n0_key].point
+            n1 = c.nodes[n1_key].point
+            p0 = (n0.x, n0.y, n0.z)
+            p1 = (n1.x, n1.y, n1.z)
+            p0_arr = np.asarray(p0, dtype=f)
+            p1_arr = np.asarray(p1, dtype=f)
+
+            # Parent 1
+            p1_type = intf.parent_type_element1
+            p1_key = intf.parent_element_key1
+            if p1_type == "Quad":
+                q1 = c.quads[p1_key]
+                geom1, centre, verts, normal, w_nodal, tol = q1._prep_geom
+                is_lat = intf.face1 <= 3
+
+                ck0 = (p1_key, n0_key)
+                cached0 = point_cache.get(ck0)
+                if cached0 is None:
+                    rx0 = float(f(p0[0] - centre[0]))
+                    ry0 = float(f(p0[1] - centre[1]))
+                    rz0 = float(f(p0[2] - centre[2]))
+                    w0 = _warping_vector_from_geometry(geom1, p0_arr) if is_lat else None
+                    cached0 = (rx0, ry0, rz0, w0)
+                    point_cache[ck0] = cached0
+                else:
+                    rx0, ry0, rz0, w0 = cached0
+                    if is_lat and w0 is None:
+                        w0 = _warping_vector_from_geometry(geom1, p0_arr)
+                        cached0 = (rx0, ry0, rz0, w0)
+                        point_cache[ck0] = cached0
+
+                ck1 = (p1_key, n1_key)
+                cached1 = point_cache.get(ck1)
+                if cached1 is None:
+                    rx1 = float(f(p1[0] - centre[0]))
+                    ry1 = float(f(p1[1] - centre[1]))
+                    rz1 = float(f(p1[2] - centre[2]))
+                    w1 = _warping_vector_from_geometry(geom1, p1_arr) if is_lat else None
+                    cached1 = (rx1, ry1, rz1, w1)
+                    point_cache[ck1] = cached1
+                else:
+                    rx1, ry1, rz1, w1 = cached1
+                    if is_lat and w1 is None:
+                        w1 = _warping_vector_from_geometry(geom1, p1_arr)
+                        cached1 = (rx1, ry1, rz1, w1)
+                        point_cache[ck1] = cached1
+
+                wx0 = 0.0 if w0 is None else float(w0[0])
+                wy0 = 0.0 if w0 is None else float(w0[1])
+                wz0 = 0.0 if w0 is None else float(w0[2])
+
+                wx1 = 0.0 if w1 is None else float(w1[0])
+                wy1 = 0.0 if w1 is None else float(w1[1])
+                wz1 = 0.0 if w1 is None else float(w1[2])
+
+                q_gdls = q1._prep_gdls
+                q_alfas = q1._prep_alfas
+
+                cnt = _point_afference_nb(rx0, ry0, rz0, float(e2[0]), float(e2[1]), float(e2[2]), wx0, wy0, wz0, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[0] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e2[0]), float(e2[1]), float(e2[2]), wx1, wy1, wz1, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[1] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                intf_aff[4] = _rotation_afference(q1, e1)
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e1[0]), float(e1[1]), float(e1[2]), wx1, wy1, wz1, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[6] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx0, ry0, rz0, float(e3[0]), float(e3[1]), float(e3[2]), wx0, wy0, wz0, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[8] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e3[0]), float(e3[1]), float(e3[2]), wx1, wy1, wz1, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[9] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+            elif p1_type != "Restraint":
+                raise ModelPreparationError(
+                    f"Interface {intf.key} has unsupported parent type {p1_type!r}."
+                )
+
+            # Parent 2
+            p2_type = intf.parent_type_element2
+            p2_key = intf.parent_element_key2
+            if p2_type == "Quad":
+                q2 = c.quads[p2_key]
+                geom2, centre, verts, normal, w_nodal, tol = q2._prep_geom
+                is_lat2 = intf.face2 <= 3
+
+                ck0 = (p2_key, n0_key)
+                cached0 = point_cache.get(ck0)
+                if cached0 is None:
+                    rx0 = float(f(p0[0] - centre[0]))
+                    ry0 = float(f(p0[1] - centre[1]))
+                    rz0 = float(f(p0[2] - centre[2]))
+                    w0 = _warping_vector_from_geometry(geom2, p0_arr) if is_lat2 else None
+                    cached0 = (rx0, ry0, rz0, w0)
+                    point_cache[ck0] = cached0
+                else:
+                    rx0, ry0, rz0, w0 = cached0
+                    if is_lat2 and w0 is None:
+                        w0 = _warping_vector_from_geometry(geom2, p0_arr)
+                        cached0 = (rx0, ry0, rz0, w0)
+                        point_cache[ck0] = cached0
+
+                ck1 = (p2_key, n1_key)
+                cached1 = point_cache.get(ck1)
+                if cached1 is None:
+                    rx1 = float(f(p1[0] - centre[0]))
+                    ry1 = float(f(p1[1] - centre[1]))
+                    rz1 = float(f(p1[2] - centre[2]))
+                    w1 = _warping_vector_from_geometry(geom2, p1_arr) if is_lat2 else None
+                    cached1 = (rx1, ry1, rz1, w1)
+                    point_cache[ck1] = cached1
+                else:
+                    rx1, ry1, rz1, w1 = cached1
+                    if is_lat2 and w1 is None:
+                        w1 = _warping_vector_from_geometry(geom2, p1_arr)
+                        cached1 = (rx1, ry1, rz1, w1)
+                        point_cache[ck1] = cached1
+
+                wx0 = 0.0 if w0 is None else float(w0[0])
+                wy0 = 0.0 if w0 is None else float(w0[1])
+                wz0 = 0.0 if w0 is None else float(w0[2])
+
+                wx1 = 0.0 if w1 is None else float(w1[0])
+                wy1 = 0.0 if w1 is None else float(w1[1])
+                wz1 = 0.0 if w1 is None else float(w1[2])
+
+                q_gdls = q2._prep_gdls
+                q_alfas = q2._prep_alfas
+
+                cnt = _point_afference_nb(rx0, ry0, rz0, float(e2[0]), float(e2[1]), float(e2[2]), wx0, wy0, wz0, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[3] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e2[0]), float(e2[1]), float(e2[2]), wx1, wy1, wz1, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[2] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                intf_aff[5] = _rotation_afference(q2, e1)
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e1[0]), float(e1[1]), float(e1[2]), wx1, wy1, wz1, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[7] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx0, ry0, rz0, float(e3[0]), float(e3[1]), float(e3[2]), wx0, wy0, wz0, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[10] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+
+                cnt = _point_afference_nb(rx1, ry1, rz1, float(e3[0]), float(e3[1]), float(e3[2]), wx1, wy1, wz1, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
+                intf_aff[11] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
+            elif p2_type != "Restraint":
+                raise ModelPreparationError(
+                    f"Interface {intf.key} has unsupported parent type {p2_type!r}."
+                )
+
+            intf.aff = intf_aff
+            if intf.status is None:
+                intf.status = InterfaceState()
+                intf.status.init_from_interface(intf)
+            intf._perf_aff_pairs = None
+        return
+
     geometry_cache: dict[int, _QuadAfferenceGeometry] = {}
     point_cache: dict[
         tuple[int, int], tuple[np.ndarray, np.ndarray | None]

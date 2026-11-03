@@ -67,6 +67,7 @@ from histra.preprocessing.spring_factory import (
     _configure_hysteretic,
     _copy_hysteretic_spring,
     _new_hysteretic_spring,
+    _series,
     _set_coulomb_ultimate,
 )
 
@@ -500,34 +501,62 @@ def _create_interface_springs(
             model.collections.quads[intf.parent_element_key2], intf
         )
 
-    s1 = _side_sliding_spring(
-        model,
-        intf.parent_type_element1,
-        intf.parent_element_key1,
-        intf,
-        out_of_plane=False,
-        area=area,
-        vertical=vertical,
-        material_override=custom_material,
-        law=in_law1,
-        distance=distance1,
-    )
-    s2 = _side_sliding_spring(
-        model,
-        intf.parent_type_element2,
-        intf.parent_element_key2,
-        intf,
-        out_of_plane=False,
-        area=area,
-        vertical=vertical,
-        material_override=custom_material,
-        law=in_law2,
-        distance=distance2,
-    )
-    slid = _combine_sliding(s1, s2, restrained)
-    # C# invokes SetUltimateDisplacement after combining both sides.
-    if isinstance(slid, SpringCoulomb03):
+    if not in_law1.is_elastic and not in_law2.is_elastic and not restrained:
+        k1 = in_law1.E * area / distance1
+        k2 = in_law2.E * area / distance2
+        k_comb = _series(k1, k2, False)
+        c1_force = area * in_law1.cohesion
+        c2_force = area * in_law2.cohesion
+        cohesion = min(c1_force, c2_force)
+        mu = min(in_law1.mu, in_law2.mu)
+        ur = 100000.0
+        h1 = k1 * in_law1.plastic_stiffness_ratio
+        h2 = k2 * in_law2.plastic_stiffness_ratio
+        h = min(h1, h2)
+        ktan = -k_comb * h / (k_comb - h) if k_comb != h else 0.0
+        ratio = ktan / k_comb if k_comb else 0.0
+        law = _CoulombLaw(
+            E=0.0, cohesion=0.0, mu=mu, plastic_stiffness_ratio=ratio,
+            max_tensile_ratio=min(in_law1.max_tensile_ratio, in_law2.max_tensile_ratio),
+            sub_law=in_law1.sub_law, hysteretic_type=in_law1.hysteretic_type,
+            ductility=ur, is_ductility_fixed=True,
+        )
+        slid = _configure_coulomb(
+            k=k_comb, area=area, length=0.0, law=law,
+            cohesion_force=cohesion, mu=mu, ur=ur,
+            hysteretic_type=in_law1.hysteretic_type,
+        )
+        slid.plastic_strain_ratio = 1.0
         _set_coulomb_ultimate(slid, in_law1, in_law2)
+    else:
+        s1 = _side_sliding_spring(
+            model,
+            intf.parent_type_element1,
+            intf.parent_element_key1,
+            intf,
+            out_of_plane=False,
+            area=area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=in_law1,
+            distance=distance1,
+        )
+        s2 = _side_sliding_spring(
+            model,
+            intf.parent_type_element2,
+            intf.parent_element_key2,
+            intf,
+            out_of_plane=False,
+            area=area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=in_law2,
+            distance=distance2,
+        )
+        slid = _combine_sliding(s1, s2, restrained)
+        # C# invokes SetUltimateDisplacement after combining both sides.
+        if isinstance(slid, SpringCoulomb03):
+            _set_coulomb_ultimate(slid, in_law1, in_law2)
     slid.key = 0
     slid.parent_key = intf.key
     slid.parent_type = "Interface"
@@ -539,57 +568,94 @@ def _create_interface_springs(
     patch_areas = _out_of_plane_spring_areas(intf)
     intf.slid_out_plan = []
 
-    # C# Interface.SetSpring creates the two *side* springs once, then invokes
-    # CombinationSpring twice using those same temporaries.  Usually each call
-    # returns a fresh combined spring.  For a restraint interface with a
-    # custom material, however, the restraint-side placeholder has K == -1 and
-    # CombinationSpring returns the active-side temporary itself.  Reusing the
-    # temporaries therefore makes SlidOutPlan[0] and [1] the same object.
-    # This is observable in the reference HRX (both entries serialize with
-    # Key=1) and in the C# spring displacement, which accumulates both
-    # interpolation contributions into the shared U field.
-    o1 = _side_sliding_spring(
-        model,
-        intf.parent_type_element1,
-        intf.parent_element_key1,
-        intf,
-        out_of_plane=True,
-        area=patch_areas[0],
-        stiffness_area=half_area,
-        vertical=vertical,
-        material_override=custom_material,
-        law=out_law1,
-        distance=distance1,
-    )
-    o2 = _side_sliding_spring(
-        model,
-        intf.parent_type_element2,
-        intf.parent_element_key2,
-        intf,
-        out_of_plane=True,
-        area=patch_areas[1],
-        stiffness_area=half_area,
-        vertical=vertical,
-        material_override=custom_material,
-        law=out_law2,
-        distance=distance2,
-    )
-    for index in range(2):
-        out = _combine_sliding(
-            o1,
-            o2,
-            restrained,
-            preserve_single_side_identity=(custom_material is not None and restrained),
+    if not out_law1.is_elastic and not out_law2.is_elastic and not restrained:
+        k1 = out_law1.E * half_area / distance1
+        k2 = out_law2.E * half_area / distance2
+        k_comb = _series(k1, k2, False)
+        c1_force = patch_areas[0] * out_law1.cohesion
+        c2_force = patch_areas[1] * out_law2.cohesion
+        cohesion = min(c1_force, c2_force)
+        area_sel = patch_areas[0] if c1_force <= c2_force else patch_areas[1]
+        mu = min(out_law1.mu, out_law2.mu)
+        ur = 100000.0
+        h1 = k1 * out_law1.plastic_stiffness_ratio
+        h2 = k2 * out_law2.plastic_stiffness_ratio
+        h = min(h1, h2)
+        ktan = -k_comb * h / (k_comb - h) if k_comb != h else 0.0
+        ratio = ktan / k_comb if k_comb else 0.0
+        law = _CoulombLaw(
+            E=0.0, cohesion=0.0, mu=mu, plastic_stiffness_ratio=ratio,
+            max_tensile_ratio=min(out_law1.max_tensile_ratio, out_law2.max_tensile_ratio),
+            sub_law=out_law1.sub_law, hysteretic_type=out_law1.hysteretic_type,
+            ductility=ur, is_ductility_fixed=True,
         )
-        if isinstance(out, SpringCoulomb03):
+        for index in range(2):
+            out = _configure_coulomb(
+                k=k_comb, area=area_sel, length=0.0, law=law,
+                cohesion_force=cohesion, mu=mu, ur=ur,
+                hysteretic_type=out_law1.hysteretic_type,
+            )
+            out.plastic_strain_ratio = 1.0
             _set_coulomb_ultimate(out, out_law1, out_law2)
-        out.key = index
-        out.parent_key = intf.key
-        out.parent_type = "Interface"
-        out.spring_purpose = "SlidOutOfPlan"
-        out.area = patch_areas[index]
-        out.length = intf.length / 2.0
-        intf.slid_out_plan.append(out)
+            out.key = index
+            out.parent_key = intf.key
+            out.parent_type = "Interface"
+            out.spring_purpose = "SlidOutOfPlan"
+            out.area = patch_areas[index]
+            out.length = intf.length / 2.0
+            intf.slid_out_plan.append(out)
+    else:
+        # C# Interface.SetSpring creates the two *side* springs once, then invokes
+        # CombinationSpring twice using those same temporaries.  Usually each call
+        # returns a fresh combined spring.  For a restraint interface with a
+        # custom material, however, the restraint-side placeholder has K == -1 and
+        # CombinationSpring returns the active-side temporary itself.  Reusing the
+        # temporaries therefore makes SlidOutPlan[0] and [1] the same object.
+        # This is observable in the reference HRX (both entries serialize with
+        # Key=1) and in the C# spring displacement, which accumulates both
+        # interpolation contributions into the shared U field.
+        o1 = _side_sliding_spring(
+            model,
+            intf.parent_type_element1,
+            intf.parent_element_key1,
+            intf,
+            out_of_plane=True,
+            area=patch_areas[0],
+            stiffness_area=half_area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=out_law1,
+            distance=distance1,
+        )
+        o2 = _side_sliding_spring(
+            model,
+            intf.parent_type_element2,
+            intf.parent_element_key2,
+            intf,
+            out_of_plane=True,
+            area=patch_areas[1],
+            stiffness_area=half_area,
+            vertical=vertical,
+            material_override=custom_material,
+            law=out_law2,
+            distance=distance2,
+        )
+        for index in range(2):
+            out = _combine_sliding(
+                o1,
+                o2,
+                restrained,
+                preserve_single_side_identity=(custom_material is not None and restrained),
+            )
+            if isinstance(out, SpringCoulomb03):
+                _set_coulomb_ultimate(out, out_law1, out_law2)
+            out.key = index
+            out.parent_key = intf.key
+            out.parent_type = "Interface"
+            out.spring_purpose = "SlidOutOfPlan"
+            out.area = patch_areas[index]
+            out.length = intf.length / 2.0
+            intf.slid_out_plan.append(out)
 
     if getattr(intf, "status", None) is None:
         intf.status = InterfaceState()

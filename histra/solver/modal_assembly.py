@@ -72,43 +72,92 @@ def _pack_afferences(afferences, count):
     return offsets, dofs, coefficients
 
 
-def _quad_chunk(quad, n, alfa):
+def _quad_chunk(quad, n, alfa, quad_k_buf=None):
     quad.compute_k(alfa)
-    afference = quad.aff[6] if quad.aff and len(quad.aff) > 6 else []
+    packed = getattr(quad, "_modal_packed", None)
+    if packed is None:
+        afference = quad.aff[6] if quad.aff and len(quad.aff) > 6 else []
+        packed = (
+            np.asarray([1], np.int64),
+            np.asarray([True]),
+            *_pack_afferences([afference], 1),
+        )
+        quad._modal_packed = packed
+    dims, act, offsets, dofs, coefs = packed
+    if quad_k_buf is None:
+        quad_k_buf = np.empty(1, dtype=np.float64)
+    quad_k_buf[0] = quad.status.k
     return _scatter_blocks(
-        np.asarray([quad.status.k], np.float64),
-        np.asarray([1], np.int64),
-        np.asarray([True]),
-        *_pack_afferences([afference], 1),
+        quad_k_buf,
+        dims,
+        act,
+        offsets,
+        dofs,
+        coefs,
         n,
         True,
     )
 
 
-def _interface_chunk(interface, n, alfa):
+def _interface_chunk(interface, n, alfa, out_buf=None):
     interface.compute_k(alfa)
-    dimensions = np.asarray(
-        [
-            interface.dim_aff[i] if i < len(interface.dim_aff) else default
-            for i, default in enumerate((6, 2, 4))
-        ],
-        np.int64,
-    )
-    active = np.asarray([True, bool(interface.slid), len(interface.slid_out_plan) >= 2])
-    matrices = (interface.status.k, interface.status.kslid, interface.status.kslid_out_plan)
-    values = np.concatenate(
-        [
-            np.asarray(matrix, np.float64)[:size, :size].ravel()
-            if enabled and size > 0
-            else np.zeros(size * size)
-            for matrix, size, enabled in zip(matrices, dimensions, active)
-        ]
-    )
+    packed = getattr(interface, "_modal_packed", None)
+    if packed is None:
+        dims = np.asarray(
+            [
+                interface.dim_aff[i] if i < len(interface.dim_aff) else default
+                for i, default in enumerate((6, 2, 4))
+            ],
+            np.int64,
+        )
+        act = np.asarray([True, bool(interface.slid), len(interface.slid_out_plan) >= 2])
+        packed = (dims, act, *_pack_afferences(interface.aff, int(dims.sum())))
+        interface._modal_packed = packed
+    dims, act, offsets, dofs, coefs = packed
+
+    if out_buf is None:
+        out_buf = np.empty(64, dtype=np.float64)
+
+    pos = 0
+    d0 = dims[0]
+    k = interface.status.k
+    for i in range(d0):
+        row = k[i]
+        for j in range(d0):
+            out_buf[pos] = row[j]
+            pos += 1
+    d1 = dims[1]
+    if act[1]:
+        kslid = interface.status.kslid
+        for i in range(d1):
+            row = kslid[i]
+            for j in range(d1):
+                out_buf[pos] = row[j]
+                pos += 1
+    else:
+        for _ in range(d1 * d1):
+            out_buf[pos] = 0.0
+            pos += 1
+    d2 = dims[2]
+    if act[2]:
+        kout = interface.status.kslid_out_plan
+        for i in range(d2):
+            row = kout[i]
+            for j in range(d2):
+                out_buf[pos] = row[j]
+                pos += 1
+    else:
+        for _ in range(d2 * d2):
+            out_buf[pos] = 0.0
+            pos += 1
+
     return _scatter_blocks(
-        values,
-        dimensions,
-        active,
-        *_pack_afferences(interface.aff, int(dimensions.sum())),
+        out_buf[:pos],
+        dims,
+        act,
+        offsets,
+        dofs,
+        coefs,
         n,
         False,
     )
@@ -121,10 +170,14 @@ def assemble_modal_stiffness(model, alfa=1.0):
 
         raise CompiledBackendRequiredError("Compiled modal scatter requires Numba")
     n = int(model.gdl)
-    chunks = [_quad_chunk(quad, n, alfa) for quad in model.collections.quads.values()]
-    chunks.extend(
-        _interface_chunk(interface, n, alfa) for interface in model.collections.interfaces.values()
-    )
+    chunks = []
+    append = chunks.append
+    quad_k_buf = np.empty(1, dtype=np.float64)
+    for quad in model.collections.quads.values():
+        append(_quad_chunk(quad, n, alfa, quad_k_buf))
+    out_buf = np.empty(64, dtype=np.float64)
+    for interface in model.collections.interfaces.values():
+        append(_interface_chunk(interface, n, alfa, out_buf))
     if not chunks:
         return sp.csc_matrix((n, n), dtype=np.float64)
     rows, columns, values = (np.concatenate(parts) for parts in zip(*chunks))

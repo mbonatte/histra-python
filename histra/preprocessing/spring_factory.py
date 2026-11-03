@@ -39,6 +39,68 @@ def _series(k1: float, k2: float, restrained: bool) -> float:
     return 0.0
 
 
+if njit is not None:
+    @njit(cache=True)
+    def _coulomb_envelope_nb(
+        k: float,
+        cohesion: float,
+        ratio1: float,
+        ratio2: float,
+        ductility: float,
+        is_ductility_fixed: bool,
+        use_second_branch: bool,
+        plastic_strain: float,
+    ):
+        ultimate = ductility if ductility > 0.0 else 100000.0
+        ktan = k * ratio1
+        ktan2 = k * ratio2
+        mom1p = max(1.0e-9, cohesion)
+        rot1p = mom1p / k if k != 0.0 else 0.0
+
+        if use_second_branch and ktan2 < 0.0:
+            ps = ultimate if plastic_strain < 0.0 else plastic_strain
+            rot2p = max(ps, rot1p * 1.0001)
+            mom2p = mom1p + ktan * (rot2p - rot1p)
+            if is_ductility_fixed:
+                rot3p = max(ultimate, rot2p * 1.0001)
+                mom3p = 0.0
+            else:
+                mom3p = 0.0
+                rot3p = rot1p - mom1p / ktan2
+        elif ktan < 0.0:
+            if is_ductility_fixed:
+                rot2p = max(ultimate, rot1p * 1.0001)
+                mom2p = 0.0
+            else:
+                mom2p = 0.0
+                rot2p = rot1p - mom1p / ktan
+            rot3p = 1.0001 * rot2p
+            mom3p = 0.0
+        else:
+            rot2p = max(ultimate, rot1p * 1.0001)
+            mom2p = mom1p + ktan * (rot2p - rot1p)
+            rot3p = 1.0001 * rot2p
+            mom3p = 0.0 if is_ductility_fixed else mom1p + ktan * (rot3p - rot1p)
+
+        rot1n = -rot1p
+        mom1n = -mom1p
+        rot2n = -rot2p
+        mom2n = -mom2p
+        rot3n = -rot3p
+        mom3n = -mom3p
+        energy_a = 0.5 * (
+            rot1p * mom1p
+            + (rot2p - rot1p) * (mom2p + mom1p)
+            + (rot3p - rot2p) * (mom3p + mom2p)
+            + rot1n * mom1n
+            + (rot2n - rot1n) * (mom2n + mom1n)
+            + (rot3n - rot2n) * (mom3n + mom2n)
+        )
+        return mom1p, rot1p, mom2p, rot2p, mom3p, rot3p, energy_a, ultimate
+else:
+    _coulomb_envelope_nb = None
+
+
 def _configure_coulomb(
     *, k: float, area: float, length: float, law: _CoulombLaw,
     cohesion_force: float | None = None, mu: float | None = None,
@@ -65,39 +127,69 @@ def _configure_coulomb(
     spring.hysteretic_type = hysteretic_type or law.hysteretic_type
     spring.bcacovic = float(law.bcacovic)
 
-    ultimate = float(law.ductility if ur is None else ur)
-    if ultimate <= 0.0:
-        ultimate = 100000.0
-    ktan = spring.k * law.plastic_stiffness_ratio
-    ktan2 = spring.k * law.plastic_stiffness_ratio2
-    mom1p = max(1.0e-9, spring.cohesion)
-    rot1p = mom1p / spring.k if spring.k else 0.0
-
-    if use_second_branch and ktan2 < 0.0:
-        ps = float(ultimate if plastic_strain is None else plastic_strain)
-        spring.plastic_strain_ratio = ps  # Set2 is the one C# path that stores it.
-        rot2p = max(ps, rot1p * 1.0001)
-        mom2p = mom1p + ktan * (rot2p - rot1p)
-        if law.is_ductility_fixed:
-            rot3p = max(ultimate, rot2p * 1.0001)
-            mom3p = 0.0
-        else:
-            mom3p = 0.0
-            rot3p = rot1p - mom1p / ktan2
-    elif ktan < 0.0:
-        if law.is_ductility_fixed:
-            rot2p = max(ultimate, rot1p * 1.0001)
-            mom2p = 0.0
-        else:
-            mom2p = 0.0
-            rot2p = rot1p - mom1p / ktan
-        rot3p = 1.0001 * rot2p
-        mom3p = 0.0
+    if _coulomb_envelope_nb is not None:
+        p_strain = -1.0 if plastic_strain is None else float(plastic_strain)
+        duct = float(law.ductility if ur is None else ur)
+        mom1p, rot1p, mom2p, rot2p, mom3p, rot3p, energy_a, ultimate = _coulomb_envelope_nb(
+            spring.k,
+            spring.cohesion,
+            float(law.plastic_stiffness_ratio),
+            float(law.plastic_stiffness_ratio2),
+            duct,
+            bool(law.is_ductility_fixed),
+            bool(use_second_branch),
+            p_strain,
+        )
+        if use_second_branch and spring.k * law.plastic_stiffness_ratio2 < 0.0:
+            spring.plastic_strain_ratio = ultimate if plastic_strain is None else float(plastic_strain)
     else:
-        rot2p = max(ultimate, rot1p * 1.0001)
-        mom2p = mom1p + ktan * (rot2p - rot1p)
-        rot3p = 1.0001 * rot2p
-        mom3p = 0.0 if law.is_ductility_fixed else mom1p + ktan * (rot3p - rot1p)
+        ultimate = float(law.ductility if ur is None else ur)
+        if ultimate <= 0.0:
+            ultimate = 100000.0
+        ktan = spring.k * law.plastic_stiffness_ratio
+        ktan2 = spring.k * law.plastic_stiffness_ratio2
+        mom1p = max(1.0e-9, spring.cohesion)
+        rot1p = mom1p / spring.k if spring.k else 0.0
+
+        if use_second_branch and ktan2 < 0.0:
+            ps = float(ultimate if plastic_strain is None else plastic_strain)
+            spring.plastic_strain_ratio = ps  # Set2 is the one C# path that stores it.
+            rot2p = max(ps, rot1p * 1.0001)
+            mom2p = mom1p + ktan * (rot2p - rot1p)
+            if law.is_ductility_fixed:
+                rot3p = max(ultimate, rot2p * 1.0001)
+                mom3p = 0.0
+            else:
+                mom3p = 0.0
+                rot3p = rot1p - mom1p / ktan2
+        elif ktan < 0.0:
+            if law.is_ductility_fixed:
+                rot2p = max(ultimate, rot1p * 1.0001)
+                mom2p = 0.0
+            else:
+                mom2p = 0.0
+                rot2p = rot1p - mom1p / ktan
+            rot3p = 1.0001 * rot2p
+            mom3p = 0.0
+        else:
+            rot2p = max(ultimate, rot1p * 1.0001)
+            mom2p = mom1p + ktan * (rot2p - rot1p)
+            rot3p = 1.0001 * rot2p
+            mom3p = 0.0 if law.is_ductility_fixed else mom1p + ktan * (rot3p - rot1p)
+        rot1n = -rot1p
+        mom1n = -mom1p
+        rot2n = -rot2p
+        mom2n = -mom2p
+        rot3n = -rot3p
+        mom3n = -mom3p
+        energy_a = 0.5 * (
+            rot1p * mom1p
+            + (rot2p - rot1p) * (mom2p + mom1p)
+            + (rot3p - rot2p) * (mom3p + mom2p)
+            + rot1n * mom1n
+            + (rot2n - rot1n) * (mom2n + mom1n)
+            + (rot3n - rot2n) * (mom3n + mom2n)
+        )
 
     spring.mom1p, spring.rot1p = mom1p, rot1p
     spring.mom2p, spring.rot2p = mom2p, rot2p
@@ -110,13 +202,7 @@ def _configure_coulomb(
     spring.umax = [spring.cohesion / spring.k if spring.k else 0.0,
                    -spring.cohesion / spring.k if spring.k else 0.0]
     spring._set_envelope()
-    spring.energy_a = 0.5 * (
-        rot1p*mom1p + (rot2p-rot1p)*(mom2p+mom1p)
-        + (rot3p-rot2p)*(mom3p+mom2p)
-        + spring.rot1n*spring.mom1n
-        + (spring.rot2n-spring.rot1n)*(spring.mom2n+spring.mom1n)
-        + (spring.rot3n-spring.rot2n)*(spring.mom3n+spring.mom2n)
-    )
+    spring.energy_a = energy_a
     spring.revert_to_start()
     spring.revert_to_last_commit()
     return spring

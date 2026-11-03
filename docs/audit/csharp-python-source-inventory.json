@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-02T23:22:05.719757+00:00",
-  "source_commit": "f6736c4ed150b327ba38f206c902d281ab5e300d",
+  "generated_at": "2026-11-03T00:06:20.457961+00:00",
+  "source_commit": "bd761516a386678330504c341d467621070345a7",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
     "files": 104,
     "classes": 118,
-    "function_definitions": 923
+    "function_definitions": 927
   },
   "files": [
     {
@@ -1232,89 +1232,101 @@
     {
       "path": "histra/preprocessing/afference.py",
       "status": "inventory_only",
-      "lf_sha256": "dc90a214a30eea4ad04220f6c5424ab61a814bfad416b1083932974e65acb6f7",
+      "lf_sha256": "aa50ef11d5ab2b7f30d398cf95af8fae01d5264f602d67a8c2216b681d529ff8",
       "classes": [
         {
           "name": "_QuadAfferenceGeometry",
-          "line": 50
+          "line": 113
         }
       ],
       "functions": [
         {
+          "name": "_bilinear_f32_nb",
+          "line": 52
+        },
+        {
+          "name": "_warping_vector_nb",
+          "line": 70
+        },
+        {
+          "name": "_point_afference_nb",
+          "line": 75
+        },
+        {
           "name": "_assign_quad_afference",
-          "line": 58
+          "line": 121
         },
         {
           "name": "_warping_nodal_vectors",
-          "line": 73
+          "line": 136
         },
         {
           "name": "_quad_afference_geometry",
-          "line": 110
+          "line": 173
         },
         {
           "name": "_warping_vector_from_geometry",
-          "line": 129
+          "line": 192
         },
         {
           "name": "_warping_vector_at_point",
-          "line": 139
+          "line": 202
         },
         {
           "name": "_point_afference",
-          "line": 152
+          "line": 215
         },
         {
           "name": "_rotation_afference",
-          "line": 220
+          "line": 283
         },
         {
           "name": "_assign_interface_afference",
-          "line": 241
+          "line": 304
         },
         {
           "name": "_bilinear",
-          "line": 308
+          "line": 559
         },
         {
           "name": "_bilinear_f32",
-          "line": 317
+          "line": 568
         },
         {
           "name": "_inverse_bilinear_f32_bisection_reference",
-          "line": 337
+          "line": 588
         },
         {
           "name": "_inverse_bilinear_f32_bisection_reference.project",
-          "line": 357
+          "line": 608
         },
         {
           "name": "_inverse_bilinear_f32_bisection_reference.align",
-          "line": 368
+          "line": 619
         },
         {
           "name": "_inverse_bilinear_f32_bisection_reference.inside",
-          "line": 388
+          "line": 639
         },
         {
           "name": "_inverse_bilinear_f32_python",
-          "line": 495
+          "line": 746
         },
         {
           "name": "_bilinear_component_f32_nb",
-          "line": 561
+          "line": 812
         },
         {
           "name": "_inverse_bilinear_f32_nb",
-          "line": 586
+          "line": 837
         },
         {
           "name": "_inverse_bilinear_f32",
-          "line": 695
+          "line": 946
         },
         {
           "name": "_inverse_bilinear",
-          "line": 707
+          "line": 958
         }
       ]
     },
@@ -1914,51 +1926,51 @@
     {
       "path": "histra/preprocessing/spring_assignment.py",
       "status": "inventory_only",
-      "lf_sha256": "40325cde0378e22948285ca719b962bf7d36687c3bf32dbbdd876b44cc344e25",
+      "lf_sha256": "9f37aef34e3018df1ccdb48c6f4a955e8d958f07a8213153d8d1528e2e1aaae6",
       "classes": [],
       "functions": [
         {
           "name": "_distance_to_interface_plane",
-          "line": 74
+          "line": 75
         },
         {
           "name": "_quad_spring",
-          "line": 89
+          "line": 90
         },
         {
           "name": "_side_transverse_spring",
-          "line": 151
+          "line": 152
         },
         {
           "name": "_interface_parent_material",
-          "line": 175
+          "line": 176
         },
         {
           "name": "_side_sliding_spring",
-          "line": 208
+          "line": 209
         },
         {
           "name": "_out_of_plane_spring_areas",
-          "line": 275
+          "line": 276
         },
         {
           "name": "_transverse_side_properties_batch",
-          "line": 298
+          "line": 299
         },
         {
           "name": "_create_interface_springs",
-          "line": 336
+          "line": 337
         },
         {
           "name": "rebuild_interface_springs",
-          "line": 601
+          "line": 667
         }
       ]
     },
     {
       "path": "histra/preprocessing/spring_factory.py",
       "status": "inventory_only",
-      "lf_sha256": "e5ad853e362bfe8612352028bfffd1b2fc5e57387489f98014d37dc5c404a3bd",
+      "lf_sha256": "2f4aad3201df1d746796653e3bb78a89c8efb911154e3630fcac931e70bc0a6e",
       "classes": [],
       "functions": [
         {
@@ -1970,72 +1982,76 @@
           "line": 33
         },
         {
+          "name": "_coulomb_envelope_nb",
+          "line": 44
+        },
+        {
           "name": "_configure_coulomb",
-          "line": 42
+          "line": 104
         },
         {
           "name": "_set_coulomb_ultimate",
-          "line": 125
+          "line": 211
         },
         {
           "name": "_configure_hysteretic",
-          "line": 150
+          "line": 236
         },
         {
           "name": "_set_ultimate_displacement",
-          "line": 197
+          "line": 283
         },
         {
           "name": "_hysteretic_side_definition",
-          "line": 262
+          "line": 348
         },
         {
           "name": "_configure_combined_hysteretic",
-          "line": 315
+          "line": 401
         },
         {
           "name": "_series_array",
-          "line": 398
+          "line": 484
         },
         {
           "name": "_hysteretic_side_arrays",
-          "line": 406
+          "line": 492
         },
         {
           "name": "_apply_ultimate_displacement_arrays",
-          "line": 452
+          "line": 538
         },
         {
           "name": "_series_nb",
-          "line": 514
+          "line": 600
         },
         {
           "name": "_hysteretic_kernel_nb",
-          "line": 521
+          "line": 607
         },
         {
           "name": "_configure_combined_hysteretic_batch",
-          "line": 829
+          "line": 915
         },
         {
           "name": "_copy_hysteretic_spring",
-          "line": 1276
+          "line": 1362
         },
         {
           "name": "_copy_coulomb_spring",
-          "line": 1299
+          "line": 1385
         },
         {
           "name": "_combine_hysteretic",
-          "line": 1309
+          "line": 1395
         },
         {
           "name": "_combine_coulomb",
-          "line": 1382
+          "line": 1468
         },
         {
           "name": "_combine_sliding",
-          "line": 1431
+          "line": 1517
         }
       ]
     },
@@ -4097,7 +4113,7 @@
     {
       "path": "histra/solver/modal_assembly.py",
       "status": "inventory_only",
-      "lf_sha256": "34991ccb103b781190f11b44dae8ceaf6046e0e85169de0651545f6e4b345d8c",
+      "lf_sha256": "d9d22b0e14cc2438a30e0788c5436755fa5eb8df936d37c16d0aa6b8a0306cfa",
       "classes": [],
       "functions": [
         {
@@ -4114,11 +4130,11 @@
         },
         {
           "name": "_interface_chunk",
-          "line": 88
+          "line": 102
         },
         {
           "name": "assemble_modal_stiffness",
-          "line": 117
+          "line": 166
         }
       ]
     },
