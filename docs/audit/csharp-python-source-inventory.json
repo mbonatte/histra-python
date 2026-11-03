@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-03T00:06:20.457961+00:00",
-  "source_commit": "bd761516a386678330504c341d467621070345a7",
+  "generated_at": "2026-11-03T01:06:52.019758+00:00",
+  "source_commit": "5512ec4e96bbf06824e2e5d684748e8250c91322",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
@@ -1232,7 +1232,7 @@
     {
       "path": "histra/preprocessing/afference.py",
       "status": "inventory_only",
-      "lf_sha256": "aa50ef11d5ab2b7f30d398cf95af8fae01d5264f602d67a8c2216b681d529ff8",
+      "lf_sha256": "946fe9a96897694581e5d32153456b344e1bb677242ed3a49c68942c66b5b640",
       "classes": [
         {
           "name": "_QuadAfferenceGeometry",
