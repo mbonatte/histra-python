@@ -799,10 +799,12 @@ The table below catalogs these unported load generators and boundary condition c
 - **Role in C# Solver**:
   - Dynamic foundation impedance updates, soil-structure interaction modeling, and multi-stage scour simulations.
 - **Python Treatment & Parity Status**:
-  - `histra-python` currently supports rigid fixed/free boundary restraints and freshly generated foundation interface springs (`interfaccia_vincolata == True`).
+  - `histra-python` supports rigid fixed boundary restraints and freshly generated foundation interface springs (`interfaccia_vincolata == True`). Free restraint directions are rejected.
+  - A verified narrow elastic vertical foundation path is implemented: a line Restraint with positive local `K2` and all other directions fixed receives one native local DOF, a serial interface connection, and the `K2` support diagonal in the global tangent/residual. `K2` is the mesher-written `Kz * B * L` value (force/length). See [`elastic-foundation-restraint-kz.md`](../investigations/elastic-foundation-restraint-kz.md).
+  - Free directions, non-vertical elastic directions, and elastic restraints combined with a geotechnical material are rejected explicitly. Modal analyses with these massless DOFs are rejected pending a verified static-condensation path.
   - While Python supports sequential interface material mutations (`AnalysisSession.change_interface_materials`), general multi-stage non-rigid point/surface restraint impedance refresh routines from C# CAD mesher are not ported.
 - **Python Boundary Guard**:
-  - Rigid restraints solve natively; non-rigid restraint material reassignment outside interface springs is unported.
+  - Rigid restraints and the verified elastic vertical line restraint solve natively; other non-rigid restraint impedance modes are unported.
 - **Porting Complexity & Prerequisites**:
   - **Complexity**: Medium.
   - **Prerequisites**: General boundary spring assembly into global stiffness matrix $\\mathbf{K}$.

@@ -30,7 +30,7 @@ independent kernel/BLAS budgets, and saved `.histra` results.
 | Area | Current boundary |
 |---|---|
 | HRX loading | Supported masonry geometry and analysis definitions, locked or unlocked |
-| Preparation | Fresh four-node masonry Quad and fixed line-Restraint computational model; serialized C# state is reference-only |
+| Preparation | Fresh four-node masonry Quad and line-Restraint computational model (fully fixed, plus verified elastic vertical `K2`); serialized C# state is reference-only |
 | Quad contacts | Full-edge, collinear partial-edge and partition/T-junction overlaps |
 | Static integration | LoadControl, ArcLength and ArcLengthLinear, with supported C# control procedures |
 | Mechanics | Supported masonry diagonal/transverse laws and in-plane/out-of-plane sliding paths; capability preflight enforces the boundary |

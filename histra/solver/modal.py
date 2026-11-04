@@ -329,6 +329,16 @@ def solve_modal_analysis(
     if policy not in {"compiled", "diagnostic-scalar"}:
         raise ValueError(f"Unknown performance_policy {performance_policy!r}; "
                          "expected 'compiled' or 'diagnostic-scalar'.")
+    collections = getattr(model, "collections", None)
+    if collections is not None and any(
+        any(float(value) >= 0.0 for value in restraint.k)
+        for restraint in collections.restraints.values()
+    ):
+        raise ModalAnalysisError(
+            "Modal analysis with elastic/free restraint DOFs is not translated: "
+            "the added foundation-spring DOFs are massless and require a "
+            "verified static-condensation path. Use fixed restraints."
+        )
     with exclusive_solver_access(should_cancel):
         return _solve_modal_analysis_impl(
             model,

@@ -65,6 +65,30 @@ def _assemble_afference(
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
+def _with_restraint_support(model: Model, matrix: sp.csc_matrix) -> sp.csc_matrix:
+    """Add native elastic Restraint diagonal stiffness to an assembled matrix.
+
+    The rigid-restraint path contributes no extra diagonal and therefore keeps
+    every existing fixed model unchanged.  An elastic foundation restraint has
+    one independent local DOF; its ``K2`` (force/length) belongs on that DOF
+    once, separately from the interface fibre stiffness.
+    """
+    from histra.preprocessing.restraint_support import restraint_support_entries
+
+    rows, cols, values = restraint_support_entries(model)
+    if not values:
+        return matrix
+    support = sp.csc_matrix(
+        (np.asarray(values, dtype=np.float64),
+         (np.asarray(rows, dtype=np.int64), np.asarray(cols, dtype=np.int64))),
+        shape=matrix.shape,
+    )
+    result = (matrix + support).tocsc()
+    result._has_sorted_indices = True
+    result._has_canonical_format = True
+    return result
+
+
 def _assemble_global_k_legacy(
     model: Model,
     alfa: float = 0.0,
@@ -155,7 +179,7 @@ def _assemble_global_k_legacy(
                                             intf.aff[ai], intf.aff[aj], k_ij)
 
     K = sp.coo_matrix((vals, (rows, cols)), shape=(n, n)).tocsc()
-    return K
+    return _with_restraint_support(model, K)
 
 
 class _AssemblyPlanIncompatible(RuntimeError):
@@ -378,6 +402,7 @@ class _StiffnessAssemblyPlan:
         )
         mat._has_sorted_indices = True
         mat._has_canonical_format = True
+        mat = _with_restraint_support(model, mat)
         ls.set_zero()
         ls.k = mat
 
@@ -1246,7 +1271,7 @@ def _assemble_global_k_cached(model: Model, plan: _StiffnessAssemblyPlan) -> sp.
     )
     mat._has_sorted_indices = True
     mat._has_canonical_format = True
-    return mat
+    return _with_restraint_support(model, mat)
 
 
 def _get_stiffness_assembly_plan(model: Model) -> _StiffnessAssemblyPlan:

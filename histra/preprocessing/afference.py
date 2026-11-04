@@ -130,7 +130,8 @@ def _assign_quad_afference(model: Model) -> None:
         quad.aff = [[AfferenceEntry(gdl=gdl + i, alfa=1.0)] for i in range(7)]
         quad._aff_by_local = tuple((gdl + i, 1.0) for i in range(7))
         gdl += 7
-    model.gdl = gdl - 1
+    from histra.preprocessing.restraint_support import assign_restraint_dofs
+    model.gdl = assign_restraint_dofs(model, gdl - 1)
 
 
 def _warping_nodal_vectors(quad: Quad, normal: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -301,6 +302,51 @@ def _rotation_afference(quad: Quad, direction: np.ndarray) -> list[AfferenceEntr
     return out
 
 
+def _restraint_interface_afference(
+    intf, restraint
+) -> list[list[AfferenceEntry]]:
+    """Port C# ``Restraint.ComputeInterfaceAfference`` into the 12 rows.
+
+    The native method receives the interface as parent 1 (``Interface.Set``
+    swaps a restraint that arrived as parent 2).  A fixed direction has no
+    active DOF and therefore contributes nothing; an elastic direction inserts
+    its independent local restraint DOF with the axis-alignment sign.
+    """
+    from histra.preprocessing.restraint_support import restraint_interface_signs
+
+    rows: list[list[AfferenceEntry]] = [[] for _ in range(12)]
+    if not any(restraint.solver_gdls):
+        return rows
+    signs = restraint_interface_signs(restraint, intf)
+    sign_e1, sign_e2, sign_e3 = signs
+    half_length = 0.5 * float(intf.length)
+    for local_index, gdl in enumerate(restraint.solver_gdls):
+        if gdl <= 0:
+            continue
+        if local_index == 0:
+            rows[6].append(AfferenceEntry(gdl, sign_e1))
+        elif local_index == 1:
+            rows[0].append(AfferenceEntry(gdl, sign_e2))
+        elif local_index == 2:
+            rows[8].append(AfferenceEntry(gdl, sign_e3))
+            rows[9].append(AfferenceEntry(gdl, sign_e3))
+        elif local_index == 3:
+            rows[4].append(AfferenceEntry(gdl, sign_e1))
+        elif local_index == 4:
+            rows[8].append(AfferenceEntry(gdl, half_length * sign_e2))
+            rows[9].append(AfferenceEntry(gdl, -half_length * sign_e2))
+        elif local_index == 5:
+            rows[1].append(AfferenceEntry(gdl, sign_e3))
+    return rows
+
+
+def _apply_restraint_parent_afference(intf, restraint) -> None:
+    if restraint is None:
+        return
+    for slot, entries in enumerate(_restraint_interface_afference(intf, restraint)):
+        intf.aff[slot].extend(entries)
+
+
 def _assign_interface_afference(model: Model) -> None:
     assert model.collections is not None
     c = model.collections
@@ -408,7 +454,17 @@ def _assign_interface_afference(model: Model) -> None:
 
                 cnt = _point_afference_nb(rx1, ry1, rz1, float(e3[0]), float(e3[1]), float(e3[2]), wx1, wy1, wz1, is_lat, q_gdls, q_alfas, gdl_buf, alfa_buf)
                 intf_aff[9] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
-            elif p1_type != "Restraint":
+            elif p1_type == "Restraint":
+                restraint = c.restraints.get(p1_key)
+                if restraint is None:
+                    raise ModelPreparationError(
+                        f"Interface {intf.key} references missing Restraint {p1_key}."
+                    )
+                for slot, entries in enumerate(
+                    _restraint_interface_afference(intf, restraint)
+                ):
+                    intf_aff[slot].extend(entries)
+            else:
                 raise ModelPreparationError(
                     f"Interface {intf.key} has unsupported parent type {p1_type!r}."
                 )
@@ -480,7 +536,13 @@ def _assign_interface_afference(model: Model) -> None:
 
                 cnt = _point_afference_nb(rx1, ry1, rz1, float(e3[0]), float(e3[1]), float(e3[2]), wx1, wy1, wz1, is_lat2, q_gdls, q_alfas, gdl_buf, alfa_buf)
                 intf_aff[11] = [AfferenceEntry(int(gdl_buf[i]), float(alfa_buf[i])) for i in range(cnt)]
-            elif p2_type != "Restraint":
+            elif p2_type == "Restraint":
+                raise ModelPreparationError(
+                    f"Interface {intf.key} has its Restraint as parent 2. "
+                    "Fresh Python preparation emits the native post-swap layout "
+                    "with the Restraint as parent 1."
+                )
+            else:
                 raise ModelPreparationError(
                     f"Interface {intf.key} has unsupported parent type {p2_type!r}."
                 )
@@ -510,6 +572,18 @@ def _assign_interface_afference(model: Model) -> None:
         ]
         for typ, key, side in parents:
             if typ == "Restraint":
+                restraint = c.restraints.get(key)
+                if restraint is None:
+                    raise ModelPreparationError(
+                        f"Interface {intf.key} references missing Restraint {key}."
+                    )
+                if side != 0:
+                    raise ModelPreparationError(
+                        f"Interface {intf.key} has its Restraint as parent 2. "
+                        "Fresh Python preparation emits the native post-swap layout "
+                        "with the Restraint as parent 1."
+                    )
+                _apply_restraint_parent_afference(intf, restraint)
                 continue
             if typ != "Quad":
                 raise ModelPreparationError(

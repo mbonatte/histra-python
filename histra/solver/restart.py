@@ -239,6 +239,14 @@ def restore_committed_analysis_state(
     ``SpringStates`` record set.  Intermediate ``SpringStatesTmp`` is not enough
     to reproduce unloading/reloading history and therefore raises explicitly.
     """
+    from histra.preprocessing.restraint_support import has_elastic_restraints
+
+    if has_elastic_restraints(model):
+        raise ResultsStateError(
+            "Database restart with elastic restraints is not supported: "
+            "restraint displacement and native DOF mapping are not validated. "
+            "Use in-memory AnalysisSession chaining."
+        )
     step = read_last_committed_step(results_path, analysis_key, combination) if step is None else int(step)
     db_u, db_v, vector_step = read_dynamic_vectors(
         results_path, analysis_key, combination, step, size=int(model.gdl)

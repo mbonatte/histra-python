@@ -477,3 +477,5 @@ def _set_initial_state(
                     continue
                 spring.revert_to_start()
                 spring.revert_to_last_commit()
+    for restraint in model.collections.restraints.values():
+        restraint.u[:] = [0.0] * 6

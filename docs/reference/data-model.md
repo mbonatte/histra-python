@@ -23,6 +23,21 @@
 
 `Node` stores a `Point`. `NodeC` links a node to master and slave elements and stores local displacement/load arrays. Elements reference node keys rather than direct node objects.
 
+## Restraint stiffness
+
+`Restraint.k` stores six local stiffnesses (`K1..K3`, `Kr1..Kr3`). `-1` means
+fixed, `0` means free, and a positive value is an elastic stiffness:
+force/length for translations and moment/rotation for rotations. The local axes
+come from the HRX `ReferenceSystem`; for a foundation line they are the line
+direction (`e1`), the parent Quad face normal (`e2`, vertical for a bottom
+face), and their cross product (`e3`).
+
+Only the verified elastic vertical foundation case is translated: positive
+`K2` with every other direction fixed. The foundation mesher writes
+`K2 = Kz * B * L`, where `Kz` is the subgrade reaction modulus and `B * L` is
+the tributary area, so `K2` is a total line support stiffness. See
+[Elastic foundation restraints](../investigations/elastic-foundation-restraint-kz.md).
+
 ## Afference mapping
 
 `AfferenceEntry(gdl, alfa)` maps a local element coordinate to a global degree of freedom. HRX `gdl` values are one-based; assembly subtracts one for NumPy indexing.

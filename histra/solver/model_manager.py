@@ -510,6 +510,10 @@ class ModelManager:
                     gdl = entry.gdl - 1
                     if 0 <= gdl < ls.n:
                         ls.sumb(gdl, -quad.status.f * entry.alfa)
+        from histra.preprocessing.restraint_support import (
+            scatter_restraint_resisting_force,
+        )
+        scatter_restraint_resisting_force(model, ls)
 
     @classmethod
     def update_domain(cls, model: Model, ls: LinearSystem, state: IntegratorState) -> None:
@@ -529,6 +533,8 @@ class ModelManager:
         else:
             for quad in model.collections.quads.values():
                 quad.update_domain(ls, state, model.collections)
+        from histra.preprocessing.restraint_support import update_restraint_domain
+        update_restraint_domain(model, ls)
 
     @classmethod
     def compute_energy(cls, model: Model, initial_elastic=0.0, initial_plastic=0.0) -> tuple[float, float]:

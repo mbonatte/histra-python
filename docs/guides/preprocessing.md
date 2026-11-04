@@ -29,7 +29,10 @@ The source HRX remains unchanged for differential auditing.
 - collinear partial-edge contacts;
 - partition/T-junction overlaps where one long edge contacts multiple shorter
   edges;
-- fixed line-Restraint contacts already associated with a Quad face.
+- fixed line-Restraint contacts already associated with a Quad face;
+- elastic vertical foundation line-Restraint contacts with `K2 > 0` and every
+  other local direction fixed (`K2` is written by the foundation mesher as
+  subgrade modulus `Kz` times the tributary foundation area).
 
 ## Generated computational objects
 

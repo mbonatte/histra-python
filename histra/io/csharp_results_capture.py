@@ -85,9 +85,6 @@ class CSharpResultsCapture:
         for node in self.model.collections.node_c.values():
             if any(node.aff) or any(node.u):
                 raise ResultsStateError('Native export requires inactive NodeC DOFs; active NodeC state is not retained')
-        for restraint in self.model.collections.restraints.values():
-            if any(value >= 0 for value in restraint.k):
-                raise ResultsStateError('Native export currently requires fully fixed explicit restraints')
         springs = _spring_rows(self.model.collections)
         self.last_springs, self.last_row = springs, dict(step)
         interval = max(1, int(getattr(analysis, 'step_save', 1)))
@@ -107,7 +104,7 @@ class CSharpResultsCapture:
         collections = self.model.collections
         self._add('QuadStates', context, ({**_element_row(q, 7), 'K': float(q.status.k)} for q in collections.quads.values()))
         self._add('NodeCStates', context, (_element_row(n, 6) for n in collections.node_c.values()))
-        self._add('RestraintStates', context, ({'ParentKey': r.key, **dict.fromkeys(('U1', 'U2', 'U3', 'U4', 'U5', 'U6'), 0.0)} for r in collections.restraints.values()))
+        self._add('RestraintStates', context, (_element_row(r, 6) for r in collections.restraints.values()))
         rows = []
         for interface in collections.interfaces.values():
             row = _element_row(interface, 12)

@@ -40,6 +40,7 @@ qualify their recorded inputs and source revisions, rather than the entire packa
 - [Solver strategy qualification methodology](benchmarks/solver-strategy-methodology.md)
 - [Article model qualification](benchmarks/article-models-release-gate.md)
 - [Benchmark 3 preprocessing/material-state investigation](investigations/benchmark-3-base-spring-reference-consistency.md)
+- [Elastic vertical foundation restraint (`K2`/`Kz`)](investigations/elastic-foundation-restraint-kz.md)
 - [C# and Python branch divergence](investigations/csharp-python-branch-divergence.md)
 
 The earlier architecture audit chapters in `audit/00_*.md` through `audit/05_*.md`

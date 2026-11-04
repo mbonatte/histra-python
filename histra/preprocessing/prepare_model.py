@@ -182,6 +182,10 @@ def reset_to_brand_new_structural_model(model: Model) -> None:
     """
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
+
+    from .restraint_support import validate_elastic_restraint_frame
+    for restraint in model.collections.restraints.values():
+        validate_elastic_restraint_frame(restraint)
     c = model.collections
 
     # If the model had serialized HRX interfaces, save them as reference for testing/comparison
@@ -255,6 +259,10 @@ def prepare_model(
     """
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
+
+    from .restraint_support import validate_elastic_restraint_frame
+    for restraint in model.collections.restraints.values():
+        validate_elastic_restraint_frame(restraint)
 
     # AdvancedOptionsDefault stores both tolerances as Single. Normalize
     # programmatically supplied settings before contact and node comparisons.

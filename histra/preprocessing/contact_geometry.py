@@ -18,6 +18,7 @@ from histra.elements.quad import Quad
 from histra.model.model import Model
 from histra.preprocessing.errors import ModelPreparationError
 from histra.preprocessing.quad_faces import align_nodes, classify_contained_contact
+from histra.preprocessing.restraint_support import classify_restraint_stiffness
 from histra.types.point import Point
 
 
@@ -1276,10 +1277,7 @@ def _generate_interfaces(model: Model) -> tuple[int, int]:
                 f"Restraint {restraint.key} targets unsupported element type "
                 f"{restraint.computational_element_type!r}."
             )
-        if any(abs(value + 1.0) > 1.0e-12 for value in restraint.k):
-            raise ModelPreparationError(
-                f"Restraint {restraint.key} is not fully fixed; elastic/free restraint DOFs are not translated."
-            )
+        classify_restraint_stiffness(restraint)
         try:
             quad = c.quads[restraint.computational_element_key]
         except KeyError as exc:
