@@ -8,11 +8,10 @@ the restraint's local reference system:
 * ``>0``: elastic stiffness in force/length (translations) or
   moment/rotation (rotations).
 
-Only the verified vertical foundation case is translated here: ``K2 > 0``
-with every other direction fixed.  The subgrade modulus ``Kz`` is not stored
-in the HRX; the C# foundation mesher multiplies it by the tributary foundation
-area ``B * L`` before writing ``K2`` (force/length).  Python therefore consumes
-only the written ``K2`` value and never invents a soil material.
+Only normal elastic stiffness is translated here: ``K2 > 0``. Other
+directions may be fixed or free. The bottom-foundation mesher writes
+``K2 = Kz * B * L`` (force/length). Python consumes each serialized ``K2``
+directly, without applying that formula to other faces or inventing a material.
 """
 
 from __future__ import annotations
@@ -31,7 +30,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 FIXED = "fixed"
-ELASTIC_VERTICAL = "elastic_vertical"
+# Preserve the classifier value exposed by the original bottom-face feature.
+ELASTIC_NORMAL = "elastic_vertical"
+ELASTIC_VERTICAL = ELASTIC_NORMAL
+FREE = "free"
 
 _INDEX_NAMES = ("K1", "K2", "K3", "Kr1", "Kr2", "Kr3")
 
@@ -41,62 +43,48 @@ def _is_fixed(value: float) -> bool:
 
 
 def _is_zero(value: float) -> bool:
-    return abs(float(value)) <= 1.0e-12
+    return float(value) == 0.0
 
 
 def classify_restraint_stiffness(restraint: "Restraint") -> str:
     """Return the supported stiffness mode or fail with a precise reason.
 
-    The native GUI can represent elastic stiffness independently in all six
-    local directions.  Only the normal (local-2) foundation spring has C#
-    source evidence and a verified interface mapping; silently accepting other
-    elastic or free directions would turn unverified UI options into a
-    different mechanical model.
+    Positive stiffness is supported in the local normal direction only.
+    Zero stiffness retains an independent free DOF, as in C#.
     """
     values = [float(value) for value in restraint.k]
     if len(values) != 6:
         raise ModelPreparationError(
             f"Restraint {restraint.key} has {len(values)} stiffness values; expected 6."
         )
+    if not np.all(np.isfinite(values)):
+        raise ModelPreparationError(f"Restraint {restraint.key} has non-finite stiffness values.")
     if all(_is_fixed(value) for value in values):
         return FIXED
 
-    if _is_fixed(values[0]) and values[1] > 0.0 and all(
-        _is_fixed(value) for value in values[2:]
-    ):
+    unsupported = [index for index, value in enumerate(values)
+                   if index != 1 and value > 0.0]
+    if unsupported:
+        directions = ", ".join(_INDEX_NAMES[index] for index in unsupported)
+        raise ModelPreparationError(
+            f"Restraint {restraint.key} has unsupported elastic local direction(s) "
+            f"{directions}; only K2 (local normal) is supported."
+        )
+    if not all(_is_fixed(value) or _is_zero(value) or (i == 1 and value > 0)
+               for i, value in enumerate(values)):
+        raise ModelPreparationError(
+            f"Restraint {restraint.key} has unsupported stiffness values K={values!r}."
+        )
+    if values[1] > 0.0:
         if int(restraint.material_key) != 0:
             raise ModelPreparationError(
-                f"Restraint {restraint.key} combines an elastic vertical stiffness "
+                f"Restraint {restraint.key} combines an elastic normal stiffness "
                 f"with MaterialKey={restraint.material_key}; elastic restraint "
                 "stiffness and geotechnical material springs are not a verified "
                 "combination."
             )
-        if not np.isfinite(values[1]):
-            raise ModelPreparationError(
-                f"Restraint {restraint.key} has a non-finite elastic K2."
-            )
-        return ELASTIC_VERTICAL
-
-    free = [
-        _INDEX_NAMES[index] for index, value in enumerate(values) if _is_zero(value)
-    ]
-    elastic = [
-        _INDEX_NAMES[index] for index, value in enumerate(values) if value > 0.0
-    ]
-    if free:
-        raise ModelPreparationError(
-            f"Restraint {restraint.key} has free local direction(s) {', '.join(free)}; "
-            "only fully fixed restraints and a single elastic vertical K2 are translated."
-        )
-    if elastic:
-        raise ModelPreparationError(
-            f"Restraint {restraint.key} has unsupported elastic local direction(s) "
-            f"{', '.join(elastic)}; only K2 (vertical foundation) is supported."
-        )
-    raise ModelPreparationError(
-        f"Restraint {restraint.key} has unsupported stiffness values "
-        f"K={list(restraint.k)!r}."
-    )
+        return ELASTIC_NORMAL
+    return FREE
 
 
 def active_restraint_directions(restraint: "Restraint") -> tuple[int, ...]:
@@ -160,7 +148,7 @@ def restraint_reference_axes(
 
 def validate_elastic_restraint_frame(restraint: "Restraint") -> None:
     """Reject unsupported frames before rebuilding computational objects."""
-    if classify_restraint_stiffness(restraint) != ELASTIC_VERTICAL:
+    if classify_restraint_stiffness(restraint) == FIXED:
         return
     if not restraint.has_reference_system:
         raise ModelPreparationError(
@@ -169,11 +157,10 @@ def validate_elastic_restraint_frame(restraint: "Restraint") -> None:
     axes = np.asarray((restraint.reference_e1, restraint.reference_e2,
                        restraint.reference_e3), dtype=float)
     if (not np.all(np.isfinite(axes)) or
-            not np.allclose(axes @ axes.T, np.eye(3), atol=1e-5, rtol=0) or
-            not np.isclose(abs(axes[1, 2]), 1.0, atol=1e-5, rtol=0)):
+            not np.allclose(axes @ axes.T, np.eye(3), atol=1e-5, rtol=0)):
         raise ModelPreparationError(
             f"Elastic Restraint {restraint.key} requires orthonormal axes "
-            "aligned with its interface and a vertical local E2."
+            "aligned with its interface."
         )
 
 
@@ -193,7 +180,7 @@ def restraint_interface_signs(
     i1 = np.asarray(interface.reference_e1, dtype=float)
     i2 = np.asarray(interface.reference_e2, dtype=float)
     i3 = np.asarray(interface.reference_e3, dtype=float)
-    if classify_restraint_stiffness(restraint) == ELASTIC_VERTICAL:
+    if classify_restraint_stiffness(restraint) != FIXED:
         validate_elastic_restraint_frame(restraint)
         axes = np.stack((e1, e2, e3))
         interface_axes = np.stack((i1, i2, i3))
@@ -201,7 +188,7 @@ def restraint_interface_signs(
                            1.0, atol=1e-5, rtol=0):
             raise ModelPreparationError(
                 f"Elastic Restraint {restraint.key} requires orthonormal axes "
-                "aligned with its interface and a vertical local E2."
+                "aligned with its interface."
             )
     return (
         _sign(float(np.dot(i1, e1))),
@@ -216,15 +203,18 @@ def _support_runtime(model: "Model"):
     if runtime is not None and runtime[0] == id(model):
         return runtime
     restraints = [r for r in sorted(getattr(model.collections, "restraints", {}).values(), key=lambda r: r.key)
-                  if classify_restraint_stiffness(r) == ELASTIC_VERTICAL]
+                  if classify_restraint_stiffness(r) != FIXED]
     states = np.asarray([r.u for r in restraints], dtype=np.float64).reshape(-1, 6)
-    dofs = np.asarray([r.solver_gdls[1] - 1 for r in restraints], dtype=np.int64)
-    stiffness = np.asarray([r.k[1] for r in restraints], dtype=np.float64)
+    row, direction = np.nonzero(np.asarray([r.solver_gdls for r in restraints], dtype=np.int64).reshape(-1, 6) > 0)
+    gdls = np.asarray([r.solver_gdls for r in restraints], dtype=np.int64).reshape(-1, 6)
+    kvals = np.asarray([r.k for r in restraints], dtype=np.float64).reshape(-1, 6)
+    dofs = gdls[row, direction] - 1
+    stiffness = kvals[row, direction]
     if np.any(dofs < 0) or np.any(dofs >= model.gdl):
         raise ModelPreparationError("Elastic restraint DOFs are not prepared.")
     for index, restraint in enumerate(restraints):
         restraint.u = states[index]
-    runtime = (id(model), states, dofs, stiffness)
+    runtime = (id(model), states, dofs, stiffness, row, direction)
     model._restraint_support_runtime = runtime
     return runtime
 
@@ -234,8 +224,9 @@ def restraint_support_entries(
 ) -> tuple[list[int], list[int], list[float]]:
     """Return 0-based diagonal COO entries for the restraint support springs."""
     assert model.collections is not None
-    _, _, dofs, stiffness = _support_runtime(model)
-    return dofs.tolist(), dofs.tolist(), stiffness.tolist()
+    _, _, dofs, stiffness, _, _ = _support_runtime(model)
+    active = stiffness > 0.0
+    return dofs[active].tolist(), dofs[active].tolist(), stiffness[active].tolist()
 
 
 def update_restraint_domain(model: "Model", ls: "LinearSystem") -> None:
@@ -247,12 +238,12 @@ def update_restraint_domain(model: "Model", ls: "LinearSystem") -> None:
     """
     assert model.collections is not None
     x = getattr(ls, "x", ls)
-    _, states, dofs, _ = _support_runtime(model)
-    states[:, 1] += np.asarray(x)[dofs]
+    _, states, dofs, _, row, direction = _support_runtime(model)
+    states[row, direction] += np.asarray(x)[dofs]
 
 
 def scatter_restraint_resisting_force(model: "Model", ls: "LinearSystem") -> None:
     """Add ``-K_i * U_i`` to the residual for each active restraint DOF."""
     assert model.collections is not None
-    _, states, dofs, stiffness = _support_runtime(model)
-    ls.b[dofs] -= stiffness * states[:, 1]
+    _, states, dofs, stiffness, row, direction = _support_runtime(model)
+    ls.b[dofs] -= stiffness * states[row, direction]

@@ -62,6 +62,7 @@ from histra.solver.output_projection import (
     project_reactions,
 )
 from histra.solver.session import AnalysisSession, AnalysisSessionError
+from histra.preprocessing.lateral_subgrade import set_lateral_subgrade_moduli
 from histra.solver.warmup import warmup_compiled_backends
 from histra.solver.modal import (
     ModalAnalysisError,
@@ -78,6 +79,7 @@ except PackageNotFoundError:  # Source tree used without installation.
 
 __all__ = [
     "__version__",
+    "set_lateral_subgrade_moduli",
     "load_model", "load_solver_model",
     "ResultsWriter",
     "pack_results_directory",

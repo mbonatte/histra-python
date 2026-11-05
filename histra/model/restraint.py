@@ -91,24 +91,20 @@ class Restraint:
         r.reference_origin = Point(
             r.reference_origin.x, r.reference_origin.y, r.reference_origin.z
         )
-        # The Point fields used for the local axes are vectors, not geometric
-        # points.  Normalise them here to shield preparation from HRX files
-        # written by tools that serialised non-unit axes.
+        # Preserve the serialized frame; validation rejects invalid axes rather
+        # than silently changing the model's reference system.
         r.reference_e1, r.reference_e2, r.reference_e3 = (
-            _unit_axis(r.reference_e1),
-            _unit_axis(r.reference_e2),
-            _unit_axis(r.reference_e3),
+            _axis_values(r.reference_e1),
+            _axis_values(r.reference_e2),
+            _axis_values(r.reference_e3),
         )
         r.extra = dict(elem.attrib)
         return r
 
 
-def _unit_axis(value: Point | Tuple[float, float, float]) -> Tuple[float, float, float]:
+def _axis_values(value: Point | Tuple[float, float, float]) -> Tuple[float, float, float]:
     if isinstance(value, Point):
         x, y, z = value.x, value.y, value.z
     else:
         x, y, z = (float(value[0]), float(value[1]), float(value[2]))
-    length = (x * x + y * y + z * z) ** 0.5
-    if length <= 1.0e-12:
-        return (x, y, z)
-    return (x / length, y / length, z / length)
+    return (x, y, z)

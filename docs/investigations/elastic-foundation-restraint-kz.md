@@ -8,15 +8,26 @@ restraint, the Python implementation, and the evidence used to qualify it.
 Supported case:
 
 - a line `Restraint` whose local `K2` is positive (`force / length`);
-- every other local direction (`K1`, `K3`, `Kr1`, `Kr2`, `Kr3`) remains fixed;
+- every other local direction (`K1`, `K3`, `Kr1`, `Kr2`, `Kr3`) is fixed or free;
 - the restraint is attached to one Quad foundation face and has no custom
   geotechnical `MaterialKey`;
 - the serialized local frame is orthonormal, aligned with the generated
-  interface frame, and has a vertical `e2`.
+  interface frame. `e2` may be vertical or horizontal.
 
-Fully fixed restraints are unchanged. Free directions, elastic tangential or
-rotational directions, and an elastic restraint combined with a geotechnical
-material are rejected explicitly.
+Fully fixed restraints are unchanged. Free directions allocate massless DOFs;
+they do not carry support stiffness and can introduce mechanisms. Elastic
+tangential or rotational directions, and an elastic restraint combined with a
+geotechnical material, are rejected explicitly.
+
+For finalized HRX models Python treats the numerical K fields and frame as
+authoritative. Native `OpenModelOperations.ReadSerialized` loads those fields,
+but `ModelManager.PrepareModel` invokes `PreliminaryOperations` when unlocked or
+missing afferences. That invokes `Restraint.Init`, whose `SetRestraintK` can
+overwrite numerical values using the behavior flags. A locked native model with
+afferences follows a different preparation branch. Python intentionally does not
+rewrite HRX stiffnesses from those flags; native behavior requires case-specific
+verification. C# source: `UnityServiceClasses/OpenModelOperations.cs`,
+`SolverRuntime/ModelManager.cs`, and `Objects/Restraint.cs`.
 
 ## C# source trace
 
@@ -133,6 +144,9 @@ inspect or correct child stiffnesses after native remeshing.
   Fully fixed models therefore keep their previous `GDL` exactly.
 - `_assign_interface_afference` ports the C# direction mapping, including the
   axis-alignment signs from the interface and restraint reference systems.
+- The generated interface normal points toward its parent Quad, as in C#
+  `Interface.Set`; the restraint's own serialized normal may point in either
+  direction. A sign maps its normal DOF to the interface.
 - `Interface` stiffness and spring construction are unchanged: the interface
   fibres still carry the Quad-side contact stiffness. The `K2` diagonal is
   added once to the global matrix on the restraint DOF by
@@ -143,20 +157,24 @@ inspect or correct child stiffnesses after native remeshing.
 
 ### Solver boundaries
 
-- Fully fixed restraints keep the existing direct boundary-condition path.
-- Elastic restraints are not added to `get_restrained_dofs`; their fixed
-  tangential/rotational directions are enforced by the constrained interface
-  springs, while the elastic normal direction remains a free global DOF with
-  the `K2` support stiffness.
+- Fixed restraint directions have no independent restraint DOF and are coupled
+  through constrained-interface springs. Active normal and free directions
+  have independent DOFs; only positive `K2` adds support stiffness.
 - `RestraintStates` export writes the native `U1..U6` values from
   `Restraint.u`.
-- Modal analysis with elastic/free restraint DOFs is rejected before assembly:
-  the added DOFs are massless and require a static-condensation path that has
-  no C# reference yet.
+- Modal analysis with elastic/free restraint DOFs uses a full sparse
+  shift-invert eigenproblem with semidefinite mass and checks the full-system
+  residual. The support DOFs are reconstructed in the resulting mode shapes.
+  This is mathematically equivalent to static condensation when the support
+  block is invertible; native C# modal parity remains unverified.
 
 ## Evidence
 
 Focused tests: `histra/tests/test_elastic_restraint_support.py`.
+`histra/tests/test_foundation_side_restraints.py` also checks all four vertical
+faces, fixed and positive `K2`, sign reversals, free DOFs and their condensed
+response. Two inclined-side geometry records come from a finalized HRX; they
+are serialized frame comparisons, not native C# force or displacement traces.
 
 The reference wall has a 100 cm x 20 cm foundation, so `K2 = Kz * 2000 cm^2`.
 The prepared interface has the expected `Nrow`, `Ncol` and `Nrow * Ncol`

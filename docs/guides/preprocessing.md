@@ -30,9 +30,23 @@ The source HRX remains unchanged for differential auditing.
 - partition/T-junction overlaps where one long edge contacts multiple shorter
   edges;
 - fixed line-Restraint contacts already associated with a Quad face;
-- elastic vertical foundation line-Restraint contacts with `K2 > 0` and every
-  other local direction fixed (`K2` is written by the foundation mesher as
-  subgrade modulus `Kz` times the tributary foundation area).
+- normal elastic Quad-face Restraint contacts with `K2 > 0`, and fixed or free
+  other directions. The finalized restraint's numerical `K2` and local frame
+  are authoritative; the bottom-foundation mesher computes `K2` from `Kz`
+  times the tributary area, but that formula is not applied to other faces.
+
+For linear lateral subgrade coefficients supplied in kN/m³, use
+`set_lateral_subgrade_moduli(model, restraint_keys, kx_kn_m3=..., ky_kn_m3=...)`.
+For a horizontal unit normal `(nx, ny)`, it writes
+`K2 = (Kx*nx² + Ky*ny²) * patch_area_cm² / 10⁶` in kN/cm. Select only the
+intended restraint keys. The call preserves other directions, changes the
+in-memory model, and requires fresh preparation; it does not edit the HRX.
+For a parameter sweep, load a fresh model for each coefficient and prepare it
+before analysis. Active geotechnical material templates are currently rejected:
+the C# `GeotecnicalMaterial` nonlinear law is not yet translated. This linear
+spring acts in both tension and compression; it is not an uplift/gap or
+nonlinear p-y soil model. Re-preparation discards the prior committed state, so
+rerun any static predecessor before evaluating its tangent modal response.
 
 ## Generated computational objects
 

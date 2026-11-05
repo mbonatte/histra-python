@@ -10,7 +10,7 @@ from typing import Any, Callable, Iterator
 import numpy as np
 import scipy.linalg
 import scipy.sparse as sp
-from scipy.sparse.linalg import splu
+from scipy.sparse.linalg import splu, eigsh, LinearOperator
 
 from histra.io.results_reader import ResultsStateError, find_results_path
 from histra.model.model import Model
@@ -329,16 +329,6 @@ def solve_modal_analysis(
     if policy not in {"compiled", "diagnostic-scalar"}:
         raise ValueError(f"Unknown performance_policy {performance_policy!r}; "
                          "expected 'compiled' or 'diagnostic-scalar'.")
-    collections = getattr(model, "collections", None)
-    if collections is not None and any(
-        any(float(value) >= 0.0 for value in restraint.k)
-        for restraint in collections.restraints.values()
-    ):
-        raise ModalAnalysisError(
-            "Modal analysis with elastic/free restraint DOFs is not translated: "
-            "the added foundation-spring DOFs are massless and require a "
-            "verified static-condensation path. Use fixed restraints."
-        )
     with exclusive_solver_access(should_cancel):
         return _solve_modal_analysis_impl(
             model,
@@ -531,8 +521,14 @@ def _solve_modal_analysis_impl(
     )
     mass = _validated_symmetric(mass_assembly.matrix, "mass")
     diagonal = mass.diagonal()
-    if np.any(diagonal <= 0.0):
-        indices = np.flatnonzero(diagonal <= 0.0)
+    support_dofs = np.asarray([
+        gdl - 1 for restraint in model.collections.restraints.values()
+        for gdl in restraint.solver_gdls if gdl > 0
+    ], dtype=int)
+    unsupported_massless = np.flatnonzero(diagonal <= 0.0)
+    unsupported_massless = np.setdiff1d(unsupported_massless, support_dofs)
+    if unsupported_massless.size or np.any(diagonal < 0.0):
+        indices = unsupported_massless if unsupported_massless.size else np.flatnonzero(diagonal < 0.0)
         preview = ", ".join(str(int(index + 1)) for index in indices[:10])
         raise MassMatrixError(
             "The mass matrix is not positive on every active DOF; zero/non-positive "
@@ -554,7 +550,19 @@ def _solve_modal_analysis_impl(
         f"(C# convergence tolerance {tolerance:.3g})."
     )
 
-    if procedure.casefold() == "inverseiterations":
+    if support_dofs.size:
+        if mass[support_dofs, :].nnz or mass[:, support_dofs].nnz:
+            raise MassMatrixError("Restraint support DOFs must be massless for modal analysis.")
+        massive_count = n - support_dofs.size
+        if massive_count < 2:
+            raise MassMatrixError("Modal analysis requires at least two mass-carrying DOFs.")
+        requested = min(requested, massive_count - 1)
+        log("Solving the full massless-support eigenproblem using sparse shift-invert.")
+        eigenvalues, eigenvectors = _massless_support_modes(
+            stiffness, mass, requested, tolerance, max_iterations, should_cancel
+        )
+        progress(0.96)
+    elif procedure.casefold() == "inverseiterations":
         eigenvalues, eigenvectors = _inverse_iterations(
             stiffness,
             mass,
@@ -601,7 +609,7 @@ def _solve_modal_analysis_impl(
             directions,
             mass_directions,
             total_masses,
-            canonicalize_sign=procedure != "InverseIterations",
+            canonicalize_sign=bool(support_dofs.size) or procedure != "InverseIterations",
         )
         modes.append(mode)
         log(
@@ -615,7 +623,7 @@ def _solve_modal_analysis_impl(
         analysis_name=str(getattr(analysis, "name", "")),
         combination=int(combination),
         requested_modes=requested,
-        procedure=procedure,
+        procedure="MasslessSupportShiftInvert" if support_dofs.size else procedure,
         convergence_criteria=criteria,
         requested_mass_matrix_type=mass_assembly.requested_type,
         effective_mass_matrix_type=mass_assembly.effective_type,
@@ -625,6 +633,50 @@ def _solve_modal_analysis_impl(
         runtime_seconds=float(time.perf_counter() - started),
         modes=tuple(modes),
     )
+
+
+def _massless_support_modes(stiffness, mass, count, tolerance, max_iterations, should_cancel):
+    """Solve K phi = lambda M phi without forming a dense Schur complement.
+
+    Shift-invert permits a positive-semidefinite M. The full K solve enforces
+    equilibrium on the massless support rows and reconstructs their mode shape.
+    """
+    raise_if_cancelled(should_cancel)
+    try:
+        factor = splu(stiffness)
+        inverse = LinearOperator(stiffness.shape, matvec=factor.solve, dtype=float)
+        if stiffness.shape[0] <= 8:
+            values, vectors = scipy.linalg.eig(stiffness.toarray(), mass.toarray())
+            real = np.isfinite(values) & (np.abs(values.imag) < 1e-10)
+            values, vectors = values[real].real, vectors[:, real].real
+        else:
+            massive_count = int(np.count_nonzero(mass.diagonal() > 0.0))
+            values, vectors = eigsh(
+                stiffness, k=count, M=mass, sigma=0.0, which="LM", OPinv=inverse,
+                tol=min(max(float(tolerance) / 100.0, 1e-12), 1e-8),
+                maxiter=max(1000, int(max_iterations)),
+                ncv=min(massive_count, max(2 * count + 1, 20)),
+                v0=np.linspace(1.0, 2.0, stiffness.shape[0]),
+            )
+    except Exception as exc:
+        raise ModalAnalysisError(
+            "Massless-support modal solve failed; check for an unrestrained mechanism "
+            "or a singular support tangent."
+        ) from exc
+    raise_if_cancelled(should_cancel)
+    if np.any(np.asarray(values) <= 0.0):
+        raise ModalAnalysisError(
+            "The massless-support modal problem has non-positive eigenvalues; "
+            "check the tangent state and structural stability."
+        )
+    values, vectors = _sorted_positive_modes(values, vectors, limit=count)
+    for value, vector in zip(values, vectors.T, strict=True):
+        kx = stiffness @ vector
+        mx = mass @ vector
+        residual = np.linalg.norm(kx - value * mx)
+        if residual > 1e-6 * (np.linalg.norm(kx) + abs(value) * np.linalg.norm(mx) + 1e-30):
+            raise ModalAnalysisError("Massless-support modal eigenpair failed its full-system residual check.")
+    return values, vectors
 
 
 def _validated_symmetric(matrix: sp.csc_matrix, name: str) -> sp.csc_matrix:

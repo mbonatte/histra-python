@@ -172,6 +172,18 @@ class PreparationReport:
     out_of_plane_springs: int
 
 
+def _validate_restraint_inputs(model: Model) -> None:
+    from .restraint_support import validate_elastic_restraint_frame
+    for restraint in model.collections.restraints.values():
+        kind = getattr(model, "unsupported_material_templates", {}).get(restraint.material_key)
+        if kind:
+            raise ModelPreparationError(
+                f"Restraint {restraint.key} references unsupported material "
+                f"{restraint.material_key} ({kind}); its constitutive law is not translated."
+            )
+        validate_elastic_restraint_frame(restraint)
+
+
 def reset_to_brand_new_structural_model(model: Model) -> None:
     """Reset model to a brand-new, unprepared structural model state.
 
@@ -183,9 +195,7 @@ def reset_to_brand_new_structural_model(model: Model) -> None:
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
 
-    from .restraint_support import validate_elastic_restraint_frame
-    for restraint in model.collections.restraints.values():
-        validate_elastic_restraint_frame(restraint)
+    _validate_restraint_inputs(model)
     c = model.collections
 
     # If the model had serialized HRX interfaces, save them as reference for testing/comparison
@@ -260,9 +270,7 @@ def prepare_model(
     if model.collections is None:
         raise ModelPreparationError("Model.collections is not initialized.")
 
-    from .restraint_support import validate_elastic_restraint_frame
-    for restraint in model.collections.restraints.values():
-        validate_elastic_restraint_frame(restraint)
+    _validate_restraint_inputs(model)
 
     # AdvancedOptionsDefault stores both tolerances as Single. Normalize
     # programmatically supplied settings before contact and node comparisons.
@@ -290,7 +298,9 @@ def prepare_model(
 
     from .cache import is_cache_enabled, load_prepared_cache, save_prepared_cache
 
-    cache_active = is_cache_enabled(use_cache)
+    # The disk cache is keyed by source bytes and cannot represent in-memory
+    # restraint stiffness changes made for a parameter study.
+    cache_active = is_cache_enabled(use_cache) and not getattr(model, "_restraint_values_modified", False)
     source_path = getattr(model, "source_path", None)
 
     if cache_active and source_path:

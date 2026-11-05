@@ -179,6 +179,9 @@ def assemble_modal_stiffness(model, alfa=1.0):
     for interface in model.collections.interfaces.values():
         append(_interface_chunk(interface, n, alfa, out_buf))
     if not chunks:
-        return sp.csc_matrix((n, n), dtype=np.float64)
-    rows, columns, values = (np.concatenate(parts) for parts in zip(*chunks))
-    return sp.coo_matrix((values, (rows, columns)), shape=(n, n)).tocsc()
+        matrix = sp.csc_matrix((n, n), dtype=np.float64)
+    else:
+        rows, columns, values = (np.concatenate(parts) for parts in zip(*chunks))
+        matrix = sp.coo_matrix((values, (rows, columns)), shape=(n, n)).tocsc()
+    from histra.solver.assembler import _with_restraint_support
+    return _with_restraint_support(model, matrix)

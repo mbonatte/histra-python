@@ -7,6 +7,7 @@ from .cache import (
     save_prepared_cache,
 )
 from .errors import ModelPreparationError
+from .lateral_subgrade import set_lateral_subgrade_moduli
 from .prepare_model import (
     PreparationReport,
     create_brand_new_model,
@@ -22,6 +23,7 @@ from .validation import (
 
 __all__ = [
     "ModelPreparationError",
+    "set_lateral_subgrade_moduli",
     "PreparationReport",
     "create_brand_new_model",
     "prepare_model",
@@ -35,4 +37,3 @@ __all__ = [
     "load_prepared_cache",
     "save_prepared_cache",
 ]
-

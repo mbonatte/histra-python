@@ -221,7 +221,6 @@ def test_elastic_support_survives_in_memory_chain(tmp_path):
     "changes, message",
     [
         ({0: 5.0}, "only K2"),
-        ({1: 0.0}, "free local direction"),
         ({3: 10.0}, "only K2"),
     ],
 )
@@ -309,11 +308,12 @@ def test_native_restraint_state_export_accepts_elastic_vertical_support(tmp_path
     assert float(rows[0]["U2"]) == pytest.approx(float(restraint.u[1]))
 
 
-def test_modal_analysis_rejects_massless_elastic_restraint_dofs(tmp_path):
-    from histra.solver.modal import ModalAnalysisError, solve_modal_analysis
+def test_modal_analysis_handles_massless_elastic_restraint_dofs(tmp_path):
+    from histra.solver.modal import solve_modal_analysis
 
     model, _ = _load_wall(tmp_path, kz=0.1)
     prepare_model(model, force=True)
     analysis = model.collections.analyses[3]
-    with pytest.raises(ModalAnalysisError, match="elastic/free restraint"):
-        solve_modal_analysis(model, analysis)
+    result = solve_modal_analysis(model, analysis)
+    assert result.modes
+    assert all(mode.frequency > 0 for mode in result.modes)

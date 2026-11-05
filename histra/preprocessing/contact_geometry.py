@@ -204,6 +204,12 @@ def _make_interface_geometry(
         e3 = _unit_f32(-across, label=f"Interface {intf.key} e3")
         e2 = _unit_f32(_cross3_f32(e3, e1), label=f"Interface {intf.key} e2")
         e3 = _unit_f32(_cross3_f32(e1, e2), label=f"Interface {intf.key} e3")
+        if parent2_g is not None:
+            # C# Interface.Set orients e2 toward the Quad (parent 2).
+            outward = vertices_f[0] - np.asarray(parent2_g, dtype=np.float32)
+            if float(_dot3_f32(e2, outward)) > 0.0:
+                e2 *= -1.0
+                e3 *= -1.0
     else:
         if parent2_g is None:
             raise ModelPreparationError(
@@ -1303,7 +1309,7 @@ def _generate_interfaces(model: Model) -> tuple[int, int]:
             dim_aff=[6, 2, 4], dim_aff_tot=12, imax=int(model.interface_imax),
             interfaccia_vincolata=True,
         )
-        _make_interface_geometry(model, intf, vertices, (n1, n2), None)
+        _make_interface_geometry(model, intf, vertices, (n1, n2), None, _v(quad.g))
         c.interfaces[key] = intf
         quad.interface_keys[face].append(key)
         key += 1

@@ -32,8 +32,9 @@ come from the HRX `ReferenceSystem`; for a foundation line they are the line
 direction (`e1`), the parent Quad face normal (`e2`, vertical for a bottom
 face), and their cross product (`e3`).
 
-Only the verified elastic vertical foundation case is translated: positive
-`K2` with every other direction fixed. The foundation mesher writes
+Positive `K2` is supported along the local normal of any Quad face; other
+directions may be fixed or free. Other positive stiffnesses are rejected.
+The bottom-foundation mesher writes
 `K2 = Kz * B * L`, where `Kz` is the subgrade reaction modulus and `B * L` is
 the tributary area, so `K2` is a total line support stiffness. See
 [Elastic foundation restraints](../investigations/elastic-foundation-restraint-kz.md).

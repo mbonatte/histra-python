@@ -243,7 +243,7 @@ def restore_committed_analysis_state(
 
     if has_elastic_restraints(model):
         raise ResultsStateError(
-            "Database restart with elastic restraints is not supported: "
+            "Database restart with elastic restraints or free restraint DOFs is not supported: "
             "restraint displacement and native DOF mapping are not validated. "
             "Use in-memory AnalysisSession chaining."
         )

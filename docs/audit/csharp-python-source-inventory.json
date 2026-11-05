@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-04T18:06:48.083853+00:00",
-  "source_commit": "9eeae004f2621b42519eaa9bf66ba0c47bf1222b",
+  "generated_at": "2026-11-05T14:05:17.779990+00:00",
+  "source_commit": "d2245f104f916c4e5f5be98e9c6010b2120cedf7",
   "generator": "tools/benchmarks/build_source_audit_inventory.py",
   "benchmark_id": "masonry-source-inventory-not-parity-certification",
   "definition_scope": "AST class/function definitions including nested helpers; excludes lambdas and aliases.",
   "counts": {
-    "files": 105,
+    "files": 106,
     "classes": 118,
-    "function_definitions": 949
+    "function_definitions": 951
   },
   "files": [
     {
@@ -189,7 +189,7 @@
     {
       "path": "histra/model/restraint.py",
       "status": "inventory_only",
-      "lf_sha256": "fc098554c00507641fb3dc43fe47d1775cabe99ff8605e1264fa772d70ac3550",
+      "lf_sha256": "ad63e3ed6db311654bcba64727ac6f07e91755ec6acf79a7e1f91857ed89ba52",
       "classes": [
         {
           "name": "Restraint",
@@ -214,8 +214,8 @@
           "line": 52
         },
         {
-          "name": "_unit_axis",
-          "line": 106
+          "name": "_axis_values",
+          "line": 105
         }
       ]
     },
@@ -1241,7 +1241,7 @@
     {
       "path": "histra/preprocessing/__init__.py",
       "status": "inventory_only",
-      "lf_sha256": "18682ec7dfb1900bc8b91eb3d16f43fc42cc13403ff02721f6e6eb8ef06702d0",
+      "lf_sha256": "e4f69d04971e6d34301efc8da822199859273efb3879ed0f3c7998bdc90be23a",
       "classes": [],
       "functions": []
     },
@@ -1357,7 +1357,7 @@
     {
       "path": "histra/preprocessing/cache.py",
       "status": "inventory_only",
-      "lf_sha256": "7670e6cc9baada3a24342e8908ef068c87270ea5fdd14ad3a46938cce195cb63",
+      "lf_sha256": "0a9a68469dc698d7545a57af54ccf8b54620c2a80533a52d798aa65a928a15ea",
       "classes": [],
       "functions": [
         {
@@ -1438,7 +1438,7 @@
     {
       "path": "histra/preprocessing/contact_geometry.py",
       "status": "inventory_only",
-      "lf_sha256": "017102478d2b60d13f8b8537725a5b1feb17c639f421ce7ed66030254c7c13ed",
+      "lf_sha256": "3d24950bbff6d6899d9323b3a1db9daad68c5f031297597d968821dc162cf67a",
       "classes": [],
       "functions": [
         {
@@ -1495,87 +1495,87 @@
         },
         {
           "name": "_node_bucket",
-          "line": 285
+          "line": 291
         },
         {
           "name": "_build_geometric_node_index",
-          "line": 289
+          "line": 295
         },
         {
           "name": "_find_or_create_geometric_node",
-          "line": 311
+          "line": 317
         },
         {
           "name": "_face_normal",
-          "line": 364
+          "line": 370
         },
         {
           "name": "_face_normals_batch",
-          "line": 386
+          "line": 392
         },
         {
           "name": "_convex_quad_overlap_prefilter_batch",
-          "line": 433
+          "line": 439
         },
         {
           "name": "_coplanar_quad_intersection_prechecked",
-          "line": 501
+          "line": 507
         },
         {
           "name": "_coplanar_quad_intersection",
-          "line": 605
+          "line": 611
         },
         {
           "name": "_polygon_edge_at_point",
-          "line": 618
+          "line": 624
         },
         {
           "name": "_quad_face_reference_edge",
-          "line": 635
+          "line": 641
         },
         {
           "name": "_prepare_interface_endpoints",
-          "line": 648
+          "line": 654
         },
         {
           "name": "_passes_csharp_lateral_area_filter",
-          "line": 696
+          "line": 702
         },
         {
           "name": "_find_broad_pairs_nb",
-          "line": 718
+          "line": 724
         },
         {
           "name": "_find_face_candidates_nb",
-          "line": 762
+          "line": 768
         },
         {
           "name": "_filter_coplanar_overlap_nb",
-          "line": 882
+          "line": 888
         },
         {
           "name": "_coplanar_quad_intersection_nb",
-          "line": 920
+          "line": 926
         },
         {
           "name": "_batch_coplanar_quad_intersection_nb",
-          "line": 1013
+          "line": 1019
         },
         {
           "name": "_quad_contact_pairs",
-          "line": 1049
+          "line": 1055
         },
         {
           "name": "_generate_interfaces",
-          "line": 1237
+          "line": 1243
         },
         {
           "name": "_quad_vint",
-          "line": 1313
+          "line": 1319
         },
         {
           "name": "_quad_vint_f32",
-          "line": 1329
+          "line": 1335
         }
       ]
     },
@@ -1755,6 +1755,18 @@
       ]
     },
     {
+      "path": "histra/preprocessing/lateral_subgrade.py",
+      "status": "inventory_only",
+      "lf_sha256": "61fe4376b4f849d074900f1a375861cf2ab2d3c62ea30e6468d45d26f72ecb49",
+      "classes": [],
+      "functions": [
+        {
+          "name": "set_lateral_subgrade_moduli",
+          "line": 10
+        }
+      ]
+    },
+    {
       "path": "histra/preprocessing/material_selection.py",
       "status": "inventory_only",
       "lf_sha256": "159b55d3b0342984bd5f926c75bb21a4f41c152c30b99a77fbd6f47892d88542",
@@ -1853,7 +1865,7 @@
     {
       "path": "histra/preprocessing/prepare_model.py",
       "status": "inventory_only",
-      "lf_sha256": "6bf41566e1da51d0ffeb185a315a8f87d19849920884445542c753122f593e35",
+      "lf_sha256": "52b552d1e24af2e87d1b0f88e5aeca0937ff0f0e538a934f3dde783a81c06442",
       "classes": [
         {
           "name": "PreparationReport",
@@ -1862,16 +1874,20 @@
       ],
       "functions": [
         {
-          "name": "reset_to_brand_new_structural_model",
+          "name": "_validate_restraint_inputs",
           "line": 175
         },
         {
+          "name": "reset_to_brand_new_structural_model",
+          "line": 187
+        },
+        {
           "name": "create_brand_new_model",
-          "line": 238
+          "line": 248
         },
         {
           "name": "prepare_model",
-          "line": 251
+          "line": 261
         }
       ]
     },
@@ -1950,64 +1966,64 @@
     {
       "path": "histra/preprocessing/restraint_support.py",
       "status": "inventory_only",
-      "lf_sha256": "70e2b204574ac6cb040c3db76cc1579dda8c29dcf775fa0d2f129fd0c4194de8",
+      "lf_sha256": "6a405a985d5f6ee7585ac24c825b6ed94523ddd8e6f92c7edbb0c59384537a6f",
       "classes": [],
       "functions": [
         {
           "name": "_is_fixed",
-          "line": 39
+          "line": 41
         },
         {
           "name": "_is_zero",
-          "line": 43
+          "line": 45
         },
         {
           "name": "classify_restraint_stiffness",
-          "line": 47
+          "line": 49
         },
         {
           "name": "active_restraint_directions",
-          "line": 102
+          "line": 90
         },
         {
           "name": "assign_restraint_dofs",
-          "line": 109
+          "line": 97
         },
         {
           "name": "has_elastic_restraints",
-          "line": 138
+          "line": 126
         },
         {
           "name": "restraint_reference_axes",
-          "line": 146
+          "line": 134
         },
         {
           "name": "validate_elastic_restraint_frame",
-          "line": 161
+          "line": 149
         },
         {
           "name": "_sign",
-          "line": 180
+          "line": 167
         },
         {
           "name": "restraint_interface_signs",
-          "line": 188
+          "line": 175
         },
         {
           "name": "_support_runtime",
-          "line": 213
+          "line": 200
         },
         {
           "name": "restraint_support_entries",
-          "line": 232
+          "line": 222
         },
         {
           "name": "update_restraint_domain",
-          "line": 241
+          "line": 232
         },
         {
           "name": "scatter_restraint_resisting_force",
-          "line": 254
+          "line": 245
         }
       ]
     },
@@ -2584,7 +2600,7 @@
     {
       "path": "histra/solver/capabilities.py",
       "status": "inventory_only",
-      "lf_sha256": "47b685da8b749c93ab7593d140e86ec5e0f3bd3149eee165d7218b6eabe844a8",
+      "lf_sha256": "ee9596bda018541fb0ea35c6c0acb5d7cd7106908b0ac5c91c14d44ff1f12664",
       "classes": [
         {
           "name": "SolverCapabilityIssue",
@@ -2609,28 +2625,24 @@
           "line": 81
         },
         {
-          "name": "_inspect_elastic_restraint_scope",
-          "line": 169
-        },
-        {
           "name": "_inspect_materials",
-          "line": 203
+          "line": 168
         },
         {
           "name": "_inspect_model_scope",
-          "line": 216
+          "line": 181
         },
         {
           "name": "_inspect_dependency_graph",
-          "line": 257
+          "line": 222
         },
         {
           "name": "_inspect_analysis_definition",
-          "line": 296
+          "line": 261
         },
         {
           "name": "_inspect_model_points",
-          "line": 445
+          "line": 410
         }
       ]
     },
@@ -4076,7 +4088,7 @@
     {
       "path": "histra/solver/modal.py",
       "status": "inventory_only",
-      "lf_sha256": "cf3f12faa17db92c97a5a59cf8cfc3b705e0703f8472d049a0a1f6f72e50b413",
+      "lf_sha256": "cda918d8fac1756ae010cd5b31a7aa3ca17f66821312c9341742e42345f93584",
       "classes": [
         {
           "name": "ModalAnalysisError",
@@ -4162,54 +4174,58 @@
         },
         {
           "name": "_solve_modal_analysis_impl",
-          "line": 359
+          "line": 349
         },
         {
           "name": "_solve_modal_analysis_impl.log",
-          "line": 376
+          "line": 366
         },
         {
           "name": "_solve_modal_analysis_impl.progress",
-          "line": 380
+          "line": 370
+        },
+        {
+          "name": "_massless_support_modes",
+          "line": 638
         },
         {
           "name": "_validated_symmetric",
-          "line": 630
+          "line": 682
         },
         {
           "name": "_resolve_modal_tolerance",
-          "line": 645
+          "line": 697
         },
         {
           "name": "_subspace_modes",
-          "line": 655
+          "line": 707
         },
         {
           "name": "_inverse_iterations",
-          "line": 727
+          "line": 779
         },
         {
           "name": "_inverse_iterations.normalize_euclidean",
-          "line": 760
+          "line": 812
         },
         {
           "name": "_euclidean_deflate",
-          "line": 821
+          "line": 873
         },
         {
           "name": "_sorted_positive_modes",
-          "line": 828
+          "line": 880
         },
         {
           "name": "_compute_mode",
-          "line": 844
+          "line": 896
         }
       ]
     },
     {
       "path": "histra/solver/modal_assembly.py",
       "status": "inventory_only",
-      "lf_sha256": "d9d22b0e14cc2438a30e0788c5436755fa5eb8df936d37c16d0aa6b8a0306cfa",
+      "lf_sha256": "be30a6efd75479220c5382b7e8fa441992b8a686fcd83873c74f16275858b800",
       "classes": [],
       "functions": [
         {
@@ -4725,7 +4741,7 @@
     {
       "path": "histra/solver/restart.py",
       "status": "inventory_only",
-      "lf_sha256": "07689aa605078016a5dfc0cd40e35cbf490f900b60e69b25538c31ccd263f114",
+      "lf_sha256": "ceed575c0305b921016ca9916f449e76e38e6cb625b16e89beffcd8971e34d93",
       "classes": [
         {
           "name": "RestartSummary",
