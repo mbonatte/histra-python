@@ -289,8 +289,11 @@ def _setup_nonlinear_analysis(
             f"norm={np.linalg.norm(initial_external_load):.6g}"
         )
     if preserved_external_load is not None:
-        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)):
-            raise ValueError("Preserved-load restart is not yet validated with P-Delta")
+        if pdelta_enabled(getattr(analysis, "pdelta_effect", None)) and model.collections.line_loads:
+            raise ValueError(
+                "Preserved-load P-Delta restart with line loads is not supported: "
+                "the predecessor's distributed load geometry is not retained"
+            )
         preserved_external_load = np.asarray(preserved_external_load, dtype=np.float64)
         if preserved_external_load.shape != (n,) or not np.all(np.isfinite(preserved_external_load)):
             raise ValueError(f"Expected a finite initial external load vector with shape ({n},)")

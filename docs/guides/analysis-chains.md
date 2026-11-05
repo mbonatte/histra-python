@@ -47,7 +47,11 @@ This retains the committed applied load vector and reaction reference for the
 next static stage. The new stage must still define its intended additional load:
 for constant-load re-equilibration, use a zero additional-load combination.
 The default retains the C# restart baseline derived from resisting forces.
-Preserved-load restart is currently limited to analyses without P-Delta.
+P-Delta is supported for preserved-load in-memory chains without line loads.
+Preserved-load P-Delta chains containing line loads are rejected: retaining the
+global force vector alone does not retain the load positions needed to update
+their geometric moments. This Python preserved-load option differs from C#'s
+default restart baseline, which is reconstructed from resisting forces.
 
 Changing parameters within the same spring law is distinct from changing the
 spring class. With the default `preserve_committed_state=True`, changed spring

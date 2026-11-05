@@ -1,5 +1,6 @@
 """A support change must be able to retain the actually applied gravity load."""
 import numpy as np
+import pytest
 
 from histra import AnalysisSession, load_model
 from histra.model.load import LoadFunction, LoadFunctionItem
@@ -9,10 +10,15 @@ from tools.benchmarks.build_material_modal_reference_models import (
 )
 
 
-def test_material_change_reequilibrates_under_committed_external_load(tmp_path):
+@pytest.mark.parametrize('pdelta', ['None', 'EachStep', 'EachIteration'])
+def test_material_change_reequilibrates_under_committed_external_load(tmp_path, pdelta):
     path = tmp_path / "bridge.hrx"
     build_material_modal_model(DEFAULT_TEMPLATE, CASES[0]).write(path, encoding="utf-8", xml_declaration=True)
     model = load_model(path)
+    if pdelta != 'None':
+        model.collections.line_loads.clear()
+    for analysis in model.collections.analyses.values():
+        analysis.pdelta_effect = pdelta
     ModelManager.prepare_model(model, force=True)
     session = AnalysisSession(model, equilibrium_policy="error", strategy_policy="off",
                               preserve_predecessor_load=True)
@@ -32,6 +38,8 @@ def test_material_change_reequilibrates_under_committed_external_load(tmp_path):
     result = session.run(2)
     assert result.completed and len(result.committed_steps) == 1, {k: v for k, v in result.steps[-1].items() if k.startswith("equilibrium_")}
     assert np.array_equal(ModelManager._fext, applied)
+    if pdelta != 'None':
+        assert np.linalg.norm(ModelManager._pq) > 0
     endpoint = result.committed_steps[-1]
     assert endpoint.equilibrium_ok
     assert np.allclose([endpoint.reaction_x, endpoint.reaction_y, endpoint.reaction_z],
@@ -58,3 +66,17 @@ def test_preserved_load_does_not_accept_false_work_convergence(tmp_path):
     assert not result.completed and not result.committed_steps
     assert not result.steps[-1]["equilibrium_ok"]
     assert result.steps[-1]["equilibrium_residual_norm"] > 1.0
+
+
+def test_pdelta_preserved_load_rejects_distributed_load_geometry(tmp_path):
+    path = tmp_path / 'bridge.hrx'
+    build_material_modal_model(DEFAULT_TEMPLATE, CASES[0]).write(path, encoding='utf-8', xml_declaration=True)
+    model = load_model(path)
+    assert model.collections.line_loads
+    ModelManager.prepare_model(model, force=True)
+    session = AnalysisSession(model, equilibrium_policy='off', strategy_policy='off',
+                              preserve_predecessor_load=True)
+    assert session.run('Vert').completed
+    model.collections.analyses[2].pdelta_effect = 'EachStep'
+    with pytest.raises(ValueError, match='distributed load geometry'):
+        session.run(2)
