@@ -244,6 +244,29 @@ validity handling and temporal scope. Existing schema 1/2.0 files remain readabl
 missing new fields are not fabricated. Re-export from a newly captured execution
 to obtain them; packing old arrays into `.histra` alone cannot add missing state.
 
+### Interface strain tensors
+
+Newly captured exports also include `fields/interface_strain_{local,global,principal,valid}`
+and `fields/interface_plastic_strain_{local,global,principal,valid}`. The first
+dimension follows transverse fibre CSR order; the second selects out-of-plane
+sliding spring 0 or 1. C# selects between those springs by position, so both
+choices are exported. Local and global arrays have trailing shape `(3, 3)`;
+principal arrays have trailing shape `(3,)` with eigenvalues in ascending order.
+Use `get_interface_strain_tensors(interface_key, plastic=False)` to select an
+interface. The accompanying `valid` mask has shape `(fibres, 2)` and must be
+checked before using any tensor or eigenvalue.
+
+The local components follow C# `Interface.GetTensorMap`: normal strain in
+22, in-plane sliding in 12 and 21, and out-of-plane sliding in 23 and 32.
+Plastic components use the corresponding plastic getters. As in that display
+tensor, shear is not halved. These are interface display tensors, not a
+continuum strain reconstructed inside the Quad; the global tensors are their
+coordinate transforms and principal values their eigenvalues. The two sides
+use positive shear orientation; C# can choose a different sign when rendering
+a particular face. The mesh includes `mesh/interface_e2` alongside e1 and e3.
+All are stage-end snapshots, and zero-length native springs make their tensor
+invalid. Old bundles cannot acquire these fields by repacking.
+
 ## Portable sessions and compatibility
 
 In the legacy split-file layout, `export_session` also creates `<bundle>.session.json` with schema version, units,

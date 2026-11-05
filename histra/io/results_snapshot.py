@@ -62,7 +62,7 @@ def _interface_arrays(model, interfaces):
         arrays[f"mesh/interface_{name}"] = np.array([getattr(i, attr) for i in interfaces], dtype)
     # The internal nspring is a legacy alias for ncol, not the fibre count.
     arrays["mesh/interface_nspring"] = np.array([len(i.trasv_1) for i in interfaces], np.uint16)
-    for axis in ("e1", "e3"):
+    for axis in ("e1", "e2", "e3"):
         arrays[f"mesh/interface_{axis}"] = np.array(
             [getattr(i, f"reference_{axis}") for i in interfaces], np.float32
         ).reshape(-1, 3)
@@ -144,6 +144,9 @@ def _add_spring_arrays(model, interfaces, arrays):
     from histra.io.spring_snapshot import add_spring_responses
 
     add_spring_responses(runtime, interfaces, transverse, sliding, arrays)
+    from histra.io.strain_tensor import add_strain_tensors
+
+    add_strain_tensors(model, runtime, interfaces, arrays)
     order = arrays["_export/interface_record_order"]
     arrays["springs/runtime_arrays/all_resultant_forces"] = runtime.all_resultant_forces()[order]
     arrays["springs/runtime_arrays/all_bending_moments"] = runtime.all_bending_moments()[order]

@@ -80,6 +80,11 @@ def test_roundtrip_spring_response_arrays_and_accessors(solved, tmp_path, format
             assert result[f'springs/{kind}_strain'].dtype == np.float32
             assert result[f'springs/{kind}_plastic_displacement'].dtype == np.float64
         for interface_key in result.mesh_interface_keys[:3]:
+            tensors = result.get_interface_strain_tensors(int(interface_key))
+            assert tensors['local'].shape[1:] == (2, 3, 3)
+            start, end = result['springs/transverse_offsets'][:2] if interface_key == result.mesh_interface_keys[0] else (0, 0)
+            if end:
+                np.testing.assert_array_equal(tensors['local'], execution.export_snapshot['fields/interface_strain_local'][start:end])
             for kind in ('transverse', 'sliding'):
                 springs = result.get_interface_springs(int(interface_key), kind)
                 assert {'strain', 'plastic_strain', 'plastic_ratio', 'is_ruptured'} <= set(springs)

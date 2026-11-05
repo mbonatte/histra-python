@@ -944,6 +944,18 @@ class SimulationResults:
                 for name in SPRING_RESPONSE_FIELDS
                 if f"springs/{kind}_{name}" in self}
 
+    def get_interface_strain_tensors(self, interface_key: int, *, plastic: bool = False) -> dict[str, np.ndarray]:
+        """Return stage-end fibre tensors for both out-of-plane spring choices."""
+        indices = np.flatnonzero(self.mesh_interface_keys == interface_key)
+        if not len(indices):
+            raise KeyError(interface_key)
+        index = int(indices[0])
+        offsets = self['springs/transverse_offsets']
+        span = slice(int(offsets[index]), int(offsets[index + 1]))
+        field = 'plastic_strain' if plastic else 'strain'
+        return {name: self[f'fields/interface_{field}_{name}'][span]
+                for name in ('local', 'global', 'principal', 'valid')}
+
     def get_quad_springs(self, quad_key: int | None = None) -> dict[str, np.ndarray]:
         """Return stage-end diagonal spring responses in mesh Quad order (or one Quad)."""
         from histra.io.spring_response import SPRING_RESPONSE_FIELDS
