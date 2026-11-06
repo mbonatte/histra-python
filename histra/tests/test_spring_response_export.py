@@ -35,6 +35,12 @@ def test_response_getters_match_executed_original_csharp(case):
         else:
             assert fields[f'{name}_valid'][0] == 0
             assert value == 0.0
+        if name in ('strain', 'plastic_strain'):
+            raw = fields[f'native_{name}_raw'][0]
+            if np.isnan(expected):
+                assert np.isnan(raw)
+            else:
+                assert raw == expected
     if 'unlimited_tension' in case['name'] or 'unlimited_compression' in case['name']:
         assert fields['plastic_ratio_is_normalized'][0] == 0
     elif fields['plastic_ratio_valid'][0]:
@@ -66,7 +72,7 @@ def test_roundtrip_spring_response_arrays_and_accessors(solved, tmp_path, format
     session, execution = solved
     files = session.export_analysis('Vert', tmp_path, format=format)
     with SimulationResults.load(files.get('bundle') or files['fields']) as result:
-        assert result.summary['metadata']['schema_version'] == '2.1.0'
+        assert result.summary['metadata']['schema_version'] == '2.2.0'
         assert result.summary['metadata']['spring_response']['scope'] == 'committed_stage_end'
         assert json.loads(result['metadata/spring_response'].item())['units']['strain'] == '1'
         for kind in ('transverse', 'sliding', 'quad'):
@@ -80,6 +86,10 @@ def test_roundtrip_spring_response_arrays_and_accessors(solved, tmp_path, format
             assert result[f'springs/{kind}_strain'].dtype == np.float32
             assert result[f'springs/{kind}_plastic_displacement'].dtype == np.float64
         for interface_key in result.mesh_interface_keys[:3]:
+            history = result.get_interface_spring_history(int(interface_key))
+            np.testing.assert_array_equal(history['step'], execution.spring_history['springs/history_step'])
+            np.testing.assert_array_equal(history['plastic_strain'][-1],
+                                          result.get_interface_springs(int(interface_key))['plastic_strain'])
             tensors = result.get_interface_strain_tensors(int(interface_key))
             assert tensors['local'].shape[1:] == (2, 3, 3)
             start, end = result['springs/transverse_offsets'][:2] if interface_key == result.mesh_interface_keys[0] else (0, 0)
@@ -116,14 +126,24 @@ def test_new_snapshot_fields_do_not_materialize_fibres_or_mutate_runtime(solved,
         assert array.tobytes() == snapshot[key].tobytes()
 
 
-def test_zero_length_is_undefined_and_signed_plastic_demand_is_preserved(solved):
+def test_geometric_length_and_signed_plastic_demand_are_preserved(solved):
     session, execution = solved
     snapshot = execution.export_snapshot
     lengths = snapshot['springs/transverse_length']
     undefined = lengths == 0
     assert undefined.any()  # Native SetQuadTrasvSpring leaves these zero.
+    reference = snapshot['springs/transverse_strain_reference_length']
+    geometric = snapshot['springs/transverse_strain_reference_is_geometric'].astype(bool)
+    assert geometric[undefined].all()
+    assert (reference[undefined] > 0).all()
     assert not snapshot['springs/transverse_strain_valid'][undefined].any()
     assert not snapshot['springs/transverse_plastic_strain_valid'][undefined].any()
+    assert snapshot['springs/transverse_derived_strain_valid'][undefined].all()
+    assert snapshot['springs/transverse_derived_plastic_strain_valid'][undefined].all()
+    np.testing.assert_allclose(snapshot['springs/transverse_derived_strain'][undefined],
+                               (snapshot['springs/transverse_displacement'][undefined] / reference[undefined]).astype(np.float32))
+    np.testing.assert_allclose(snapshot['springs/transverse_derived_plastic_strain'][undefined],
+                               (snapshot['springs/transverse_plastic_displacement'][undefined] / reference[undefined]).astype(np.float32))
     assert np.isfinite(snapshot['springs/transverse_strain']).all()
     assert np.isfinite(snapshot['springs/transverse_plastic_strain']).all()
     # Native Coulomb demand can be signed and must not be clamped to [0,1].
@@ -132,6 +152,38 @@ def test_zero_length_is_undefined_and_signed_plastic_demand_is_preserved(solved)
                                      [case['ur']], [case['length']], [12], [1], [10.0])
     assert fields['plastic_displacement'][0] < 0
     assert fields['plastic_ratio'][0] < 0
+
+
+def test_reference_lengths_follow_preprocessing_fibre_geometry(solved):
+    from histra.preprocessing.spring_assignment import _interface_cells, _transverse_side_properties_batch
+
+    session, execution = solved
+    model = session.model
+    interfaces = [i for _, i in sorted(model.collections.interfaces.items())]
+    offsets = execution.export_snapshot['springs/transverse_offsets']
+    for index in (0, len(interfaces) - 1):
+        interface = interfaces[index]
+        cells = _interface_cells(interface)
+        material = model.collections.materials.get(interface.material_key)
+        sides = [_transverse_side_properties_batch(model, kind, key, face, interface, cells, material)[0]
+                 for kind, key, face in ((interface.parent_type_element1, interface.parent_element_key1, interface.face1),
+                                         (interface.parent_type_element2, interface.parent_element_key2, interface.face2))]
+        expected = sides[0][:, 2] + sides[1][:, 2]
+        actual = execution.export_snapshot['springs/transverse_strain_reference_length'][offsets[index]:offsets[index + 1]]
+        np.testing.assert_array_equal(actual, expected)
+
+
+def test_missing_geometric_reference_stays_invalid(solved, monkeypatch):
+    session, _ = solved
+    interface = next(i for i in session.model.collections.interfaces.values() if len(i.trasv_1))
+    monkeypatch.delattr(interface, '_transverse_reference_length')
+    snapshot = capture_export_snapshot(session.model)
+    index = int(np.flatnonzero(snapshot['mesh/interface_keys'] == interface.key)[0])
+    offsets = snapshot['springs/transverse_offsets']
+    span = slice(offsets[index], offsets[index + 1])
+    assert not snapshot['springs/transverse_strain_valid'][span].any()
+    assert not snapshot['springs/transverse_plastic_strain_valid'][span].any()
+    assert not snapshot['springs/transverse_derived_plastic_strain_valid'][span].any()
 
 
 def test_snapshot_isolation_after_later_runtime_changes(solved, monkeypatch, tmp_path):
@@ -149,3 +201,32 @@ def test_snapshot_isolation_after_later_runtime_changes(solved, monkeypatch, tmp
     with SimulationResults.load(files['bundle']) as result:
         assert result['springs/transverse_strain'].tobytes() == expected
         assert result['springs/sliding_plastic_displacement'].tobytes() == expected_up
+
+
+def test_saved_step_history_respects_csharp_step_save_and_commits(tmp_path):
+    session = AnalysisSession(load_model(ROOT / 'histra/model-output/model.hrx'), strategy_policy='off')
+    session.resolve_analysis('Vert').step_save = 2
+    expected = {}
+
+    def committed(row, analysis):
+        if row['step'] % analysis.step_save == 0:
+            snapshot = capture_export_snapshot(session.model)
+            expected[row['step']] = snapshot['springs/transverse_plastic_displacement'].copy()
+
+    execution = session.run('Vert', max_committed_steps=3, on_step_committed=committed)
+    history = execution.spring_history
+    np.testing.assert_array_equal(history['springs/history_step'], [0, 2])
+    np.testing.assert_array_equal(history['springs/history_transverse_plastic_displacement'][1], expected[2])
+    assert not np.array_equal(history['springs/history_transverse_displacement'][1],
+                              execution.export_snapshot['springs/transverse_displacement'])
+    bundle = session.export_bundle(tmp_path / 'history.histra')
+    with SimulationResults.load(bundle) as result:
+        key = int(result.mesh_interface_keys[0])
+        observed = result.get_interface_spring_history(key)
+        offsets = result['springs/transverse_offsets']
+        np.testing.assert_array_equal(observed['step'], [0, 2])
+        np.testing.assert_array_equal(observed['plastic_displacement'],
+                                      history['springs/history_transverse_plastic_displacement'][:, offsets[0]:offsets[1]])
+        assert observed['yield_force'].shape == (*observed['force'].shape, 2)
+        np.testing.assert_array_equal(observed['native_plastic_strain_raw'],
+                                      history['springs/history_transverse_native_plastic_strain_raw'][:, offsets[0]:offsets[1]])

@@ -307,7 +307,7 @@ def test_bundle_manifest_relative_references_and_curve_only(vert_execution, tmp_
     shutil.move(tmp_path / "original", tmp_path / "moved")
     base = tmp_path / "moved"
     manifest = json.loads((base / "bundle.session.json").read_text())
-    assert manifest["schema_version"] == "2.1.0"
+    assert manifest["schema_version"] == "2.2.0"
     assert len(manifest["cases"]) == len(session.executions)
     for case in manifest["cases"]:
         assert not case["curve_only"]
@@ -442,7 +442,7 @@ def test_sorted_interface_fields_with_different_runtime_order(tmp_path, monkeypa
         assert result.quad_displacements.shape[2:] == (4, 3)
         for key in result.keys():
             array = result[key]
-            if np.issubdtype(array.dtype, np.number):
+            if np.issubdtype(array.dtype, np.number) and not key.endswith(('_native_strain_raw', '_native_plastic_strain_raw')):
                 assert np.isfinite(array).all(), key
 
 

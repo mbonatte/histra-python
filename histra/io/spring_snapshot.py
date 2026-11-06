@@ -56,8 +56,26 @@ def _project(arrays, kind, definitions, u, force, phase, tangent):
 def add_spring_responses(runtime, interfaces, transverse, sliding, arrays):
     """CSR spans and Quad ordering follow the existing export snapshot."""
     committed = runtime.committed[transverse]
-    _project(arrays, 'transverse', _transverse_definitions(interfaces), committed[:, 7],
+    definitions = _transverse_definitions(interfaces)
+    native_length = definitions[:, 1].copy()
+    reference_length = np.concatenate([
+        np.asarray(getattr(interface, '_transverse_reference_length',
+                           np.zeros(len(interface.trasv_1))), dtype=np.float64)
+        for interface in interfaces
+    ]) if interfaces else np.empty(0, np.float64)
+    if reference_length.shape != native_length.shape:
+        raise ValueError('Transverse reference lengths do not match spring counts')
+    use_geometry = (native_length <= 0) & np.isfinite(reference_length) & (reference_length > 0)
+    _project(arrays, 'transverse', definitions, committed[:, 7],
              committed[:, 6], committed[:, 8], runtime.trial[transverse, 9])
+    definitions[:, 1] = np.where(use_geometry, reference_length, native_length)
+    derived = {}
+    _project(derived, 'transverse', definitions, committed[:, 7],
+             committed[:, 6], committed[:, 8], runtime.trial[transverse, 9])
+    for field in ('strain', 'strain_valid', 'plastic_strain', 'plastic_strain_valid'):
+        arrays[f'springs/transverse_derived_{field}'] = derived[f'springs/transverse_{field}']
+    arrays['springs/transverse_strain_reference_length'] = definitions[:, 1].copy()
+    arrays['springs/transverse_strain_reference_is_geometric'] = use_geometry.astype(np.uint8)
     state = runtime.coulomb_state[sliding]
     definitions = _definitions(runtime.coulomb_springs[index] for index in sliding)
     definitions[:, 3:5] = state[:, [ic.CFY0, ic.CFY1]]

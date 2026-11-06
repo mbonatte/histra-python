@@ -165,6 +165,7 @@ class AnalysisExecution:
     initial_step: AnalysisStep | None = None
     modal_result: Any | None = None
     export_snapshot: dict[str, np.ndarray] | None = field(default=None, repr=False, compare=False)
+    spring_history: dict[str, np.ndarray] | None = field(default=None, repr=False, compare=False)
 
     csharp_records: dict[str, list[dict[str, Any]]] | None = field(default=None, repr=False, compare=False)
     model_point_output: dict[str, Any] | None = field(default=None, repr=False, compare=False)

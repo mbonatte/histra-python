@@ -28,7 +28,7 @@ from histra.io.model_point_summary import build_model_point_summary
 from histra.solver.outcomes import AnalysisExecution, AnalysisOutcome
 
 
-NATIVE_RESULTS_SCHEMA = "2.1.0"
+NATIVE_RESULTS_SCHEMA = "2.2.0"
 
 NATIVE_UNITS = {
     "length": "cm", "displacement": "cm", "force": "kN",
@@ -366,6 +366,7 @@ def _build_dense_field_arrays(
 
     snapshot = execution.export_snapshot
     arrays.update(snapshot if snapshot is not None else capture_export_snapshot(model))
+    arrays.update(getattr(execution, 'spring_history', None) or {})
     record_order = arrays.pop("_export/interface_record_order", None)
     sorted_interfaces = arrays["mesh/interface_keys"]
 

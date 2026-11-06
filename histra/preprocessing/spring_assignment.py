@@ -376,6 +376,11 @@ def _create_interface_springs(
         law_cache=flex_law_cache,
     )
 
+    # C# computes these geometric lengths for stiffness but Hysteretic
+    # SetQuadTrasvSpring does not retain them. Keep them separately for a
+    # derived output measure; changing Spring.Length would change native data.
+    intf._transverse_reference_length = props1[:, 2] + props2[:, 2]
+
     if not restrained:
         intf.trasv_1 = _configure_combined_hysteretic_batch(
             props1, law1, props2, law2, interface_key=intf.key, interface=intf

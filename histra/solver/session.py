@@ -373,6 +373,16 @@ class AnalysisSession:
                 )
 
         capture = None
+        from histra.io.spring_history import SpringHistoryCapture
+
+        spring_history = None if is_modal else SpringHistoryCapture(self.model)
+
+        def capture_saved_state(step, analysis):
+            if spring_history is not None:
+                spring_history.capture(step, analysis)
+            if capture is not None:
+                capture.capture(step, analysis)
+
         if self.capture_csharp_results:
             from histra.io.csharp_results_capture import CSharpResultsCapture
 
@@ -405,7 +415,7 @@ class AnalysisSession:
                     max_committed_steps=max_committed_steps,
                     should_stop_after_commit=should_stop_after_commit,
                     on_step_committed=on_step_committed,
-                    on_state_saved=capture.capture if capture is not None else None,
+                    on_state_saved=capture_saved_state,
                     should_cancel=should_cancel,
                     linear_solver_backend=execution_backend,
                     linear_solver_precision=getattr(
@@ -466,6 +476,7 @@ class AnalysisSession:
             initial_step=initial_step,
             modal_result=modal_result,
             export_snapshot=capture_export_snapshot(self.model) if modal_result is None else None,
+            spring_history=spring_history.arrays() if spring_history is not None else None,
             csharp_records=capture.finish(definition.key) if capture is not None and capture.last_row is not None else None,
             model_point_output=build_model_point_summary(
                 self.model, ((initial_step,) if initial_step is not None else ()) + tuple(s for s in steps if s.committed), definition,

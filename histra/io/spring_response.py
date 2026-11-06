@@ -13,17 +13,25 @@ from histra.types.phase_enum import PhaseEnum
 ELASTIC, HYSTERETIC, COULOMB = 1, 8, 12
 SPRING_RESPONSE_METADATA = {
     "scope": "committed_stage_end",
+    "history_scope": "committed step 0 and StepSave intervals when captured by AnalysisSession",
     "units": {"displacement": "cm", "length": "cm", "plastic_displacement": "cm",
               "strain": "1", "plastic_strain": "1", "plastic_ratio": "C# GetUpOverUr",
               "initial_stiffness": "kN/cm", "tangent_stiffness": "kN/cm"},
     "undefined": "zero placeholder with the corresponding *_valid mask equal to 0",
     "damage": "native phase, is_plastic, is_ruptured and is_slipping; no universal scalar damage",
     "plastic_ratio": "native demand measure, not bounded to [0,1]; Hysteretic unlimited branches return cm",
+    "transverse_strain": "native getter; undefined results have validity zero",
+    "transverse_derived_strain": "separate estimate using native length when positive or the sum of Quad-side fibre lengths; not a native C# getter",
+    "native_raw": "native float32 getter values retain NaN and infinity; standard fields use finite placeholders and validity masks",
+    "restraint_strain": "Quad-side reference only; not a soil strain or a separately resolved plastic strain in either material",
 }
 
 
 SPRING_RESPONSE_FIELDS = (
     "force", "stress", "phase", "area", "stress_valid", "displacement", "length", "spring_type",
+    "strain_reference_length", "strain_reference_is_geometric",
+    "derived_strain", "derived_strain_valid", "derived_plastic_strain", "derived_plastic_strain_valid",
+    "native_strain_raw", "native_plastic_strain_raw",
     "initial_stiffness", "tangent_stiffness", "strain", "strain_valid", "plastic_displacement",
     "plastic_displacement_valid", "plastic_strain", "plastic_strain_valid", "plastic_ratio",
     "plastic_ratio_valid", "plastic_ratio_is_normalized", "is_plastic", "is_ruptured", "is_slipping", "plastic_history_valid",
@@ -59,6 +67,9 @@ def project_spring_response(displacement, force, stiffness, yield_force, ultimat
     fields = {"displacement": u.copy(), "length": length.copy(), "initial_stiffness": k.copy(),
               "tangent_stiffness": np.asarray(tangent, np.float64).copy(), "spring_type": kind.astype(np.uint8)}
     for name, value in values.items():
+        if name in ('strain', 'plastic_strain'):
+            with np.errstate(over='ignore', invalid='ignore'):
+                fields[f'native_{name}_raw'] = np.asarray(value, dtype=np.float32)
         fields[name], fields[f"{name}_valid"] = _finite_projection(value, np.float64 if name == 'plastic_displacement' else np.float32)
     fields["plastic_ratio_is_normalized"] = (normalized & fields["plastic_ratio_valid"].astype(bool)).astype(np.uint8)
     fields.update(_phase_flags(phase))

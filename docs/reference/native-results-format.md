@@ -1,4 +1,4 @@
-# Native simulation results (schema 2.1.0)
+# Native simulation results (schema 2.2.0)
 
 `ResultsWriter` exports the following numerical schema either inside a single
 [`.histra` study bundle](histra-bundle-format.md) or as a summary JSON and
@@ -182,9 +182,10 @@ arrays follow `mesh/quad_keys` order. There is one value per spring slot.
 | `length` | float64, cm | Native spring `Length` |
 | `initial_stiffness`, `tangent_stiffness` | float64, kN/cm | Initial and committed tangent stiffness |
 | `spring_type` | uint8 | Native enum: LinearElastic=1, Hysteretic=8, Coulomb03=12 |
-| `strain` | float32, dimensionless | `Spring.GetStrain()`: `U / Length` |
+| `strain` | float32, dimensionless | Native `Spring.GetStrain()`: `U / Length` |
 | `plastic_displacement` | float64, cm | Law-specific `GetUp()` |
-| `plastic_strain` | float32, dimensionless | `GetStrainPlastic()` |
+| `plastic_strain` | float32, dimensionless | Native `GetStrainPlastic()`; elastic springs return zero |
+| `native_strain_raw`, `native_plastic_strain_raw` | float32 | Native getters including NaN and infinity |
 | `plastic_ratio` | float32 | Law-specific `GetUpOverUr()` |
 | `plastic_ratio_is_normalized` | uint8 | Valid dimensionless demand; zero for the Hysteretic unlimited-displacement branch |
 | `is_plastic`, `is_ruptured`, `is_slipping` | uint8 | Native current phase classification |
@@ -195,12 +196,24 @@ values become finite zero placeholders with validity zero. Consumers **must use
 the masks**; a placeholder is not evidence of zero deformation. Input doubles
 remain available to reconstruct the native expression where required.
 
-A significant native limitation is preserved: `SetQuadTrasvSpring` leaves many
-Hysteretic transverse fibres with `Length == 0`. Consequently, their dimensional
-opening and plastic displacement can be valid while strain is undefined.
-The exporter does not replace this length with interface length or change the
-solver's spring definition. Sliding reference lengths and the diagonal spring
-length retain their native definitions too.
+`SetQuadTrasvSpring` leaves many Hysteretic transverse fibres with native
+`Length == 0`. The native length is still exported unchanged. To make a derived
+measure available, preprocessing retains the geometric fibre lengths that C#
+`Quad.GetFiberStiffness` calculates on each Quad side; their sum is the
+reference length when the native length is zero. A restraint contributes no
+Quad-side length. `strain_reference_length` records the denominator and
+`strain_reference_is_geometric` identifies this fallback. The estimates are
+separate `derived_strain` and `derived_plastic_strain` fields with their own
+validity masks. The native fields never use this fallback. Invalid or
+unavailable reference geometry remains masked.
+
+The resulting value is an **average relative deformation over a geometric
+reference length**, not the undefined native C# getter. At a soil support the
+denominator covers the Quad side only; it does not represent a soil thickness,
+and the resulting plastic measure does not separate plasticity in soil and
+masonry. No constitutive law or solver spring length is changed. These choices
+do not reproduce C#'s exact strain map and should not be treated as a local
+continuum plastic strain.
 
 For Hysteretic springs, `GetUp()` is the nonnegative excess of `abs(U)` above
 `abs(Fy / K)`, choosing the positive/negative yield force by the sign of U.
@@ -240,9 +253,30 @@ diagonals = results.get_quad_springs()  # all Quads, or pass one Quad key
 ```
 
 `metadata/spring_response` and summary `metadata.spring_response` describe units,
-validity handling and temporal scope. Existing schema 1/2.0 files remain readable;
-missing new fields are not fabricated. Re-export from a newly captured execution
-to obtain them; packing old arrays into `.histra` alone cannot add missing state.
+validity handling and temporal scope. Existing files remain readable; missing
+histories cannot be recovered by repacking them.
+
+### Saved-step spring histories
+
+Schema 2.2 captures committed spring responses automatically during static
+`AnalysisSession` runs at step 0 and each `StepSave` interval, using the C#
+save schedule. `springs/history_step` contains actual step numbers, and
+`springs/history_{transverse,sliding,quad}_<field>` arrays have saved step as
+their first axis. They include displacement, force, yield forces, phase, spring
+type and stiffness, plastic displacement, native strain and plastic strain,
+raw native getter results, validity masks and, for
+transverse fibres, the separate geometric estimates. Stage-end arrays remain
+available even when the final step is not a save interval. Histories are held
+in memory during the run and can be large for models with many saved steps.
+They are absent from old exports and standalone executions without capture.
+
+```python
+history = results.get_interface_spring_history(interface_key)
+steps = history['step']
+plastic = history['plastic_strain']
+valid = history['plastic_strain_valid'].astype(bool)
+raw_csharp_values = history['native_plastic_strain_raw']
+```
 
 ### Interface strain tensors
 
@@ -264,8 +298,9 @@ continuum strain reconstructed inside the Quad; the global tensors are their
 coordinate transforms and principal values their eigenvalues. The two sides
 use positive shear orientation; C# can choose a different sign when rendering
 a particular face. The mesh includes `mesh/interface_e2` alongside e1 and e3.
-All are stage-end snapshots, and zero-length native springs make their tensor
-invalid. Old bundles cannot acquire these fields by repacking.
+These tensor fields are stage-end snapshots and use the native strain fields;
+they remain invalid where any required native getter is undefined. Old bundles
+do not acquire these fields by repacking alone.
 
 ## Portable sessions and compatibility
 

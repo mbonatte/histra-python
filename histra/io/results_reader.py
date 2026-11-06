@@ -956,6 +956,21 @@ class SimulationResults:
         return {name: self[f'fields/interface_{field}_{name}'][span]
                 for name in ('local', 'global', 'principal', 'valid')}
 
+    def get_interface_spring_history(self, interface_key: int, kind: str = 'transverse') -> dict[str, np.ndarray]:
+        """Return C#-interval saved spring histories, indexed by actual step number."""
+        if kind not in {'transverse', 'sliding'}:
+            raise ValueError(f'Unknown spring kind: {kind}')
+        matches = np.flatnonzero(self.mesh_interface_keys == interface_key)
+        if not len(matches):
+            raise KeyError(interface_key)
+        offsets = self[f'springs/{kind}_offsets']
+        index = int(matches[0])
+        span = slice(int(offsets[index]), int(offsets[index + 1]))
+        prefix = f'springs/history_{kind}_'
+        result = {'step': self['springs/history_step']}
+        result.update({key[len(prefix):]: self[key][:, span] for key in self.keys() if key.startswith(prefix)})
+        return result
+
     def get_quad_springs(self, quad_key: int | None = None) -> dict[str, np.ndarray]:
         """Return stage-end diagonal spring responses in mesh Quad order (or one Quad)."""
         from histra.io.spring_response import SPRING_RESPONSE_FIELDS
